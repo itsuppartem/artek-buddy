@@ -12,7 +12,7 @@ Shipped versions: [CHANGELOG.md](CHANGELOG.md).
 
 Pair the Linux window, ask a question, answer the bot’s card, reply in the thread, and watch Chromium open Wikipedia on the Pi desktop.
 
-<video src="media/demo.mp4" controls muted playsinline title="Artek Buddy demo"></video>
+![Artek Buddy demo](media/demo.gif)
 
 ## Why this exists
 
