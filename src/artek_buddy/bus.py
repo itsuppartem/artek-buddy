@@ -7,6 +7,7 @@ from typing import AsyncIterator
 from artek_buddy.contracts.events import ProductEvent
 
 HEARTBEAT = object()
+REPLAY_GAP = object()
 
 
 class EventHub:
@@ -41,6 +42,9 @@ class EventHub:
                 except asyncio.QueueFull:
                     pass
 
+    def has_event(self, bot_id: str, event_id: str) -> bool:
+        return any(event.id == event_id for event in self._buf.get(bot_id, ()))
+
     def replay(self, bot_id: str, after: str | None = None) -> list[ProductEvent]:
         items = list(self._buf.get(bot_id, ()))
         if not after:
@@ -63,8 +67,11 @@ class EventHub:
         queue: asyncio.Queue[ProductEvent] = asyncio.Queue(maxsize=256)
         self._subs[bot_id].add(queue)
         try:
-            for event in self.replay(bot_id, after=after):
-                yield event
+            if after and not self.has_event(bot_id, after):
+                yield REPLAY_GAP
+            else:
+                for event in self.replay(bot_id, after=after):
+                    yield event
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=heartbeat_s)

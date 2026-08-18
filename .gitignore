@@ -22,6 +22,8 @@ client/url
 scripts/
 test-results/
 docs/
+docker-compose.local.yml
+docker-compose.override.yml
 workspace/*.py
 
 # desktop UI toolchain

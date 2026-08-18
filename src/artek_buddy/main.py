@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket
 from fastapi.responses import Response, StreamingResponse
 
-from artek_buddy.auth import host_token_match
-from artek_buddy.bus import HEARTBEAT, EventHub
+from artek_buddy.auth import host_token_match, pairing_attempts
+from artek_buddy.bus import HEARTBEAT, REPLAY_GAP, EventHub
 from artek_buddy.config import Settings, get_settings
 from artek_buddy.contracts import (
     Bot,
@@ -64,9 +65,9 @@ from artek_buddy.contracts import (
 )
 from artek_buddy.cron import CronError
 from artek_buddy.computer.proxy import proxy_novnc_http, proxy_novnc_ws
-from artek_buddy.computer.service import ComputerBusy, ComputerError, ComputerService
+from artek_buddy.computer.service import ComputerBusy, ComputerError, ComputerService, ComputerUnavailable
 from artek_buddy.db import DatabaseUnavailable, product_run_status
-from artek_buddy.db.history import HistoryStore
+from artek_buddy.db.history import HistoryStore, InboxFullError
 from artek_buddy.db.shaping import (
     DEFAULT_BOT_NAME,
     DEFAULT_PAGE_SIZE,
@@ -97,6 +98,19 @@ from artek_buddy.stream import accumulate
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
+
+class _RedactNovncFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if "/novnc/" not in message:
+            return True
+        record.msg = re.sub(r"/novnc/\S+", "/novnc/[redacted]", message)
+        record.args = ()
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_RedactNovncFilter())
+
 MAX_INBOX = 20
 
 
@@ -115,9 +129,12 @@ async def lifespan(app: FastAPI):
     try:
         async with open_runtime(settings, store, computers) as runtime:
             try:
-                store.ensure_seed(cursor_agent_id=runtime.default_agent_id)
+                store.ensure_workspace()
+                leftover = store.fail_orphaned_runs()
+                if leftover:
+                    log.warning("marked %s leftover run(s) failed after restart", leftover)
             except DatabaseUnavailable:
-                log.exception("seed skipped; postgres unavailable")
+                log.exception("workspace setup skipped; postgres unavailable")
             app.state.settings = settings
             app.state.runtime = runtime
             app.state.store = store
@@ -131,6 +148,14 @@ async def lifespan(app: FastAPI):
             runtime.loop = asyncio.get_running_loop()
             app.state.subagents = subagents
             runtime.on_takeover_requested = _handle_takeover_request
+            try:
+                for bot in store.list_bots():
+                    asyncio.create_task(
+                        _kick_inbox(store, runtime, app.state.hub, bot),
+                        name=f"inbox-recover-{bot.id}",
+                    )
+            except DatabaseUnavailable:
+                log.exception("inbox recovery skipped; postgres unavailable")
             log.info(
                 "listening on %s:%s runtime=%s default_agent=%s",
                 settings.http_host,
@@ -139,11 +164,18 @@ async def lifespan(app: FastAPI):
                 runtime.default_agent_id,
             )
             yield
+            await _shutdown_work()
     finally:
         store.close()
 
 
-app = FastAPI(title="Artek Buddy", lifespan=lifespan)
+app = FastAPI(
+    title="Artek Buddy",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 
 def runtime() -> AgentRuntime:
@@ -201,6 +233,23 @@ async def require_host(
         raise HTTPException(status_code=401, detail="missing bearer token")
     if not host_token_match(token, cfg.agent_http_token):
         raise HTTPException(status_code=403, detail="host token required")
+
+
+async def _authorize_websocket(websocket: WebSocket) -> str:
+    cfg: Settings = websocket.app.state.settings
+    history: HistoryStore = websocket.app.state.store
+    token = _bearer(websocket.headers.get("authorization"))
+    if token is None:
+        raise HTTPException(status_code=401, detail="missing bearer token")
+    if host_token_match(token, cfg.agent_http_token):
+        return "host"
+    try:
+        device = history.lookup_device_token(token)
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    if device is None:
+        raise HTTPException(status_code=403, detail="invalid token")
+    return device.id
 
 
 def _db_error(err: DatabaseUnavailable) -> HTTPException:
@@ -267,6 +316,8 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
 def _computer_http(err: Exception) -> HTTPException:
     if isinstance(err, ComputerBusy):
         return HTTPException(status_code=409, detail=f"{err.name} is using the computer")
+    if isinstance(err, ComputerUnavailable):
+        return HTTPException(status_code=502, detail=str(err) or "screen unavailable")
     if isinstance(err, ComputerError):
         return HTTPException(status_code=400, detail=str(err))
     return HTTPException(status_code=500, detail=str(err))
@@ -334,6 +385,23 @@ def _emit(
     return event
 
 
+def _emit_answered_asks(
+    history: HistoryStore,
+    events: EventHub,
+    bot: Bot,
+    text: str,
+    run_id: str | None,
+) -> None:
+    for message in history.answer_pending_asks(bot.thread_id, text):
+        _emit(
+            events,
+            bot,
+            ProductEventType.THREAD_MESSAGE_CREATED,
+            {"message": message.model_dump(mode="json")},
+            run_id=run_id,
+        )
+
+
 def _turn_bucket(bot_id: str) -> dict[str, asyncio.Task[Any]]:
     turns = getattr(app.state, "active_turns", None)
     if turns is None:
@@ -376,6 +444,27 @@ def _cancel_turns(bot_id: str, run_id: str | None = None) -> None:
             task.cancel()
 
 
+async def _shutdown_work() -> None:
+    pending: list[asyncio.Task[Any]] = []
+    turns = getattr(app.state, "active_turns", None)
+    if turns:
+        for bucket in list(turns.values()):
+            for task in list(bucket.values()):
+                if task and not task.done():
+                    task.cancel()
+                    pending.append(task)
+    service = getattr(app.state, "subagents", None)
+    history = getattr(app.state, "store", None)
+    if service is not None and history is not None:
+        try:
+            for bot in history.list_bots():
+                service.stop_all(bot)
+        except Exception:
+            log.exception("failed to stop subagents during shutdown")
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
 def _message_excerpt(message: ThreadMessage, limit: int = 400) -> str:
     raw: list[dict[str, Any]] = []
     for block in message.blocks or []:
@@ -402,49 +491,21 @@ async def _accept_turn(
             reply_msg = history.get_message_in_thread(bot.thread_id, reply_to_id)
             if reply_msg is None:
                 raise HTTPException(status_code=400, detail="reply target not found")
-        already_busy = history.has_active_run(bot.id)
-        if already_busy:
-            current = history.latest_run(bot.id)
-            if current is None:
-                raise HTTPException(status_code=409, detail="run already in progress")
-            if history.inbox_count(bot.id) >= MAX_INBOX:
-                raise HTTPException(status_code=409, detail="too many queued messages")
-            user_msg = history.append_user_message(
-                bot,
-                text,
-                reply_to_id=reply_msg.id if reply_msg else None,
-            )
-            history.enqueue_inbox(
-                bot.id,
-                user_msg.id,
-                text,
-                reply_to_id=reply_msg.id if reply_msg else None,
-            )
-            _emit(
-                events,
-                bot,
-                ProductEventType.THREAD_MESSAGE_CREATED,
-                {"message": user_msg.model_dump(mode="json")},
-                run_id=current.id,
-            )
-            return ThreadSendResult(
-                task_id=current.task_id,
-                run_id=current.id,
-                seq=user_msg.seq,
-                run=current,
-                queued=True,
-            )
-        user_msg, run = history.begin_turn(
+        user_msg, run, queued = history.begin_or_enqueue_turn(
             bot,
             text,
             model_provider=runtime_kind(rt.settings),
             model_id=rt.settings.cursor_model,
             trigger=trigger,
             reply_to_id=reply_msg.id if reply_msg else None,
+            max_inbox=MAX_INBOX,
         )
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
+    except InboxFullError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
 
+    _emit_answered_asks(history, events, bot, text, run.id)
     _emit(
         events,
         bot,
@@ -452,6 +513,14 @@ async def _accept_turn(
         {"message": user_msg.model_dump(mode="json")},
         run_id=run.id,
     )
+    if queued:
+        return ThreadSendResult(
+            task_id=run.task_id,
+            run_id=run.id,
+            seq=user_msg.seq,
+            run=run,
+            queued=True,
+        )
     _emit(
         events,
         bot,
@@ -642,33 +711,18 @@ async def _kick_inbox(
     bot: Bot,
 ) -> None:
     try:
-        items = history.drain_inbox(bot.id)
-    except Exception:
-        log.exception("failed to drain inbox")
-        return
-    if not items or history.has_active_run(bot.id):
-        return
-    live = history.get_bot(bot.id) or bot
-    try:
-        run = history.begin_run(
+        live = history.get_bot(bot.id) or bot
+        claimed = history.claim_inbox_follow_up(
             live,
-            trigger="follow_up",
             model_provider=runtime_kind(rt.settings),
             model_id=rt.settings.cursor_model,
         )
     except Exception:
-        log.exception("failed to start inbox follow-up")
-        for item in items:
-            try:
-                history.enqueue_inbox(
-                    live.id,
-                    str(item.get("message_id") or ""),
-                    str(item.get("text") or ""),
-                    reply_to_id=item.get("reply_to_id"),
-                )
-            except Exception:
-                log.exception("failed to restore inbox item")
+        log.exception("failed to claim inbox")
         return
+    if claimed is None:
+        return
+    run, items = claimed
     _emit(
         events,
         live,
@@ -704,7 +758,6 @@ async def health() -> HealthResponse:
             db_ok = False
     return HealthResponse(
         ok=current is not None,
-        agent_id=getattr(current, "default_agent_id", None),
         db=db_ok,
     )
 
@@ -719,6 +772,7 @@ async def create_pairing(history: HistoryStore = Depends(store)) -> PairingCode:
 
 @app.post("/v1/devices")
 async def create_device(
+    request: Request,
     body: CreateDeviceInput,
     authorization: str | None = Header(default=None),
     cfg: Settings = Depends(settings),
@@ -727,11 +781,18 @@ async def create_device(
     pairing = (body.pairing_code or "").strip()
     token = _bearer(authorization)
     if pairing:
+        key = request.client.host if request.client else "unknown"
+        if not pairing_attempts.allow(key):
+            raise HTTPException(
+                status_code=429,
+                detail="too many pairing attempts, try again in a few minutes",
+            )
         try:
             ok = history.consume_pairing_code(pairing)
         except DatabaseUnavailable as err:
             raise _db_error(err) from err
         if not ok:
+            pairing_attempts.record(key)
             raise HTTPException(status_code=403, detail="invalid or expired pairing code")
     elif token is None:
         raise HTTPException(status_code=401, detail="missing bearer token")
@@ -1153,7 +1214,7 @@ async def subscribe_thread_events(
     events: EventHub = Depends(hub),
 ) -> StreamingResponse:
     try:
-        _require_bot(history, bot_id)
+        bot = _require_bot(history, bot_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
 
@@ -1161,6 +1222,20 @@ async def subscribe_thread_events(
         async for item in events.subscribe(bot_id, after=after):
             if item is HEARTBEAT:
                 yield ": keepalive\n\n"
+                continue
+            if item is REPLAY_GAP:
+                gap = ProductEvent(
+                    id=new_id("evt"),
+                    workspace_id=bot.workspace_id,
+                    thread_id=bot.thread_id,
+                    bot_id=bot.id,
+                    seq=0,
+                    type=ProductEventType.THREAD_REPLAY_GAP,
+                    created_at=isoformat_utc(),
+                    payload={"after": after},
+                )
+                data = gap.model_dump_json()
+                yield f"id: {gap.id}\nevent: {gap.type.value}\ndata: {data}\n\n"
                 continue
             data = item.model_dump_json()
             yield f"id: {item.id}\nevent: {item.type.value}\ndata: {data}\n\n"
@@ -1470,6 +1545,42 @@ async def computer_stop(
     return status
 
 
+@app.post("/v1/computer/{bot_id}/restart", dependencies=[Depends(require_auth)])
+async def computer_restart(
+    bot_id: str,
+    history: HistoryStore = Depends(store),
+    events: EventHub = Depends(hub),
+    boxes: ComputerService = Depends(computers),
+) -> ComputerStatus:
+    try:
+        bot = _require_bot(history, bot_id)
+        status = boxes.restart(bot)
+    except (ComputerBusy, ComputerError) as err:
+        raise _computer_http(err) from err
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    _emit_computer(events, bot, status)
+    return status
+
+
+@app.post("/v1/computer/{bot_id}/reset", dependencies=[Depends(require_auth)])
+async def computer_reset(
+    bot_id: str,
+    history: HistoryStore = Depends(store),
+    events: EventHub = Depends(hub),
+    boxes: ComputerService = Depends(computers),
+) -> ComputerStatus:
+    try:
+        bot = _require_bot(history, bot_id)
+        status = boxes.reset(bot)
+    except (ComputerBusy, ComputerError) as err:
+        raise _computer_http(err) from err
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    _emit_computer(events, bot, status)
+    return status
+
+
 @app.post("/v1/computer/{bot_id}/takeover", dependencies=[Depends(require_auth)])
 async def computer_takeover(
     bot_id: str,
@@ -1589,11 +1700,17 @@ async def computer_read_file(
         raise _db_error(err) from err
 
 
-@app.api_route("/novnc/{rest:path}", methods=["GET", "HEAD"])
+@app.api_route("/novnc/{rest:path}", methods=["GET", "HEAD"], dependencies=[Depends(require_auth)])
 async def novnc_http(rest: str, request: Request) -> Response:
     return await proxy_novnc_http(request, request.app.state.settings.agent_http_token)
 
 
 @app.websocket("/novnc/{rest:path}")
 async def novnc_ws(websocket: WebSocket, rest: str) -> None:
+    try:
+        await _authorize_websocket(websocket)
+    except HTTPException as err:
+        code = 4401 if err.status_code == 401 else 4403
+        await websocket.close(code=code)
+        return
     await proxy_novnc_ws(websocket, websocket.app.state.settings.agent_http_token)

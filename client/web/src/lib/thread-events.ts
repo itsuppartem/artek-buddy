@@ -44,6 +44,7 @@ export function prependThreadMessagePage(
   page: ThreadMessagePage,
 ): ThreadSnapshot | null {
   if (!prev) return prev;
+  if (page.threadId && prev.threadId && page.threadId !== prev.threadId) return prev;
   const seen = new Set(prev.messages.map((message) => message.id));
   const older = page.messages.filter((message) => !seen.has(message.id));
   return {
@@ -345,7 +346,13 @@ function subagentMessage(item: Subagent, seq: number): ThreadMessage {
 }
 
 function isActiveRun(status: string | undefined): boolean {
-  return status === "queued" || status === "leased" || status === "running";
+  return (
+    status === "queued" ||
+    status === "leased" ||
+    status === "running" ||
+    status === "waiting_input" ||
+    status === "waiting_takeover"
+  );
 }
 
 export function liveMessageId(kind: "progress" | "stream", runId?: string | null): string {

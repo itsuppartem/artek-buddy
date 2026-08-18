@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readClientLogTail } from "./client-log";
+import { createBot } from "./helpers";
 
 test.describe("paired shell", () => {
   test("walks the live panes and does not paint raw tool cards", async ({ page }) => {
@@ -12,6 +13,7 @@ test.describe("paired shell", () => {
     await expect(page.locator("aside button").first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByLabel("Message")).toBeVisible();
     await expect(page.getByLabel("Message")).not.toHaveAttribute("placeholder", "Message…");
+    await createBot(page);
     await page.screenshot({ path: "test-results/shell-thread.png" });
 
     await expect(page.getByText("Tool", { exact: true })).toHaveCount(0);

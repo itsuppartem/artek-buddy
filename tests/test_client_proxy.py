@@ -37,14 +37,14 @@ class ClientProxyTest(unittest.TestCase):
                 with patch.dict(os.environ, {"AGENT_HTTP_TOKEN": "env-token"}):
                     self.assertEqual(module._load_token(), "user-device-token")
 
-    def test_token_uses_env_before_leftover_files(self) -> None:
+    def test_token_ignores_host_env(self) -> None:
         module = _load()
         with tempfile.TemporaryDirectory() as raw:
             home = Path(raw)
             (home / ".config" / "artek-buddy").mkdir(parents=True)
             with patch.object(module.Path, "home", return_value=home):
                 with patch.dict(os.environ, {"AGENT_HTTP_TOKEN": "env-token"}):
-                    self.assertEqual(module._load_token(), "env-token")
+                    self.assertNotEqual(module._load_token(), "env-token")
 
     def test_local_status_unpaired(self) -> None:
         module = _load()
@@ -357,6 +357,42 @@ class ClientProxyTest(unittest.TestCase):
                 httpd.shutdown()
                 httpd.server_close()
 
+    def test_local_unpair_forgets_the_device_token(self) -> None:
+        module = _load()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            cfg = home / ".config" / "artek-buddy"
+            cfg.mkdir(parents=True)
+            (cfg / "token").write_text("dev_forget_me\n", encoding="utf-8")
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve("http://127.0.0.1:9", "dev_forget_me", 0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                port = httpd.server_address[1]
+                with patch.object(module.Path, "home", return_value=home):
+                    req = Request(
+                        f"http://127.0.0.1:{port}/local/unpair",
+                        data=b"{}",
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(req, timeout=8) as resp:
+                        payload = json.loads(resp.read().decode())
+                    self.assertTrue(payload["ok"])
+                    self.assertFalse(payload["paired"])
+                    self.assertFalse((cfg / "token").exists())
+                    self.assertEqual(httpd.token, "")
+                    with urlopen(f"http://127.0.0.1:{port}/local/status", timeout=8) as resp:
+                        status = json.loads(resp.read().decode())
+                    self.assertFalse(status["paired"])
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
     def test_proxy_health_when_host_is_up(self) -> None:
         token_path = ROOT / "client" / "token"
         if not token_path.is_file():
@@ -385,3 +421,79 @@ class ClientProxyTest(unittest.TestCase):
         finally:
             httpd.shutdown()
             httpd.server_close()
+
+    def test_pairing_url_allowlist(self) -> None:
+        module = _load()
+        self.assertTrue(module.pairing_url_allowed("http://127.0.0.1:8080"))
+        self.assertTrue(module.pairing_url_allowed("http://192.168.1.10:8080"))
+        self.assertTrue(module.pairing_url_allowed("http://100.64.1.2:8080"))
+        self.assertTrue(module.pairing_url_allowed("https://pi.ts.net"))
+        self.assertFalse(module.pairing_url_allowed("https://example.com"))
+        self.assertFalse(module.pairing_url_allowed("ftp://127.0.0.1"))
+
+    def test_proxy_origin_allowlist(self) -> None:
+        module = _load()
+        self.assertTrue(module.proxy_origin_allowed(None, None, 4173))
+        self.assertTrue(module.proxy_origin_allowed("http://127.0.0.1:4173", "same-origin", 4173))
+        self.assertFalse(module.proxy_origin_allowed("https://evil.example", "cross-site", 4173))
+        self.assertFalse(module.proxy_origin_allowed("http://127.0.0.1:9999", None, 4173))
+
+    def test_redacts_novnc_paths_in_logs(self) -> None:
+        module = _load()
+        raw = 'GET /novnc/view/127.0.0.1/6080/embed.html?sig=secret HTTP/1.1" 200 -'
+        self.assertEqual(module._redact_client_log(raw), 'GET /novnc/[redacted] HTTP/1.1" 200 -')
+
+    def test_proxy_rejects_cross_site(self) -> None:
+        module = _load()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve("http://127.0.0.1:9", "dev-token", 0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                port = httpd.server_address[1]
+                req = Request(
+                    f"http://127.0.0.1:{port}/health",
+                    headers={
+                        "Origin": "https://evil.example",
+                        "Sec-Fetch-Site": "cross-site",
+                    },
+                )
+                with self.assertRaises(HTTPError) as raised:
+                    urlopen(req, timeout=8)
+                self.assertEqual(raised.exception.code, 403)
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+    def test_local_pair_rejects_public_url(self) -> None:
+        module = _load()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve("http://127.0.0.1:9", "", 0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                port = httpd.server_address[1]
+                req = Request(
+                    f"http://127.0.0.1:{port}/local/pair",
+                    data=json.dumps(
+                        {
+                            "pairing_code": "ABCD-EFGH",
+                            "name": "desktop",
+                            "url": "https://example.com",
+                        }
+                    ).encode(),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with self.assertRaises(HTTPError) as raised:
+                    urlopen(req, timeout=8)
+                self.assertEqual(raised.exception.code, 400)
+            finally:
+                httpd.shutdown()
+                httpd.server_close()

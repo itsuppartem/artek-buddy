@@ -20,6 +20,17 @@ describe("thread event reduction", () => {
     expect(next?.olderCursor).toBeNull();
   });
 
+  it("does not splice another thread's history into the open chat", () => {
+    const initial = snapshot([message("m-2", [], 2)], 2);
+    const next = prependThreadMessagePage(initial, {
+      threadId: "thread-other",
+      messages: [message("leak", [], 0)],
+      olderCursor: null,
+    });
+    expect(next).toBe(initial);
+    expect(next?.messages.map((item) => item.id)).toEqual(["m-2"]);
+  });
+
   it("merges a refreshed page with loaded history and drops live drafts", () => {
     const previous = snapshot(
       [
@@ -146,6 +157,44 @@ describe("thread event reduction", () => {
     );
     expect(next?.messages.map((item) => item.id)).toEqual(["msg-1"]);
     expect(next?.messages[0]?.blocks).toEqual([{ kind: "text", text: "done" }]);
+  });
+
+  it("replaces a pending ask card with the answered one", () => {
+    const initial = snapshot([
+      message(
+        "ask-1",
+        [
+          {
+            kind: "ask",
+            text: "Which city?",
+            status: "pending",
+            actions: [{ id: "opt_1", label: "Belgrade" }],
+          },
+        ],
+        3,
+      ),
+    ]);
+    const next = reduceThreadSnapshot(
+      initial,
+      event({
+        type: "thread.message.created",
+        seq: 4,
+        payload: {
+          message: {
+            id: "ask-1",
+            role: "bot",
+            seq: 3,
+            threadId: "thread-1",
+            createdAt: "2026-08-17T00:00:02.000Z",
+            blocks: [{ kind: "ask", text: "Which city?", status: "answered", answer: "Belgrade" }],
+          },
+        },
+      }),
+    );
+    expect(next?.messages).toHaveLength(1);
+    expect(next?.messages[0]?.blocks).toEqual([
+      { kind: "ask", text: "Which city?", status: "answered", answer: "Belgrade" },
+    ]);
   });
 
   it("treats live stream and thinking drafts as hidden monologue", () => {

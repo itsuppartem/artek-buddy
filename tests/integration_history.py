@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 
 from tests.pgutil import open_test_store
@@ -157,6 +158,87 @@ class HistoryIntegrationTest(unittest.TestCase):
         follow = self.store.begin_run(bot, trigger="follow_up")
         self.assertEqual(follow.trigger, "follow_up")
         self.assertTrue(self.store.has_active_run(bot.id))
+
+    def test_answer_pending_asks(self) -> None:
+        bot = self.store.create_bot(name="ask-answer")
+        self.addCleanup(self.store.delete_bot, bot.id)
+        pending = self.store.append_bot_message(
+            bot,
+            [
+                {
+                    "kind": "ask",
+                    "text": "Which city?",
+                    "status": "pending",
+                    "actions": [{"id": "opt_1", "label": "Belgrade"}],
+                }
+            ],
+        )
+        updated = self.store.answer_pending_asks(bot.thread_id, "Belgrade")
+        self.assertEqual(len(updated), 1)
+        self.assertEqual(updated[0].id, pending.id)
+        ask = updated[0].blocks[0]
+        self.assertEqual(ask.kind, "ask")
+        self.assertEqual(ask.status, "answered")
+        self.assertEqual(ask.answer, "Belgrade")
+        self.assertEqual(self.store.answer_pending_asks(bot.thread_id, "Berlin"), [])
+
+    def test_begin_or_enqueue_turn_serializes_simultaneous_sends(self) -> None:
+        bot = self.store.create_bot(name="atomic-send")
+        self.addCleanup(self.store.delete_bot, bot.id)
+
+        def accept(text: str) -> tuple[object, object, bool]:
+            return self.store.begin_or_enqueue_turn(bot, text, model_provider="scripted")
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(accept, ["first", "second"]))
+
+        queued = [result for result in results if result[2]]
+        started = [result for result in results if not result[2]]
+        self.assertEqual(len(started), 1)
+        self.assertEqual(len(queued), 1)
+        self.assertEqual(self.store.active_run_count(bot.id), 1)
+        self.assertEqual(self.store.inbox_count(bot.id), 1)
+        self.assertEqual(started[0][1].id, queued[0][1].id)
+
+    def test_claim_inbox_follow_up_never_drops_queued_messages(self) -> None:
+        bot = self.store.create_bot(name="atomic-inbox")
+        self.addCleanup(self.store.delete_bot, bot.id)
+        _, first_run, queued = self.store.begin_or_enqueue_turn(bot, "first", model_provider="scripted")
+        self.assertFalse(queued)
+        queued_message, active_run, queued = self.store.begin_or_enqueue_turn(
+            bot,
+            "second",
+            model_provider="scripted",
+        )
+        self.assertTrue(queued)
+        self.assertEqual(first_run.id, active_run.id)
+        self.store.finish_turn(bot, first_run, "done", "completed")
+
+        claimed = self.store.claim_inbox_follow_up(bot, model_provider="scripted")
+        self.assertIsNotNone(claimed)
+        follow_up, items = claimed or (None, [])
+        self.assertEqual([item["message_id"] for item in items], [queued_message.id])
+        self.assertEqual(self.store.inbox_count(bot.id), 0)
+        self.assertEqual(self.store.active_run_count(bot.id), 1)
+        self.assertEqual(follow_up.trigger, "follow_up")
+
+    def test_fail_orphaned_runs_clears_stuck_work_after_restart(self) -> None:
+        bot = self.store.create_bot(name="orphaned-run")
+        self.addCleanup(self.store.delete_bot, bot.id)
+        _, run, queued = self.store.begin_or_enqueue_turn(bot, "still working", model_provider="scripted")
+        self.assertFalse(queued)
+        self.assertEqual(self.store.active_run_count(bot.id), 1)
+
+        count = self.store.fail_orphaned_runs("The host restarted before this turn finished.")
+        self.assertEqual(count, 1)
+        self.assertEqual(self.store.active_run_count(bot.id), 0)
+        finished = self.store.latest_run(bot.id)
+        self.assertIsNotNone(finished)
+        self.assertEqual(finished.id, run.id)
+        self.assertEqual(finished.status.value if hasattr(finished.status, "value") else finished.status, "failed")
+        self.assertIn("restarted", finished.error or "")
+        live = self.store.get_bot(bot.id)
+        self.assertEqual(live.status if live else "", "idle")
 
 
 if __name__ == "__main__":

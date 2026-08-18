@@ -125,6 +125,13 @@ class _Store:
         self.inbox = []
         return items
 
+    def claim_inbox_follow_up(self, bot: Bot, **kwargs: object) -> tuple[Run, list[dict[str, str | None]]] | None:
+        if not self.inbox or self.has_active_run(bot.id):
+            return None
+        items = list(self.inbox)
+        self.inbox = []
+        return _run(bot, run_id="run_inbox"), items
+
     def has_active_run(self, bot_id: str) -> bool:
         return False
 
@@ -163,6 +170,18 @@ class TurnPipelineTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(ProductEventType.THREAD_PROGRESS, types)
         self.assertIn(ProductEventType.THREAD_MESSAGE_CREATED, types)
         self.assertIn(ProductEventType.RUN_COMPLETED, types)
+
+    async def test_prompt_scenario_hides_live_draft_from_the_bus(self) -> None:
+        bot = _bot()
+        store = _Store(bot)
+        runtime = ScriptedRuntime(_settings(), store=store)
+        await runtime.start()
+        events = EventHub()
+        await _run_turn(store, runtime, events, bot, "e2e-hide-draft", _run(bot))
+        self.assertEqual(store.finished[-1]["text"], "Belgrade is 22°C and clear.")
+        types = [item.type for item in events.replay(bot.id)]
+        self.assertNotIn(ProductEventType.THREAD_MESSAGE_UPDATED, types)
+        self.assertNotIn(ProductEventType.THREAD_PROGRESS, types)
 
     async def test_run_turn_remember_and_runtime_error(self) -> None:
         bot = _bot()

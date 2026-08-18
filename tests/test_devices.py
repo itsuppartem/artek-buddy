@@ -5,12 +5,16 @@ import unittest
 
 from artek_buddy.auth import (
     PAIRING_ALPHABET,
+    AttemptLimiter,
     hash_secret,
     host_token_match,
     new_device_token,
     new_pairing_code,
     normalize_pairing_code,
 )
+from pydantic import ValidationError
+
+from artek_buddy.config import Settings
 from artek_buddy.__main__ import main as pair_main
 from artek_buddy.contracts import PROCEDURES_BY_NAME, CreateDeviceInput, Device, DeviceCreated
 
@@ -49,6 +53,20 @@ class AuthHelpersTest(unittest.TestCase):
         self.assertRegex(code, r"^[A-Z2-9]{4}-[A-Z2-9]{4}$")
         self.assertTrue(all(ch in PAIRING_ALPHABET or ch == "-" for ch in code))
         self.assertEqual(len(normalize_pairing_code(code)), 8)
+
+    def test_placeholder_host_token_is_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            Settings(agent_http_token="change-me")
+
+    def test_pairing_limiter_blocks_after_window_fills(self) -> None:
+        limiter = AttemptLimiter(limit=3, window_seconds=60)
+        self.assertTrue(limiter.allow("10.0.0.1", now=100.0))
+        limiter.record("10.0.0.1", now=100.0)
+        limiter.record("10.0.0.1", now=101.0)
+        limiter.record("10.0.0.1", now=102.0)
+        self.assertFalse(limiter.allow("10.0.0.1", now=103.0))
+        self.assertTrue(limiter.allow("10.0.0.2", now=103.0))
+        self.assertTrue(limiter.allow("10.0.0.1", now=163.0))
 
 
 class DeviceContractTest(unittest.TestCase):

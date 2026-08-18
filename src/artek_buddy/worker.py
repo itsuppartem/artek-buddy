@@ -69,9 +69,11 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
     for routine in due:
         status = wake_routine(base, token, routine.bot_id, routine.prompt)
         if status in {200, 201}:
+            store.ack_routine(routine.id)
             woke += 1
             log.info("routine woke id=%s status=%s", routine.id, status)
         elif status == 409:
+            store.ack_routine(routine.id)
             log.info("routine skipped busy id=%s", routine.id)
         else:
             retry = datetime.now(timezone.utc) + timedelta(seconds=RETRY_SECONDS)

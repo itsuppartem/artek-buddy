@@ -67,6 +67,27 @@ class DockerEngine:
             return None
         return self.inspect(data[0]["Id"])
 
+    def ensure_network(self, name: str = "artek-computers") -> str:
+        status, data = self.request("GET", f"/networks/{quote(name)}")
+        if status == 200 and isinstance(data, dict):
+            return name
+        status, created = self.request(
+            "POST",
+            "/networks/create",
+            {
+                "Name": name,
+                "CheckDuplicate": True,
+                "Driver": "bridge",
+                "Internal": False,
+                "Options": {"com.docker.network.bridge.enable_icc": "false"},
+            },
+        )
+        if status in {201, 409} or (isinstance(created, dict) and created.get("Id")):
+            return name
+        if status >= 300:
+            raise RuntimeError(f"docker network create failed: {status} {created}")
+        return name
+
     def create(self, spec: dict[str, Any]) -> str:
         name = spec.pop("name")
         status, data = self.request("POST", f"/containers/create?name={quote(name)}", spec)

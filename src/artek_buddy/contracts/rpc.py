@@ -83,6 +83,8 @@ PROCEDURES: list[Procedure] = [
     _p("computer.status", "GET", "/v1/computer/{bot_id}", "BotIdInput", "ComputerStatus", True),
     _p("computer.boot", "POST", "/v1/computer/{bot_id}/boot", "BotIdInput", "ComputerStatus", True),
     _p("computer.stop", "POST", "/v1/computer/{bot_id}/stop", "BotIdInput", "ComputerStatus", True),
+    _p("computer.restart", "POST", "/v1/computer/{bot_id}/restart", "BotIdInput", "ComputerStatus", True),
+    _p("computer.reset", "POST", "/v1/computer/{bot_id}/reset", "BotIdInput", "ComputerStatus", True),
     _p("computer.takeover", "POST", "/v1/computer/{bot_id}/takeover", "BotIdInput", "TakeoverResult", True),
     _p("computer.release", "POST", "/v1/computer/{bot_id}/release", "BotIdInput", "OkResponse", True),
     _p("computer.input", "POST", "/v1/computer/{bot_id}/input", "ComputerInput", "OkResponse", True),

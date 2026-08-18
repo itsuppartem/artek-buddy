@@ -516,10 +516,9 @@ class ThreadSendResult(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """GET /health is process liveness. db is additive."""
+    """GET /health is process liveness. db is additive. No agent identity."""
 
     ok: bool
-    agent_id: str | None = None
     db: bool | None = None
 
 

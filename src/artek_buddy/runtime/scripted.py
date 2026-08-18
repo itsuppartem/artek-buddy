@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -14,6 +15,14 @@ from artek_buddy.stream import _map_tool_to_events
 
 log = logging.getLogger("artek_buddy")
 
+E2E_DRAFT_LEAK = "grade's current weather from a public API"
+E2E_DRAFT_ANSWER = "Belgrade is 22°C and clear."
+E2E_CLOSE_STATUS = "Closing Chromium"
+E2E_SLOW_ANSWER = "slow done"
+E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C"
+E2E_ASK_QUESTION = "Which city?"
+E2E_FAIL_ERROR = "scripted fail"
+
 
 @dataclass
 class ScriptedStep:
@@ -24,6 +33,7 @@ class ScriptedStep:
     status: str | None = None
     error: str | None = None
     raise_error: str | None = None
+    delay_s: float | None = None
 
 
 def scripted_text(text: str) -> ScriptedStep:
@@ -38,8 +48,45 @@ def scripted_tool(name: str, **args: Any) -> ScriptedStep:
     return ScriptedStep(tool=name, args=dict(args))
 
 
+def scripted_delay(seconds: float) -> ScriptedStep:
+    return ScriptedStep(delay_s=seconds)
+
+
 def scripted_finish(result: str = "ok", status: str = "completed", error: str | None = None) -> ScriptedStep:
     return ScriptedStep(result=result, status=status, error=error)
+
+
+def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
+    text = prompt or ""
+    if "e2e-hide-draft" in text:
+        return [
+            scripted_progress("planning the lookup"),
+            scripted_text(E2E_DRAFT_LEAK),
+            scripted_delay(0.6),
+            scripted_finish(E2E_DRAFT_ANSWER),
+        ]
+    if "e2e-close-browser" in text:
+        return [
+            scripted_tool("send_message", text=E2E_CLOSE_STATUS),
+            scripted_tool("close_app", application="chromium"),
+            scripted_finish("browser closed"),
+        ]
+    if "e2e-ask" in text:
+        return [
+            scripted_tool(
+                "ask_user",
+                question=E2E_ASK_QUESTION,
+                options=["Belgrade", "Berlin"],
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-slow" in text:
+        return [scripted_delay(2.5), scripted_finish(E2E_SLOW_ANSWER)]
+    if "e2e-markdown-preview" in text:
+        return [scripted_finish(E2E_MARKDOWN_ANSWER)]
+    if "e2e-fail" in text:
+        return [scripted_finish(E2E_FAIL_ERROR, status="failed", error=E2E_FAIL_ERROR)]
+    return [scripted_text("ok"), scripted_finish("ok")]
 
 
 class ScriptedRuntime(RuntimeBase):
@@ -122,16 +169,16 @@ class ScriptedRuntime(RuntimeBase):
     ) -> AsyncIterator[ProductStreamEvent | RunRecord]:
         agent_id = await self.ensure_session(session_id, bot_id=bot_id, role=role)
         self.bind_agent_bot(agent_id, bot_id)
-        steps = self._queue.pop(0) if self._queue else [
-            scripted_text("ok"),
-            scripted_finish("ok"),
-        ]
+        steps = self._queue.pop(0) if self._queue else steps_for_prompt(prompt)
         tools = ProductTools(self)
         result = ""
         status = "completed"
         error: str | None = None
         run_id = new_id("run")
         for step in steps:
+            if step.delay_s:
+                await asyncio.sleep(step.delay_s)
+                continue
             if step.raise_error:
                 raise AgentRuntimeError(step.raise_error)
             if step.tool:

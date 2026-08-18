@@ -9,9 +9,11 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +30,33 @@ USER = "artek"
 PASSWORD = "artek"
 DATABASE = "artek_buddy_ui"
 TOKEN = "ui-e2e-token"
+FAKE_NOVNC_HTML = b"<html><body><canvas id='screen'></canvas></body></html>"
+
+
+class _FakeNovnc(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(FAKE_NOVNC_HTML)))
+        self.end_headers()
+        self.wfile.write(FAKE_NOVNC_HTML)
+
+    def log_message(self, *_args: object) -> None:
+        return
+
+
+def _start_fake_novnc() -> list[ThreadingHTTPServer]:
+    servers: list[ThreadingHTTPServer] = []
+    for port in (16080, 16081):
+        try:
+            httpd = ThreadingHTTPServer(("127.0.0.1", port), _FakeNovnc)
+        except OSError as err:
+            print(f"run_ui: fake noVNC :{port} unavailable ({err})", file=sys.stderr)
+            continue
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        servers.append(httpd)
+    return servers
 
 
 def _docker() -> str:
@@ -118,7 +147,9 @@ def main() -> int:
         return 1
 
     host: subprocess.Popen[bytes] | None = None
+    novnc: list[ThreadingHTTPServer] = []
     try:
+        novnc = _start_fake_novnc()
         _wait_postgres(database_url)
         scratch = Path(tempfile.mkdtemp(prefix="artek-ui-e2e-"))
         data_dir = scratch / "data"
@@ -141,6 +172,7 @@ def main() -> int:
                 "AGENT_DATA_DIR": str(data_dir),
                 "AGENT_CWD": str(cwd_dir),
                 "CURSOR_API_KEY": "",
+                "ARTEK_SCREEN_STARTUP_RETRY_SECONDS": "0",
             }
         )
         host = subprocess.Popen(
@@ -181,6 +213,8 @@ def main() -> int:
             return 1
         return subprocess.call([npx, "playwright", "test"], cwd=WEB, env=play_env)
     finally:
+        for server in novnc:
+            server.shutdown()
         if host is not None and host.poll() is None:
             try:
                 os.killpg(host.pid, signal.SIGTERM)

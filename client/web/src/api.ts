@@ -12,14 +12,57 @@ import type {
   ThreadSnapshot,
 } from "./types";
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+const REQUEST_TIMEOUT_MS = 30_000;
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly retryable = false,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export type ShellErrorKind = "host" | "auth" | "action";
+
+export function classifyError(err: unknown): { message: string; kind: ShellErrorKind } {
+  if (err instanceof ApiError) {
+    if (err.status === 401 || err.status === 403) {
+      return { message: err.message, kind: "auth" };
+    }
+    if (err.retryable || err.status == null) {
+      return { message: err.message, kind: "host" };
+    }
+    return { message: err.message, kind: "action" };
+  }
+  if (err instanceof Error && err.message) {
+    return { message: err.message, kind: "action" };
+  }
+  return { message: "Something went wrong", kind: "action" };
+}
+
+export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
-  const init: RequestInit = { method, headers };
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const init: RequestInit = { method, headers, signal: controller.signal };
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(snakify(body));
   }
-  const response = await fetch(path, init);
+  let response: Response;
+  try {
+    response = await fetch(path, init);
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new ApiError("The host did not respond in time. Check the connection and try again.", undefined, true);
+    }
+    throw new ApiError("Could not reach the host. Check Tailscale or the host address, then try again.", undefined, true);
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
   const raw = await response.text();
   let parsed: unknown = {};
   if (raw) {
@@ -42,7 +85,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
         : detail && typeof detail === "object" && "message" in detail
           ? String((detail as { message: unknown }).message)
           : `${response.status} ${path}`;
-    throw new Error(message);
+    if ((response.status === 401 || response.status === 403) && path.startsWith("/v1/")) {
+      throw new ApiError("This computer is no longer authorized. Pair it again to continue.", response.status);
+    }
+    throw new ApiError(message, response.status, response.status >= 500);
   }
   return camelize<T>(parsed);
 }
@@ -54,6 +100,9 @@ export const api = {
     },
     pair(input: { url?: string; pairingCode: string; name: string; platform?: string }) {
       return request<{ ok: boolean; device: PairedDevice; error?: string }>("POST", "/local/pair", input);
+    },
+    unpair() {
+      return request<{ ok: boolean; paired?: boolean }>("POST", "/local/unpair");
     },
     notify(input: { title: string; body: string; urgency: "low" | "normal" | "critical" }) {
       return request<{ ok: boolean }>("POST", "/local/notify", input).catch(() => ({ ok: false }));
@@ -241,6 +290,15 @@ export const api = {
     boot(botId: string) {
       return request<ComputerStatus>("POST", `/v1/computer/${botId}/boot`);
     },
+    stop(botId: string) {
+      return request<ComputerStatus>("POST", `/v1/computer/${botId}/stop`);
+    },
+    restart(botId: string) {
+      return request<ComputerStatus>("POST", `/v1/computer/${botId}/restart`);
+    },
+    reset(botId: string) {
+      return request<ComputerStatus>("POST", `/v1/computer/${botId}/reset`);
+    },
     takeover(botId: string) {
       return request<{ leaseId: string; expiresAt: string }>("POST", `/v1/computer/${botId}/takeover`);
     },
@@ -291,7 +349,14 @@ export const api = {
         signal,
       });
       if (!response.ok || !response.body) {
-        throw new Error(`subscribe ${response.status}`);
+        if (response.status === 401 || response.status === 403) {
+          throw new ApiError("This computer is no longer authorized. Pair it again to continue.", response.status);
+        }
+        throw new ApiError(
+          "Live updates stopped. Check the host connection and try again.",
+          response.status || undefined,
+          true,
+        );
       }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -350,5 +415,11 @@ export function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 export function isActive(status: string | undefined): boolean {
-  return status === "queued" || status === "leased" || status === "running";
+  return (
+    status === "queued" ||
+    status === "leased" ||
+    status === "running" ||
+    status === "waiting_input" ||
+    status === "waiting_takeover"
+  );
 }

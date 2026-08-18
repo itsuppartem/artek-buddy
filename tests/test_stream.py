@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import unittest
 from types import SimpleNamespace
 
-from artek_buddy.bus import EventHub
+from artek_buddy.bus import REPLAY_GAP, EventHub
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.stream import accumulate, map_cursor_event, tool_name
 
@@ -137,6 +138,30 @@ class EventHubTest(unittest.TestCase):
         self.assertEqual([item.id for item in hub.replay("bot")], ["evt_a", "evt_b"])
         self.assertEqual([item.id for item in hub.replay("bot", after="evt_a")], ["evt_b"])
         self.assertEqual(hub.replay("missing"), [])
+        self.assertTrue(hub.has_event("bot", "evt_a"))
+        self.assertFalse(hub.has_event("bot", "evt_missing"))
+
+    def test_unknown_after_is_a_gap(self) -> None:
+        hub = EventHub()
+        event = ProductEvent(
+            id="evt_a",
+            workspace_id="ws",
+            thread_id="th",
+            bot_id="bot",
+            seq=1,
+            type=ProductEventType.RUN_STARTED,
+            created_at="2026-08-17T00:00:00Z",
+            payload={},
+            run_id="run_1",
+        )
+        hub.publish(event)
+
+        async def take() -> object:
+            async for item in hub.subscribe("bot", after="evt_gone", heartbeat_s=30):
+                return item
+            return None
+
+        self.assertIs(asyncio.run(take()), REPLAY_GAP)
 
 
 if __name__ == "__main__":

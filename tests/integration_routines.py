@@ -57,7 +57,7 @@ class RoutinesIntegrationTest(unittest.TestCase):
         self.assertTrue(self.store.delete_routine(created.id))
         self.assertIsNone(self.store.get_routine(created.id))
 
-    def test_claim_due_advances_next(self) -> None:
+    def test_claim_due_holds_lease_until_ack(self) -> None:
         created = self.store.create_routine(
             self.bot.id,
             "Due now",
@@ -75,9 +75,20 @@ class RoutinesIntegrationTest(unittest.TestCase):
         claimed = [item for item in self.store.claim_due_routines() if item.id == created.id]
         self.assertEqual(len(claimed), 1)
         self.assertIsNotNone(claimed[0].last_run_at)
-        self.assertIsNotNone(claimed[0].next_run_at)
         again = [item for item in self.store.claim_due_routines() if item.id == created.id]
         self.assertEqual(again, [])
+        expired = datetime.now(timezone.utc) - timedelta(minutes=1)
+        with self.store._conn() as conn:
+            conn.execute(
+                "UPDATE routines SET lease_until = %s WHERE id = %s",
+                (expired, created.id),
+            )
+            conn.commit()
+        reclaimed = [item for item in self.store.claim_due_routines() if item.id == created.id]
+        self.assertEqual(len(reclaimed), 1)
+        self.store.ack_routine(created.id)
+        after_ack = [item for item in self.store.claim_due_routines() if item.id == created.id]
+        self.assertEqual(after_ack, [])
         self.store.delete_routine(created.id)
 
     def test_invalid_cron_rejected(self) -> None:

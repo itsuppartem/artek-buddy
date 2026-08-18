@@ -10,7 +10,13 @@ from types import SimpleNamespace
 from artek_buddy.computer.client import FakeSupervisorClient
 from artek_buddy.computer.models import ComputerRecord
 from artek_buddy.computer.screen import embeddable_screen_url, mint_novnc_url, resolve_novnc_target
-from artek_buddy.computer.service import ComputerBusy, ComputerError, ComputerService
+from artek_buddy.computer.service import (
+    ComputerBusy,
+    ComputerError,
+    ComputerService,
+    ComputerUnavailable,
+    wipe_computer_home,
+)
 from artek_buddy.config import Settings
 from artek_buddy.supervisor.logic import interactive_screen_command
 
@@ -224,6 +230,81 @@ class ComputerServiceTest(unittest.TestCase):
         screen = self.service.screen_url(self.bot)  # type: ignore[arg-type]
         assert screen.url is not None
         self.assertIn("/view/", screen.url)
+
+    def test_boot_reprovisions_a_missing_container(self) -> None:
+        first = self.service.boot(self.bot)  # type: ignore[arg-type]
+        self.assertEqual(first.state, "running")
+        stale = self.store.record.provider_ref
+        assert stale
+        self.client.destroy(stale)
+        self.store.record.state = "running"
+        self.store.record.provider_ref = stale
+        again = self.service.boot(self.bot)  # type: ignore[arg-type]
+        self.assertEqual(again.state, "running")
+        self.assertTrue(self.store.record.provider_ref)
+        self.assertIsNotNone(self.service.screen_url(self.bot).url)  # type: ignore[arg-type]
+
+    def test_screen_url_reprovisions_when_the_box_is_gone(self) -> None:
+        self.service.boot(self.bot)  # type: ignore[arg-type]
+        stale = self.store.record.provider_ref
+        assert stale
+        self.client.destroy(stale)
+        self.store.record.state = "running"
+        self.store.record.provider_ref = stale
+        screen = self.service.screen_url(self.bot)  # type: ignore[arg-type]
+        self.assertIsNotNone(screen.url)
+        self.assertIn(self.store.record.provider_ref, self.client.boxes)
+
+    def test_reset_wipes_home_and_destroys_the_box(self) -> None:
+        self.service.boot(self.bot)  # type: ignore[arg-type]
+        home = self.service.home_path(self.store.record)
+        box_id = self.store.record.provider_ref
+        (home / "Cookies").write_text("logged-in", encoding="utf-8")
+        status = self.service.reset(self.bot)  # type: ignore[arg-type]
+        self.assertEqual(status.state, "stopped")
+        self.assertIsNone(self.store.record.provider_ref)
+        self.assertFalse((home / "Cookies").exists())
+        self.assertIn("destroy", [call[0] for call in self.client.calls])
+        self.assertNotIn(box_id, self.client.boxes)
+
+    def test_restart_keeps_home_files(self) -> None:
+        self.service.boot(self.bot)  # type: ignore[arg-type]
+        home = self.service.home_path(self.store.record)
+        (home / "Cookies").write_text("logged-in", encoding="utf-8")
+        status = self.service.restart(self.bot)  # type: ignore[arg-type]
+        self.assertEqual(status.state, "running")
+        self.assertEqual((home / "Cookies").read_text(encoding="utf-8"), "logged-in")
+        self.assertIn("stop", [call[0] for call in self.client.calls])
+
+    def test_reset_blocked_when_another_team_bot_is_busy(self) -> None:
+        self.store.record.execution_bot_id = "bot_2"
+        self.store.active.add("bot_2")
+        with self.assertRaises(ComputerBusy):
+            self.service.reset(self.bot)  # type: ignore[arg-type]
+
+    def test_reset_blocked_when_this_bot_has_a_run(self) -> None:
+        self.store.active.add(self.bot.id)
+        with self.assertRaises(ComputerBusy):
+            self.service.reset(self.bot)  # type: ignore[arg-type]
+
+    def test_wipe_rejects_a_path_escape(self) -> None:
+        root = Path(self.tmp.name)
+        with self.assertRaises(ComputerError):
+            wipe_computer_home(root, "../etc")
+        with self.assertRaises(ComputerError):
+            wipe_computer_home(root, "..")
+
+    def test_screen_url_raises_when_desktop_is_unreachable(self) -> None:
+        self.service.boot(self.bot)  # type: ignore[arg-type]
+
+        def boom(*_args: object, **_kwargs: object) -> object:
+            raise RuntimeError("desktop gone")
+
+        self.client.screen_mode = boom  # type: ignore[method-assign]
+        self.client.inspect = boom  # type: ignore[method-assign]
+        self.client.provision = boom  # type: ignore[method-assign]
+        with self.assertRaises(ComputerUnavailable):
+            self.service.screen_url(self.bot)  # type: ignore[arg-type]
 
     def test_open_path_auto_boots_and_calls_act(self) -> None:
         self.assertEqual(self.store.record.state, "stopped")

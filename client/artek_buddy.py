@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import argparse
 import http.client
+import ipaddress
 import json
 import mimetypes
 import os
+import re
 import select
 import shutil
 import socket
@@ -29,15 +31,60 @@ _WINDOW_LOCK = threading.Lock()
 _GTK_WINDOWS: list[object] = []
 
 
+_NOVNC_LOG = re.compile(r"/novnc/\S+")
+_CGNAT = ipaddress.ip_network("100.64.0.0/10")
+
+
+def _redact_client_log(message: str) -> str:
+    return _NOVNC_LOG.sub("/novnc/[redacted]", message)
+
+
+def pairing_url_allowed(url: str) -> bool:
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    if host.endswith(".ts.net"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return bool(ip.is_loopback or ip.is_private or ip in _CGNAT)
+
+
+def proxy_origin_allowed(origin: str | None, fetch_site: str | None, proxy_port: int) -> bool:
+    if (fetch_site or "").lower() == "cross-site":
+        return False
+    if not origin:
+        return True
+    parsed = urlsplit(origin)
+    host = (parsed.hostname or "").lower()
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        return False
+    port = parsed.port
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    return port == proxy_port
+
+
 def _log(message: str) -> None:
+    text = _redact_client_log(message.rstrip())
     try:
         path = Path.home() / ".config" / "artek-buddy" / "client.log"
         path.parent.mkdir(parents=True, exist_ok=True)
+        existed = path.exists()
         with path.open("a", encoding="utf-8") as handle:
-            handle.write(message.rstrip() + "\n")
+            handle.write(text + "\n")
+        if not existed or path.stat().st_mode & 0o077:
+            path.chmod(0o600)
     except OSError:
         pass
-    sys.stderr.write(message.rstrip() + "\n")
+    sys.stderr.write(text + "\n")
 
 
 def _config_dir() -> Path:
@@ -69,9 +116,6 @@ def _load_token() -> str:
         value = ""
     if value:
         return value
-    env = os.environ.get("AGENT_HTTP_TOKEN", "").strip()
-    if env:
-        return env
     for path in (
         Path("/usr/lib/artek-buddy-client/token"),
         Path(__file__).with_name("token"),
@@ -127,6 +171,13 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         _log("client: " + (fmt % args))
 
+    def _accept_browser(self) -> bool:
+        port = int(self.server.server_address[1])
+        if proxy_origin_allowed(self.headers.get("Origin"), self.headers.get("Sec-Fetch-Site"), port):
+            return True
+        self.send_error(403, "cross-origin request blocked")
+        return False
+
     def _route(self) -> str:
         return self.path.split("?", 1)[0]
 
@@ -147,6 +198,9 @@ class Handler(BaseHTTPRequestHandler):
         path = self._route()
         if path == "/local/pair":
             self._local_pair()
+            return
+        if path == "/local/unpair":
+            self._local_unpair()
             return
         if path == "/local/notify":
             self._local_notify()
@@ -169,8 +223,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_OPTIONS(self) -> None:
+        if not self._accept_browser():
+            return
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
         self.end_headers()
@@ -216,7 +271,7 @@ class Handler(BaseHTTPRequestHandler):
         if not code:
             self._json(400, {"ok": False, "error": "pairing code required"})
             return
-        if not url.startswith(("http://", "https://")):
+        if not url.startswith(("http://", "https://")) or not pairing_url_allowed(url):
             self._json(400, {"ok": False, "error": "invalid url"})
             return
         body = json.dumps(
@@ -272,6 +327,22 @@ class Handler(BaseHTTPRequestHandler):
             },
         )
 
+    def _local_unpair(self) -> None:
+        if not self._local_only():
+            self.send_error(403)
+            return
+        path = _config_dir() / "token"
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            self._json(500, {"ok": False, "error": "could not forget this computer"})
+            return
+        self.server.token = ""  # type: ignore[attr-defined]
+        _log("unpair ok")
+        self._json(200, {"ok": True, "paired": False})
+
     def _local_notify(self) -> None:
         if not self._local_only():
             self.send_error(403)
@@ -295,6 +366,8 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {"ok": True})
 
     def _proxy(self) -> None:
+        if not self._accept_browser():
+            return
         upstream = urlsplit(self.server.upstream)  # type: ignore[attr-defined]
         token = self.server.token  # type: ignore[attr-defined]
         path = self.path
@@ -339,12 +412,14 @@ class Handler(BaseHTTPRequestHandler):
                     break
                 self.wfile.write(chunk)
                 self.wfile.flush()
-        except BrokenPipeError:
+        except (BrokenPipeError, ConnectionResetError):
             return
         finally:
             conn.close()
 
     def _proxy_ws(self) -> None:
+        if not self._accept_browser():
+            return
         upstream = urlsplit(self.server.upstream)  # type: ignore[attr-defined]
         token = self.server.token  # type: ignore[attr-defined]
         host = upstream.hostname or "127.0.0.1"

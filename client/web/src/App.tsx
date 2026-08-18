@@ -6,14 +6,36 @@ import { ShellPage } from "./pages/Shell";
 
 export function App() {
   const [paired, setPaired] = useState<boolean | null>(null);
+  const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
     api.local
       .status()
-      .then((status) => setPaired(status.paired))
-      .catch(() => setPaired(false));
+      .then((status) => {
+        setBootError(null);
+        setPaired(status.paired);
+      })
+      .catch((err: unknown) => {
+        setBootError(err instanceof Error ? err.message : "Could not reach the local client");
+      });
   }, []);
 
+  if (bootError) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#050506] px-6 text-center">
+        <div data-testid="proxy-error" className="max-w-sm text-[14px] leading-6 text-[#F0AAA0]">
+          <div>{bootError}</div>
+          <button
+            type="button"
+            className="mt-3 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (paired === null) {
     return <div className="h-full bg-[#050506]" />;
   }

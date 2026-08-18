@@ -1,5 +1,95 @@
 # Changelog
 
+## [0.9.2] - 2026-08-18
+
+### Added
+- Bot Settings can Restart (same home), Stop (sleep, keep files), or Reset (destroy the box and wipe `data/homes/{home_key}`). Team reset wipes the shared desktop for every Team bot.
+- `computer.restart` and `computer.reset`.
+
+### Clarified
+- A Pi reboot or Stop does not wipe Chromium logins. Homes are bind-mounted on disk. Containers use `RestartPolicy: no` and come back on the next boot with the same home.
+- README now says where to run tests (`make test` vs `make test-ui`), what they must not touch, and how to build/install the owner `.deb`.
+
+## [0.9.1] - 2026-08-18
+
+### Fixed
+- The screen proxy waits for noVNC to accept connections and returns an HTML placeholder instead of `{"detail":"screen unreachable"}`. The preview detects that page and retries.
+- Deleting or archiving the open chat clears the thread immediately. An in-flight refresh can no longer paint the deleted conversation over the empty state.
+- Archived chats are listed under Archived and can be restored. Archiving the last chat no longer leaves a dead end.
+- A computer marked running whose container is gone is provisioned again instead of leaving the preview on “Connecting desktop…”. The pane shows Retry when the screen URL is missing.
+
+### Added
+- Team vs Private is documented: Team bots share one container and home; Private creates `artek-bot-{bot_id}` and `data/homes/{bot_id}`. The create/edit form explains that.
+
+## [0.9.0] - 2026-08-18
+
+Open-source ready.
+
+### Security
+- `/novnc` HTTP and WebSocket require a Bearer token. The desktop proxy already sent one.
+- The host token is no longer accepted as the supervisor bearer. When `SANDBOX_SUPERVISOR_TOKEN` is unset, both sides derive `sha256("supervisor:"+AGENT_HTTP_TOKEN)`.
+- Computer containers join `artek-computers` with inter-container communication off and `no-new-privileges`.
+- Chromium remote debugging inside the box binds `127.0.0.1`.
+- Compose requires `MEMORY_DB_PASSWORD`. `/docs` and `/openapi.json` are off. `/health` no longer returns `agent_id`.
+- The desktop proxy rejects cross-site browser requests and pairing URLs that are not loopback, RFC1918, Tailscale CGNAT, or `*.ts.net`.
+- Access logs and `client.log` redact `/novnc` paths. `client.log` is mode `600`.
+
+### Fixed
+- Stopping a Cursor turn now calls `cancel` / `stop` / `abort` on the remote run when the SDK exposes it.
+- An SSE client that reconnects past a discarded event id gets `thread.replay.gap` and refreshes the thread and screen.
+- A worker crash after claiming a routine no longer loses the fire: the row is leased and acknowledged only after HTTP 200 or 409.
+- A running desktop that cannot mint a screen URL returns 502 instead of an empty URL. The overlay shows Retry.
+
+### Added
+- Apache-2.0 `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md`.
+
+### Upgrade
+- Set `MEMORY_DB_PASSWORD` in `.env` before `docker compose up`. The old default `artek` is no longer implied.
+- Recreate running `artek-bot-*` desktops so they join the isolated `artek-computers` network.
+
+## [0.8.5] - 2026-08-18
+
+### Fixed
+- A slow thread fetch after switching bots can no longer paint the previous chat.
+- Older-history pages from another thread are ignored.
+- A bad pairing code stays “invalid or expired”, not “pair this computer again”.
+- A dead local proxy no longer dumps a paired install onto the pairing screen.
+- The empty-bot prompt waits until the bot list has actually loaded.
+- A failed computer boot is not auto-retried in a loop, and idle-stop does not immediately wake the box again.
+- Stop stays available while the bot is waiting for an answer or takeover.
+- Failed and cancelled turns leave a durable error in the thread, not only a 4s toast.
+- An idle worker no longer stops a shared team computer while another bot is still running.
+- The desktop client no longer treats `AGENT_HTTP_TOKEN` as a device token.
+- Host boot rejects placeholder tokens such as `change-me`.
+
+## [0.8.4] - 2026-08-18
+
+### Fixed
+- Host restart no longer leaves bots stuck `running`. Leftover turns and workers are marked failed, then queued messages resume.
+- Send, queue, and auth failures no longer show a "Retry connection" banner. Host outages, revoked devices, and action errors each get their own recovery action.
+- A revoked device can forget its local token and return to the pairing screen.
+- Pairing guesses from one address are rate-limited so a public host cannot be brute-forced cheaply.
+- Failed subagent runs stay `failed` in the thread instead of looking completed.
+
+### Added
+- Playwright coverage for host disconnect, inbox overflow, and revoked-device pairing.
+
+## [0.8.3] - 2026-08-18
+
+### Fixed
+- The noVNC proxy waits briefly for a newly started desktop port instead of serving a transient `screen unreachable` page in the first computer preview.
+- Fresh hosts no longer create an `artek-buddy` bot automatically. The empty state guides the owner to create the first bot explicitly.
+
+## [0.8.2] - 2026-08-18
+
+### Fixed
+- Answering an `ask_user` card marks that card answered and hides the options. Refreshing the thread no longer brings the buttons back.
+- Switching bots clears the previous thread and desktop preview immediately, so the old chat cannot flash in the new one.
+
+### Added
+- Scripted UI host understands `e2e-*` prompts (hidden drafts, close browser, ask cards, slow turns, markdown preview, failure).
+- Playwright regressions for streamed reasoning, `close_app`, computer iframe identity, in-window alerts, queue-while-busy, Stop, ask cards, and sidebar preview text.
+
 ## [0.8.1] - 2026-08-18
 
 ### Changed
@@ -11,7 +101,8 @@
 - First `threads.send` on a scripted host starts a turn again (`begin_turn` was stuck inside the busy-queue branch).
 - Live Cursor text/thinking drafts stay off the thread. The window shows the pulsing activity dots until `send_message` or the finished answer.
 - `close_app` closes the on-screen browser (or another app) in one step. The lead no longer has to hunt for the window X.
-- Computer preview keeps one noVNC connection. A new signed URL is minted only when the box, port, or view/control policy changes, or the signature is about to expire.
+- Computer preview keeps one noVNC connection. Sending a message does not remint the screen URL or remount the iframe.
+- Attention stays in the window banner only. The `.deb` does not also fire `notify-send` for the same event.
 
 ### Added
 - Desktop attention alerts when a bot replies, asks, fails, or requests takeover.

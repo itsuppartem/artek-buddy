@@ -1,33 +1,38 @@
 import {
   type Dispatch,
   type MouseEvent,
+  type RefObject,
   type SetStateAction,
+  type SyntheticEvent,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { abortableDelay, api, isActive } from "../api";
+import { abortableDelay, api, classifyError, isActive, type ShellErrorKind } from "../api";
 import { isCronShape } from "../lib/cron";
 import { isMemoryPath } from "../lib/memory";
+import { filterBots, inboxEmptyState, type SidebarView } from "../lib/sidebar";
 import {
   computerLabel,
+  computerModeHint,
   embeddableScreenUrl,
   overlayPointerEvents,
   previewPointerEvents,
+  screenFrameLooksFailed,
   screenIframeSandbox,
   shouldAutoBoot,
   shouldRefreshScreenUrl,
   shouldReplaceScreenUrl,
   shouldTakeControl,
+  screenTargetKey,
 } from "../lib/screen";
 import {
   allowAlert,
   attentionFromBotChange,
   attentionFromEvent,
   isHistoricalEvent,
-  shouldSendDesktopAlert,
   type AttentionAlert,
 } from "../lib/alerts";
 import { ChatMarkdown } from "../lib/chat-markdown";
@@ -63,18 +68,29 @@ export function ShellPage() {
   const { botId } = useParams();
   const navigate = useNavigate();
   const [bots, setBots] = useState<Bot[]>([]);
+  const [botsReady, setBotsReady] = useState(false);
   const [query, setQuery] = useState("");
+  const [archivedBots, setArchivedBots] = useState<Bot[]>([]);
+  const [sidebarView, setSidebarView] = useState<SidebarView>("inbox");
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const [draft, setDraft] = useState("");
   const [panel, setPanel] = useState<Panel>("computer");
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const screenUrlRef = useRef<string | null>(null);
+  const [screenError, setScreenError] = useState<string | null>(null);
+  const [screenEpoch, setScreenEpoch] = useState(0);
+  const screenRetries = useRef(0);
+  const previewFrameRef = useRef<HTMLIFrameElement>(null);
+  const overlayFrameRef = useRef<HTMLIFrameElement>(null);
   const [computerOpen, setComputerOpen] = useState(false);
   const [booting, setBooting] = useState(false);
   const autoBooted = useRef<string | null>(null);
+  const sleepHeld = useRef(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<ShellErrorKind>("host");
+  const errorKindRef = useRef<ShellErrorKind>("host");
   const [later, setLater] = useState<string | null>(null);
   const [attention, setAttention] = useState<AttentionAlert | null>(null);
   const seenAlertKeys = useRef(new Set<string>());
@@ -82,7 +98,6 @@ export function ShellPage() {
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
   const botsRef = useRef<Bot[]>([]);
-  const windowFocusedRef = useRef(true);
   const [contextMenu, setContextMenu] = useState<{
     bot: Bot;
     position: ContextMenuPosition;
@@ -93,12 +108,15 @@ export function ShellPage() {
   } | null>(null);
   const [replyTo, setReplyTo] = useState<ThreadMessage | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
+  const discardedBotIds = useRef(new Set<string>());
   const messageScroll = useRef<HTMLDivElement>(null);
 
   const active = bots.find((bot) => bot.id === botId) ?? bots[0];
+  activeIdRef.current = active?.id;
+  const thread = active ? snapshot : null;
   const isBusy = Boolean(
-    (snapshot?.run && isActive(snapshot.run.status)) ||
-      (snapshot && (hasLive(snapshot) || hasActiveWorkers(snapshot))),
+    (thread?.run && isActive(thread.run.status)) ||
+      (thread && (hasLive(thread) || hasActiveWorkers(thread))),
   );
   const otherBotIds = useMemo(
     () =>
@@ -111,24 +129,8 @@ export function ShellPage() {
   );
 
   useEffect(() => {
-    activeIdRef.current = active?.id;
     botsRef.current = bots;
-  }, [active?.id, bots]);
-
-  useEffect(() => {
-    function syncFocus() {
-      windowFocusedRef.current = document.visibilityState === "visible" && document.hasFocus();
-    }
-    syncFocus();
-    window.addEventListener("focus", syncFocus);
-    window.addEventListener("blur", syncFocus);
-    document.addEventListener("visibilitychange", syncFocus);
-    return () => {
-      window.removeEventListener("focus", syncFocus);
-      window.removeEventListener("blur", syncFocus);
-      document.removeEventListener("visibilitychange", syncFocus);
-    };
-  }, []);
+  }, [bots]);
 
   function dispatchAlert(next: AttentionAlert, key: string, notifyOnFinish: boolean) {
     if (!allowAlert(next, notifyOnFinish)) return;
@@ -146,21 +148,6 @@ export function ShellPage() {
       const oldest = seenAlertKeys.current.values().next().value;
       if (oldest) seenAlertKeys.current.delete(oldest);
     }
-    const focused = windowFocusedRef.current && document.visibilityState === "visible";
-    if (
-      !shouldSendDesktopAlert({
-        windowFocused: focused,
-        viewingBotId: activeIdRef.current ?? null,
-        alertBotId: next.botId,
-      })
-    ) {
-      return;
-    }
-    void api.local.notify({
-      title: next.title,
-      body: next.body,
-      urgency: next.urgency,
-    });
     setAttention(next);
   }
 
@@ -171,10 +158,7 @@ export function ShellPage() {
   }
 
   async function refreshBots() {
-    let list = await api.bots.list();
-    if (list.length === 0) {
-      list = [await api.bots.create({ name: "artek-buddy" })];
-    }
+    const list = await api.bots.list();
     const prev = prevBotsRef.current;
     if (prev.size) {
       for (const next of list) {
@@ -187,11 +171,55 @@ export function ShellPage() {
       }
     }
     prevBotsRef.current = new Map(list.map((item) => [item.id, item]));
+    for (const item of list) discardedBotIds.current.delete(item.id);
+    const archivedList = await api.bots.listArchived().catch(() => [] as Bot[]);
     setBots(list);
+    setArchivedBots(archivedList);
+    if (archivedList.length === 0) setSidebarView("inbox");
+    setBotsReady(true);
     if (!botId || !list.some((bot) => bot.id === botId)) {
       navigate(list[0] ? `/app/${list[0].id}` : "/app", { replace: true });
     }
     return list;
+  }
+
+  function showError(err: unknown, fallback: string) {
+    const classified = classifyError(err);
+    const message = classified.message || fallback;
+    errorKindRef.current = classified.kind;
+    setErrorKind(classified.kind);
+    setError(message);
+  }
+
+  const reconnecting = useRef(false);
+
+  async function reconnectHost(loadBots = false) {
+    if (reconnecting.current) return;
+    reconnecting.current = true;
+    try {
+      await api.health();
+      const recovering = errorKindRef.current === "host";
+      if (loadBots || recovering) {
+        await refreshBots();
+      }
+      if (loadBots || recovering) {
+        setError(null);
+      }
+    } catch (err) {
+      setBotsReady(true);
+      showError(err, "Could not reach the host");
+    } finally {
+      reconnecting.current = false;
+    }
+  }
+
+  async function forgetDevice() {
+    try {
+      await api.local.unpair();
+    } catch {
+      // Reload anyway so the pairing screen can appear if the token is gone.
+    }
+    window.location.assign("/");
   }
 
   function adoptScreenUrl(next: string | null) {
@@ -201,27 +229,84 @@ export function ShellPage() {
     setScreenUrl(next);
   }
 
+  function onScreenFrameLoad(event: SyntheticEvent<HTMLIFrameElement>) {
+    if (screenFrameLooksFailed(event.currentTarget)) {
+      setScreenError("Desktop is starting…");
+      return;
+    }
+    screenRetries.current = 0;
+    setScreenError(null);
+  }
+
+  function reloadScreenFrames() {
+    for (const frame of [previewFrameRef.current, overlayFrameRef.current]) {
+      if (!frame) continue;
+      const src = frame.getAttribute("src");
+      if (src) frame.src = src;
+    }
+  }
+
+  function retryScreen() {
+    if (!active) return;
+    setScreenEpoch((value) => value + 1);
+    void ensureScreenUrl(active.id, true, true);
+  }
+
   async function ensureScreenUrl(id: string, available: boolean, force = false) {
     if (!available) {
       adoptScreenUrl(null);
+      setScreenError(null);
       return;
     }
     if (!force && !shouldRefreshScreenUrl(screenUrlRef.current)) return;
-    const screen = await api.computer.screenUrl(id).catch(() => ({ url: null }));
-    adoptScreenUrl(embeddableScreenUrl(screen.url));
+    try {
+      const screen = await api.computer.screenUrl(id);
+      adoptScreenUrl(embeddableScreenUrl(screen.url));
+      setScreenError(null);
+    } catch (err) {
+      setScreenError(err instanceof Error ? err.message : "Could not open the screen");
+    }
+  }
+
+  function forgetBot(id: string, wasActive: boolean) {
+    discardedBotIds.current.add(id);
+    if (wasActive) {
+      activeIdRef.current = undefined;
+      setSnapshot(null);
+      setComputer(null);
+      screenUrlRef.current = null;
+      setScreenUrl(null);
+      setScreenError(null);
+      setDraft("");
+      setReplyTo(null);
+    }
+    setBots((list) => list.filter((item) => item.id !== id));
+  }
+
+  async function restoreBot(bot: Bot) {
+    try {
+      await api.bots.restore(bot.id);
+      discardedBotIds.current.delete(bot.id);
+      setSidebarView("inbox");
+      await refreshBots();
+      navigate(`/app/${bot.id}`);
+    } catch (err) {
+      showError(err, "Could not restore chat");
+    }
   }
 
   async function refreshThread(id: string) {
+    if (discardedBotIds.current.has(id) || activeIdRef.current !== id) return null;
     const scrollElement = messageScroll.current;
     const stickToEnd =
       !scrollElement ||
       scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 80;
     const snap = await api.threads.get(id);
+    if (discardedBotIds.current.has(id) || activeIdRef.current !== id) return snap;
     setSnapshot((prev) =>
       mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId),
     );
     setComputer(snap.computer);
-    await ensureScreenUrl(id, snap.computer.screenAvailable);
     if (stickToEnd) {
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
@@ -235,44 +320,54 @@ export function ShellPage() {
     if (!active || snapshot?.olderCursor == null || loadingOlder) return;
     const scrollElement = messageScroll.current;
     const previousHeight = scrollElement?.scrollHeight ?? 0;
+    const requested = active.id;
     setLoadingOlder(true);
     try {
-      const page = await api.threads.messages(active.id, snapshot.olderCursor);
+      const page = await api.threads.messages(requested, snapshot.olderCursor);
+      if (activeIdRef.current !== requested) return;
       expandedHistoryThread.current = page.threadId;
       setSnapshot((prev) => prependThreadMessagePage(prev, page));
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
         if (element) element.scrollTop += element.scrollHeight - previousHeight;
       });
+    } catch (err) {
+      if (activeIdRef.current === requested) showError(err, "Could not load earlier messages");
     } finally {
       setLoadingOlder(false);
     }
   }
 
   useEffect(() => {
-    void (async () => {
-      try {
-        await api.health();
-        await refreshBots();
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not reach the host");
-      }
-    })();
-    const poll = window.setInterval(() => void refreshBots().catch(() => undefined), 4000);
+    void reconnectHost(true);
+    const poll = window.setInterval(() => void reconnectHost(false), 4000);
     return () => window.clearInterval(poll);
   }, []);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      sleepHeld.current = false;
+      setSnapshot(null);
+      setComputer(null);
+      screenUrlRef.current = null;
+      setScreenUrl(null);
+      setScreenError(null);
+      return;
+    }
+    sleepHeld.current = false;
     screenUrlRef.current = null;
     setScreenUrl(null);
+    setScreenError(null);
+    setScreenEpoch(0);
+    screenRetries.current = 0;
+    setSnapshot(null);
+    setComputer(null);
     expandedHistoryThread.current = null;
     const abort = new AbortController();
     const subscribedAt = Date.now();
     void (async () => {
       const snap = await refreshThread(active.id).catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Could not load thread");
+        showError(err, "Could not load thread");
         return null;
       });
       if (abort.signal.aborted) return;
@@ -282,8 +377,18 @@ export function ShellPage() {
         try {
           for await (const event of api.threads.subscribe(active.id, after, abort.signal)) {
             if (abort.signal.aborted) break;
+            if (event.type === "thread.replay.gap") {
+              after = null;
+              retryMs = 250;
+              void refreshThread(active.id).catch(() => undefined);
+              void ensureScreenUrl(active.id, true, true);
+              continue;
+            }
             after = event.id;
             retryMs = 250;
+            if (discardedBotIds.current.has(active.id) || activeIdRef.current !== active.id) {
+              break;
+            }
             applyThreadEvent(event, setSnapshot, setComputer);
             const bot = botsRef.current.find((item) => item.id === active.id) ?? active;
             considerEvent(event, bot, subscribedAt);
@@ -292,7 +397,13 @@ export function ShellPage() {
               void refreshThread(active.id).catch(() => undefined);
             }
           }
-        } catch {
+        } catch (err) {
+          if (abort.signal.aborted) break;
+          const classified = classifyError(err);
+          if (classified.kind === "auth") {
+            showError(err, classified.message);
+            break;
+          }
           // Reconnect after a dropped stream. The last event id keeps replay safe.
         }
         if (abort.signal.aborted) break;
@@ -326,7 +437,9 @@ export function ShellPage() {
               const bot = botsRef.current.find((item) => item.id === id);
               if (bot) considerEvent(event, bot, subscribedAt);
             }
-          } catch {
+          } catch (err) {
+            if (abort.signal.aborted) break;
+            if (classifyError(err).kind === "auth") break;
             // Same reconnect as the active thread stream.
           }
           if (abort.signal.aborted) break;
@@ -353,19 +466,28 @@ export function ShellPage() {
       return;
     }
     if (!active) return;
+    if (sleepHeld.current) {
+      autoBooted.current = active.id;
+      return;
+    }
     if (computer?.state === "booting") return;
-    if (!shouldAutoBoot(computer?.state, screenUrl, autoBooted.current === active.id)) return;
+    if (!shouldAutoBoot(computer?.state, screenUrlRef.current, autoBooted.current === active.id)) return;
     autoBooted.current = active.id;
     void bootComputer({
       takeControl: false,
       overlay: false,
-      force: true,
+      force: false,
     });
-  }, [panel, active?.id, computer?.state, screenUrl]);
+  }, [panel, active?.id, computer?.state]);
 
   useEffect(() => {
     setComputerOpen(false);
   }, [active?.id]);
+
+  useEffect(() => {
+    if (panel !== "settings" || !active) return;
+    void api.computer.status(active.id).then(setComputer).catch(() => undefined);
+  }, [panel, active?.id]);
 
   useEffect(() => {
     if ((panel !== "computer" && !computerOpen) || !active || computer?.state !== "running") return;
@@ -374,6 +496,21 @@ export function ShellPage() {
     const timer = window.setInterval(ping, 60_000);
     return () => window.clearInterval(timer);
   }, [panel, computerOpen, active?.id, computer?.state]);
+
+  useEffect(() => {
+    if (!active || computer?.state !== "running" || !screenError) return;
+    screenRetries.current = 0;
+    const timer = window.setInterval(() => {
+      if (screenRetries.current >= 4) {
+        window.clearInterval(timer);
+        return;
+      }
+      screenRetries.current += 1;
+      reloadScreenFrames();
+      void ensureScreenUrl(active.id, true, true);
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [active?.id, computer?.state, screenError]);
 
   useEffect(() => {
     if (!computerOpen) return;
@@ -385,9 +522,14 @@ export function ShellPage() {
   }, [computerOpen]);
 
   const filtered = useMemo(
-    () => bots.filter((bot) => `${bot.name} ${stripMarkdown(bot.preview || bot.title)}`.toLowerCase().includes(query.toLowerCase())),
+    () => filterBots(bots, query, (bot) => stripMarkdown(bot.preview || bot.title)),
     [bots, query],
   );
+  const filteredArchived = useMemo(
+    () => filterBots(archivedBots, query, (bot) => stripMarkdown(bot.preview || bot.title)),
+    [archivedBots, query],
+  );
+  const emptyInbox = inboxEmptyState(bots.length, archivedBots.length);
 
   async function send(textOverride?: string) {
     const text = (textOverride ?? draft).trim();
@@ -401,7 +543,7 @@ export function ShellPage() {
       await refreshThread(active.id);
     } catch (err) {
       if (textOverride == null) setDraft(text);
-      setError(err instanceof Error ? err.message : "Send failed");
+      showError(err, "Send failed");
     }
   }
 
@@ -411,7 +553,7 @@ export function ShellPage() {
       await api.threads.stop(active.id);
       await refreshThread(active.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Stop failed");
+      showError(err, "Stop failed");
     }
   }
 
@@ -425,7 +567,8 @@ export function ShellPage() {
     force?: boolean;
   }) {
     if (!active) return;
-    const needsBoot = force || computer?.state !== "running" || !screenUrl;
+    sleepHeld.current = false;
+    const needsBoot = force || computer?.state !== "running" || !screenUrlRef.current;
     if (overlay && needsBoot) setBooting(true);
     try {
       if (needsBoot) {
@@ -436,11 +579,57 @@ export function ShellPage() {
         await api.computer.takeover(active.id);
         setComputer(await api.computer.status(active.id));
       }
-      await ensureScreenUrl(active.id, true, true);
+      await ensureScreenUrl(active.id, true, takeControl || !screenUrlRef.current);
     } catch (err) {
       setLater(err instanceof Error ? err.message : "Could not boot the computer");
     } finally {
       setBooting(false);
+    }
+  }
+
+  function clearScreen() {
+    screenUrlRef.current = null;
+    setScreenUrl(null);
+    setScreenError(null);
+    setScreenEpoch((value) => value + 1);
+  }
+
+  async function restartComputer() {
+    if (!active) return;
+    sleepHeld.current = false;
+    autoBooted.current = active.id;
+    try {
+      const status = await api.computer.restart(active.id);
+      setComputer(status);
+      await ensureScreenUrl(active.id, true, true);
+    } catch (err) {
+      setLater(err instanceof Error ? err.message : "Could not restart the computer");
+    }
+  }
+
+  async function stopComputer() {
+    if (!active) return;
+    try {
+      const status = await api.computer.stop(active.id);
+      setComputer(status);
+      sleepHeld.current = true;
+      autoBooted.current = active.id;
+      clearScreen();
+    } catch (err) {
+      setLater(err instanceof Error ? err.message : "Could not stop the computer");
+    }
+  }
+
+  async function resetComputer() {
+    if (!active) return;
+    try {
+      const status = await api.computer.reset(active.id);
+      setComputer(status);
+      sleepHeld.current = true;
+      autoBooted.current = active.id;
+      clearScreen();
+    } catch (err) {
+      setLater(err instanceof Error ? err.message : "Could not reset the computer");
     }
   }
 
@@ -483,15 +672,11 @@ export function ShellPage() {
   async function deleteBot(bot: Bot, deleteMemories: boolean = false) {
     try {
       await api.bots.remove(bot.id, deleteMemories);
+      forgetBot(bot.id, active?.id === bot.id);
       setPanel(null);
-      setSnapshot(null);
-      const list = await refreshBots();
-      if (active?.id === bot.id) {
-        const remaining = list.filter((b) => b.id !== bot.id);
-        if (remaining[0]) navigate(`/app/${remaining[0].id}`);
-      }
+      await refreshBots();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete chat");
+      showError(err, "Could not delete chat");
     }
   }
 
@@ -502,11 +687,10 @@ export function ShellPage() {
   }, [later]);
 
   useEffect(() => {
-    if (!attention || active?.id !== attention.botId) return;
-    if (windowFocusedRef.current && document.visibilityState === "visible") {
-      setAttention(null);
-    }
-  }, [active?.id, attention]);
+    if (!attention) return;
+    const timer = window.setTimeout(() => setAttention(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [attention]);
 
   return (
     <div className="relative flex h-full min-w-0 overflow-hidden bg-[#050506] text-[#DFDFE2]">
@@ -533,56 +717,113 @@ export function ShellPage() {
           />
         </div>
         <div className="ab-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
-          {filtered.map((bot) => (
-            <button
-              key={bot.id}
-              type="button"
-              onClick={() => navigate(`/app/${bot.id}`)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setContextMenu({
-                  bot,
-                  position: { x: event.clientX, y: event.clientY },
-                });
-              }}
-              className="flex gap-3 rounded-xl px-2.5 py-[11px] text-left"
-              style={{ background: active?.id === bot.id ? "#161618" : "transparent" }}
-            >
-              <BotAvatar color={bot.color} size={38} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span
-                    className={`flex items-center gap-1.5 text-[15px] text-[#ECECEE] ${
-                      bot.unread ? "font-semibold" : "font-medium"
-                    }`}
+          {sidebarView === "archived" ? (
+            <>
+              <button
+                type="button"
+                data-testid="back-inbox"
+                onClick={() => setSidebarView("inbox")}
+                className="mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13.5px] text-[#85858A] hover:bg-[#131315] hover:text-[#ECECEE]"
+              >
+                ← Inbox
+              </button>
+              <div data-testid="archived-list" className="flex flex-col gap-0.5">
+                {filteredArchived.map((bot) => (
+                  <div
+                    key={bot.id}
+                    data-testid="archived-bot-row"
+                    data-bot-id={bot.id}
+                    className="flex items-center gap-3 rounded-xl px-2.5 py-[11px]"
                   >
-                    {bot.name}
-                    {bot.pinned ? (
-                      <span title="Pinned" className="text-[11px] text-[#A8A8AD]">
-                        📌
+                    <BotAvatar color={bot.color} size={38} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[15px] font-medium text-[#ECECEE]">{bot.name}</div>
+                      <div className="mt-0.5 truncate text-[13.5px] text-[#85858A]">
+                        {stripMarkdown(bot.preview || bot.title)}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="restore-chat"
+                      onClick={() => void restoreBot(bot)}
+                      className="shrink-0 rounded-lg border border-[#303036] px-2.5 py-1 text-[12.5px] text-[#ECECEE] hover:bg-[#1A1A1D]"
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              {filtered.map((bot) => (
+                <button
+                  key={bot.id}
+                  type="button"
+                  data-testid="bot-row"
+                  data-bot-id={bot.id}
+                  data-bot-name={bot.name}
+                  onClick={() => navigate(`/app/${bot.id}`)}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setContextMenu({
+                      bot,
+                      position: { x: event.clientX, y: event.clientY },
+                    });
+                  }}
+                  className="flex gap-3 rounded-xl px-2.5 py-[11px] text-left"
+                  style={{ background: active?.id === bot.id ? "#161618" : "transparent" }}
+                >
+                  <BotAvatar color={bot.color} size={38} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span
+                        className={`flex items-center gap-1.5 text-[15px] text-[#ECECEE] ${
+                          bot.unread ? "font-semibold" : "font-medium"
+                        }`}
+                      >
+                        {bot.name}
+                        {bot.pinned ? (
+                          <span title="Pinned" className="text-[11px] text-[#A8A8AD]">
+                            📌
+                          </span>
+                        ) : null}
                       </span>
-                    ) : null}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-[#6C6C70]">
-                    {bot.status === "idle" ? "" : bot.status}
+                      <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-[#6C6C70]">
+                        {bot.status === "idle" ? "" : bot.status}
                     {bot.unread ? (
                       <span
+                        data-testid="unread-dot"
                         aria-hidden="true"
                         className="inline-block h-2 w-2 rounded-full bg-[#8B5CF6]"
                       />
                     ) : null}
-                  </span>
-                </div>
-                <div
-                  className={`mt-0.5 truncate text-[13.5px] ${
-                    bot.unread ? "font-medium text-[#C9C9CE]" : "text-[#85858A]"
-                  }`}
+                      </span>
+                    </div>
+                    <div
+                      data-testid="bot-preview"
+                      className={`mt-0.5 truncate text-[13.5px] ${
+                        bot.unread ? "font-medium text-[#C9C9CE]" : "text-[#85858A]"
+                      }`}
+                    >
+                      {stripMarkdown(bot.preview || bot.title)}
+                    </div>
+                  </div>
+                </button>
+              ))}
+              {archivedBots.length > 0 ? (
+                <button
+                  type="button"
+                  data-testid="open-archived"
+                  onClick={() => setSidebarView("archived")}
+                  className="mt-1 flex items-center justify-between rounded-xl px-2.5 py-[11px] text-left text-[14px] text-[#85858A] hover:bg-[#131315] hover:text-[#ECECEE]"
                 >
-                  {stripMarkdown(bot.preview || bot.title)}
-                </div>
-              </div>
-            </button>
-          ))}
+                  <span>Archived</span>
+                  <span data-testid="archived-count">{archivedBots.length}</span>
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
         <button
           type="button"
@@ -618,8 +859,9 @@ export function ShellPage() {
         <div className="flex items-center justify-between border-b border-[#141416] px-[22px] py-[17px]">
           <button
             type="button"
+            disabled={!active}
             onClick={() => setPanel("settings")}
-            className="flex min-w-0 items-center gap-3"
+            className="flex min-w-0 items-center gap-3 disabled:cursor-default"
           >
             {active ? <BotAvatar color={active.color} size={26} /> : null}
             <span className="min-w-0">
@@ -631,8 +873,9 @@ export function ShellPage() {
           <button
             type="button"
             title="Agent computer"
+            disabled={!active}
             onClick={() => setPanel((current) => (current === "computer" ? null : "computer"))}
-            className="grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-[#1B1B1E]"
+            className="grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-[#1B1B1E] disabled:opacity-40"
             style={{ background: panel ? "#1B1B1E" : "transparent" }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A8AD" strokeWidth="1.6">
@@ -646,8 +889,76 @@ export function ShellPage() {
           data-testid="thread"
           className="ab-scroll flex flex-1 flex-col gap-[13px] overflow-y-auto px-7 py-6"
         >
-          {error ? <div className="self-center text-[13.5px] text-[#E65707]">{error}</div> : null}
-          {snapshot?.olderCursor != null ? (
+          {error ? (
+            <div
+              data-testid={errorKind === "host" ? "host-error" : errorKind === "auth" ? "auth-error" : "action-error"}
+              className="self-center rounded-xl border border-[#4A2522] bg-[#1A1110] px-4 py-3 text-center text-[13.5px] text-[#F0AAA0]"
+            >
+              <div>{error}</div>
+              {errorKind === "host" ? (
+                <button
+                  type="button"
+                  onClick={() => void reconnectHost(true)}
+                  className="mt-2 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+                >
+                  Retry connection
+                </button>
+              ) : errorKind === "auth" ? (
+                <button
+                  type="button"
+                  onClick={() => void forgetDevice()}
+                  className="mt-2 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+                >
+                  Pair this computer again
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  className="mt-2 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+                >
+                  Dismiss
+                </button>
+              )}
+            </div>
+          ) : null}
+          {!active && !error && botsReady && emptyInbox === "archived" ? (
+            <div
+              data-testid="empty-inbox"
+              className="m-auto flex max-w-sm flex-col items-center text-center"
+            >
+              <div className="text-[17px] font-medium text-[#ECECEE]">Chats are archived</div>
+              <p className="mt-2 text-[14px] leading-5 text-[#85858A]">
+                Restore one from Archived, or create a new bot.
+              </p>
+              <div className="mt-5 flex gap-2">
+                <Button type="button" onClick={() => setSidebarView("archived")}>
+                  Open archived
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setPanel("create")}>
+                  Create bot
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {!active && !error && botsReady && emptyInbox === "create" ? (
+            <div
+              data-testid="empty-bots"
+              className="m-auto flex max-w-sm flex-col items-center text-center"
+            >
+              <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-[#1A1A1D] text-[23px] text-[#A8A8AD]">
+                +
+              </div>
+              <div className="text-[17px] font-medium text-[#ECECEE]">Create your first bot</div>
+              <p className="mt-2 text-[14px] leading-5 text-[#85858A]">
+                Give it a purpose, then it gets its own chat, memory, routines, and computer.
+              </p>
+              <Button type="button" className="mt-5" onClick={() => setPanel("create")}>
+                Create bot
+              </Button>
+            </div>
+          ) : null}
+          {thread?.olderCursor != null ? (
             <button
               type="button"
               disabled={loadingOlder}
@@ -657,7 +968,7 @@ export function ShellPage() {
               {loadingOlder ? "Loading…" : "Load earlier messages"}
             </button>
           ) : null}
-          {(snapshot?.messages ?? [])
+          {(thread?.messages ?? [])
             .filter((message) => !isToolNoise(message) && !isHiddenLiveDraft(message))
             .map((message) => (
             <MessageView
@@ -676,9 +987,18 @@ export function ShellPage() {
               }}
             />
           ))}
-          {snapshot?.run && isActive(snapshot.run.status) ? (
+          {thread?.run && (thread.run.status === "failed" || thread.run.status === "cancelled") ? (
+            <div
+              data-testid="run-error"
+              className="self-start rounded-xl border border-[#4A2522] bg-[#1A1110] px-4 py-2 text-[13.5px] text-[#F0AAA0]"
+            >
+              {thread.run.error || (thread.run.status === "cancelled" ? "Stopped." : "The turn failed.")}
+            </div>
+          ) : null}
+          {thread?.run && isActive(thread.run.status) ? (
             <div className="flex justify-start">
               <div
+                data-testid="typing-indicator"
                 className="flex items-center gap-1.5 rounded-[18px] bg-[#161619] border border-[#222226] px-4 py-3"
                 title="Typing…"
               >
@@ -721,6 +1041,7 @@ export function ShellPage() {
             <input
               value={draft}
               aria-label="Message"
+              disabled={!active}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
@@ -729,9 +1050,9 @@ export function ShellPage() {
                 }
               }}
               placeholder={
-                replyTo ? "Write a reply…" : active ? `Message ${active.name}` : "Message…"
+                replyTo ? "Write a reply…" : active ? `Message ${active.name}` : "Create a bot to start"
               }
-              className="flex-1 bg-transparent text-[15.5px] text-[#E9E9EA] outline-none"
+              className="flex-1 bg-transparent text-[15.5px] text-[#E9E9EA] outline-none disabled:cursor-not-allowed disabled:opacity-40"
             />
             {isBusy ? (
               <button
@@ -747,7 +1068,7 @@ export function ShellPage() {
             <button
               type="button"
               aria-label="Send"
-              disabled={!draft.trim()}
+              disabled={!active || !draft.trim()}
               onClick={() => void send()}
               className="grid h-9 w-9 place-items-center rounded-full bg-[#F1F1EF] text-[#17171A] disabled:opacity-40"
             >
@@ -759,10 +1080,10 @@ export function ShellPage() {
 
       <aside
         className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#0A0A0B] transition-[width] duration-200 ease-out ${
-          panel ? "w-[384px] border-l border-[#141416]" : "w-0"
+          panel && (active || panel === "create") ? "w-[384px] border-l border-[#141416]" : "w-0"
         }`}
       >
-        {panel ? (
+        {panel && (active || panel === "create") ? (
           <div className="ab-scroll h-full w-[384px] overflow-y-auto px-5 py-[17px]">
             {panel === "create" ? (
               <CreateBotForm onCancel={() => setPanel(null)} onCreate={(input) => void createBot(input)} />
@@ -770,9 +1091,13 @@ export function ShellPage() {
             {panel === "settings" && active ? (
               <BotSettings
                 bot={active}
+                computer={computer ?? snapshot?.computer ?? null}
                 onClose={() => setPanel(null)}
                 onUpdated={() => void refreshBots()}
                 onDelete={(deleteMemories) => void deleteBot(active, deleteMemories)}
+                onRestart={() => restartComputer()}
+                onStop={() => stopComputer()}
+                onReset={() => resetComputer()}
                 onLater={setLater}
               />
             ) : null}
@@ -781,12 +1106,17 @@ export function ShellPage() {
                 bot={active}
                 computer={computer ?? snapshot?.computer ?? null}
                 screenUrl={screenUrl}
+                screenError={screenError}
+                screenEpoch={screenEpoch}
+                previewFrameRef={previewFrameRef}
                 booting={booting}
                 onClose={() => setPanel(null)}
                 onSettings={() => setPanel("settings")}
                 onOpenFullscreen={() => void openOverlay("preview")}
                 onTakeControl={() => void openOverlay("button")}
                 onRelease={() => void releaseComputer()}
+                onRetryScreen={retryScreen}
+                onScreenFrameLoad={onScreenFrameLoad}
                 onLater={setLater}
               />
             ) : null}
@@ -817,7 +1147,7 @@ export function ShellPage() {
               await api.bots.update(target.id, { pinned: !target.pinned });
               await refreshBots();
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Failed to update pin");
+              showError(err, "Failed to update pin");
             }
           }}
           onToggleUnread={async () => {
@@ -831,7 +1161,7 @@ export function ShellPage() {
               }
               await refreshBots();
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Failed to toggle read status");
+              showError(err, "Failed to toggle read status");
             }
           }}
           onEdit={() => {
@@ -848,7 +1178,7 @@ export function ShellPage() {
               await refreshBots();
               navigate(`/app/${duplicated.id}`);
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Duplicate failed");
+              showError(err, "Duplicate failed");
             }
           }}
           onArchive={async () => {
@@ -856,13 +1186,11 @@ export function ShellPage() {
             setContextMenu(null);
             try {
               await api.bots.archive(target.id);
-              const list = await refreshBots();
-              if (active?.id === target.id) {
-                const remaining = list.filter((b) => b.id !== target.id);
-                if (remaining[0]) navigate(`/app/${remaining[0].id}`);
-              }
+              forgetBot(target.id, active?.id === target.id);
+              setArchivedBots((list) => [target, ...list.filter((item) => item.id !== target.id)]);
+              await refreshBots();
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Archive failed");
+              showError(err, "Archive failed");
             }
           }}
           onDelete={async () => {
@@ -870,13 +1198,10 @@ export function ShellPage() {
             setContextMenu(null);
             try {
               await api.bots.remove(target.id, false);
-              const list = await refreshBots();
-              if (active?.id === target.id) {
-                const remaining = list.filter((b) => b.id !== target.id);
-                if (remaining[0]) navigate(`/app/${remaining[0].id}`);
-              }
+              forgetBot(target.id, active?.id === target.id);
+              await refreshBots();
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Delete failed");
+              showError(err, "Delete failed");
             }
           }}
         />
@@ -956,19 +1281,46 @@ export function ShellPage() {
               </button>
             </div>
           </div>
-          <div className="min-h-0 flex-1 bg-[#0E0E10]">
-            {computer?.state === "running" && embeddableScreenUrl(screenUrl) ? (
-              <iframe
-                title="Bot screen"
-                src={embeddableScreenUrl(screenUrl) ?? undefined}
-                sandbox={screenIframeSandbox(screenUrl)}
-                className="h-full w-full border-0 bg-black"
-                allow="clipboard-read; clipboard-write; fullscreen"
-                style={{ pointerEvents: overlayPointerEvents(computer?.controlHolder) }}
-              />
+          <div className="relative min-h-0 flex-1 bg-[#0E0E10]">
+            {embeddableScreenUrl(screenUrl) ? (
+              <>
+                <iframe
+                  ref={overlayFrameRef}
+                  key={`${screenTargetKey(screenUrl) ?? "screen"}-${screenEpoch}`}
+                  title="Bot screen"
+                  src={embeddableScreenUrl(screenUrl) ?? undefined}
+                  sandbox={screenIframeSandbox(screenUrl)}
+                  className="h-full w-full border-0 bg-black"
+                  allow="clipboard-read; clipboard-write; fullscreen"
+                  style={{ pointerEvents: overlayPointerEvents(computer?.controlHolder) }}
+                  onLoad={onScreenFrameLoad}
+                  onError={() => setScreenError("Screen preview failed to load")}
+                />
+                {screenError ? (
+                  <div className="absolute inset-0 z-10 grid place-items-center gap-3 bg-[#0E0E10] text-sm text-[#6C6C70]">
+                    <div>{screenError}</div>
+                    <Button type="button" variant="outline" size="sm" onClick={retryScreen}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : null}
+              </>
             ) : (
-              <div className="grid h-full place-items-center text-sm text-[#6C6C70]">
-                {computer?.state === "suspended" ? "Computer is asleep" : computerLabel(computer?.mode, active.name)}
+              <div className="grid h-full place-items-center gap-3 text-sm text-[#6C6C70]">
+                <div>
+                  {screenError
+                    ? screenError
+                    : computer?.state === "running"
+                      ? "Screen is not available yet"
+                      : computer?.state === "suspended"
+                        ? "Computer is asleep"
+                        : computerLabel(computer?.mode, active.name)}
+                </div>
+                {screenError || computer?.state === "running" ? (
+                  <Button type="button" variant="outline" size="sm" onClick={retryScreen}>
+                    Retry
+                  </Button>
+                ) : null}
               </div>
             )}
           </div>
@@ -1051,6 +1403,9 @@ function MessageView({
   const quote = message.replyTo;
   return (
     <div
+      data-testid="thread-message"
+      data-role={message.role}
+      data-message-id={message.id}
       onContextMenu={(event) => {
         if (!onContextMenu) return;
         event.preventDefault();
@@ -1280,7 +1635,11 @@ function AskCard({
   }
 
   return (
-    <div className="max-w-[74%] rounded-[20px] border border-[#242428] bg-[#141417] px-5 py-[17px]">
+    <div
+      data-testid="ask-card"
+      data-status={block.status ?? "pending"}
+      className="max-w-[74%] rounded-[20px] border border-[#242428] bg-[#141417] px-5 py-[17px]"
+    >
       <div className="text-[15.5px] leading-[1.5] text-[#ECECEE]">
         <ChatMarkdown>{block.text}</ChatMarkdown>
       </div>
@@ -1341,6 +1700,7 @@ function AskCard({
                   <button
                     key={act.id}
                     type="button"
+                    data-testid="ask-option"
                     disabled={submitting}
                     onClick={() => void submitAnswer(act.label)}
                     className="group flex w-full items-center rounded-[12px] border border-[#242429] bg-[#17171B] px-3.5 py-2.5 text-left transition hover:border-[#383842] hover:bg-[#1E1E23] disabled:opacity-50"
@@ -1416,6 +1776,9 @@ function ComputerModePicker({
           </button>
         ))}
       </div>
+      <p data-testid="computer-mode-hint" className="mt-2 text-[12.5px] leading-5 text-[#6C6C70]">
+        {computerModeHint(value)}
+      </p>
     </div>
   );
 }
@@ -1485,17 +1848,33 @@ function CreateBotForm({
   );
 }
 
+function computerPowerLabel(state: ComputerStatus["state"] | undefined): string {
+  if (state === "running") return "Running";
+  if (state === "booting") return "Booting";
+  if (state === "error") return "Error";
+  if (state === "suspended") return "Sleeping";
+  return "Offline";
+}
+
 function BotSettings({
   bot,
+  computer,
   onClose,
   onUpdated,
   onDelete,
+  onRestart,
+  onStop,
+  onReset,
   onLater,
 }: {
   bot: Bot;
+  computer: ComputerStatus | null;
   onClose: () => void;
   onUpdated: () => void;
   onDelete: (deleteMemories: boolean) => void;
+  onRestart: () => Promise<void>;
+  onStop: () => Promise<void>;
+  onReset: () => Promise<void>;
   onLater: (text: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -1507,6 +1886,8 @@ function BotSettings({
   const [notifyOnFinish, setNotifyOnFinish] = useState(bot.notifyOnFinish);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [powerBusy, setPowerBusy] = useState(false);
   const [deleteMemories, setDeleteMemories] = useState(false);
 
   useEffect(() => {
@@ -1560,6 +1941,7 @@ function BotSettings({
           <div>
             <label className="text-[12px] text-[#85858A]">Name</label>
             <input
+              data-testid="bot-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="mt-1 w-full rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
@@ -1592,6 +1974,7 @@ function BotSettings({
               className="mt-1 w-full resize-none rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
             />
           </div>
+          <ComputerModePicker value={computerMode} onChange={setComputerMode} />
           <div className="mt-2 flex gap-2">
             <Button type="button" size="sm" disabled={saving || !name.trim()} onClick={() => void save()}>
               {saving ? "Saving…" : "Save"}
@@ -1610,6 +1993,7 @@ function BotSettings({
           <div className="mt-4 text-[14px] text-[#A8A8AD]">
             Computer: {bot.computerMode === "dedicated" ? "Private" : "Team"}
           </div>
+          <p className="mt-1 text-[12.5px] leading-5 text-[#6C6C70]">{computerModeHint(bot.computerMode)}</p>
           <div className="mt-3">
             <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
               Edit Profile
@@ -1617,6 +2001,98 @@ function BotSettings({
           </div>
         </>
       )}
+
+      <div className="mt-6 rounded-xl border border-[#232326] bg-[#101012] p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[13.5px] text-[#C9C9CE]">Computer</span>
+          <span data-testid="computer-power-state" className="text-[12px] text-[#85858A]">
+            {computerPowerLabel(computer?.state)}
+          </span>
+        </div>
+        <p className="mt-2 text-[12.5px] leading-5 text-[#6C6C70]">
+          Rebooting the Pi, Stop, or Restart keeps Chromium logins and downloads on disk. Reset
+          destroys the box and deletes that home.
+        </p>
+        {bot.computerMode === "team" ? (
+          <p className="mt-1.5 text-[12.5px] leading-5 text-[#8A7A5C]">
+            Reset wipes the shared Team desktop for every Team bot.
+          </p>
+        ) : null}
+        {computer?.busyBotName ? (
+          <p className="mt-1.5 text-[12.5px] leading-5 text-[#8A7A5C]">
+            {computer.busyBotName} is using this computer.
+          </p>
+        ) : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="computer-restart"
+            disabled={powerBusy || Boolean(computer?.busyBotName)}
+            onClick={() => {
+              setPowerBusy(true);
+              void onRestart().finally(() => setPowerBusy(false));
+            }}
+          >
+            Restart
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="computer-stop"
+            disabled={powerBusy || Boolean(computer?.busyBotName)}
+            onClick={() => {
+              setPowerBusy(true);
+              void onStop().finally(() => setPowerBusy(false));
+            }}
+          >
+            Stop
+          </Button>
+          {resetting ? null : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid="computer-reset"
+              disabled={powerBusy || Boolean(computer?.busyBotName)}
+              onClick={() => setResetting(true)}
+              className="border-[#FF5364] text-[#FF5364] hover:bg-[#FF5364]/10"
+            >
+              Reset…
+            </Button>
+          )}
+        </div>
+        {resetting ? (
+          <div className="mt-3 rounded-lg border border-[#3A2222] bg-[#1A1212] p-3">
+            <div className="text-[13px] leading-5 text-[#E8A0A0]">
+              Erase this computer’s home? Browser logins and downloads will be gone.
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="computer-reset-confirm"
+                disabled={powerBusy}
+                onClick={() => {
+                  setPowerBusy(true);
+                  void onReset()
+                    .then(() => setResetting(false))
+                    .finally(() => setPowerBusy(false));
+                }}
+                className="border-[#FF5364] text-[#FF5364] hover:bg-[#FF5364]/10"
+              >
+                Reset computer
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setResetting(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       <label className="mt-5 flex items-start gap-2.5 text-[13.5px] leading-5 text-[#C9C9CE]">
         <input
@@ -1685,23 +2161,33 @@ function ComputerPane({
   bot,
   computer,
   screenUrl,
+  screenError,
+  screenEpoch,
+  previewFrameRef,
   booting,
   onClose,
   onSettings,
   onOpenFullscreen,
   onTakeControl,
   onRelease,
+  onRetryScreen,
+  onScreenFrameLoad,
   onLater,
 }: {
   bot: Bot;
   computer: ComputerStatus | null;
   screenUrl: string | null;
+  screenError: string | null;
+  screenEpoch: number;
+  previewFrameRef: RefObject<HTMLIFrameElement | null>;
   booting: boolean;
   onClose: () => void;
   onSettings: () => void;
   onOpenFullscreen: () => void;
   onTakeControl: () => void;
   onRelease: () => void;
+  onRetryScreen: () => void;
+  onScreenFrameLoad: (event: SyntheticEvent<HTMLIFrameElement>) => void;
   onLater: (text: string) => void;
 }) {
   const mode = computer?.mode || bot.computerMode;
@@ -1759,32 +2245,54 @@ function ComputerPane({
       </div>
 
       <div className="group relative aspect-[16/10] w-full overflow-hidden rounded-[14px] border border-[#232326] bg-[#0E0E10]">
-        {preview && isRunning ? (
+        {preview ? (
           <>
             <iframe
+              ref={previewFrameRef}
+              key={`${screenTargetKey(preview) ?? "preview"}-${screenEpoch}`}
+              data-testid="computer-preview"
               title="Computer preview"
               src={preview}
               sandbox={screenIframeSandbox(preview)}
               className="pointer-events-none h-full w-full border-0 bg-black"
               allow="clipboard-read; clipboard-write"
               style={{ pointerEvents: previewPointerEvents() }}
+              onLoad={onScreenFrameLoad}
             />
-            <button
-              type="button"
-              className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100 cursor-pointer"
-              onClick={onOpenFullscreen}
-              aria-label="Open computer fullscreen"
-            >
-              <span className="flex items-center gap-1.5 rounded-lg border border-[#303036] bg-[#161619]/90 px-3 py-1.5 text-[13px] font-medium text-[#ECECEE] shadow-lg backdrop-blur-sm">
-                Open screen ↗
-              </span>
-            </button>
+            {screenError ? (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#0E0E10] px-6 text-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#3A3A40] border-t-[#30A24B]" />
+                <span className="text-[13px] font-medium text-[#ECECEE]">{screenError}</span>
+                <Button type="button" variant="outline" size="sm" onClick={onRetryScreen}>
+                  Retry
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100 cursor-pointer"
+                onClick={onOpenFullscreen}
+                aria-label="Open computer fullscreen"
+              >
+                <span className="flex items-center gap-1.5 rounded-lg border border-[#303036] bg-[#161619]/90 px-3 py-1.5 text-[13px] font-medium text-[#ECECEE] shadow-lg backdrop-blur-sm">
+                  Open screen ↗
+                </span>
+              </button>
+            )}
           </>
         ) : isRunning ? (
           <div className="grid h-full w-full place-items-center px-6 text-center">
             <div className="flex flex-col items-center gap-2 text-[#85858A]">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#3A3A40] border-t-[#30A24B]" />
-              <span className="text-[13px] font-medium text-[#ECECEE]">Connecting desktop…</span>
+              <span
+                data-testid="computer-connecting"
+                className="text-[13px] font-medium text-[#ECECEE]"
+              >
+                {screenError || "Connecting desktop…"}
+              </span>
+              <Button type="button" variant="outline" size="sm" onClick={onRetryScreen}>
+                Retry
+              </Button>
             </div>
           </div>
         ) : (
@@ -1829,7 +2337,7 @@ function ComputerPane({
       </div>
 
       <div className="mt-3 flex items-center justify-between">
-        <span className="text-[13px] text-[#85858A]">
+        <span data-testid="computer-label" className="text-[13px] text-[#85858A]">
           {computer?.busyBotName
             ? `${computer.busyBotName} is using it`
             : computer?.controlHolder === "user"
@@ -1950,7 +2458,11 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
       </div>
       <div className="flex flex-col gap-2">
         {documents.map((document) => (
-          <div key={document.id} className="rounded-xl border border-[#202023] bg-[#0D0D0E] px-3 py-2.5">
+          <div
+            key={document.id}
+            data-testid="memory-doc"
+            className="rounded-xl border border-[#202023] bg-[#0D0D0E] px-3 py-2.5"
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="truncate text-[14.5px] text-[#ECECEE]">{document.path}</div>
@@ -2049,6 +2561,7 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
       ) : (
         <button
           type="button"
+          data-testid="new-memory"
           onClick={() => setCreating(true)}
           className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-[#7A7A80]"
         >
@@ -2135,7 +2648,11 @@ function RoutinesPanel({ botId, onLater }: { botId: string; onLater: (text: stri
       <div className="mt-[30px] mb-3 text-[14px] text-[#85858A]">Routines</div>
       <div className="flex flex-col gap-2">
         {routines.map((routine) => (
-          <div key={routine.id} className="rounded-xl border border-[#202023] bg-[#0D0D0E] px-3 py-2.5">
+          <div
+            key={routine.id}
+            data-testid="routine-row"
+            className="rounded-xl border border-[#202023] bg-[#0D0D0E] px-3 py-2.5"
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="truncate text-[14.5px] text-[#ECECEE]">{routine.name}</div>
@@ -2208,6 +2725,7 @@ function RoutinesPanel({ botId, onLater }: { botId: string; onLater: (text: stri
       ) : (
         <button
           type="button"
+          data-testid="new-routine"
           onClick={() => setCreating(true)}
           className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-[#7A7A80]"
         >

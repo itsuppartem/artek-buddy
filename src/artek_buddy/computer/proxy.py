@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -25,6 +27,16 @@ HOP = {
     "host",
     "content-length",
 }
+SCREEN_STARTUP_RETRY_SECONDS = float(os.environ.get("ARTEK_SCREEN_STARTUP_RETRY_SECONDS", "12"))
+SCREEN_STARTUP_RETRY_INTERVAL_SECONDS = 0.25
+SCREEN_UNREACHABLE_HTML = (
+    b"<!DOCTYPE html>"
+    b'<html lang="en" data-artek-screen-error="1">'
+    b'<head><meta charset="utf-8"><title>Screen unavailable</title>'
+    b"<style>html,body{margin:0;height:100%;background:#0E0E10;color:#6C6C70;"
+    b"font:14px/1.4 system-ui,sans-serif}body{display:grid;place-items:center}</style>"
+    b"</head><body>Desktop is starting...</body></html>"
+)
 
 
 def signed_target(url: str, secret: str) -> Any:
@@ -36,15 +48,28 @@ def signed_target(url: str, secret: str) -> Any:
 
 def fetch_novnc(url: str, method: str) -> Response:
     request = urllib.request.Request(url, method=method)
-    try:
-        with urllib.request.urlopen(request, timeout=30) as resp:
-            data = resp.read()
-            content_type = resp.headers.get("Content-Type") or "application/octet-stream"
-            return Response(content=data, media_type=content_type, status_code=resp.status)
-    except urllib.error.HTTPError as err:
-        return Response(content=err.read(), status_code=err.code)
-    except OSError as err:
-        raise HTTPException(status_code=502, detail="screen unreachable") from err
+    deadline = time.monotonic() + SCREEN_STARTUP_RETRY_SECONDS
+    while True:
+        try:
+            with urllib.request.urlopen(request, timeout=30) as resp:
+                data = resp.read()
+                content_type = resp.headers.get("Content-Type") or "application/octet-stream"
+                return Response(content=data, media_type=content_type, status_code=resp.status)
+        except urllib.error.HTTPError as err:
+            return Response(content=err.read(), status_code=err.code)
+        except OSError as err:
+            # A computer is marked running just before noVNC begins accepting
+            # connections. Keep the original iframe request open for this small
+            # startup window instead of serving a transient 502 JSON page.
+            if time.monotonic() >= deadline:
+                log.warning("screen unreachable: %s", err)
+                return Response(
+                    content=SCREEN_UNREACHABLE_HTML,
+                    media_type="text/html; charset=utf-8",
+                    status_code=502,
+                    headers={"Cache-Control": "no-store"},
+                )
+            time.sleep(SCREEN_STARTUP_RETRY_INTERVAL_SECONDS)
 
 
 async def proxy_novnc_http(request: Request, secret: str) -> Response:

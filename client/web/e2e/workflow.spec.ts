@@ -18,7 +18,7 @@ test.describe("full bot workflow e2e", () => {
     await page.getByPlaceholder("Describe what this bot does").fill("Automated E2E Test Bot");
     await page.screenshot({ path: "test-results/flow-1-create-dialog.png" });
 
-    await page.getByRole("button", { name: "Create" }).click();
+    await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.locator("aside").first().getByText(botName)).toBeVisible({ timeout: 15_000 });
     await page.screenshot({ path: "test-results/flow-2-bot-created.png" });
 

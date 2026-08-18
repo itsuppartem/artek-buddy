@@ -9,7 +9,7 @@ from psycopg import InterfaceError, OperationalError
 from psycopg.errors import UniqueViolation
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool, PoolTimeout
 
 from artek_buddy.auth import (
     PAIRING_TTL_SECONDS,
@@ -42,9 +42,9 @@ from artek_buddy.memory import (
 )
 from artek_buddy.computer.models import ComputerRecord
 from artek_buddy.db.shaping import (
-    DEFAULT_BOT_NAME,
     DEFAULT_PAGE_SIZE,
     DEFAULT_WORKSPACE_ID,
+    answer_ask_blocks,
     isoformat_utc,
     new_id,
     next_seq,
@@ -57,6 +57,10 @@ from artek_buddy.db.shaping import (
 )
 
 log = logging.getLogger("artek_buddy")
+
+
+class InboxFullError(Exception):
+    pass
 
 
 class HistoryStore:
@@ -114,7 +118,7 @@ class HistoryStore:
                 yield conn
         except DatabaseUnavailable:
             raise
-        except (OperationalError, InterfaceError, OSError) as err:
+        except (OperationalError, InterfaceError, OSError, PoolTimeout) as err:
             raise DatabaseUnavailable(str(err)) from err
 
     def apply_migrations(self) -> None:
@@ -148,26 +152,13 @@ class HistoryStore:
                 conn.commit()
                 log.info("applied migration %s", path.name)
 
-    def ensure_seed(self, cursor_agent_id: str | None) -> Bot:
+    def ensure_workspace(self) -> None:
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO workspaces (id) VALUES (%s) ON CONFLICT (id) DO NOTHING",
                 (DEFAULT_WORKSPACE_ID,),
             )
             conn.commit()
-        bots = self.list_bots()
-        if cursor_agent_id:
-            existing = self.get_bot_by_agent(cursor_agent_id)
-            if existing is not None:
-                return existing
-        if not bots:
-            return self.create_bot(
-                name=DEFAULT_BOT_NAME,
-                cursor_agent_id=cursor_agent_id,
-            )
-        if cursor_agent_id:
-            return self.attach_agent(bots[0].id, cursor_agent_id)
-        return bots[0]
 
     def delete_bot(self, bot_id: str, delete_memories: bool = False) -> bool:
         bot = self.get_bot(bot_id)
@@ -345,6 +336,40 @@ class HistoryStore:
                     (now, bot_id),
                 )
         return [row["id"] for row in rows]
+
+    def fail_orphaned_runs(self, error: str = "The host restarted before this turn finished.") -> int:
+        """Mark leftover in-flight work failed after a process restart."""
+        now = isoformat_utc()
+        with self._conn() as conn:
+            with conn.transaction():
+                rows = conn.execute(
+                    """
+                    UPDATE runs
+                    SET status = %s, error = %s, completed_at = %s
+                    WHERE status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
+                    RETURNING id, bot_id
+                    """,
+                    (RunStatus.failed.value, error, now),
+                ).fetchall()
+                bot_ids = [row["bot_id"] for row in rows]
+                if bot_ids:
+                    conn.execute(
+                        """
+                        UPDATE bots
+                        SET status = 'idle', updated_at = %s
+                        WHERE id = ANY(%s)
+                        """,
+                        (now, bot_ids),
+                    )
+                conn.execute(
+                    """
+                    UPDATE subagents
+                    SET status = 'failed', error = %s, updated_at = %s
+                    WHERE status IN ('queued', 'running')
+                    """,
+                    (error, now),
+                )
+        return len(rows)
 
     def create_bot(
         self,
@@ -591,6 +616,137 @@ class HistoryStore:
         value = -1 if row is None else int(row["max_seq"])
         return value
 
+    def begin_or_enqueue_turn(
+        self,
+        bot: Bot,
+        text: str,
+        *,
+        model_provider: str | None = "cursor",
+        model_id: str | None = None,
+        trigger: str = "user",
+        reply_to_id: str | None = None,
+        max_inbox: int = 20,
+    ) -> tuple[ThreadMessage, Run, bool]:
+        """Atomically start a lead turn or queue behind the current lead."""
+        with self._conn() as conn:
+            with conn.transaction():
+                locked = conn.execute(
+                    "SELECT id FROM bots WHERE id = %s FOR UPDATE",
+                    (bot.id,),
+                ).fetchone()
+                if locked is None:
+                    raise RuntimeError("bot not found")
+                active = conn.execute(
+                    """
+                    SELECT * FROM runs
+                    WHERE bot_id = %s
+                      AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    FOR UPDATE
+                    """,
+                    (bot.id,),
+                ).fetchone()
+                now = isoformat_utc()
+                seq = self._lock_next_seq(conn, bot.thread_id)
+                msg_id = new_id("msg")
+                if active is not None:
+                    queued = conn.execute(
+                        "SELECT COUNT(*) AS n FROM turn_inbox WHERE bot_id = %s",
+                        (bot.id,),
+                    ).fetchone()
+                    if int(queued["n"]) >= max_inbox:
+                        raise InboxFullError(
+                            "Too many messages are already queued. Wait for the bot to finish, then try again."
+                        )
+                    conn.execute(
+                        """
+                        INSERT INTO messages (
+                            id, thread_id, seq, role, blocks, run_id, reply_to_id, created_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, NULL, %s, %s)
+                        """,
+                        (
+                            msg_id,
+                            bot.thread_id,
+                            seq,
+                            MessageRole.user.value,
+                            Json(text_blocks(text)),
+                            reply_to_id,
+                            now,
+                        ),
+                    )
+                    conn.execute(
+                        """
+                        INSERT INTO turn_inbox (id, bot_id, message_id, text, reply_to_id, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        """,
+                        (new_id("inb"), bot.id, msg_id, text, reply_to_id, now),
+                    )
+                    conn.execute(
+                        "UPDATE bots SET preview = %s, unread = FALSE, updated_at = %s WHERE id = %s",
+                        (preview_snippet(text), now, bot.id),
+                    )
+                    run_id = active["id"]
+                    queued_turn = True
+                else:
+                    run_id = new_id("run")
+                    task_id = new_id("tsk")
+                    conn.execute(
+                        """
+                        INSERT INTO messages (
+                            id, thread_id, seq, role, blocks, run_id, reply_to_id, created_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            msg_id,
+                            bot.thread_id,
+                            seq,
+                            MessageRole.user.value,
+                            Json(text_blocks(text)),
+                            run_id,
+                            reply_to_id,
+                            now,
+                        ),
+                    )
+                    conn.execute(
+                        """
+                        INSERT INTO runs (
+                            id, bot_id, thread_id, task_id, status, trigger,
+                            model_provider, model_id, error, result, started_at, completed_at
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s,
+                            %s, %s, NULL, NULL, %s, NULL
+                        )
+                        """,
+                        (
+                            run_id,
+                            bot.id,
+                            bot.thread_id,
+                            task_id,
+                            RunStatus.running.value,
+                            trigger or "user",
+                            model_provider,
+                            model_id,
+                            now,
+                        ),
+                    )
+                    conn.execute(
+                        """
+                        UPDATE bots
+                        SET preview = %s, status = %s, unread = FALSE, updated_at = %s
+                        WHERE id = %s
+                        """,
+                        (preview_snippet(text), "running", now, bot.id),
+                    )
+                    queued_turn = False
+        user = self._get_message(msg_id)
+        run = self._get_run(run_id)
+        if user is None or run is None:
+            raise RuntimeError("failed to persist turn")
+        return self._with_replies([user])[0], run, queued_turn
+
     def begin_turn(
         self,
         bot: Bot,
@@ -820,6 +976,47 @@ class HistoryStore:
             raise RuntimeError("failed to persist inbox message")
         return self._with_replies([message])[0]
 
+    def answer_pending_asks(self, thread_id: str, answer: str) -> list[ThreadMessage]:
+        text = (answer or "").strip()
+        if not text:
+            return []
+        updated_ids: list[str] = []
+        with self._conn() as conn:
+            with conn.transaction():
+                rows = conn.execute(
+                    """
+                    SELECT id, blocks
+                    FROM messages
+                    WHERE thread_id = %s AND role = %s
+                    ORDER BY seq DESC
+                    LIMIT 30
+                    """,
+                    (thread_id, MessageRole.bot.value),
+                ).fetchall()
+                for row in rows:
+                    blocks = row["blocks"]
+                    if isinstance(blocks, str):
+                        import json
+
+                        blocks = json.loads(blocks)
+                    if not isinstance(blocks, list):
+                        continue
+                    next_blocks, changed = answer_ask_blocks(blocks, text)
+                    if not changed:
+                        continue
+                    conn.execute(
+                        "UPDATE messages SET blocks = %s WHERE id = %s",
+                        (Json(next_blocks), row["id"]),
+                    )
+                    updated_ids.append(row["id"])
+                    break
+        out: list[ThreadMessage] = []
+        for message_id in updated_ids:
+            message = self._get_message(message_id)
+            if message is not None:
+                out.append(message)
+        return out
+
     def enqueue_inbox(
         self,
         bot_id: str,
@@ -874,6 +1071,89 @@ class HistoryStore:
             }
             for row in rows
         ]
+
+    def claim_inbox_follow_up(
+        self,
+        bot: Bot,
+        *,
+        model_provider: str | None = "cursor",
+        model_id: str | None = None,
+    ) -> tuple[Run, list[dict[str, str | None]]] | None:
+        """Atomically claim queued messages only when no other lead is active."""
+        with self._conn() as conn:
+            with conn.transaction():
+                locked = conn.execute(
+                    "SELECT id FROM bots WHERE id = %s FOR UPDATE",
+                    (bot.id,),
+                ).fetchone()
+                if locked is None:
+                    return None
+                active = conn.execute(
+                    """
+                    SELECT 1 FROM runs
+                    WHERE bot_id = %s
+                      AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
+                    LIMIT 1
+                    """,
+                    (bot.id,),
+                ).fetchone()
+                if active is not None:
+                    return None
+                rows = conn.execute(
+                    """
+                    SELECT id, message_id, text, reply_to_id
+                    FROM turn_inbox
+                    WHERE bot_id = %s
+                    ORDER BY created_at ASC
+                    FOR UPDATE
+                    """,
+                    (bot.id,),
+                ).fetchall()
+                if not rows:
+                    return None
+                now = isoformat_utc()
+                run_id = new_id("run")
+                task_id = new_id("tsk")
+                conn.execute(
+                    """
+                    INSERT INTO runs (
+                        id, bot_id, thread_id, task_id, status, trigger,
+                        model_provider, model_id, error, result, started_at, completed_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, 'follow_up',
+                        %s, %s, NULL, NULL, %s, NULL
+                    )
+                    """,
+                    (
+                        run_id,
+                        bot.id,
+                        bot.thread_id,
+                        task_id,
+                        RunStatus.running.value,
+                        model_provider,
+                        model_id,
+                        now,
+                    ),
+                )
+                conn.execute("DELETE FROM turn_inbox WHERE bot_id = %s", (bot.id,))
+                conn.execute(
+                    "UPDATE bots SET status = %s, updated_at = %s WHERE id = %s",
+                    ("running", now, bot.id),
+                )
+        run = self._get_run(run_id)
+        if run is None:
+            raise RuntimeError("failed to persist follow-up run")
+        return (
+            run,
+            [
+                {
+                    "message_id": row["message_id"],
+                    "text": row["text"],
+                    "reply_to_id": row["reply_to_id"],
+                }
+                for row in rows
+            ],
+        )
 
     def begin_run(
         self,
@@ -1497,6 +1777,7 @@ class HistoryStore:
 
     def claim_due_routines(self, limit: int = 20) -> list[Routine]:
         now = datetime.now(timezone.utc)
+        lease_until = now + timedelta(minutes=5)
         claimed: list[Routine] = []
         with self._conn() as conn:
             rows = conn.execute(
@@ -1507,18 +1788,19 @@ class HistoryStore:
                 WHERE active
                   AND next_run_at IS NOT NULL
                   AND next_run_at <= %s
+                  AND (lease_until IS NULL OR lease_until <= %s)
                 ORDER BY next_run_at
                 LIMIT %s
                 FOR UPDATE SKIP LOCKED
                 """,
-                (now, limit),
+                (now, now, limit),
             ).fetchall()
             for row in rows:
                 try:
-                    nxt = next_run_at(row["cron"], now, row["timezone"] or "UTC")
+                    parse_cron(row["cron"])
                 except CronError:
                     conn.execute(
-                        "UPDATE routines SET active = FALSE WHERE id = %s",
+                        "UPDATE routines SET active = FALSE, lease_until = NULL WHERE id = %s",
                         (row["id"],),
                     )
                     continue
@@ -1526,23 +1808,54 @@ class HistoryStore:
                 conn.execute(
                     """
                     UPDATE routines
-                    SET last_run_at = %s, next_run_at = %s
+                    SET last_run_at = %s, lease_until = %s
                     WHERE id = %s
                     """,
-                    (seen, isoformat_utc(nxt), row["id"]),
+                    (seen, isoformat_utc(lease_until), row["id"]),
                 )
                 claimed.append(
-                    self._routine_from_row(row).model_copy(
-                        update={"last_run_at": seen, "next_run_at": isoformat_utc(nxt)}
-                    )
+                    self._routine_from_row(row).model_copy(update={"last_run_at": seen})
                 )
             conn.commit()
         return claimed
 
+    def ack_routine(self, routine_id: str) -> None:
+        now = datetime.now(timezone.utc)
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT cron, timezone FROM routines WHERE id = %s AND active",
+                (routine_id,),
+            ).fetchone()
+            if row is None:
+                conn.commit()
+                return
+            try:
+                nxt = next_run_at(row["cron"], now, row["timezone"] or "UTC")
+            except CronError:
+                conn.execute(
+                    "UPDATE routines SET active = FALSE, lease_until = NULL WHERE id = %s",
+                    (routine_id,),
+                )
+                conn.commit()
+                return
+            conn.execute(
+                """
+                UPDATE routines
+                SET next_run_at = %s, lease_until = NULL
+                WHERE id = %s
+                """,
+                (isoformat_utc(nxt), routine_id),
+            )
+            conn.commit()
+
     def reschedule_routine(self, routine_id: str, when: str) -> None:
         with self._conn() as conn:
             conn.execute(
-                "UPDATE routines SET next_run_at = %s WHERE id = %s AND active",
+                """
+                UPDATE routines
+                SET next_run_at = %s, lease_until = NULL
+                WHERE id = %s AND active
+                """,
                 (when, routine_id),
             )
             conn.commit()
@@ -1868,12 +2181,27 @@ class HistoryStore:
         return self._computer_from_row(row)
 
     def busy_bot_name(self, computer: ComputerRecord, except_bot_id: str) -> str | None:
-        if not computer.execution_bot_id or computer.execution_bot_id == except_bot_id:
-            return None
-        if not self.has_active_run(computer.execution_bot_id):
-            return None
-        other = self.get_bot(computer.execution_bot_id)
-        return other.name if other else computer.execution_bot_id
+        if computer.execution_bot_id and computer.execution_bot_id != except_bot_id:
+            if self.has_active_run(computer.execution_bot_id):
+                other = self.get_bot(computer.execution_bot_id)
+                return other.name if other else computer.execution_bot_id
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT b.name
+                FROM bots b
+                JOIN runs r ON r.bot_id = b.id
+                WHERE b.computer_id = %s
+                  AND b.id <> %s
+                  AND r.status IN (
+                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
+                  )
+                LIMIT 1
+                """,
+                (computer.id, except_bot_id),
+            ).fetchone()
+            conn.commit()
+        return str(row["name"]) if row else None
 
     def due_idle_computer_bots(self) -> list[str]:
         now = isoformat_utc()
@@ -1888,9 +2216,13 @@ class HistoryStore:
                   AND c.sleep_at <= %s
                   AND c.control_holder <> 'user'
                   AND NOT EXISTS (
-                    SELECT 1 FROM runs r
-                    WHERE r.bot_id = b.id
-                      AND r.status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
+                    SELECT 1
+                    FROM bots other
+                    JOIN runs r ON r.bot_id = other.id
+                    WHERE other.computer_id = c.id
+                      AND r.status IN (
+                        'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
+                      )
                   )
                 ORDER BY c.sleep_at ASC
                 """,

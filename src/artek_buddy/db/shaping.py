@@ -79,6 +79,25 @@ def preview_snippet(text: str, limit: int = PREVIEW_LIMIT) -> str:
     return compact[: max(0, limit - 1)].rstrip() + "…"
 
 
+def answer_ask_blocks(blocks: list[Any], answer: str) -> tuple[list[Any], bool]:
+    text = (answer or "").strip()
+    if not text or not isinstance(blocks, list):
+        return blocks, False
+    next_blocks: list[Any] = []
+    changed = False
+    for block in blocks:
+        if (
+            isinstance(block, dict)
+            and block.get("kind") == "ask"
+            and block.get("status") != "answered"
+        ):
+            next_blocks.append({**block, "status": "answered", "answer": text})
+            changed = True
+        else:
+            next_blocks.append(block)
+    return next_blocks, changed
+
+
 def older_cursor(seqs: list[int], page_limit: int = DEFAULT_PAGE_SIZE) -> int | None:
     if not seqs or len(seqs) < page_limit:
         return None

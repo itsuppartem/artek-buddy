@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import logging
+import re
+import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from artek_buddy.auth import supervisor_token
 from artek_buddy.computer.client import FakeSupervisorClient, SupervisorClient
 from artek_buddy.computer.models import ComputerRecord
 from artek_buddy.computer.screen import mint_novnc_url
@@ -23,6 +26,20 @@ from artek_buddy.db.shaping import isoformat_utc, new_id
 log = logging.getLogger("artek_buddy")
 
 EXEC_TTL = timedelta(minutes=5)
+_HOME_KEY = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def wipe_computer_home(data_dir: Path, home_key: str) -> Path:
+    if not _HOME_KEY.fullmatch(home_key):
+        raise ComputerError("invalid home")
+    root = (Path(data_dir) / "homes").resolve()
+    path = (root / home_key).resolve()
+    if path.parent != root:
+        raise ComputerError("invalid home")
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 class ComputerBusy(Exception):
@@ -35,6 +52,10 @@ class ComputerError(Exception):
     pass
 
 
+class ComputerUnavailable(ComputerError):
+    """The desktop is supposed to be reachable but the screen proxy cannot mint a URL."""
+
+
 class ComputerService:
     def __init__(self, store: HistoryStore, settings: Settings, client: Any | None = None) -> None:
         self.store = store
@@ -44,7 +65,7 @@ class ComputerService:
         elif settings.sandbox_provider == "fake":
             self.client = FakeSupervisorClient()
         else:
-            token = settings.sandbox_supervisor_token or settings.agent_http_token
+            token = supervisor_token(settings.agent_http_token, settings.sandbox_supervisor_token)
             self.client = SupervisorClient(settings.sandbox_supervisor_url, token)
 
     def home_path(self, record: ComputerRecord) -> Path:
@@ -68,10 +89,13 @@ class ComputerService:
             record.execution_bot_id = bot.id
             record.execution_run_id = new_id("boot")
             record.execution_lease_expires_at = isoformat_utc(datetime.now(timezone.utc) + EXEC_TTL)
-        if record.state == "running" and record.provider_ref:
+        if record.state == "running" and record.provider_ref and self._box_alive(record.provider_ref):
             record = self._touch(record)
             self.store.save_computer(record)
             return self.status(bot)
+        if record.provider_ref and not self._box_alive(record.provider_ref):
+            log.warning("stale computer container %s, reprovisioning", record.provider_ref)
+            record.provider_ref = None
         record.state = "booting"
         record.kind = "fake" if self.settings.sandbox_provider == "fake" else "docker"
         self.store.save_computer(record)
@@ -89,11 +113,49 @@ class ComputerService:
 
     def stop(self, bot: Bot) -> ComputerStatus:
         record = self.store.get_computer_for_bot(bot)
+        record = self._expire_lease(record)
+        busy = self.store.busy_bot_name(record, bot.id)
+        if busy:
+            raise ComputerBusy(busy)
         if record.provider_ref:
             try:
                 self.client.stop(record.provider_ref)
             except Exception:
                 log.exception("supervisor stop failed")
+        record.state = "stopped"
+        record.control_holder = "none"
+        record.control_lease_id = None
+        record.control_lease_expires_at = None
+        record.control_bot_id = None
+        record.execution_bot_id = None
+        record.execution_run_id = None
+        record.execution_lease_expires_at = None
+        record.sleep_at = None
+        record.home_revision = isoformat_utc()
+        self.store.save_computer(record)
+        return self.status(bot)
+
+    def restart(self, bot: Bot) -> ComputerStatus:
+        if self.store.has_active_run(bot.id):
+            raise ComputerBusy(bot.name)
+        self.stop(bot)
+        return self.boot(bot)
+
+    def reset(self, bot: Bot) -> ComputerStatus:
+        record = self.store.get_computer_for_bot(bot)
+        record = self._expire_lease(record)
+        if self.store.has_active_run(bot.id):
+            raise ComputerBusy(bot.name)
+        busy = self.store.busy_bot_name(record, bot.id)
+        if busy:
+            raise ComputerBusy(busy)
+        if record.provider_ref:
+            try:
+                self.client.destroy(record.provider_ref)
+            except Exception:
+                log.exception("supervisor destroy failed")
+        wipe_computer_home(Path(self.settings.agent_data_dir), record.home_key)
+        record.provider_ref = None
         record.state = "stopped"
         record.control_holder = "none"
         record.control_lease_id = None
@@ -171,17 +233,22 @@ class ComputerService:
             except Exception:
                 log.exception("inspect fallback failed, rebooting container")
                 try:
+                    record.provider_ref = None
+                    record.state = "stopped"
+                    self.store.save_computer(record)
                     self.boot(bot)
                     record = self.store.get_computer_for_bot(bot)
                     if record.provider_ref:
                         box = self.client.inspect(record.provider_ref)
                     else:
-                        return ScreenUrlResult(url=None)
-                except Exception:
-                    return ScreenUrlResult(url=None)
+                        raise ComputerUnavailable("screen unavailable")
+                except ComputerUnavailable:
+                    raise
+                except Exception as err:
+                    raise ComputerUnavailable("screen unavailable") from err
         port = box.control_port if control_ready else box.view_port
         if not port:
-            return ScreenUrlResult(url=None)
+            raise ComputerUnavailable("screen unavailable")
         secret = self.settings.agent_http_token
         url = mint_novnc_url(secret, "127.0.0.1", int(port), interactive=control_ready)
         record = self._touch(record)
@@ -242,7 +309,7 @@ class ComputerService:
     def ensure_running(self, bot: Bot) -> ComputerRecord:
         record = self.store.get_computer_for_bot(bot)
         record = self._expire_lease(record)
-        if record.state != "running" or not record.provider_ref:
+        if record.state != "running" or not record.provider_ref or not self._box_alive(record.provider_ref):
             self.boot(bot)
             record = self.store.get_computer_for_bot(bot)
         record = self._touch(record)
@@ -285,6 +352,13 @@ class ComputerService:
             raise ComputerError("bot not found")
         self.store.ensure_computer(updated)
         return self.store.get_bot(updated.id) or updated
+
+    def _box_alive(self, provider_ref: str) -> bool:
+        try:
+            box = self.client.inspect(provider_ref)
+        except Exception:
+            return False
+        return bool(box.running and (box.view_port or box.control_port))
 
     def _touch(self, record: ComputerRecord) -> ComputerRecord:
         record.sleep_at = isoformat_utc(datetime.now(timezone.utc) + self._idle_ttl())

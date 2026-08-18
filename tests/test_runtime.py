@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import tempfile
 import threading
@@ -306,6 +307,31 @@ class CursorStreamAdapterTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(items[-1], RunRecord)
         self.assertEqual(items[-1].status, "completed")
         self.assertEqual(items[-1].result, "hi")
+
+    async def test_cancelled_stream_calls_remote_cancel(self) -> None:
+        cancelled: list[str] = []
+
+        class _Run:
+            id = "cr-cancel"
+
+            async def events(self):
+                if False:
+                    yield None
+                raise asyncio.CancelledError
+
+            def cancel(self) -> None:
+                cancelled.append(self.id)
+
+        class _Agent:
+            async def send(self, prompt: str, opts: object) -> _Run:
+                return _Run()
+
+        runtime = CursorRuntime(_Client(_Agents()), _settings())
+        runtime._agents["bc-1"] = _Agent()
+        with self.assertRaises(asyncio.CancelledError):
+            async for _item in runtime.stream("hello", session_id="bc-1"):
+                pass
+        self.assertEqual(cancelled, ["cr-cancel"])
 
 
 class RuntimeSessionTest(unittest.IsolatedAsyncioTestCase):

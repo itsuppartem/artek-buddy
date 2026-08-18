@@ -89,6 +89,7 @@ class ContractsTest(unittest.TestCase):
     def test_product_event_types(self) -> None:
         values = {item.value for item in ProductEventType}
         self.assertIn("thread.message.created", values)
+        self.assertIn("thread.replay.gap", values)
         self.assertIn("thread.subagent", values)
         self.assertIn("bot.spawned", values)
         self.assertIn("run.completed", values)
@@ -139,6 +140,8 @@ class ContractsTest(unittest.TestCase):
             "computer.status",
             "computer.boot",
             "computer.stop",
+            "computer.restart",
+            "computer.reset",
             "computer.takeover",
             "computer.release",
             "computer.input",

@@ -1,4 +1,7 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_PLACEHOLDER_TOKENS = {"change-me", "changeme", "secret", "token", "password"}
 
 
 class Settings(BaseSettings):
@@ -6,6 +9,14 @@ class Settings(BaseSettings):
 
     cursor_api_key: str = ""
     agent_http_token: str
+
+    @field_validator("agent_http_token")
+    @classmethod
+    def reject_placeholder_host_token(cls, value: str) -> str:
+        token = (value or "").strip()
+        if not token or token.lower() in _PLACEHOLDER_TOKENS:
+            raise ValueError("AGENT_HTTP_TOKEN is missing or still a placeholder")
+        return token
     agent_runtime: str = "cursor"
     cursor_model: str = "grok-4.6"
     cursor_model_effort: str = "xhigh"

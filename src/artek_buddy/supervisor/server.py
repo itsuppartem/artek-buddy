@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
+from artek_buddy.auth import supervisor_token
 from artek_buddy.supervisor.docker_engine import DockerEngine, published_port
 from artek_buddy.supervisor.logic import (
     action_command,
@@ -26,8 +27,9 @@ SAFE_HOME = re.compile(r"^[A-Za-z0-9._-]+$")
 class SupervisorState:
     def __init__(self) -> None:
         self.engine = DockerEngine(os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock"))
-        self.token = os.environ.get("SANDBOX_SUPERVISOR_TOKEN") or os.environ.get(
-            "AGENT_HTTP_TOKEN", ""
+        self.token = supervisor_token(
+            os.environ.get("AGENT_HTTP_TOKEN", ""),
+            os.environ.get("SANDBOX_SUPERVISOR_TOKEN", ""),
         )
         self.image = os.environ.get("COMPUTER_IMAGE", "artek-buddy-computer:local")
         self.data_dir = Path(os.environ.get("AGENT_DATA_DIR", "/data"))
@@ -185,6 +187,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if existing:
             STATE.engine.remove(existing["Id"])
+        network = STATE.engine.ensure_network("artek-computers")
         spec = {
             "name": name,
             "Image": STATE.image,
@@ -202,6 +205,8 @@ class Handler(BaseHTTPRequestHandler):
                     "6080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "0"}],
                     "6081/tcp": [{"HostIp": "127.0.0.1", "HostPort": "0"}],
                 },
+                "NetworkMode": network,
+                "SecurityOpt": ["no-new-privileges:true"],
                 "ShmSize": 268435456,
                 "RestartPolicy": {"Name": "no"},
             },

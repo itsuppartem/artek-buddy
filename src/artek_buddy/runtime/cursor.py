@@ -25,6 +25,22 @@ from artek_buddy.stream import map_cursor_event
 log = logging.getLogger("artek_buddy")
 
 
+async def _cancel_cursor_run(run: Any) -> None:
+    if run is None:
+        return
+    for name in ("cancel", "stop", "abort"):
+        fn = getattr(run, name, None)
+        if not callable(fn):
+            continue
+        try:
+            result = fn()
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception:
+            log.exception("cursor run %s failed", name)
+        return
+
+
 def build_model(settings: Settings) -> ModelSelection:
     params: list[ModelParameterValue] = []
     if settings.cursor_model_effort:
@@ -176,9 +192,34 @@ class CursorRuntime(RuntimeBase):
         agent_id, agent, lock = await self._agent(session_id, bot_id=bot_id, role=role)
         cwd = self.home_cwd(bot_id or self.resolve_turn_context()[0])
         async with lock:
+            run = None
             try:
                 run = await agent.send(prompt, {"local": {"force": True, "cwd": cwd}})
                 log.info("run started run_id=%s agent_id=%s", run.id, agent_id)
+                async for event in run.events():
+                    for typ, payload in map_cursor_event(event):
+                        yield ProductStreamEvent(type=typ, payload=payload)
+                text = ""
+                status = "unknown"
+                try:
+                    result = await run.wait()
+                    text = getattr(result, "result", None) or ""
+                    status = str(getattr(result, "status", "unknown"))
+                except Exception:
+                    log.exception("wait after stream failed")
+                if not text:
+                    try:
+                        text = await run.text()
+                    except Exception:
+                        text = ""
+                mapped = product_run_status(status)
+                yield RunRecord(
+                    id=str(getattr(run, "id", "")),
+                    agent_id=agent_id,
+                    status=mapped,
+                    result=text or None,
+                    error=None if mapped == "completed" else f"run failed: {getattr(run, 'id', '')}",
+                )
             except CursorAgentError as err:
                 log.error(
                     "run did not start: %s retryable=%s request_id=%s",
@@ -191,30 +232,9 @@ class CursorRuntime(RuntimeBase):
                     retryable=bool(err.is_retryable),
                     request_id=getattr(err, "request_id", None),
                 ) from err
-            async for event in run.events():
-                for typ, payload in map_cursor_event(event):
-                    yield ProductStreamEvent(type=typ, payload=payload)
-            text = ""
-            status = "unknown"
-            try:
-                result = await run.wait()
-                text = getattr(result, "result", None) or ""
-                status = str(getattr(result, "status", "unknown"))
-            except Exception:
-                log.exception("wait after stream failed")
-            if not text:
-                try:
-                    text = await run.text()
-                except Exception:
-                    text = ""
-            mapped = product_run_status(status)
-            yield RunRecord(
-                id=str(getattr(run, "id", "")),
-                agent_id=agent_id,
-                status=mapped,
-                result=text or None,
-                error=None if mapped == "completed" else f"run failed: {getattr(run, 'id', '')}",
-            )
+            except asyncio.CancelledError:
+                await _cancel_cursor_run(run)
+                raise
 
     async def list_models(self) -> list[dict[str, Any]]:
         models = await self.client.models.list()

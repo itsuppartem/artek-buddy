@@ -11,6 +11,7 @@ from artek_buddy.contracts.ids import Id
 class ProductEventType(str, Enum):
     THREAD_MESSAGE_CREATED = "thread.message.created"
     THREAD_MESSAGE_UPDATED = "thread.message.updated"
+    THREAD_REPLAY_GAP = "thread.replay.gap"
     THREAD_PROGRESS = "thread.progress"
     THREAD_ARTIFACT = "thread.artifact"
     THREAD_ASK = "thread.ask"

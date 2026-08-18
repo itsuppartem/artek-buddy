@@ -74,6 +74,49 @@ class ComputerIntegrationTest(unittest.TestCase):
             service.boot(second)
         self.assertEqual(raised.exception.name, first.name)
 
+    def test_idle_stop_skips_shared_computer_while_other_bot_runs(self) -> None:
+        first = self.store.create_bot(name="idle-keep-a")
+        second = self.store.create_bot(name="idle-keep-b")
+        self.addCleanup(self.store.delete_bot, first.id)
+        self.addCleanup(self.store.delete_bot, second.id)
+        service, client = self._service()
+        service.boot(first)
+        self.store.begin_turn(first, "still using the box")
+        record = self.store.get_computer_for_bot(first)
+        record.sleep_at = "2020-01-01T00:00:00+00:00"
+        self.store.save_computer(record)
+
+        due = self.store.due_idle_computer_bots()
+        self.assertNotIn(first.id, due)
+        self.assertNotIn(second.id, due)
+        with self.assertRaises(ComputerBusy):
+            service.stop(second)
+        self.assertFalse(any(call[0] == "stop" for call in client.calls))
+
+    def test_team_bots_share_a_box_private_bots_get_their_own(self) -> None:
+        team_a = self.store.create_bot(name="share-a")
+        team_b = self.store.create_bot(name="share-b")
+        private_a = self.store.create_bot(name="solo-a", computer_mode="dedicated")
+        private_b = self.store.create_bot(name="solo-b", computer_mode="dedicated")
+        self.addCleanup(self.store.delete_bot, team_a.id)
+        self.addCleanup(self.store.delete_bot, team_b.id)
+        self.addCleanup(self.store.delete_bot, private_a.id)
+        self.addCleanup(self.store.delete_bot, private_b.id)
+
+        shared_a = self.store.get_computer_for_bot(team_a)
+        shared_b = self.store.get_computer_for_bot(team_b)
+        own_a = self.store.get_computer_for_bot(private_a)
+        own_b = self.store.get_computer_for_bot(private_b)
+
+        self.assertEqual(shared_a.id, shared_b.id)
+        self.assertEqual(shared_a.scope, "team")
+        self.assertEqual(shared_a.home_key, f"team-{team_a.workspace_id}")
+        self.assertEqual(own_a.scope, "dedicated")
+        self.assertEqual(own_a.home_key, private_a.id)
+        self.assertEqual(own_b.home_key, private_b.id)
+        self.assertNotEqual(own_a.id, own_b.id)
+        self.assertNotEqual(own_a.id, shared_a.id)
+
     def test_snapshot_row_is_real(self) -> None:
         bot = self.store.create_bot(name="computer-snapshot", computer_mode="dedicated")
         self.addCleanup(self.store.delete_bot, bot.id)

@@ -17,7 +17,7 @@ services:
       AGENT_DATA_DIR: /data
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: "8080"
-      DATABASE_URL: postgresql://artek:${MEMORY_DB_PASSWORD:-artek}@127.0.0.1:5432/artek_buddy
+      DATABASE_URL: postgresql://artek:${MEMORY_DB_PASSWORD:?set MEMORY_DB_PASSWORD in .env}@127.0.0.1:5432/artek_buddy
       SANDBOX_SUPERVISOR_URL: http://127.0.0.1:7091
       SANDBOX_PROVIDER: docker
       COMPUTER_IMAGE: artek-buddy-computer:local
@@ -71,7 +71,7 @@ services:
       - .env
     environment:
       HTTP_PORT: "8080"
-      DATABASE_URL: postgresql://artek:${MEMORY_DB_PASSWORD:-artek}@127.0.0.1:5432/artek_buddy
+      DATABASE_URL: postgresql://artek:${MEMORY_DB_PASSWORD:?set MEMORY_DB_PASSWORD in .env}@127.0.0.1:5432/artek_buddy
       WORKER_POLL_SECONDS: "15"
     command: ["python", "-m", "artek_buddy", "worker"]
 
@@ -87,7 +87,7 @@ services:
     environment:
       POSTGRES_DB: artek_buddy
       POSTGRES_USER: artek
-      POSTGRES_PASSWORD: ${MEMORY_DB_PASSWORD:-artek}
+      POSTGRES_PASSWORD: ${MEMORY_DB_PASSWORD:?set MEMORY_DB_PASSWORD in .env}
     volumes:
       - memory-data:/var/lib/postgresql/data
     ports:

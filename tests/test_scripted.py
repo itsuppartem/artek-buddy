@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,10 +14,19 @@ from artek_buddy.runtime import (
     ProductTools,
     RunRecord,
     ScriptedRuntime,
+    ScriptedStep,
     open_runtime,
+    scripted_delay,
     scripted_finish,
     scripted_text,
     scripted_tool,
+    steps_for_prompt,
+)
+from artek_buddy.runtime.scripted import (
+    E2E_ASK_QUESTION,
+    E2E_CLOSE_STATUS,
+    E2E_DRAFT_ANSWER,
+    E2E_DRAFT_LEAK,
 )
 
 
@@ -81,9 +91,36 @@ class ScriptedRuntimeTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(store.saved[0]["path"], "NOTES.md")
         self.assertEqual(runtime.last_tool_results[0][0], "remember")
 
-    async def test_raise_error_step(self) -> None:
-        from artek_buddy.runtime.scripted import ScriptedStep
+    async def test_prompt_scenarios_and_delay(self) -> None:
+        hide = steps_for_prompt("please e2e-hide-draft now")
+        self.assertEqual(hide[-1].result, E2E_DRAFT_ANSWER)
+        self.assertTrue(any(step.event and E2E_DRAFT_LEAK in str(step.event) for step in hide))
 
+        close = steps_for_prompt("e2e-close-browser")
+        self.assertEqual([step.tool for step in close if step.tool], ["send_message", "close_app"])
+        self.assertEqual(close[0].args.get("text"), E2E_CLOSE_STATUS)
+
+        ask = steps_for_prompt("e2e-ask")
+        self.assertEqual(ask[0].tool, "ask_user")
+        self.assertEqual(ask[0].args.get("question"), E2E_ASK_QUESTION)
+
+        runtime = ScriptedRuntime(_settings())
+        await runtime.start()
+        started = time.monotonic()
+        runtime.queue_turn(scripted_delay(0.05), scripted_finish("later"))
+        record = await runtime.send("x")
+        self.assertGreaterEqual(time.monotonic() - started, 0.04)
+        self.assertEqual(record.result, "later")
+
+        items: list[object] = []
+        async for item in runtime.stream("e2e-hide-draft"):
+            items.append(item)
+        types = [item.type for item in items if isinstance(item, ProductStreamEvent)]
+        self.assertIn("thread.message.updated", types)
+        self.assertIsInstance(items[-1], RunRecord)
+        self.assertEqual(items[-1].result, E2E_DRAFT_ANSWER)
+
+    async def test_raise_error_step(self) -> None:
         runtime = ScriptedRuntime(_settings())
         await runtime.start()
         runtime.queue_turn(ScriptedStep(raise_error="boom"))

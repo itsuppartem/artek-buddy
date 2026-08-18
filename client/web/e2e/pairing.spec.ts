@@ -42,6 +42,7 @@ test.describe("pairing screen", () => {
     await page.getByPlaceholder("XXXX-XXXX").fill("AAAA-BBBB");
     await page.getByRole("button", { name: "Pair" }).click();
     await expect(page.getByTestId("pairing-error")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("pairing-error")).toContainText(/invalid or expired|pairing/i);
     await page.screenshot({ path: "test-results/pairing-bad-code.png" });
     await page.close();
   });

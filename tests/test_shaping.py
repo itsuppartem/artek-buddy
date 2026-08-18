@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from artek_buddy.db.shaping import (
+    answer_ask_blocks,
     blocks_text,
     next_seq,
     older_cursor,
@@ -45,6 +46,23 @@ class ShapingTest(unittest.TestCase):
         self.assertIsNone(older_cursor(list(range(10)), 50))
         self.assertEqual(older_cursor(list(range(50)), 50), 0)
         self.assertEqual(older_cursor(list(range(50, 100)), 50), 50)
+
+    def test_answer_ask_blocks_marks_only_pending(self) -> None:
+        pending = [
+            {"kind": "ask", "text": "Which city?", "status": "pending", "actions": [{"id": "a", "label": "Belgrade"}]},
+            {"kind": "text", "text": "ignore"},
+        ]
+        next_blocks, changed = answer_ask_blocks(pending, "Belgrade")
+        self.assertTrue(changed)
+        self.assertEqual(next_blocks[0]["status"], "answered")
+        self.assertEqual(next_blocks[0]["answer"], "Belgrade")
+        self.assertEqual(next_blocks[1], {"kind": "text", "text": "ignore"})
+        again, changed_again = answer_ask_blocks(next_blocks, "Berlin")
+        self.assertFalse(changed_again)
+        self.assertEqual(again[0]["answer"], "Belgrade")
+        empty, empty_changed = answer_ask_blocks(pending, "  ")
+        self.assertFalse(empty_changed)
+        self.assertEqual(empty, pending)
 
     def test_product_run_status(self) -> None:
         self.assertEqual(product_run_status("finished"), "completed")

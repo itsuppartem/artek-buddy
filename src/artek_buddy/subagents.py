@@ -157,6 +157,8 @@ class SubagentService:
             )
             draft = ""
             result = ""
+            status = "completed"
+            error: str | None = None
             async for item in self.runtime.stream(
                 prompt,
                 session_id=session_id,
@@ -167,6 +169,11 @@ class SubagentService:
                     result = item.result or draft or ""
                     if item.status not in {"finished", "completed"} and not result:
                         result = item.error or f"subagent failed: {item.id}"
+                    if item.status in {"cancelled", "canceled"}:
+                        status = "cancelled"
+                    elif item.status not in {"finished", "completed"}:
+                        status = "failed"
+                    error = item.error if status != "completed" else None
                     continue
                 if not isinstance(item, ProductStreamEvent):
                     continue
@@ -175,8 +182,6 @@ class SubagentService:
                     if draft:
                         record = self.store.update_subagent(sub_id, progress=draft) or record
                         self._emit(live, record)
-            status = "completed"
-            error = None
             if not result:
                 result = draft or ""
             final = self.store.update_subagent(sub_id, status=status, result=result, error=error)

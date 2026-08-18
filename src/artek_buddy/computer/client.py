@@ -127,7 +127,14 @@ class FakeSupervisorClient:
             raise RuntimeError("not found")
         interactive = bool(box.get("interactive"))
         port = 16081 if interactive else 16080
-        return SandboxBox(provider_ref, 16080, 16081, f"http://127.0.0.1:{port}/embed.html", True, True)
+        return SandboxBox(
+            provider_ref,
+            16080,
+            16081,
+            f"http://127.0.0.1:{port}/embed.html",
+            bool(box.get("running", True)),
+            True,
+        )
 
     def stop(self, provider_ref: str) -> None:
         if provider_ref in self.boxes:
@@ -139,7 +146,9 @@ class FakeSupervisorClient:
         self.calls.append(("destroy", provider_ref))
 
     def screen_mode(self, provider_ref: str, interactive: bool, control_token: str | None) -> SandboxBox:
-        box = self.boxes.setdefault(provider_ref, {"id": provider_ref, "running": True})
+        if provider_ref not in self.boxes:
+            raise RuntimeError("not found")
+        box = self.boxes[provider_ref]
         box["interactive"] = interactive
         box["control_token"] = control_token
         self.calls.append(("screen_mode", interactive, control_token))
