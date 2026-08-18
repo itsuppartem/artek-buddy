@@ -1,15 +1,13 @@
 ---
-description: Before every commit, scan for secret leaks. Keep the product original.
+description: Before every commit, keep secrets and private data out of git.
 alwaysApply: true
 ---
 
 # Pre-commit hygiene
 
-This repository will be public. History cannot be cleaned later. Never commit first and scan after.
+History cannot be cleaned later. Do not commit secrets, then scan.
 
-Before `git add` is finalized and before every `git commit`, run `.cursor/handoff/check-commit.sh` from the repo root (local only, not in git). If it fails, **do not commit**. Fix the files, then run it again.
-
-Do not add a `scripts/` folder to git. Local tooling stays on this machine.
+Do not add a `scripts/` folder to git. Local owner tooling stays off the remote.
 
 ## Block secrets and private data
 
@@ -20,8 +18,9 @@ Do not commit:
 - Real API keys, bearer tokens, GitHub tokens, Cursor keys, Tailscale auth keys
 - Live passwords, connection strings with real passwords, private emails of people
 - Contents of `data/`, session dumps, database dumps
+- `docs/`, `docker-compose.local.yml`, Funnel hostnames, tailnet or LAN IPs
 
-`.env.example` may contain **placeholders only** (`change-me`, `crsr_your_key_here`).
+`.env.example` may contain **placeholders only** (`crsr_your_key_here`, empty tokens).
 
 Mentioning the *name* of an env var (`AGENT_HTTP_TOKEN`) in docs is fine. A real value is not.
 
@@ -33,8 +32,4 @@ Honest attribution belongs in `README.md` and `NOTICE`: the HTTP contract surfac
 
 Write "adapted from" in those attribution files. Do not claim the implementation is a verbatim dump of their repo.
 
-## If the scan finds something
-
-1. Do not commit.
-2. Remove the leak or the copy-language.
-3. If a secret was ever committed, stop and recreate the repo (orphan history) instead of fixing forward. Attribution of Rakazo in `README.md` / `NOTICE` is not a leak.
+If a secret was ever committed, stop and recreate the repo (orphan history) instead of fixing forward. Attribution of Rakazo in `README.md` / `NOTICE` is not a leak.

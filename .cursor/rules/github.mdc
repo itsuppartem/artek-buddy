@@ -1,5 +1,5 @@
 ---
-description: GitHub is the remote. Commit, describe, and push finished work.
+description: GitHub is the remote. English commits and docs.
 alwaysApply: true
 ---
 
@@ -9,16 +9,13 @@ This repo lives on GitHub: `git@github.com:itsuppartem/artek-buddy.git` (`origin
 
 ## After a finished change
 
-1. Bump the one product version (`VERSION`, `src/artek_buddy/__init__.py`, `client/VERSION`).
-2. Run `make test`. If it fails, do not commit.
-3. Run `.cursor/handoff/check-commit.sh` (local only). If it fails, do not commit.
-4. Commit (English, imperative) and push to `origin`.
-
-Do not ask whether to commit or push when the work is a completed project change.
+1. Bump the one product version when behavior ships (`VERSION`, `src/artek_buddy/__init__.py`, `client/VERSION`).
+2. Run `make test`. If the window changed, also `make test-ui`. If tests fail, do not commit.
+3. Follow [precommit-hygiene.mdc](precommit-hygiene.mdc). Do not commit secrets.
 
 ## Do not commit
 
-See `.cursor/rules/precommit-hygiene.mdc`. Short list: `.env`, tokens, `*.deb`, `data/`, `scripts/`, `docs/`. Attribution of the adapted Rakazo contracts stays in `README.md` / `NOTICE` only. Do not present this repo as their TypeScript port.
+`.env`, tokens, `*.deb`, `data/`, `scripts/`, `docs/`, `docker-compose.local.yml`. Attribution of the adapted Rakazo contracts stays in `README.md` / `NOTICE` only. Do not present this repo as their TypeScript port.
 
 ## Language
 

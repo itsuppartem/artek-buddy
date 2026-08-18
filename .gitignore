@@ -17,6 +17,7 @@ client/url
 
 # local agent handoff (machine context + local scan) — never commit
 .cursor/handoff/
+.cursor/rules/local*.mdc
 
 # local-only tooling — never commit
 scripts/
