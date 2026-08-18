@@ -1,0 +1,25 @@
+---
+description: GitHub is the remote. Commit, describe, and push finished work.
+alwaysApply: true
+---
+
+# GitHub workflow
+
+This repo lives on GitHub: `git@github.com:itsuppartem/artek-buddy.git` (`origin`, branch `main`).
+
+## After a finished change
+
+1. Bump the one product version (`VERSION`, `src/artek_buddy/__init__.py`, `client/VERSION`).
+2. Run `make test`. If it fails, do not commit.
+3. Run `.cursor/handoff/check-commit.sh` (local only). If it fails, do not commit.
+4. Commit (English, imperative) and push to `origin`.
+
+Do not ask whether to commit or push when the work is a completed project change.
+
+## Do not commit
+
+See `.cursor/rules/precommit-hygiene.mdc`. Short list: `.env`, tokens, `*.deb`, `data/`, `scripts/`, `docs/`. Attribution of the adapted Rakazo contracts stays in `README.md` / `NOTICE` only. Do not present this repo as their TypeScript port.
+
+## Language
+
+Commit messages and repo docs stay English. Chat with the user may stay in their language.

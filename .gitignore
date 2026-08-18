@@ -1,0 +1,35 @@
+.env
+data/
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+.cursor/sdk/
+
+# secrets and packaged clients
+client/token
+client/.baked_token
+*.deb
+
+# local client bake (host URL / token) — never commit
+client/url
+
+# local agent handoff (machine context + local scan) — never commit
+.cursor/handoff/
+
+# local-only tooling — never commit
+scripts/
+test-results/
+docs/
+workspace/*.py
+
+# desktop UI toolchain
+client/web/node_modules/
+client/web/dist/
+client/web/playwright-report/
+client/web/test-results/
+client/web/blob-report/
+
+# host-side Cursor leftover; the live agent prompt is workspace/AGENTS.md
+/AGENTS.md

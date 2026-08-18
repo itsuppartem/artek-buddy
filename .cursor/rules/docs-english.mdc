@@ -1,0 +1,12 @@
+---
+description: Write all repository documentation in English.
+alwaysApply: true
+---
+
+# Documentation language
+
+Committed documentation must be English: `README.md`, `CHANGELOG.md`, `.cursor/rules/`, architecture comments.
+
+`docs/` is local-only. Do not commit it.
+
+Chat with the user may stay in their language.

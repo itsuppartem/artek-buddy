@@ -1,0 +1,27 @@
+---
+description: Write tests with the change and run them before every commit.
+alwaysApply: true
+---
+
+# Tests
+
+A finished change includes tests. Do not commit if they fail.
+
+- Host: `tests/test_*.py` (`unittest`). Cover the new behavior, not the whole product.
+- Client: colocated `client/web/src/**/*.test.ts` (Vitest). Same for a new reducer, mapper, or helper.
+- Client UI flows: `client/web/e2e/*.spec.ts` (Playwright). Include UI behavior / flow changes into UI specs.
+- Integration (`tests/integration_*.py`) uses a throwaway Postgres via `TEST_DATABASE_URL` or `make test-integration`. It must never use the live compose database.
+- Playwright (`make test-ui`) uses its own throwaway host (`tests/run_ui.py`). It must never use compose `:8080`, the live database, or the owner device token.
+- Unit tests must not need the live host, Funnel, a token, or Postgres.
+- Integration tests must delete the bots, devices, pairing rows, and routines they create.
+- Before commit: run `make test` and `make test-ui` locally. Also GitHub Actions on `main` / PRs.
+- Do not put the runner in `scripts/` (that folder is not in git).
+
+```text
+# ❌ BAD
+# ship a client reducer / stream mapper with no test
+
+# ✅ GOOD
+# add tests/test_stream.py or client/web/src/lib/thread-events.test.ts
+# run `make test` and only then commit
+```

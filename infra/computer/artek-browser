@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+ARTEK_HOME="${HOME:-/home/artek}"
+PROFILE="$ARTEK_HOME/.browser-profiles/chromium"
+mkdir -p "$PROFILE"
+if [ -x "/usr/bin/chromium" ]; then
+  BIN="/usr/bin/chromium"
+elif [ -x "/usr/bin/chromium-browser" ]; then
+  BIN="/usr/bin/chromium-browser"
+elif command -v chromium >/dev/null 2>&1 && [ "$(command -v chromium)" != "$0" ]; then
+  BIN="$(command -v chromium)"
+elif command -v chromium-browser >/dev/null 2>&1 && [ "$(command -v chromium-browser)" != "$0" ]; then
+  BIN="$(command -v chromium-browser)"
+else
+  BIN=""
+fi
+if [ -z "$BIN" ]; then
+  echo "chromium is not installed" >&2
+  exit 1
+fi
+exec "$BIN" \
+  --no-sandbox \
+  --disable-dev-shm-usage \
+  --disable-gpu \
+  --disable-software-rasterizer \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-session-crashed-bubble \
+  --password-store=basic \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$PROFILE" \
+  --start-maximized \
+  "$@"

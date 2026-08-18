@@ -1,0 +1,9 @@
+[app] (class=Chromium)
+  [Maximized] {yes}
+[end]
+[app] (class=chromium)
+  [Maximized] {yes}
+[end]
+[app] (class=XTerm)
+  [Maximized] {no}
+[end]

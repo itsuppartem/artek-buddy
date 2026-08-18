@@ -1,0 +1,183 @@
+.ab-chat-markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ab-chat-markdown > :first-child,
+.ab-chat-markdown > :first-child > :first-child {
+  margin-top: 0;
+}
+
+.ab-chat-markdown > :last-child,
+.ab-chat-markdown > :last-child > :last-child {
+  margin-bottom: 0;
+}
+
+.ab-chat-markdown p,
+.ab-chat-markdown blockquote,
+.ab-chat-markdown pre,
+.ab-chat-markdown table,
+.ab-chat-markdown ul,
+.ab-chat-markdown ol {
+  margin: 0.65em 0;
+}
+
+.ab-chat-markdown h1,
+.ab-chat-markdown h2,
+.ab-chat-markdown h3,
+.ab-chat-markdown h4,
+.ab-chat-markdown h5,
+.ab-chat-markdown h6 {
+  margin: 0.9em 0 0.35em;
+  color: #f3f3f4;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.ab-chat-markdown h1 {
+  font-size: 1.35em;
+}
+
+.ab-chat-markdown h2 {
+  font-size: 1.2em;
+}
+
+.ab-chat-markdown h3,
+.ab-chat-markdown h4,
+.ab-chat-markdown h5,
+.ab-chat-markdown h6 {
+  font-size: 1.05em;
+}
+
+.ab-chat-markdown ul,
+.ab-chat-markdown ol {
+  padding-left: 1.45em;
+}
+
+.ab-chat-markdown ul {
+  list-style: disc;
+}
+
+.ab-chat-markdown ol {
+  list-style: decimal;
+}
+
+.ab-chat-markdown li + li {
+  margin-top: 0.25em;
+}
+
+.ab-chat-markdown li > p {
+  margin: 0.2em 0;
+}
+
+.ab-chat-markdown .contains-task-list,
+.ab-chat-markdown .task-list-item {
+  list-style: none;
+}
+
+.ab-chat-markdown .contains-task-list {
+  padding-left: 0;
+}
+
+.ab-chat-markdown a {
+  color: #86b7ff;
+  text-decoration: underline;
+  text-decoration-color: rgba(134, 183, 255, 0.55);
+  text-underline-offset: 0.15em;
+}
+
+.ab-chat-markdown code {
+  border: 1px solid #34343a;
+  border-radius: 0.35em;
+  background: #101012;
+  padding: 0.08em 0.32em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.ab-chat-markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid #2d2d32;
+  border-radius: 0.75em;
+  background: #0e0e10;
+  padding: 0.8em 0.9em;
+}
+
+.ab-chat-markdown pre code {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 0.84em;
+  white-space: pre;
+}
+
+.ab-chat-markdown blockquote {
+  border-left: 3px solid #55555c;
+  padding-left: 0.85em;
+  color: #aaaab0;
+}
+
+.ab-chat-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+
+.ab-chat-markdown th,
+.ab-chat-markdown td {
+  border: 1px solid #34343a;
+  padding: 0.4em 0.6em;
+  text-align: left;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.ab-chat-markdown th {
+  background: #232327;
+  color: #f3f3f4;
+  font-weight: 600;
+}
+
+.ab-chat-markdown hr {
+  margin: 0.9em 0;
+  border: 0;
+  border-top: 1px solid #34343a;
+}
+
+.ab-chat-markdown img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.65em 0;
+  border-radius: 0.65em;
+}
+
+.ab-chat-markdown input[type="checkbox"] {
+  margin-right: 0.4em;
+  accent-color: #6ea8fe;
+}
+
+.ab-chat-markdown-streaming {
+  position: relative;
+  padding-right: 0.8em;
+}
+
+.ab-chat-markdown-cursor {
+  position: absolute;
+  right: 0;
+  bottom: 0.24em;
+  width: 0.16em;
+  height: 1em;
+  border-radius: 999px;
+  background: #85858a;
+  animation: abMarkdownCursor 1s steps(2, jump-none) infinite;
+}
+
+@keyframes abMarkdownCursor {
+  50% {
+    opacity: 0;
+  }
+}

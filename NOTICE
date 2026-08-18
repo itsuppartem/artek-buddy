@@ -1,0 +1,15 @@
+Artek Buddy
+Copyright 2026 Artek Buddy contributors
+
+This product's HTTP contract surface (nouns, procedure names, and
+run/event status vocabulary) was adapted from:
+
+  Rakazo
+  https://github.com/elie222/rakazo
+  Copyright 2026 Rakazo contributors
+  Licensed under the Apache License, Version 2.0
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Artek Buddy's implementation — the Python host, Cursor runtime, Linux
+.deb client, bot colors, and bot avatar — is original work and is not a
+copy of the Rakazo TypeScript sources.

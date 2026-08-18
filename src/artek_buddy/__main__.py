@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+import os
+import sys
+
+from artek_buddy.db import DatabaseUnavailable
+from artek_buddy.db.history import HistoryStore
+
+USAGE = "usage: python -m artek_buddy pair|worker|supervisor"
+
+
+def pair() -> int:
+    url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://artek:artek@127.0.0.1:5432/artek_buddy",
+    )
+    store = HistoryStore(url)
+    try:
+        store.open()
+        store.apply_migrations()
+        minted = store.create_pairing_code()
+    except DatabaseUnavailable as err:
+        print(f"pairing failed: {err}", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+    print(minted.code)
+    print(minted.expires_at)
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args == ["pair"]:
+        return pair()
+    if args == ["worker"]:
+        from artek_buddy.worker import worker
+
+        return worker()
+    if args == ["supervisor"]:
+        from artek_buddy.supervisor.server import main as supervisor_main
+
+        return supervisor_main()
+    print(USAGE, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

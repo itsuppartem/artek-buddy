@@ -1,0 +1,103 @@
+services:
+  artek-buddy:
+    build: .
+    image: artek-buddy:local
+    container_name: artek-buddy
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      memory:
+        condition: service_healthy
+      supervisor:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      AGENT_CWD: /workspace
+      AGENT_DATA_DIR: /data
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8080"
+      DATABASE_URL: postgresql://artek:${MEMORY_DB_PASSWORD:-artek}@127.0.0.1:5432/artek_buddy
+      SANDBOX_SUPERVISOR_URL: http://127.0.0.1:7091
+      SANDBOX_PROVIDER: docker
+      COMPUTER_IMAGE: artek-buddy-computer:local
+    volumes:
+      - ./workspace:/workspace
+      - ./data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+
+  supervisor:
+    build: .
+    image: artek-buddy:local
+    container_name: artek-buddy-supervisor
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      AGENT_DATA_DIR: /data
+      SUPERVISOR_HOST: 127.0.0.1
+      SUPERVISOR_PORT: "7091"
+      COMPUTER_IMAGE: artek-buddy-computer:local
+      DOCKER_SOCKET: /var/run/docker.sock
+    volumes:
+      - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["python", "-m", "artek_buddy", "supervisor"]
+
+  worker:
+    build: .
+    image: artek-buddy:local
+    container_name: artek-buddy-worker
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      artek-buddy:
+        condition: service_healthy
+      memory:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      HTTP_PORT: "8080"
+      DATABASE_URL: postgresql://artek:${MEMORY_DB_PASSWORD:-artek}@127.0.0.1:5432/artek_buddy
+      WORKER_POLL_SECONDS: "15"
+    command: ["python", "-m", "artek_buddy", "worker"]
+
+  computer:
+    build: ./infra/computer
+    image: artek-buddy-computer:local
+    profiles: ["build"]
+
+  memory:
+    image: postgres:16-alpine
+    container_name: artek-buddy-memory
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: artek_buddy
+      POSTGRES_USER: artek
+      POSTGRES_PASSWORD: ${MEMORY_DB_PASSWORD:-artek}
+    volumes:
+      - memory-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U artek -d artek_buddy"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  memory-data:

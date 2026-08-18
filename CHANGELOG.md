@@ -1,0 +1,312 @@
+# Changelog
+
+## [0.8.1] - 2026-08-18
+
+### Changed
+- Bot colors and avatar mark are an original Artek palette (rounded badge + chevron), not the previous swatch.
+- README / NOTICE attribute the adapted HTTP contract surface.
+- README documents Tailscale as the daily path to the Pi; the free Personal plan is enough. Funnel stays optional.
+- README states there is no GitHub `.deb`: you build a local owner package.
+- `make test-ui` uses a throwaway scripted host and isolated client home. Playwright no longer sends into the live workspace.
+- First `threads.send` on a scripted host starts a turn again (`begin_turn` was stuck inside the busy-queue branch).
+- Live Cursor text/thinking drafts stay off the thread. The window shows the pulsing activity dots until `send_message` or the finished answer.
+- `close_app` closes the on-screen browser (or another app) in one step. The lead no longer has to hunt for the window X.
+- Computer preview keeps one noVNC connection. A new signed URL is minted only when the box, port, or view/control policy changes, or the signature is about to expire.
+
+### Added
+- Desktop attention alerts when a bot replies, asks, fails, or requests takeover.
+- Loopback `POST /local/notify` (`notify-send` + window urgency hint). The page still never sees the host token.
+- Bot Settings toggle for `notifyOnFinish`. Questions and takeover always notify.
+
+## [0.8.0] - 2026-08-18
+
+### Added
+- `AgentRuntime` protocol with `CursorRuntime` (product default) and `ScriptedRuntime` (tests / host-only debug).
+- Shared product tool registry used by both runtimes. Cursor only wraps it as `CustomTool`.
+- `AGENT_RUNTIME=cursor|scripted`. Scripted starts without a Cursor key or bridge.
+
+### Changed
+- Host turns and subagents consume product stream events. Cursor event mapping stays inside the Cursor adapter.
+- Host errors are `AgentRuntimeError`, not `CursorAgentError`.
+- Unit tests cover a full `_run_turn` on the scripted runtime (reply, `remember`, failure, inbox follow-up).
+- Workflow E2E waits for a bot markdown answer instead of a loose "Belgrade" match that also hit the user bubble.
+
+## [0.7.18] - 2026-08-18
+
+### Added
+- Interactive Grok-style `send_message` and `ask_user` tools with stacked option cards (A, B, C, D badges) and live reply stream cleanup.
+- Fast `open_path` and `launch_app` tools in runtime and supervisor with automatic `artek-browser` / `xdg-open` routing in background with `nohup`.
+- Python Playwright installed in sandbox container and backend with `--remote-debugging-port=9222` on Chromium for isolated `BrowserContext` automation and CDP connection.
+- Markdown stripping (`strip_markdown` in Python, `stripMarkdown` in TypeScript) for clean plain-text rendering in sidebar bot previews, quote excerpts, search filters, and profile modals.
+
+### Changed
+- Suppressed raw internal reasoning/monologue streams in chat thread, replacing with a subtle pulsing activity indicator.
+- Replaced eager desktop container booting on every user turn with lazy booting on demand.
+- Updated Playwright E2E tests (`shell.spec.ts`, `workflow.spec.ts`) for robust UI navigation and fullscreen screen preview.
+
+## [0.7.17] - 2026-08-18
+
+### Changed
+- Computer preview pane UI: clear status badge (`Running`, `Booting…`, `Offline`, `Error`), smooth hover overlay with `Open screen ↗` action, and connecting spinner while the display WebSocket handshakes.
+- Fullscreen computer overlay verification in Playwright E2E suite.
+
+## [0.7.16] - 2026-08-18
+
+Full live worker execution observation and responsive subagent card layout.
+
+- Extended E2E workflow test to wait for live subagents to complete and verify generated weather answers.
+- Widened subagent card layout and fixed table header word wrapping in markdown cards.
+- Network-idle wait added to pairing screen E2E test.
+
+## [0.7.15] - 2026-08-18
+
+Visual polish from Playwright screenshot review.
+
+- Background computer autoboot no longer blocks UI with a full-screen overlay modal.
+- Replaced plain "working…" placeholder with refined status indicator.
+- Verified visual rendering of live thinking and subagent worker cards in E2E workflow screenshots.
+
+## [0.7.14] - 2026-08-18
+
+Clean thought process rendering, prompt guidance for parallel subagents, and full workflow E2E test.
+
+- Thinking/reasoning stream renders in a distinct, compact box instead of a full assistant message bubble.
+- Subagent cards display reasoning inside a collapsible element.
+- Lead prompt and inbox drain instructions explicitly require spawning parallel subagents for independent tasks.
+- Added Playwright workflow test for bot creation, single request, and 3 queued tasks with screenshots.
+
+## [0.7.13] - 2026-08-18
+
+Playwright drives the same loopback UI the `.deb` serves.
+
+- `make test-ui` starts `artek_buddy.py --serve` and walks pairing, the thread, the computer pane, reply, and the composer.
+- Screenshots stay local (`client/web/test-results/`). This is not part of `make test`.
+
+## [0.7.12] - 2026-08-17
+
+The thread no longer paints every Cursor tool call.
+
+- `mcp` / `read` / `shell` and other raw tools stay off the chat. Desktop actions stay in the computer pane.
+- The thread keeps answers, thinking, worker cards, and `remember` notes.
+
+## [0.7.11] - 2026-08-17
+
+The lead can correct a worker while it works.
+
+- Tell the lead to refine worker 2. It calls `steer_subagent`. That worker keeps the same session and applies the note.
+- Corrections are stored on the worker and shown on its card.
+
+## [0.7.10] - 2026-08-17
+
+One lead agent in the chat. Workers run the extra tasks.
+
+- Send while the lead is busy stores the message and queues it. The lead handles the pile after it finishes. No second user-facing Cursor agent.
+- The lead can `spawn_subagent`, `inspect_subagent`, `stop_subagent`, and `restart_subagent`. Ask about worker 2 and it reads that worker's reasoning and stage.
+- Cards in the thread show index, thinking, and Stop / Restart. Composer Stop cancels the lead and the workers.
+- Reply is unchanged.
+
+## [0.7.9] - 2026-08-17
+
+Send while a turn is running, and reply to a message.
+
+- A second send starts another Cursor agent on the same thread. Up to four tasks at once. Stop cancels all of them.
+- Right-click a message to reply. The next prompt includes that quote.
+
+## [0.7.8] - 2026-08-17
+
+Desktop tools reach the running box during a turn.
+
+- `computer_observe` / `computer_act` used a ContextVar that the SDK callback thread cannot see, so they returned `computer is not available` while the pane was live.
+- The host now keeps the current bot on the runtime and binds the Cursor agent to that bot.
+
+## [0.7.7] - 2026-08-17
+
+Fullscreen view does not take control.
+
+- Click the thumbnail for the same overlay, view-only.
+- Take control is only the button. Release keeps the overlay open.
+
+## [0.7.6] - 2026-08-17
+
+The `.deb` WebSocket proxy speaks HTTP/1.1, so noVNC can paint.
+
+- Loopback `/novnc` upgrades were `HTTP/1.0 101`. WebKit and noVNC then sat on a black canvas.
+- Failures still append to `~/.config/artek-buddy/client.log`.
+
+## [0.7.5] - 2026-08-17
+
+The computer pane shows the desktop instead of a black frame.
+
+- x11vnc was stuck at ~100% CPU (Xinerama on Xvfb) and never sent the RFB greeting.
+- View and control VNC now start with `-noxinerama -threads -noxdamage -noshm`.
+
+## [0.7.4] - 2026-08-17
+
+Release actually drops the control noVNC port.
+
+- websockify's process name is `websockify`, not `python3`. Stop now matches that.
+
+## [0.7.3] - 2026-08-17
+
+Take control no longer kills its own start script.
+
+- Control VNC is stopped by process name and `/proc` cmdline, not `pkill -f`.
+- The previous pattern matched the supervisor `bash -lc` wrapper, so `:6081` never stayed up.
+
+## [0.7.2] - 2026-08-17
+
+Take control starts the control VNC.
+
+- The supervisor no longer joins background jobs with `;` after `&` (`&;` is invalid bash).
+- Control x11vnc/websockify now stay listening on `:5901`/`:6081` after Take control.
+
+## [0.7.1] - 2026-08-17
+
+Take control keeps a live screen.
+
+- Control VNC is started with `setsid`/`nohup` so it survives `docker exec`.
+- If that stack is not up, the signed URL stays on the view-only port instead of a dead `:6081`.
+
+## [0.7.0] - 2026-08-17
+
+Stage 7. Linux desktop on this Pi.
+
+- Isolated computer image (`artek-buddy-computer:local`): Xvfb, fluxbox, Chromium, view-only VNC, noVNC.
+- Supervisor on `:7091` owns the Docker socket. The API container no longer mounts it.
+- Table `computers`. Live `computer.*` routes: boot, stop, takeover, release, heartbeat, screen, input, files.
+- Signed `/novnc` capability URLs. Host and `.deb` proxy HTTP and WebSocket.
+- Window: live 16:10 preview, Take control overlay, 60s heartbeat.
+- Agent tools: `computer_observe`, `computer_act`, `request_takeover`. Cursor cwd is that bot's home.
+- Worker sleeps a quiet box after about 10 minutes.
+
+## [0.6.2] - 2026-08-17
+
+Streaming fills one bubble instead of overwriting tokens.
+
+- The host emits `thread.message.updated` / `thread.progress` as the full draft so far (`{text, kind}`), not a leftover `delta` on top of that text.
+- A shorter assistant snapshot does not shrink a longer draft.
+- The window keeps the live draft across a thread refresh while the run is still active. Thinking and tokens no longer wipe each other.
+
+## [0.6.1] - 2026-08-17
+
+Bot lifecycle, stop, and memory the agent can write itself.
+
+- Live: `me`, `deployment.get` / `update`, `bots.get` / `update` / `duplicate` / `archive` / `restore` / `list_archived` / `set_computer`.
+- `DELETE /v1/bots/{bot_id}` keeps that bot's documents as user memory unless `delete_memories=true`.
+- Live: `threads.stop`, `threads.follow_up`, `threads.mark_read`, `threads.mark_unread`. Stop cancels the in-process turn and marks the run `cancelled`.
+- Cursor turns register a `remember` custom tool. The host writes `memory_documents` (default path `MEMORY.md`) and injects those facts on the next prompt.
+- SSE maps tool calls into thread blocks (`meta`, `subagent`, `child_bot`, `computer`). The window paints cards, ask prompts, and a Stop control.
+- Right-click a bot: pin, mark read/unread, edit, duplicate, archive, delete.
+
+## [0.6.0] - 2026-08-17
+
+Stage 6. Memory is not the chat transcript.
+
+- Tables `memory_documents` and `memory_revisions`. Scope is `bot` or `user`.
+- Live: `memory.list` / `create` / `update` / `remove` / `export_markdown`.
+- The next Cursor prompt gets those facts as background. The user message in `messages` stays the raw chat text.
+- The computer pane lists, edits, exports, and deletes memory.
+
+## [0.5.3] - 2026-08-17
+
+A follow-up message in an existing chat works after the host restarts.
+
+- Cursor `resume` now gets `AgentOptions`, which JSON-encodes. A raw `LocalAgentOptions` object in a dict was crashing the send path.
+- If resume still fails, the host creates a new agent and remaps that chat. The TypeError is not written into the thread.
+
+## [0.5.2] - 2026-08-17
+
+Integration tests use a throwaway Postgres, not the live compose database.
+
+- `make test-integration` starts `postgres:16-alpine` on loopback port 55432 and deletes the container after the run.
+- `TEST_DATABASE_URL` pointing at `127.0.0.1:5432/artek_buddy` is refused.
+- CI uses its own `artek_buddy_test` database.
+
+## [0.5.1] - 2026-08-17
+
+Chats can be deleted, and tests leave the database as they found it.
+
+- `DELETE /v1/bots/{bot_id}` removes the bot, thread, messages, runs, and routines.
+- The settings pane deletes a chat after a confirm step.
+- Integration tests delete the bots, devices, and pairing rows they create.
+
+## [0.5.0] - 2026-08-17
+
+Stage 5. Worker and routines.
+
+- Table `routines` (cron, prompt, bot). Five-field cron, timezone, next run.
+- Live: `routines.list` / `create` / `update` / `remove` / `test_run`.
+- Compose service `artek-buddy-worker` runs `python -m artek_buddy worker`. A due routine wakes the bot with the same `threads.send` path as the window.
+- The computer pane lists, creates, pauses, runs, and deletes routines.
+
+## [0.4.0] - 2026-08-17
+
+Stage 4. Device tokens.
+
+- `POST /v1/devices/pairing` (host token) mints a one-time pairing code.
+- `POST /v1/devices` mints a per-device token. Gate is the host token or a pairing code. The token is shown once and stored as a hash.
+- Host or device bearer works on live `/v1` routes. `/health` stays open.
+- `python -m artek_buddy pair` prints only the code and expiry.
+- An unpaired window shows a pairing screen. The page talks to loopback `/local/pair`; the device token is written to `~/.config/artek-buddy/token` and never reaches JavaScript.
+
+## [0.3.3] - 2026-08-17
+
+Tests are part of the product.
+
+- `make test` runs host `unittest` and the desktop-shell Vitest suite.
+- GitHub Actions runs the same on `main` and pull requests, plus history tests against Postgres.
+- Client helpers have colocated tests (thread events, markdown, camelCase, window chrome).
+- A change is not finished if tests were not written or they fail.
+
+## [0.3.2] - 2026-08-17
+
+The desktop window opens from the application menu.
+
+- The window opens from the application menu. Failures go to `~/.config/artek-buddy/client.log`.
+- WebKit setup no longer depends on the script-message API.
+- After `dpkg -i`, install depends: `sudo apt-get install -f`.
+
+## [0.3.1] - 2026-08-17
+
+Desktop client is the product shell in a desktop window.
+
+- The `.deb` ships the TypeScript UI and a loopback proxy. The page talks to `/v1` on localhost; the proxy attaches the bearer.
+- Live surface only: bots, thread, send, SSE. Computer / plugins / routines stay as stubs until those host stages exist.
+- Tokens and tools still paint live.
+
+## [0.3.0] - 2026-08-17
+
+Stage 3. Streaming.
+
+- `GET /v1/threads/{bot_id}/events` streams product events.
+- `threads.send` returns `{task_id, run_id, seq}` immediately.
+- The host pipes Cursor run events (tokens, tools). It does not only wait for the end.
+- The `.deb` paints the live turn.
+
+## [0.2.3] - 2026-08-17
+
+- Desktop client is the product shell: bot list, thread, computer pane.
+- New bot, search, earlier messages, and a computer stub live in the `.deb`.
+
+## [0.2.2] - 2026-08-17
+
+- Local scan and other machine tooling stay on the host. They are not in git.
+- Owner `.deb` is built with `client/build-deb.sh` (not stored in git).
+
+## [0.2.1] - 2026-08-17
+
+Hygiene after the 0.2.0 cutover. Stages 0–2 unchanged.
+
+- Docs match the live wire. Stale client version notes are gone.
+- Postgres is published on loopback only (`127.0.0.1:5432`).
+- Reserved computer host is this machine (`host`), not a laptop. Sandbox kinds are `docker` / `desktop` / `fake`.
+
+## [0.2.0] - 2026-08-17
+
+Stages 0–2.
+
+- Host on this Raspberry Pi: FastAPI, Cursor runtime, Tailscale Funnel.
+- Shared contracts for bots, threads, messages, and runs.
+- Postgres history. Send path: `POST /v1/threads/{bot_id}/messages`.
+- Run status: `completed` / `failed` / `cancelled`.
+- Desktop client source `artek-buddy`.

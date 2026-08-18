@@ -1,0 +1,40 @@
+---
+description: Before every commit, scan for secret leaks. Keep the product original.
+alwaysApply: true
+---
+
+# Pre-commit hygiene
+
+This repository will be public. History cannot be cleaned later. Never commit first and scan after.
+
+Before `git add` is finalized and before every `git commit`, run `.cursor/handoff/check-commit.sh` from the repo root (local only, not in git). If it fails, **do not commit**. Fix the files, then run it again.
+
+Do not add a `scripts/` folder to git. Local tooling stays on this machine.
+
+## Block secrets and private data
+
+Do not commit:
+
+- `.env`, `client/token`, any file named `token` or `*.pem` / `id_ed25519` / `id_rsa`
+- `*.deb` (they can embed a host token)
+- Real API keys, bearer tokens, GitHub tokens, Cursor keys, Tailscale auth keys
+- Live passwords, connection strings with real passwords, private emails of people
+- Contents of `data/`, session dumps, database dumps
+
+`.env.example` may contain **placeholders only** (`change-me`, `crsr_your_key_here`).
+
+Mentioning the *name* of an env var (`AGENT_HTTP_TOKEN`) in docs is fine. A real value is not.
+
+## Original product
+
+Describe Artek Buddy on its own terms: bots, threads, Cursor runtime, `.deb` client, per-user sandbox on this Raspberry Pi.
+
+Honest attribution belongs in `README.md` and `NOTICE`: the HTTP contract surface was adapted from Rakazo (Apache-2.0). Do not present this repo as their TypeScript sources. Do not put that name in source, tests, or commit messages.
+
+Write "adapted from" in those attribution files. Do not claim the implementation is a verbatim dump of their repo.
+
+## If the scan finds something
+
+1. Do not commit.
+2. Remove the leak or the copy-language.
+3. If a secret was ever committed, stop and recreate the repo (orphan history) instead of fixing forward. Attribution of Rakazo in `README.md` / `NOTICE` is not a leak.
