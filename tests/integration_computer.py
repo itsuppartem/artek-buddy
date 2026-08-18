@@ -117,6 +117,22 @@ class ComputerIntegrationTest(unittest.TestCase):
         self.assertNotEqual(own_a.id, own_b.id)
         self.assertNotEqual(own_a.id, shared_a.id)
 
+    def test_delete_one_team_bot_keeps_the_shared_row(self) -> None:
+        first = self.store.create_bot(name="keep-share-a")
+        second = self.store.create_bot(name="keep-share-b")
+        self.addCleanup(self.store.delete_bot, second.id)
+        shared = self.store.get_computer_for_bot(first)
+        self.assertEqual(self.store.other_bots_using_computer(shared.id, first.id), 1)
+        self.assertTrue(self.store.delete_bot(first.id))
+        self.assertIsNotNone(self.store.get_computer(shared.id))
+
+    def test_delete_last_bot_drops_the_computer_row(self) -> None:
+        private = self.store.create_bot(name="drop-private", computer_mode="dedicated")
+        record = self.store.get_computer_for_bot(private)
+        self.assertTrue(self.store.delete_bot(private.id))
+        self.assertIsNone(self.store.get_computer(record.id))
+        self.assertEqual(self.store.list_orphan_computers(), [])
+
     def test_snapshot_row_is_real(self) -> None:
         bot = self.store.create_bot(name="computer-snapshot", computer_mode="dedicated")
         self.addCleanup(self.store.delete_bot, bot.id)

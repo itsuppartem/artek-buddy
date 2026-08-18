@@ -5,7 +5,7 @@ VENV_PY := $(VENV)/bin/python
 NODE := $(HOME)/.local/node/bin
 export PATH := $(NODE):$(PATH)
 
-.PHONY: test test-host test-web test-integration test-ui ensure-host-py
+.PHONY: test test-host test-web test-integration test-ui demo ensure-host-py
 
 test: test-host test-integration test-web
 
@@ -31,3 +31,7 @@ test-web:
 test-ui: ensure-host-py
 	cd client/web && npm run build
 	$(host-py) tests/run_ui.py
+
+demo: ensure-host-py
+	cd client/web && npm run build
+	$(host-py) tests/run_demo.py

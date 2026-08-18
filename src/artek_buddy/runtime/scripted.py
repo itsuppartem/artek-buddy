@@ -44,8 +44,8 @@ def scripted_progress(text: str, kind: str = "thinking") -> ScriptedStep:
     return ScriptedStep(event=("thread.progress", {"text": text, "kind": kind, "replace": True}))
 
 
-def scripted_tool(name: str, **args: Any) -> ScriptedStep:
-    return ScriptedStep(tool=name, args=dict(args))
+def scripted_tool(tool: str, **args: Any) -> ScriptedStep:
+    return ScriptedStep(tool=tool, args=dict(args))
 
 
 def scripted_delay(seconds: float) -> ScriptedStep:
@@ -56,8 +56,15 @@ def scripted_finish(result: str = "ok", status: str = "completed", error: str | 
     return ScriptedStep(result=result, status=status, error=error)
 
 
+def _user_tail(prompt: str) -> str:
+    """Last wrap_turn_prompt segment is the user (or worker) text."""
+    return (prompt or "").rsplit("\n\n", 1)[-1]
+
+
 def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     text = prompt or ""
+    user = _user_tail(text)
+    hay = user.lower()
     if "e2e-hide-draft" in text:
         return [
             scripted_progress("planning the lookup"),
@@ -79,6 +86,84 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 options=["Belgrade", "Berlin"],
             ),
             scripted_finish(""),
+        ]
+    if "research a city" in hay or "which city should we research" in hay:
+        return [
+            scripted_progress("I need a city before I open sources."),
+            scripted_delay(1.4),
+            scripted_tool(
+                "ask_user",
+                question="Which city should we research?",
+                detail="I can open Wikipedia on the desktop after you pick one.",
+                options=["Belgrade", "Berlin"],
+            ),
+            scripted_finish(""),
+        ]
+    if "morning briefing" in hay:
+        return [
+            scripted_progress("checking the desktop and routines"),
+            scripted_delay(2.2),
+            scripted_finish(
+                "Pi host is up. The desktop is idle. I can open Chromium, remember facts, "
+                "and run a scheduled briefing. Take control if a login is needed."
+            ),
+        ]
+    if user.strip() == "Belgrade":
+        return [
+            scripted_progress("pulling a short brief"),
+            scripted_delay(2.0),
+            scripted_finish(
+                "Belgrade: Danube + Sava, Kalemegdan, and a dense cafe scene. "
+                "I can keep sources open on this Pi desktop."
+            ),
+        ]
+    if "open wikipedia" in hay or "open the belgrade page" in hay:
+        return [
+            scripted_progress("launching Chromium"),
+            scripted_delay(1.2),
+            scripted_tool("send_message", text="Opening Chromium on the Pi desktop."),
+            scripted_tool("open_path", path="https://en.wikipedia.org/wiki/Belgrade"),
+            scripted_delay(2.8),
+            scripted_tool(
+                "send_message",
+                text="Wikipedia is on this computer. Open the screen to watch or take control.",
+            ),
+            scripted_finish("Wikipedia is on this computer. Open the screen to watch or take control."),
+        ]
+    if "attractions, weather" in hay or "in parallel" in hay or "three workers" in hay:
+        return [
+            scripted_progress("working through attractions, weather, and cafes"),
+            scripted_delay(2.0),
+            scripted_tool(
+                "send_message",
+                text="Attractions: Kalemegdan, Skadarlija, and the Temple of Saint Sava.",
+            ),
+            scripted_delay(1.8),
+            scripted_tool(
+                "send_message",
+                text="Weather: clear, about 22°C, light wind off the river.",
+            ),
+            scripted_delay(1.8),
+            scripted_tool(
+                "send_message",
+                text="Cafes: start by the water at Beton Hala, then walk up to Skadarlija.",
+            ),
+            scripted_finish(""),
+        ]
+    if "list three attractions in belgrade" in hay:
+        return [
+            scripted_delay(0.8),
+            scripted_finish("Kalemegdan, Skadarlija, and the Temple of Saint Sava."),
+        ]
+    if "current weather notes for belgrade" in hay:
+        return [
+            scripted_delay(1.1),
+            scripted_finish("Clear, about 22°C. Light wind off the river."),
+        ]
+    if "cafe recommendations in belgrade" in hay:
+        return [
+            scripted_delay(1.4),
+            scripted_finish("Start with a riverside spot near Beton Hala, then Skadarlija."),
         ]
     if "e2e-slow" in text:
         return [scripted_delay(2.5), scripted_finish(E2E_SLOW_ANSWER)]

@@ -8,6 +8,12 @@ If you searched for a self-hosted Grok bot, a Cursor agent host, computer-use on
 
 Shipped versions: [CHANGELOG.md](CHANGELOG.md).
 
+## Demo
+
+Pair the Linux window, ask a question, answer the bot’s card, reply in the thread, and watch Chromium open Wikipedia on the Pi desktop.
+
+<video src="media/demo.mp4" controls muted playsinline title="Artek Buddy demo"></video>
+
 ## Why this exists
 
 Most chat assistants are good at answering one request, but poor at being a long-lived personal worker: they lose context, cannot keep a task-specific desktop, and usually require you to adopt another account, quota, or hosted environment.
@@ -254,6 +260,7 @@ Run tests from the **repo root** on a machine that is allowed to start throwaway
 | --- | --- | --- | --- |
 | `make test` | Host `unittest` + throwaway Postgres integration + Vitest | Repo root. Python 3.13, `pip install -r requirements.txt` (or `.venv`), Docker, Node 22 | Every change. GitHub Actions runs this. |
 | `make test-ui` | Vite build + Playwright against a scripted host | Repo root. Same as above, plus a browser for Playwright. Host is `127.0.0.1:18080`, token `ui-e2e-token` | Desktop UI / flow changes. Not in CI. |
+| `make demo` | Same throwaway host pattern, records `media/demo.mp4` | Host is `127.0.0.1:18081`. Optional `ffmpeg` for the MP4 | README video. Not in CI. |
 
 ```bash
 # once per machine

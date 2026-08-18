@@ -28,6 +28,7 @@ function requireIsolatedHost(): { hostUrl: string; home: string; token: string }
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "demo.spec.ts",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,

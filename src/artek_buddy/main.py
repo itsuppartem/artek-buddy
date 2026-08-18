@@ -133,6 +133,9 @@ async def lifespan(app: FastAPI):
                 leftover = store.fail_orphaned_runs()
                 if leftover:
                     log.warning("marked %s leftover run(s) failed after restart", leftover)
+                reaped = computers.reap_orphan_computers()
+                if reaped:
+                    log.warning("destroyed %s computer(s) with no remaining bot", reaped)
             except DatabaseUnavailable:
                 log.exception("workspace setup skipped; postgres unavailable")
             app.state.settings = settings
@@ -1085,8 +1088,23 @@ async def remove_bot(
     bot_id: str,
     delete_memories: bool = Query(default=False),
     history: HistoryStore = Depends(store),
+    boxes: ComputerService = Depends(computers),
 ) -> OkResponse:
     try:
+        bot = history.get_bot(bot_id)
+        if bot is None:
+            raise HTTPException(status_code=404, detail="bot not found")
+        _cancel_turns(bot.id)
+        service = getattr(app.state, "subagents", None)
+        if service is not None:
+            try:
+                service.stop_all(bot)
+            except Exception:
+                log.exception("failed to stop subagents while deleting bot %s", bot.id)
+        try:
+            boxes.release_for_deleted_bot(bot)
+        except Exception:
+            log.exception("failed to release computer while deleting bot %s", bot.id)
         deleted = history.delete_bot(bot_id, delete_memories=delete_memories)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err

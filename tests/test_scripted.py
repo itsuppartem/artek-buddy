@@ -22,6 +22,7 @@ from artek_buddy.runtime import (
     scripted_tool,
     steps_for_prompt,
 )
+from artek_buddy.memory import wrap_turn_prompt
 from artek_buddy.runtime.scripted import (
     E2E_ASK_QUESTION,
     E2E_CLOSE_STATUS,
@@ -103,6 +104,38 @@ class ScriptedRuntimeTest(unittest.IsolatedAsyncioTestCase):
         ask = steps_for_prompt("e2e-ask")
         self.assertEqual(ask[0].tool, "ask_user")
         self.assertEqual(ask[0].args.get("question"), E2E_ASK_QUESTION)
+        demo_ask = steps_for_prompt("I want to research a city.")
+        self.assertEqual([step.tool for step in demo_ask if step.tool], ["ask_user"])
+        self.assertEqual(demo_ask[-2].args.get("question"), "Which city should we research?")
+        brief = steps_for_prompt("Morning briefing for today.")
+        self.assertIn("Pi host is up", brief[-1].result or "")
+        city = steps_for_prompt("Belgrade")
+        self.assertIn("Kalemegdan", city[-1].result or "")
+        browser = steps_for_prompt("Open Wikipedia for Belgrade on the desktop.")
+        self.assertEqual(
+            [step.tool for step in browser if step.tool],
+            ["send_message", "open_path", "send_message"],
+        )
+        notes = steps_for_prompt("Also give me attractions, weather, and cafes.")
+        self.assertEqual([step.tool for step in notes if step.tool], ["send_message"] * 3)
+        self.assertFalse(any(step.tool == "spawn_subagent" for step in notes))
+        attraction = steps_for_prompt("List three attractions in Belgrade")
+        self.assertIn("Kalemegdan", attraction[-1].result or "")
+
+        wrapped_brief = wrap_turn_prompt("Morning briefing for today.", None, role="lead")
+        self.assertIn("Pi host is up", steps_for_prompt(wrapped_brief)[-1].result or "")
+        self.assertFalse(any(step.tool == "spawn_subagent" for step in steps_for_prompt(wrapped_brief)))
+        wrapped_city = wrap_turn_prompt("Belgrade", None, role="lead")
+        self.assertIn("Kalemegdan", steps_for_prompt(wrapped_city)[-1].result or "")
+        wrapped_notes = wrap_turn_prompt(
+            "Also give me attractions, weather, and cafes.",
+            None,
+            role="lead",
+        )
+        self.assertEqual(
+            [step.tool for step in steps_for_prompt(wrapped_notes) if step.tool],
+            ["send_message"] * 3,
+        )
 
         runtime = ScriptedRuntime(_settings())
         await runtime.start()

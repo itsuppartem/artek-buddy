@@ -36,3 +36,6 @@ client/web/blob-report/
 
 # host-side Cursor leftover; the live agent prompt is workspace/AGENTS.md
 /AGENTS.md
+
+# Playwright source tape; README ships media/demo.mp4
+media/*.webm

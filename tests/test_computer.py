@@ -64,6 +64,9 @@ class _Store:
         self.record = record
         self.bot = bot
         self.active: set[str] = set()
+        self.others = 0
+        self.orphans: list[ComputerRecord] = []
+        self.deleted: list[str] = []
 
     def get_computer_for_bot(self, bot: object) -> ComputerRecord:
         return self.record
@@ -90,6 +93,16 @@ class _Store:
 
     def ensure_computer(self, bot: SimpleNamespace) -> ComputerRecord:
         return self.record
+
+    def other_bots_using_computer(self, computer_id: str, except_bot_id: str) -> int:
+        return getattr(self, "others", 0)
+
+    def list_orphan_computers(self) -> list[ComputerRecord]:
+        return list(getattr(self, "orphans", []))
+
+    def delete_computer(self, computer_id: str) -> bool:
+        self.deleted.append(computer_id)
+        return True
 
 
 class ScreenUrlTest(unittest.TestCase):
@@ -254,6 +267,38 @@ class ComputerServiceTest(unittest.TestCase):
         screen = self.service.screen_url(self.bot)  # type: ignore[arg-type]
         self.assertIsNotNone(screen.url)
         self.assertIn(self.store.record.provider_ref, self.client.boxes)
+
+    def test_delete_destroys_a_private_box(self) -> None:
+        self.service.boot(self.bot)  # type: ignore[arg-type]
+        home = self.service.home_path(self.store.record)
+        box_id = self.store.record.provider_ref
+        (home / "Cookies").write_text("logged-in", encoding="utf-8")
+        self.service.release_for_deleted_bot(self.bot)  # type: ignore[arg-type]
+        self.assertEqual(self.store.record.state, "stopped")
+        self.assertIsNone(self.store.record.provider_ref)
+        self.assertFalse((home / "Cookies").exists())
+        self.assertNotIn(box_id, self.client.boxes)
+        self.assertIn("destroy", [call[0] for call in self.client.calls])
+
+    def test_delete_keeps_a_shared_team_box(self) -> None:
+        self.store.others = 1
+        self.service.boot(self.bot)  # type: ignore[arg-type]
+        box_id = self.store.record.provider_ref
+        self.store.record.execution_bot_id = self.bot.id
+        self.service.release_for_deleted_bot(self.bot)  # type: ignore[arg-type]
+        self.assertEqual(self.store.record.state, "running")
+        self.assertEqual(self.store.record.provider_ref, box_id)
+        self.assertIsNone(self.store.record.execution_bot_id)
+        self.assertIn(box_id, self.client.boxes)
+        self.assertNotIn("destroy", [call[0] for call in self.client.calls])
+
+    def test_reap_destroys_orphan_boxes(self) -> None:
+        self.service.boot(self.bot)  # type: ignore[arg-type]
+        orphan = self.store.record
+        self.store.orphans = [orphan]
+        self.assertEqual(self.service.reap_orphan_computers(), 1)
+        self.assertEqual(self.store.record.state, "stopped")
+        self.assertIn(orphan.id, self.store.deleted)
 
     def test_reset_wipes_home_and_destroys_the_box(self) -> None:
         self.service.boot(self.bot)  # type: ignore[arg-type]

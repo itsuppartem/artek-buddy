@@ -149,12 +149,60 @@ class ComputerService:
         busy = self.store.busy_bot_name(record, bot.id)
         if busy:
             raise ComputerBusy(busy)
+        self._destroy_box(record)
+        return self.status(bot)
+
+    def release_for_deleted_bot(self, bot: Bot) -> None:
+        """Drop this bot's box. Shared Team stays if another bot still uses it."""
+        record = self.store.get_computer_for_bot(bot)
+        record = self._expire_lease(record)
+        others = 0
+        if hasattr(self.store, "other_bots_using_computer"):
+            others = int(self.store.other_bots_using_computer(record.id, bot.id))
+        if others > 0:
+            self._detach_bot(record, bot.id)
+            return
+        self._destroy_box(record)
+
+    def reap_orphan_computers(self) -> int:
+        """Destroy boxes that no bot points at (left behind by older deletes)."""
+        if not hasattr(self.store, "list_orphan_computers"):
+            return 0
+        reaped = 0
+        for record in self.store.list_orphan_computers():
+            self._destroy_box(record)
+            if hasattr(self.store, "delete_computer"):
+                self.store.delete_computer(record.id)
+            reaped += 1
+        return reaped
+
+    def _detach_bot(self, record: ComputerRecord, bot_id: str) -> ComputerRecord:
+        changed = False
+        if record.execution_bot_id == bot_id:
+            record.execution_bot_id = None
+            record.execution_run_id = None
+            record.execution_lease_expires_at = None
+            changed = True
+        if record.control_bot_id == bot_id:
+            record.control_holder = "none"
+            record.control_lease_id = None
+            record.control_lease_expires_at = None
+            record.control_bot_id = None
+            changed = True
+        if changed:
+            self.store.save_computer(record)
+        return record
+
+    def _destroy_box(self, record: ComputerRecord) -> ComputerRecord:
         if record.provider_ref:
             try:
                 self.client.destroy(record.provider_ref)
             except Exception:
                 log.exception("supervisor destroy failed")
-        wipe_computer_home(Path(self.settings.agent_data_dir), record.home_key)
+        try:
+            wipe_computer_home(Path(self.settings.agent_data_dir), record.home_key)
+        except ComputerError:
+            log.exception("failed to wipe computer home %s", record.home_key)
         record.provider_ref = None
         record.state = "stopped"
         record.control_holder = "none"
@@ -167,7 +215,7 @@ class ComputerService:
         record.sleep_at = None
         record.home_revision = isoformat_utc()
         self.store.save_computer(record)
-        return self.status(bot)
+        return record
 
     def takeover(self, bot: Bot) -> TakeoverResult:
         record = self.store.get_computer_for_bot(bot)

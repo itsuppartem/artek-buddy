@@ -26,6 +26,7 @@ Do not use the live compose database or the owner client token.
 | --- | --- | --- | --- |
 | `make test` | Host unit + throwaway Postgres + Vitest | Python 3.13, `requirements.txt`, Docker, Node 22 | Every change. CI runs this. |
 | `make test-ui` | Vite build + Playwright | Same, plus a browser. Host `:18080` | Desktop UI / e2e flows. Local only. |
+| `make demo` | Records `media/demo.mp4` | Same as `test-ui`, host `:18081`, optional `ffmpeg` | README video. Local only. |
 
 ```bash
 python3 -m venv .venv

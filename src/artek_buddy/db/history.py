@@ -193,6 +193,14 @@ class HistoryStore:
                 conn.execute("DELETE FROM runs WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM threads WHERE id = %s", (bot.thread_id,))
                 conn.execute("DELETE FROM bots WHERE id = %s", (bot_id,))
+                conn.execute(
+                    """
+                    DELETE FROM computers
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM bots WHERE bots.computer_id = computers.id
+                    )
+                    """
+                )
         return True
 
     def archive_bot(self, bot_id: str) -> Bot | None:
@@ -2179,6 +2187,50 @@ class HistoryStore:
         if row is None:
             raise RuntimeError("computer missing")
         return self._computer_from_row(row)
+
+    def other_bots_using_computer(self, computer_id: str, except_bot_id: str) -> int:
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS n
+                FROM bots
+                WHERE computer_id = %s AND id <> %s
+                """,
+                (computer_id, except_bot_id),
+            ).fetchone()
+            conn.commit()
+        return int(row["n"]) if row else 0
+
+    def list_orphan_computers(self) -> list[ComputerRecord]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT c.*
+                FROM computers c
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM bots b WHERE b.computer_id = c.id
+                )
+                ORDER BY c.updated_at ASC
+                """
+            ).fetchall()
+            conn.commit()
+        return [self._computer_from_row(row) for row in rows]
+
+    def delete_computer(self, computer_id: str) -> bool:
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                DELETE FROM computers
+                WHERE id = %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM bots WHERE bots.computer_id = computers.id
+                  )
+                RETURNING id
+                """,
+                (computer_id,),
+            ).fetchone()
+            conn.commit()
+        return row is not None
 
     def busy_bot_name(self, computer: ComputerRecord, except_bot_id: str) -> str | None:
         if computer.execution_bot_id and computer.execution_bot_id != except_bot_id:
