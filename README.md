@@ -268,6 +268,19 @@ The worker (`artek-buddy-worker`) wakes due routines through the same `threads.s
 
 Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel hostnames, local compose (`docker-compose.local.yml`), or local tooling.
 
+## CI (GitHub only)
+
+Tests run in Actions on every pull request and on pushes to `develop` and `main`. They do **not** run on this Pi and must not use the live `:8080` stack or owner Postgres.
+
+| Job | What |
+| --- | --- |
+| `backend` | pytest host modules + HTTP API (`AGENT_RUNTIME=scripted`) + `.deb` proxy unit tests + `tsc` |
+| `live` | install the built `.deb`, real computer image, your Cursor key, Playwright against `artek-buddy --serve` |
+
+The repository is public. Workflows never `echo` secrets, never dump `env`, never run `docker compose config`, and never upload `.env`, client logs, or Playwright traces. Generated host/DB tokens are `::add-mask::`’d. Failure logs pass through `infra/ci-redact-logs.sh`.
+
+Add one repository secret: **`CURSOR_API_KEY`** (Settings → Secrets and variables → Actions). Same key/model as the Pi. Fork pull requests do not see it, so `live` is skipped there. Do not put the key in the workflow file, in `GITHUB_OUTPUT`, or in a commit.
+
 ## License
 
 Artek Buddy is licensed under the [Apache License 2.0](LICENSE).

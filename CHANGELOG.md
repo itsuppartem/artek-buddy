@@ -4,9 +4,10 @@
 
 ### Added
 - Client window map in `client/WINDOW.md` (pairing, shell, thread blocks, computer pane).
+- GitHub Actions `test` workflow on pull requests and on `develop` / `main`: host unit + HTTP API (scripted/fake), packaged-client unit tests, and a live `.deb` job that uses `CURSOR_API_KEY` from repository secrets. Jobs never print tokens, keys, or compose config. The suite does not talk to the owner Pi stack.
 
 ### Removed
-- The host, Vitest, Playwright, integration, and demo-recorder suite. GitHub no longer runs a `test` job. The suite will be rewritten from scratch.
+- The previous host, Vitest, Playwright, integration, and demo-recorder suite.
 
 ## [0.10.22] - 2026-08-19
 
