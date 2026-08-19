@@ -8,7 +8,7 @@ the host through a loopback proxy so the token never sits in the page.
 
 ## Build and install
 
-There is no GitHub Release package. Build a local owner `.deb` (do not commit it).
+GitHub Releases attach `artek-buddy-client_<version>_all.deb` when `VERSION` is bumped on `main`. Those packages do not bake a host URL. You can still build a local owner `.deb` (do not commit it).
 
 | | Where | Needs |
 | --- | --- | --- |
@@ -23,9 +23,9 @@ sudo dpkg -i artek-buddy-client_<version>_all.deb
 sudo apt-get install -f
 ```
 
-`build-deb.sh` compiles `web/` with Vite. `dist/` stays out of git. Optional untracked
-`client/url` (host URL only, never a token) is copied into the package and prefills
-the pair form.
+`build-deb.sh` compiles `web/` with Vite. `dist/` stays out of git. Release builds
+never copy `client/url`. `ARTEK_BAKE_URL=1` copies that untracked file into a local
+package only (host URL, never a token).
 
 Upgrade: install a newer versioned `.deb`. Remove: `sudo apt-get remove artek-buddy-client`.
 Config in `~/.config/artek-buddy` is left behind until you delete it.
