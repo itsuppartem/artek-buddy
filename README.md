@@ -268,6 +268,22 @@ The worker (`artek-buddy-worker`) wakes due routines through the same `threads.s
 
 Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel hostnames, local compose (`docker-compose.local.yml`), or local tooling.
 
+## CI (GitHub only)
+
+Tests run in Actions on every pull request and on pushes to `develop` and `main`. They do **not** run on this Pi and must not use the live `:8080` stack or owner Postgres.
+
+| Job | What |
+| --- | --- |
+| `backend` | pytest host modules + HTTP API (`AGENT_RUNTIME=scripted`) + `.deb` proxy unit tests + `tsc` |
+| `ui` | always. Built `.deb` + `--serve` against a scripted host (no Cursor key). Pairing, bots, memory, routines, scripted chat / fail / consent |
+| `live` | only if `CURSOR_API_KEY` is set. Same `.deb`, real computer image, Grok turns (reply + Allow/Deny browse) |
+
+`ui` is the merge gate for the window. `live` is a canary: Grok can flake without hiding a broken shell. Fork pull requests do not see the secret, so `live` is skipped there.
+
+The repository is public. Workflows never `echo` secrets, never dump `env`, never run `docker compose config`, and never upload `.env`, client logs, or Playwright traces. Generated host/DB tokens are `::add-mask::`’d. Failure logs pass through `infra/ci-redact-logs.sh`.
+
+Add one repository secret: **`CURSOR_API_KEY`** (Settings → Secrets and variables → Actions). Same key/model as the Pi. Do not put the key in the workflow file, in `GITHUB_OUTPUT`, or in a commit.
+
 ## License
 
 Artek Buddy is licensed under the [Apache License 2.0](LICENSE).

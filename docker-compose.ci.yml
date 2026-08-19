@@ -1,0 +1,76 @@
+# Ephemeral GitHub Actions stack. Do not use on the Pi.
+# Do not run `docker compose config` — it prints env_file values.
+services:
+  artek-buddy:
+    image: artek-buddy:ci
+    container_name: artek-buddy
+    network_mode: host
+    depends_on:
+      memory:
+        condition: service_healthy
+      supervisor:
+        condition: service_started
+    env_file:
+      - ${ARTEK_CI_ENV}
+    environment:
+      AGENT_CWD: /workspace
+      AGENT_DATA_DIR: /data
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8080"
+      DATABASE_URL: postgresql://artek:${MEMORY_DB_PASSWORD}@127.0.0.1:5432/artek_buddy
+      SANDBOX_SUPERVISOR_URL: http://127.0.0.1:7091
+      SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-docker}
+      COMPUTER_IMAGE: artek-buddy-computer:ci
+    volumes:
+      - ${ARTEK_CI_WORKSPACE}:/workspace
+      - ${ARTEK_CI_DATA}:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 40s
+
+  supervisor:
+    image: artek-buddy:ci
+    container_name: artek-buddy-supervisor
+    network_mode: host
+    env_file:
+      - ${ARTEK_CI_ENV}
+    environment:
+      AGENT_DATA_DIR: /data
+      SUPERVISOR_HOST: 127.0.0.1
+      SUPERVISOR_PORT: "7091"
+      COMPUTER_IMAGE: artek-buddy-computer:ci
+      DOCKER_SOCKET: /var/run/docker.sock
+    volumes:
+      - ${ARTEK_CI_DATA}:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["python", "-m", "artek_buddy", "supervisor"]
+
+  memory:
+    image: postgres:16-alpine
+    container_name: artek-buddy-memory
+    environment:
+      POSTGRES_DB: artek_buddy
+      POSTGRES_USER: artek
+      POSTGRES_PASSWORD: ${MEMORY_DB_PASSWORD}
+    volumes:
+      - ci-memory:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U artek -d artek_buddy"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  ci-memory:

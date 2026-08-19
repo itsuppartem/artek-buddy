@@ -38,5 +38,9 @@ before posting a write-up.
 3. Do not enable Tailscale Funnel until you have read the Funnel warning
    in the README. `/novnc` now requires a Bearer token, but Funnel still
    publishes the whole API.
-4. Rebuild `artek-buddy-computer:local` after you pull a computer-image
+4. GitHub Actions may hold `CURSOR_API_KEY` as a repository secret for the
+   live canary job. The `ui` job does not receive it. That value is not
+   written to logs or artifacts. Rotate it if a workflow file is ever
+   changed to print env or upload traces.
+5. Rebuild `artek-buddy-computer:local` after you pull a computer-image
    change, then recreate running desktops so they join `artek-computers`.
