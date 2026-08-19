@@ -53,6 +53,18 @@ def pair_fresh(page: Page, client_url: str, host_url: str) -> None:
     page.get_by_role("button", name="Pair").click()
 
 
+def create_named_bot(page: Page, name: str) -> None:
+    empty = page.get_by_test_id("empty-bots")
+    if empty.count() and empty.first.is_visible():
+        page.get_by_role("button", name="Create bot", exact=True).click()
+    else:
+        page.get_by_title("New bot").click()
+    page.get_by_placeholder("Name this bot").fill(name)
+    page.get_by_role("button", name="Create", exact=True).click()
+    expect(page.get_by_test_id("bot-row")).to_contain_text(name, timeout=20_000)
+    composer(page).wait_for(timeout=20_000)
+
+
 def ensure_bot(page: Page, name: str) -> None:
     empty = page.get_by_test_id("empty-bots")
     rows = page.get_by_test_id("bot-row")

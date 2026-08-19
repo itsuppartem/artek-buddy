@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import pair_fresh
+from tests.live.helpers import create_named_bot, pair_fresh
 
 pytestmark = pytest.mark.live
 
@@ -24,12 +24,7 @@ def test_pair_create_memory_routine_and_settings(
     host_url: str,
 ) -> None:
     pair_fresh(page, client_url, host_url)
-    expect(page.get_by_test_id("empty-bots")).to_be_visible(timeout=20_000)
-
-    page.get_by_role("button", name="Create bot", exact=True).click()
-    page.get_by_placeholder("Name this bot").fill("CI Team")
-    page.get_by_role("button", name="Create", exact=True).click()
-    expect(page.get_by_test_id("bot-row")).to_contain_text("CI Team", timeout=20_000)
+    create_named_bot(page, "CI Team")
 
     page.get_by_test_id("new-memory").click()
     page.get_by_placeholder("Facts to remember").fill("CI prefers short answers")

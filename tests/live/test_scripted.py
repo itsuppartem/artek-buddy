@@ -34,4 +34,6 @@ def test_scripted_consent_can_be_denied(page: Page, client_url: str, host_url: s
     card = page.get_by_test_id("consent-card")
     expect(card).to_be_visible(timeout=20_000)
     page.get_by_test_id("ask-option").filter(has_text="Deny").click()
-    expect(card).to_have_count(0, timeout=20_000)
+    expect(card).to_have_attribute("data-status", "answered", timeout=20_000)
+    expect(card.get_by_text("Answered")).to_be_visible()
+    expect(page.get_by_test_id("ask-option")).to_have_count(0)
