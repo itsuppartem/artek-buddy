@@ -136,6 +136,23 @@ jobs:
           mkdir -p "$RUNNER_TEMP/artek-data" "$RUNNER_TEMP/artek-workspace" "$RUNNER_TEMP/owner-home/Downloads"
           printf 'ci notes\n' > "$RUNNER_TEMP/owner-home/notes.txt"
 
+      - name: Pin Ubuntu apt mirrors
+        run: |
+          set +x
+          sudo find /etc/apt/sources.list.d -maxdepth 1 \( -type f -o -type l \) \
+            ! -name 'ubuntu*' -exec rm -f {} +
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf '%s\n' \
+              $'http://archive.ubuntu.com/ubuntu/\tpriority:1' \
+              $'http://security.ubuntu.com/ubuntu/\tpriority:2' \
+              | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          for src in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.list; do
+            if [ -f "$src" ]; then
+              sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' "$src"
+            fi
+          done
+
       - name: Build images
         run: |
           set +x
@@ -162,12 +179,11 @@ jobs:
         run: |
           set +x
           export DEBIAN_FRONTEND=noninteractive
-          # Keep Ubuntu only. Runner extras (Chrome, Azure, GitHub CLI) hang apt.
-          sudo find /etc/apt/sources.list.d -maxdepth 1 \( -type f -o -type l \) \
-            ! -name 'ubuntu*' -exec rm -f {} +
           sudo apt-get update -o Acquire::ForceIPv4=true
           sudo apt-get install -y --no-install-recommends \
-            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils libnotify-bin
+            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils libnotify-bin \
+            libnss3 libnspr4 libgbm1 libasound2t64 libatk-bridge2.0-0 libxkbcommon0 \
+            libxcomposite1 libxdamage1 libxrandr2 libcups2
           unset ARTEK_BAKE_URL
           client/build-deb.sh
           sudo dpkg -i "artek-buddy-client_$(tr -d '[:space:]' < VERSION)_all.deb"
@@ -178,7 +194,7 @@ jobs:
         run: |
           set +x
           python -m pip install -r requirements-dev.txt
-          python -m playwright install --with-deps chromium
+          python -m playwright install chromium
           export HOME="$ARTEK_CLIENT_HOME"
           mkdir -p "$HOME/.config/artek-buddy"
           umask 077
