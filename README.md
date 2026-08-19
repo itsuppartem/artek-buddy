@@ -29,7 +29,7 @@ The result is **your Cursor key, your model quota, your Pi, and your client**. T
 - **Keep separate agents for separate responsibilities.** Create bots for research, recurring monitoring, coding or operations tasks, or a personal assistant. Each bot has an independent thread, profile, memory, schedule, and desktop mode.
 - **Give an agent a real Linux workspace.** A bot can open URLs and local paths, launch or close graphical apps, inspect its screen, and interact with a Chromium desktop on this Pi. You can watch the view-only preview or take control when the agent needs you to complete a login, CAPTCHA, payment, or other human-only step. **Team** bots share one desktop; **Private** gives that bot its own container — see below.
 - **Run work without keeping your laptop on.** The Pi runs the host continuously. Routine prompts run on a cron schedule; idle desktops sleep automatically.
-- **Retain useful context deliberately.** Bots can store facts and preferences in editable Markdown-like memory documents. Use this for project conventions, standing instructions, account-safe preferences, or the context a recurring task needs.
+- **Retain useful context from chat.** Talk normally — name, city, tone, repo, a standing rule for this bot. The host writes a short card; there is no profile form. Every bot sees the owner book. Work notes (repo, branch) come back when the turn is about that work. A chat-local charter stays on that bot. The Memory panel shows the same cards. Replayable skills are later.
 - **Work on more than one thing at a time.** A lead agent can create workers for distinct tasks, show their progress in the chat, and stop, restart, or steer a worker when requirements change. Messages sent while a lead is busy are queued rather than lost.
 - **Use a chat that can ask back.** Agents can post a useful intermediate update, show multiple-choice question cards, and wait for your answer. Completed answers and actions stay in the thread history.
 - **Use the same agent from your Linux PC securely.** Pair the desktop window once over Tailscale. The client holds a device token; the Pi's host token and Docker access never leave the Pi.
@@ -60,7 +60,7 @@ The home stays on the Pi disk (`data/homes/{home_key}`). Rebooting the Pi, Stop,
 
 | Part | Responsibility |
 | --- | --- |
-| Raspberry Pi host | FastAPI `:8080`, Postgres history and memory, cron worker, and the Docker supervisor |
+| Raspberry Pi host | FastAPI `:8080`, Postgres history and memory, optional loopback memory index `:8420`, cron worker, and the Docker supervisor |
 | Agent runtime | Cursor Cloud through `cursor-sdk`; default model is `grok-4.6`, configurable in `.env` |
 | Bot desktop | A graphical Linux container with Xvfb, Chromium, view-only VNC, and temporary user takeover |
 | Linux client | Pairing, bot list, live thread, notifications, memory/routine controls, and computer preview |
@@ -205,7 +205,7 @@ That writes `artek-buddy-client_<version>_all.deb` in the repo root (gitignored)
 On the desktop PC:
 
 ```bash
-sudo dpkg -i artek-buddy-client_0.9.2_all.deb
+sudo dpkg -i artek-buddy-client_0.9.5_all.deb
 sudo apt-get install -f
 ```
 
@@ -284,7 +284,7 @@ More: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Version
 
-`0.9.2` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md). How to report a vuln: [SECURITY.md](SECURITY.md).
+`0.9.5` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md). How to report a vuln: [SECURITY.md](SECURITY.md).
 
 Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel hostnames, local compose (`docker-compose.local.yml`), or local tooling.
 

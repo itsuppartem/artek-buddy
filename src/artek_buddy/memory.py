@@ -181,6 +181,12 @@ def wrap_turn_prompt(
             "and take over to finish the job directly.\n"
             "- Delegation: when the user asks for substantive, distinct parallel background jobs (e.g. running scripts, doing complex parallel workflows), spawn a subagent using spawn_subagent(name=..., task=...). Do not spawn subagents for trivial questions or simple answers you can give directly.\n"
             "- Use list_subagents, inspect_subagent, steer_subagent, stop_subagent to monitor and steer workers.\n"
+            "- Memory: if the user states a preference, rule, person, project, place, or correction, "
+            "call remember with one short sentence. Shared (default) is about the owner and every bot sees it. "
+            "Set scope=bot only for a standing rule of this chat. "
+            "A later note on the same slot (name, city, timezone, tone, format) replaces the old one. "
+            "Do not remember one-off tasks such as opening a tab. "
+            "To erase something, call remember with forget=true.\n"
             "- Do not dump internal monologues; be helpful, concise, and proactive."
         )
     elif role == "subagent" or parallel:
@@ -191,7 +197,8 @@ def wrap_turn_prompt(
             "Use open_path or launch_app if you need to open URLs or applications on the visible desktop. "
             "Use close_app(application='chromium') to close the on-screen browser or another app. "
             "Only interact with the visual desktop/browser (computer_observe, computer_act) if your specific task explicitly requires GUI interaction, as you share the screen with other processes. "
-            "You can use send_message to post direct updates or findings to the user."
+            "You can use send_message to post direct updates or findings to the user. "
+            "If this task has a standing rule for this chat, call remember; it stays with this bot."
         )
     if subagent_context:
         parts.append(subagent_context)

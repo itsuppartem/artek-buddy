@@ -40,6 +40,7 @@ from artek_buddy.memory import (
     MemoryPathError,
     normalize_memory_path,
 )
+from artek_buddy.memory_hub import MemoryEntry, entry_path, normalize_kind, shelf_from_path
 from artek_buddy.computer.models import ComputerRecord
 from artek_buddy.db.shaping import (
     DEFAULT_PAGE_SIZE,
@@ -166,6 +167,14 @@ class HistoryStore:
             return False
         with self._conn() as conn:
             with conn.transaction():
+                conn.execute(
+                    "DELETE FROM memory_entries WHERE scope = 'bot' AND bot_id = %s",
+                    (bot_id,),
+                )
+                conn.execute(
+                    "DELETE FROM memory_documents WHERE scope = 'bot' AND bot_id = %s",
+                    (bot_id,),
+                )
                 if not delete_memories:
                     safe_name = bot.name.replace("/", "-").strip() or "Bot"
                     archive_dir = f"bots/{safe_name}-{bot.id}"
@@ -176,7 +185,7 @@ class HistoryStore:
                             scope = 'user',
                             path = %s || '/' || path,
                             updated_at = %s
-                        WHERE bot_id = %s
+                        WHERE bot_id = %s AND scope = 'user'
                         """,
                         (archive_dir, isoformat_utc(), bot_id),
                     )
@@ -2092,16 +2101,320 @@ class HistoryStore:
                         now,
                     ),
                 )
-        return self._memory_from_row(row) if row else None
+        document = self._memory_from_row(row) if row else None
+        if document is not None:
+            linked = self.find_entry_by_document(document.id)
+            if linked is not None:
+                self.update_entry_text(linked.id, document.content)
+        return document
 
     def delete_memory(self, document_id: str) -> bool:
         with self._conn() as conn:
+            conn.execute(
+                """
+                UPDATE memory_entries
+                SET superseded_at = %s
+                WHERE document_id = %s AND superseded_at IS NULL
+                """,
+                (isoformat_utc(), document_id),
+            )
             row = conn.execute(
                 "DELETE FROM memory_documents WHERE id = %s RETURNING id",
                 (document_id,),
             ).fetchone()
             conn.commit()
         return row is not None
+
+    def create_memory_entry(
+        self,
+        text: str,
+        kind: str = "preference",
+        scope: str = "user",
+        bot_id: str | None = None,
+        source: str = "remember",
+        source_run_id: str | None = None,
+        source_thread_id: str | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+        slot: str | None = None,
+        shelf: str = "owner",
+        until: str | None = None,
+    ) -> MemoryEntry:
+        kind_value = normalize_kind(kind)
+        scope_value = "bot" if scope == "bot" and bot_id else "user"
+        writer_id = bot_id
+        entry_id = new_id("ment")
+        layer = shelf if shelf in {"owner", "work", "charter"} else "owner"
+        document = self.create_memory(
+            scope=scope_value,
+            content=text,
+            bot_id=writer_id if scope_value == "bot" else None,
+            path=entry_path(entry_id, kind_value, layer),
+            workspace_id=workspace_id,
+            source_run_id=source_run_id,
+            source_thread_id=source_thread_id,
+        )
+        now = isoformat_utc()
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO memory_entries (
+                    id, workspace_id, bot_id, scope, kind, slot, text, source,
+                    source_run_id, source_thread_id, document_id, created_at,
+                    shelf, until
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    entry_id,
+                    workspace_id,
+                    writer_id,
+                    scope_value,
+                    kind_value,
+                    slot,
+                    text,
+                    source,
+                    source_run_id,
+                    source_thread_id,
+                    document.id,
+                    now,
+                    layer,
+                    until,
+                ),
+            )
+            conn.commit()
+        return MemoryEntry(
+            id=entry_id,
+            scope=scope_value,
+            kind=kind_value,
+            text=text,
+            source=source,
+            bot_id=writer_id,
+            document_id=document.id,
+            slot=slot,
+            shelf=layer,
+            until=until,
+        )
+
+    def attach_memory_entry(
+        self,
+        document: MemoryDocument,
+        kind: str = "preference",
+        source: str = "panel",
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+        slot: str | None = None,
+        shelf: str | None = None,
+        until: str | None = None,
+    ) -> MemoryEntry:
+        existing = self.find_entry_by_document(document.id)
+        if existing is not None:
+            return self.update_entry_text(existing.id, document.content) or existing
+        kind_value = normalize_kind(kind)
+        scope_value = document.scope.value if hasattr(document.scope, "value") else str(document.scope)
+        layer = shelf or shelf_from_path(getattr(document, "path", "") or "", scope_value)
+        entry_id = new_id("ment")
+        now = isoformat_utc()
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO memory_entries (
+                    id, workspace_id, bot_id, scope, kind, slot, text, source,
+                    document_id, created_at, shelf, until
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    entry_id,
+                    workspace_id,
+                    document.bot_id,
+                    scope_value,
+                    kind_value,
+                    slot,
+                    document.content,
+                    source,
+                    document.id,
+                    now,
+                    layer,
+                    until,
+                ),
+            )
+            conn.commit()
+        return MemoryEntry(
+            id=entry_id,
+            scope=scope_value,
+            kind=kind_value,
+            text=document.content,
+            source=source,
+            bot_id=document.bot_id,
+            document_id=document.id,
+            slot=slot,
+            shelf=layer,
+            until=until,
+        )
+
+    def list_live_memory_entries(
+        self,
+        bot_id: str | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> list[MemoryEntry]:
+        clauses = [
+            "workspace_id = %s",
+            "superseded_at IS NULL",
+            "(until IS NULL OR until > NOW())",
+        ]
+        args: list[Any] = [workspace_id]
+        if bot_id:
+            clauses.append("(scope = 'user' OR bot_id = %s)")
+            args.append(bot_id)
+        else:
+            clauses.append("scope = 'user'")
+        with self._conn() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT id, scope, kind, slot, text, source, bot_id, document_id, shelf, until
+                FROM memory_entries
+                WHERE {' AND '.join(clauses)}
+                ORDER BY created_at DESC
+                """,
+                args,
+            ).fetchall()
+            conn.commit()
+        return [self._entry_from_row(row) for row in rows]
+
+    def find_live_memory_entry_by_slot(
+        self,
+        slot: str,
+        scope: str = "user",
+        bot_id: str | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> MemoryEntry | None:
+        if not slot:
+            return None
+        clauses = [
+            "workspace_id = %s",
+            "superseded_at IS NULL",
+            "slot = %s",
+            "scope = %s",
+        ]
+        args: list[Any] = [workspace_id, slot, scope]
+        if scope == "bot":
+            if not bot_id:
+                return None
+            clauses.append("bot_id = %s")
+            args.append(bot_id)
+        with self._conn() as conn:
+            row = conn.execute(
+                f"""
+                SELECT id, scope, kind, slot, text, source, bot_id, document_id, shelf, until
+                FROM memory_entries
+                WHERE {' AND '.join(clauses)}
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                args,
+            ).fetchone()
+            conn.commit()
+        return self._entry_from_row(row) if row else None
+
+    def find_live_memory_entry(
+        self,
+        text: str,
+        scope: str = "user",
+        bot_id: str | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> MemoryEntry | None:
+        body = (text or "").strip()
+        if not body:
+            return None
+        clauses = [
+            "workspace_id = %s",
+            "superseded_at IS NULL",
+            "text = %s",
+            "scope = %s",
+        ]
+        args: list[Any] = [workspace_id, body, scope]
+        if scope == "bot":
+            if not bot_id:
+                return None
+            clauses.append("bot_id = %s")
+            args.append(bot_id)
+        with self._conn() as conn:
+            row = conn.execute(
+                f"""
+                SELECT id, scope, kind, slot, text, source, bot_id, document_id, shelf, until
+                FROM memory_entries
+                WHERE {' AND '.join(clauses)}
+                LIMIT 1
+                """,
+                args,
+            ).fetchone()
+            conn.commit()
+        return self._entry_from_row(row) if row else None
+
+    def find_entry_by_document(self, document_id: str) -> MemoryEntry | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT id, scope, kind, slot, text, source, bot_id, document_id, shelf, until
+                FROM memory_entries
+                WHERE document_id = %s AND superseded_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (document_id,),
+            ).fetchone()
+            conn.commit()
+        return self._entry_from_row(row) if row else None
+
+    def update_entry_text(self, entry_id: str, text: str) -> MemoryEntry | None:
+        body = (text or "").strip()
+        if not body:
+            return None
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE memory_entries
+                SET text = %s
+                WHERE id = %s
+                RETURNING id, scope, kind, slot, text, source, bot_id, document_id, shelf, until
+                """,
+                (body, entry_id),
+            ).fetchone()
+            conn.commit()
+        return self._entry_from_row(row) if row else None
+
+    def supersede_memory_entry(self, entry_id: str) -> bool:
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE memory_entries
+                SET superseded_at = %s
+                WHERE id = %s AND superseded_at IS NULL
+                RETURNING document_id
+                """,
+                (isoformat_utc(), entry_id),
+            ).fetchone()
+            conn.commit()
+        if row is None:
+            return False
+        document_id = row.get("document_id") if isinstance(row, dict) else row["document_id"]
+        if document_id:
+            self.delete_memory(document_id)
+        return True
+
+    def _entry_from_row(self, row: dict[str, Any]) -> MemoryEntry:
+        until = row.get("until")
+        if until is not None and hasattr(until, "isoformat"):
+            until = until.isoformat()
+        return MemoryEntry(
+            id=row["id"],
+            scope=row["scope"],
+            kind=row["kind"],
+            text=row["text"],
+            source=row["source"],
+            bot_id=row["bot_id"],
+            document_id=row["document_id"],
+            slot=row.get("slot"),
+            shelf=str(row.get("shelf") or "owner"),
+            until=str(until) if until else None,
+        )
 
     def _memory_from_row(self, row: dict[str, Any]) -> MemoryDocument:
         return MemoryDocument(

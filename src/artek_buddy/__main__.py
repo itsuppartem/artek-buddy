@@ -6,7 +6,7 @@ import sys
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
 
-USAGE = "usage: python -m artek_buddy pair|worker|supervisor"
+USAGE = "usage: python -m artek_buddy pair|worker|supervisor|memory-gateway"
 
 
 def pair() -> int:
@@ -41,6 +41,10 @@ def main(argv: list[str] | None = None) -> int:
         from artek_buddy.supervisor.server import main as supervisor_main
 
         return supervisor_main()
+    if args == ["memory-gateway"]:
+        from artek_buddy.memory_gateway import main as gateway_main
+
+        return gateway_main()
     print(USAGE, file=sys.stderr)
     return 2
 

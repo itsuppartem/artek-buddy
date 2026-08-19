@@ -78,6 +78,15 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             scripted_tool("close_app", application="chromium"),
             scripted_finish("browser closed"),
         ]
+    if "e2e-remember" in hay:
+        return [
+            scripted_tool(
+                "remember",
+                content="Prefers short answers without emoji",
+                kind="preference",
+            ),
+            scripted_finish("I'll remember that."),
+        ]
     if "e2e-ask" in text:
         return [
             scripted_tool(

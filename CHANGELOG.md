@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.9.5] - 2026-08-19
+
+### Changed
+- Memory has three shelves written from chat: owner (name, city, tz, tone, format, language), work (repo, branch, project), and this bot's charter. No profile form.
+- The next prompt always gets owner + this bot. Work is pulled only when the turn is about that work. Temporary work notes can expire (`until`).
+- `tone` and `format` are separate slots. A subagent `remember` stays in this chat's charter. Thread meta `Remembered: …` also fires for ask and extract.
+
+## [0.9.4] - 2026-08-19
+
+### Changed
+- Same-slot notes replace the old one (name, city, timezone, tone, language).
+- Extract writes a short phrase, not the raw user line. One-off ask answers are not saved.
+- Profile always includes name / city / timezone / tone when known. Empty chit-chat does not pull random recalled facts.
+- Memory panel shows the card text. Outdated drops the note. Thread meta says `Remembered: …`.
+- Bot-scoped notes are deleted with the bot instead of being promoted to shared.
+
+### Fixed
+- The loopback memory index no longer returns the first N rows on a miss, and it hides other chats' bot-scoped notes.
+
+## [0.9.3] - 2026-08-18
+
+### Added
+- Shared memory: `remember` appends a short typed note the owner (default) so every bot can see it. Chat-local notes use `scope=bot`.
+- Ask-card answers and an end-of-turn safety net write the same book. The lead prompt and `AGENTS.md` now tell the model to call `remember`.
+- Turns receive a short profile plus recalled notes instead of dumping every memory file.
+- Optional loopback memory index at `127.0.0.1:8420` (`python -m artek_buddy memory-gateway`). Postgres stays the panel source of truth.
+
 ## [0.9.2] - 2026-08-18
 
 ### Added

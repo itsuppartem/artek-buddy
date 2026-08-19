@@ -111,6 +111,7 @@ class MemoryContextTest(unittest.TestCase):
         self.assertIn("inspect_subagent", text)
         self.assertIn("steer_subagent", text)
         self.assertIn("close_app", text)
+        self.assertIn("remember", text)
         self.assertIn("2. news", text)
         self.assertTrue(text.endswith("what about the second?"))
 

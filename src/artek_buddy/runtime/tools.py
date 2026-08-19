@@ -88,17 +88,44 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="remember",
-        description="Store a durable fact or key preference in this bot's explicit memory for future turns.",
+        description=(
+            "Save one short durable sentence about the owner or this chat. "
+            "Call this when the user states a preference, rule, person, project, place, "
+            "or correction. Default scope is shared (every bot sees it). "
+            "Use scope=bot only for a note that belongs to this chat. "
+            "Do not store one-off tasks such as opening a tab. "
+            "A new note on the same slot (name, city, tz, tone, format, language) replaces the old one. "
+            "To erase something, set forget=true with the text to drop."
+        ),
         input_schema={
             "type": "object",
             "properties": {
                 "content": {
                     "type": "string",
-                    "description": "The fact or key piece of information to remember.",
+                    "description": "One short sentence to remember, or the text to forget.",
+                },
+                "kind": {
+                    "type": "string",
+                    "description": (
+                        "preference, choice, rule, person, project, place, "
+                        "desktop, correction, or workflow."
+                    ),
+                },
+                "scope": {
+                    "type": "string",
+                    "description": "user (shared, default) or bot (this chat only).",
+                },
+                "slot": {
+                    "type": "string",
+                    "description": "Optional singleton topic: name, city, tz, tone, format, language.",
+                },
+                "forget": {
+                    "type": "boolean",
+                    "description": "If true, delete matching saved notes instead of adding one.",
                 },
                 "path": {
                     "type": "string",
-                    "description": "Path to the memory file (default: MEMORY.md).",
+                    "description": "Optional document path. Leave empty to append a unique entry.",
                 },
             },
             "required": ["content"],
@@ -290,14 +317,59 @@ class ProductTools:
 
     def _exec_remember(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
         content = str(args.get("content") or "").strip()
-        path = str(args.get("path") or "MEMORY.md").strip() or "MEMORY.md"
+        path = str(args.get("path") or "").strip()
         if not content:
             return {"ok": False, "error": "content cannot be empty"}
         bot_id, run_id, thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+        forget = bool(args.get("forget"))
+        kind = str(args.get("kind") or "preference")
+        if args.get("scope"):
+            scope = str(args.get("scope"))
+        elif getattr(self.runtime, "resolve_turn_role", lambda: "lead")() == "subagent":
+            scope = "bot"
+        else:
+            scope = "user"
+        hub = getattr(self.runtime, "memory", None)
+        if hub is not None:
+            try:
+                if forget:
+                    removed = hub.forget(content, bot_id=bot_id)
+                    return {"ok": True, "forgotten": removed}
+                entry = hub.capture(
+                    content,
+                    kind=kind,
+                    scope=scope,
+                    bot_id=bot_id,
+                    source="remember",
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    slot=str(args.get("slot") or "") or None,
+                )
+                if entry is None:
+                    return {"ok": True, "saved": False}
+                return {
+                    "ok": True,
+                    "entry_id": entry.id,
+                    "document_id": entry.document_id,
+                    "scope": entry.scope,
+                    "kind": entry.kind,
+                }
+            except Exception as exc:
+                log.exception("failed to save memory in remember tool")
+                return {"ok": False, "error": str(exc)}
         if self.runtime.store is not None:
             try:
+                if not path or path == "MEMORY.md":
+                    from artek_buddy.db.shaping import new_id
+                    from artek_buddy.memory_hub import entry_path, normalize_kind
+
+                    path = entry_path(
+                        new_id("ment"),
+                        normalize_kind(kind),
+                        "charter" if scope == "bot" else "owner",
+                    )
                 doc = self.runtime.store.save_memory(
-                    scope="bot" if bot_id else "user",
+                    scope="bot" if scope == "bot" and bot_id else "user",
                     path=path,
                     content=content,
                     bot_id=bot_id,

@@ -147,10 +147,16 @@ class SubagentService:
                 sub_id,
                 live.thread_id,
                 agent_id=session_id,
+                role="subagent",
             )
+            memory = getattr(self.runtime, "memory", None)
             prompt = wrap_turn_prompt(
                 record.task,
-                format_memory_context(self.store.memory_for_agent(live.id)),
+                (
+                    memory.context_for_turn(live.id, record.task)
+                    if memory is not None
+                    else format_memory_context(self.store.memory_for_agent(live.id))
+                ),
                 role="subagent",
                 clarifications=record.clarifications,
                 steer=mode == "steer",

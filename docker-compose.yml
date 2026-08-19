@@ -21,6 +21,7 @@ services:
       SANDBOX_SUPERVISOR_URL: http://127.0.0.1:7091
       SANDBOX_PROVIDER: docker
       COMPUTER_IMAGE: artek-buddy-computer:local
+      MEMORY_GATEWAY_URL: http://127.0.0.1:8420
     volumes:
       - ./workspace:/workspace
       - ./data:/data
@@ -79,6 +80,20 @@ services:
     build: ./infra/computer
     image: artek-buddy-computer:local
     profiles: ["build"]
+
+  memory-gateway:
+    build: .
+    image: artek-buddy:local
+    container_name: artek-buddy-memory-gateway
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      MEMORY_GATEWAY_HOST: 127.0.0.1
+      MEMORY_GATEWAY_PORT: "8420"
+      MEMORY_GATEWAY_DIR: /data/agent-memory
+    volumes:
+      - ./data:/data
+    command: ["python", "-m", "artek_buddy", "memory-gateway"]
 
   memory:
     image: postgres:16-alpine

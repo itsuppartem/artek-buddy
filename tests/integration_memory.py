@@ -7,6 +7,7 @@ import sys
 import unittest
 
 from artek_buddy.memory import MemoryConflict, MemoryPathError, format_memory_context, wrap_turn_prompt
+from artek_buddy.memory_hub import InMemoryGateway, MemoryHub
 from tests.pgutil import open_test_store
 
 
@@ -39,6 +40,7 @@ class MemoryIntegrationTest(unittest.TestCase):
         names = {row["table_name"] for row in rows}
         self.assertIn("memory_documents", names)
         self.assertIn("memory_revisions", names)
+        self.assertIn("memory_entries", names)
 
     def test_create_list_update_delete(self) -> None:
         created = self.store.create_memory(
@@ -92,6 +94,33 @@ class MemoryIntegrationTest(unittest.TestCase):
         self.assertIn("bot fact", prompt)
         self.assertIn("user fact", prompt)
         self.assertTrue(prompt.endswith("what do you know?"))
+
+    def test_shared_entries_survive_other_bot_and_delete(self) -> None:
+        reader = self.store.create_bot(name="memory-reader")
+        writer = self.store.create_bot(name="memory-writer")
+        hub = MemoryHub(self.store, InMemoryGateway())
+        saved = hub.capture("Owner prefers tea", kind="preference", bot_id=writer.id)
+        assert saved is not None
+        self.addCleanup(self.store.delete_memory, saved.document_id)
+        local = hub.capture(
+            "This research uses Wikipedia only",
+            kind="rule",
+            scope="bot",
+            bot_id=writer.id,
+        )
+        assert local is not None
+        self.addCleanup(self.store.delete_memory, local.document_id)
+        shared = {entry.text for entry in self.store.list_live_memory_entries(bot_id=reader.id)}
+        self.assertIn("Owner prefers tea", shared)
+        self.assertNotIn("This research uses Wikipedia only", shared)
+        context = hub.context_for_turn(reader.id, "what tea does the owner like")
+        assert context is not None
+        self.assertIn("Owner prefers tea", context)
+        self.assertTrue(self.store.delete_bot(writer.id, delete_memories=True))
+        kept = {entry.text for entry in self.store.list_live_memory_entries(bot_id=reader.id)}
+        self.assertIn("Owner prefers tea", kept)
+        self.assertNotIn("This research uses Wikipedia only", kept)
+        self.store.delete_bot(reader.id, delete_memories=True)
 
 
 if __name__ == "__main__":

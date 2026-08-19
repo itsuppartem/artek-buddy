@@ -47,7 +47,7 @@ class StreamMapTest(unittest.TestCase):
         )
         mapped = map_cursor_event(event)
         self.assertEqual(mapped[0][0], "thread.meta")
-        self.assertEqual(mapped[0][1]["text"], "Saved fact to NOTES.md")
+        self.assertEqual(mapped[0][1]["text"], "Remembered: fact")
 
     def test_subagent_tool_started_and_completed(self) -> None:
         event = SimpleNamespace(

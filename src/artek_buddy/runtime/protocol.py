@@ -13,6 +13,7 @@ class AgentRuntime(Protocol):
     store: Any
     computers: Any
     default_agent_id: str | None
+    memory: Any
     subagents: Any
     events: Any
     loop: Any
@@ -26,6 +27,7 @@ class AgentRuntime(Protocol):
         run_id: str | None,
         thread_id: str | None,
         agent_id: str | None = None,
+        role: str = "lead",
     ) -> Any: ...
 
     def has_sent_message_in_turn(self, run_id: str | None) -> bool: ...
@@ -36,6 +38,8 @@ class AgentRuntime(Protocol):
         self,
         bound_bot_id: str | None = None,
     ) -> tuple[str | None, str | None, str | None]: ...
+
+    def resolve_turn_role(self, bound_bot_id: str | None = None) -> str: ...
 
     def home_cwd(self, bot_id: str | None = None) -> str: ...
 

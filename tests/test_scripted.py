@@ -101,6 +101,9 @@ class ScriptedRuntimeTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([step.tool for step in close if step.tool], ["send_message", "close_app"])
         self.assertEqual(close[0].args.get("text"), E2E_CLOSE_STATUS)
 
+        remember = steps_for_prompt("e2e-remember")
+        self.assertEqual(remember[0].tool, "remember")
+        self.assertEqual(remember[0].args.get("content"), "Prefers short answers without emoji")
         ask = steps_for_prompt("e2e-ask")
         self.assertEqual(ask[0].tool, "ask_user")
         self.assertEqual(ask[0].args.get("question"), E2E_ASK_QUESTION)

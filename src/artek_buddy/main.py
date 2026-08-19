@@ -84,6 +84,8 @@ from artek_buddy.memory import (
     format_subagent_context,
     wrap_turn_prompt,
 )
+from artek_buddy.memory_gateway import GatewayClient
+from artek_buddy.memory_hub import MemoryHub, should_persist_ask
 from artek_buddy.subagents import SubagentError, SubagentService
 from artek_buddy.runtime import (
     AgentRuntime,
@@ -144,6 +146,9 @@ async def lifespan(app: FastAPI):
             app.state.computers = computers
             app.state.hub = EventHub()
             app.state.active_turns = {}
+            memory = MemoryHub(store, GatewayClient(settings.memory_gateway_url))
+            runtime.memory = memory
+            app.state.memory = memory
             subagents = SubagentService(store, runtime)
             subagents.bind(app.state.hub, asyncio.get_running_loop())
             runtime.subagents = subagents
@@ -388,6 +393,40 @@ def _emit(
     return event
 
 
+def _emit_remembered(
+    events: EventHub,
+    bot: Bot,
+    text: str,
+    run_id: str | None,
+) -> None:
+    label = f"Remembered: {text}".strip() if text else "Remembered a note"
+    _emit(events, bot, ProductEventType.THREAD_META, {"text": label[:160]}, run_id=run_id)
+
+
+def _memory_hub(rt: AgentRuntime | None = None) -> MemoryHub | None:
+    if rt is not None:
+        found = getattr(rt, "memory", None)
+        if found is not None:
+            return found
+    return getattr(app.state, "memory", None)
+
+
+def _ask_question(message: ThreadMessage) -> str | None:
+    for block in message.blocks or []:
+        data = block.model_dump() if hasattr(block, "model_dump") else block
+        if isinstance(data, dict) and data.get("kind") == "ask":
+            question = str(data.get("text") or "").strip()
+            return question or None
+    return None
+
+
+def _memory_context(history: HistoryStore, rt: AgentRuntime, bot: Bot, text: str) -> str | None:
+    hub = _memory_hub(rt)
+    if hub is not None:
+        return hub.context_for_turn(bot.id, text)
+    return format_memory_context(history.memory_for_agent(bot.id))
+
+
 def _emit_answered_asks(
     history: HistoryStore,
     events: EventHub,
@@ -395,6 +434,7 @@ def _emit_answered_asks(
     text: str,
     run_id: str | None,
 ) -> None:
+    hub = _memory_hub()
     for message in history.answer_pending_asks(bot.thread_id, text):
         _emit(
             events,
@@ -403,6 +443,25 @@ def _emit_answered_asks(
             {"message": message.model_dump(mode="json")},
             run_id=run_id,
         )
+        if hub is None:
+            continue
+        question = _ask_question(message)
+        if not should_persist_ask(question, text):
+            continue
+        try:
+            entry = hub.capture(
+                text,
+                kind="choice",
+                bot_id=bot.id,
+                source="ask",
+                run_id=run_id,
+                thread_id=bot.thread_id,
+                question=question,
+            )
+            if entry is not None:
+                _emit_remembered(events, bot, entry.text, run_id)
+        except Exception:
+            log.exception("failed to capture ask answer in memory")
 
 
 def _turn_bucket(bot_id: str) -> dict[str, asyncio.Task[Any]]:
@@ -561,7 +620,7 @@ async def _run_turn(
     reply: ThreadMessage | None = None,
 ) -> None:
     agent_id = session_id or bot.cursor_agent_id
-    rt.set_current_turn_context(bot.id, run.id, bot.thread_id, agent_id=agent_id)
+    rt.set_current_turn_context(bot.id, run.id, bot.thread_id, agent_id=agent_id, role="lead")
     draft = ""
     thinking = ""
     reply_text = ""
@@ -570,7 +629,7 @@ async def _run_turn(
     try:
         memory_prompt = wrap_turn_prompt(
             text,
-            format_memory_context(history.memory_for_agent(bot.id)),
+            _memory_context(history, rt, bot, text),
             reply_excerpt=_message_excerpt(reply) if reply else None,
             reply_role=(
                 (reply.role.value if hasattr(reply.role, "value") else str(reply.role))
@@ -680,6 +739,14 @@ async def _run_turn(
         {"run": finished.model_dump(mode="json"), "error": error},
         run_id=finished.id,
     )
+    if status == "completed":
+        hub = _memory_hub(rt)
+        if hub is not None:
+            try:
+                for entry in hub.extract_after_turn(text, run.id, bot.id):
+                    _emit_remembered(events, bot, entry.text, run.id)
+            except Exception:
+                log.exception("failed to extract memory after turn")
     if status != "cancelled":
         await _kick_inbox(history, rt, events, bot)
 
@@ -1318,6 +1385,12 @@ async def create_memory(
             bot_id=body.bot_id,
             path=body.path,
         )
+        hub = _memory_hub()
+        if hub is not None:
+            try:
+                hub.index_document(document, kind=body.kind or "preference", source="panel")
+            except Exception:
+                log.exception("failed to index panel memory")
     except MemoryPathError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
     except MemoryConflict as err:
@@ -1362,6 +1435,12 @@ async def update_memory(
 ) -> MemoryDocument:
     try:
         document = history.update_memory(document_id, body.content)
+        hub = _memory_hub()
+        if hub is not None and document is not None:
+            try:
+                hub.index_document(document, source="panel")
+            except Exception:
+                log.exception("failed to index panel memory")
     except MemoryPathError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
     except DatabaseUnavailable as err:
@@ -1394,7 +1473,8 @@ async def remove_memory(
     history: HistoryStore = Depends(store),
 ) -> OkResponse:
     try:
-        deleted = history.delete_memory(document_id)
+        hub = _memory_hub()
+        deleted = hub.remove_document(document_id) if hub is not None else history.delete_memory(document_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
     if not deleted:

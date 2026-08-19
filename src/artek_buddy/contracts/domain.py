@@ -157,6 +157,7 @@ class CreateMemoryInput(BaseModel):
     bot_id: Id | None = None
     path: str = "MEMORY.md"
     content: str = ""
+    kind: str | None = None
 
 
 class MemoryUpdateInput(BaseModel):

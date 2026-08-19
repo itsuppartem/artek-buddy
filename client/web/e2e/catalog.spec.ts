@@ -127,10 +127,8 @@ test.describe("every shell function", () => {
     await openComputerPane(page);
 
     await page.getByTestId("new-memory").click();
-    await page.getByPlaceholder("MEMORY.md").fill("NOTES.md");
     await page.getByPlaceholder("Facts to remember").fill("Remember the archive restore path.");
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByTestId("memory-doc")).toContainText("NOTES.md");
     await expect(page.getByTestId("memory-doc")).toContainText("archive restore");
 
     await page.getByTestId("new-routine").click();

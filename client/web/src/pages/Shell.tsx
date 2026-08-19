@@ -12,7 +12,6 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { abortableDelay, api, classifyError, isActive, type ShellErrorKind } from "../api";
 import { isCronShape } from "../lib/cron";
-import { isMemoryPath } from "../lib/memory";
 import { filterBots, inboxEmptyState, type SidebarView } from "../lib/sidebar";
 import {
   computerLabel,
@@ -2367,12 +2366,24 @@ function ComputerPane({
   );
 }
 
+function memoryShelf(path: string): string {
+  return path.match(/^entries\/(owner|work|charter)\//)?.[1] ?? "owner";
+}
+
+function memoryKind(path: string): string | null {
+  return path.match(/^entries\/(?:(?:owner|work|charter)\/)?([a-z]+)-/)?.[1] ?? null;
+}
+
+function memoryTitle(document: MemoryDocument): string {
+  const line = document.content.trim().split("\n")[0];
+  return line || memoryKind(document.path) || document.path;
+}
+
 function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string) => void }) {
   const [documents, setDocuments] = useState<MemoryDocument[]>([]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [scope, setScope] = useState<"bot" | "user">("bot");
-  const [path, setPath] = useState("MEMORY.md");
+  const [scope, setScope] = useState<"bot" | "user">("user");
   const [content, setContent] = useState("");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -2390,17 +2401,16 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
   }, [botId]);
 
   async function create() {
-    if (!content.trim() || !isMemoryPath(path)) return;
+    if (!content.trim()) return;
     setBusy(true);
     try {
       await api.memory.create({
         scope,
         botId: scope === "bot" ? botId : undefined,
-        path: path.trim(),
+        path: `entries/owner/note-${Date.now()}.md`,
         content: content.trim(),
       });
       setContent("");
-      setPath("MEMORY.md");
       setCreating(false);
       await refresh();
     } catch (err) {
@@ -2451,7 +2461,10 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
   return (
     <div>
       <div className="mt-[30px] mb-3 flex items-center justify-between">
-        <span className="text-[14px] text-[#85858A]">Memory</span>
+        <div>
+          <span className="text-[14px] text-[#85858A]">Memory</span>
+          <div className="mt-0.5 text-[12px] text-[#6C6C70]">Owner, work, and this bot — written from chat</div>
+        </div>
         <button type="button" onClick={() => void exportMarkdown()} className="text-[12.5px] text-[#85858A]">
           Export
         </button>
@@ -2465,9 +2478,12 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="truncate text-[14.5px] text-[#ECECEE]">{document.path}</div>
+                <div className="line-clamp-2 text-[14.5px] text-[#ECECEE]">{memoryTitle(document)}</div>
                 <div className="mt-0.5 text-[12px] text-[#6C6C70]">
-                  {document.scope === "user" ? "shared" : "this bot"} · rev {document.revision}
+                  {memoryShelf(document.path)}
+                  {` · ${document.scope === "user" ? "shared" : "this bot"}`}
+                  {memoryKind(document.path) ? ` · ${memoryKind(document.path)}` : ""}
+                  {document.updatedAt ? ` · ${document.updatedAt.slice(0, 10)}` : ""}
                 </div>
               </div>
             </div>
@@ -2490,9 +2506,11 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
               </div>
             ) : (
               <div className="mt-2">
-                <div className="line-clamp-3 whitespace-pre-wrap text-[12.5px] text-[#9A9AA0]">
-                  {document.content || "Empty"}
-                </div>
+                {document.content.includes("\n") ? (
+                  <div className="line-clamp-3 whitespace-pre-wrap text-[12.5px] text-[#9A9AA0]">
+                    {document.content}
+                  </div>
+                ) : null}
                 <div className="mt-2 flex gap-3 text-[12.5px] text-[#85858A]">
                   <button
                     type="button"
@@ -2504,7 +2522,7 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
                     Edit
                   </button>
                   <button type="button" onClick={() => void remove(document)}>
-                    Delete
+                    Outdated
                   </button>
                 </div>
               </div>
@@ -2530,12 +2548,6 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
               Shared
             </button>
           </div>
-          <input
-            value={path}
-            onChange={(event) => setPath(event.target.value)}
-            placeholder="MEMORY.md"
-            className="h-9 w-full rounded-lg border border-[#202023] bg-[#141416] px-2.5 font-mono text-[13px] text-[#ECECEE] outline-none"
-          />
           <textarea
             value={content}
             onChange={(event) => setContent(event.target.value)}
@@ -2548,7 +2560,7 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
               type="button"
               variant="cream"
               size="sm"
-              disabled={busy || !content.trim() || !isMemoryPath(path)}
+              disabled={busy || !content.trim()}
               onClick={() => void create()}
             >
               Save
