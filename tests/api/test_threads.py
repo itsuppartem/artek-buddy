@@ -36,13 +36,23 @@ def test_scripted_turn_happy_and_fail(client, auth_header) -> None:
     assert "user" in roles
     assert "bot" in roles
 
+    first_run = snap["run"]["id"]
     fail = client.post(
         f"/v1/threads/{bot_id}/messages",
         headers=auth_header,
         json={"text": "please e2e-fail now"},
     )
     assert fail.status_code == 200
-    failed = _wait_run(client, auth_header, bot_id)
+    deadline = time.time() + 15
+    failed = None
+    while time.time() < deadline:
+        current = client.get(f"/v1/threads/{bot_id}", headers=auth_header).json()
+        run = current.get("run") or {}
+        if run.get("id") != first_run and run.get("status") in {"completed", "failed", "cancelled"}:
+            failed = current
+            break
+        time.sleep(0.15)
+    assert failed is not None, "fail turn did not start"
     assert failed["run"]["status"] == "failed"
 
 
