@@ -19,7 +19,7 @@ services:
       HTTP_PORT: "8080"
       DATABASE_URL: postgresql://artek:${MEMORY_DB_PASSWORD}@127.0.0.1:5432/artek_buddy
       SANDBOX_SUPERVISOR_URL: http://127.0.0.1:7091
-      SANDBOX_PROVIDER: docker
+      SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-docker}
       COMPUTER_IMAGE: artek-buddy-computer:ci
     volumes:
       - ${ARTEK_CI_WORKSPACE}:/workspace

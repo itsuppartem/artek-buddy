@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.conftest import mint_pairing_code
+from tests.live.helpers import pair_fresh
 
 pytestmark = pytest.mark.live
 
@@ -23,11 +22,7 @@ def test_pair_create_memory_routine_and_settings(
     client_url: str,
     host_url: str,
 ) -> None:
-    page.goto(client_url)
-    page.get_by_test_id("pairing").wait_for()
-    page.get_by_placeholder("https://host.example").fill(host_url)
-    page.get_by_placeholder("XXXX-XXXX").fill(mint_pairing_code())
-    page.get_by_role("button", name="Pair").click()
+    pair_fresh(page, client_url, host_url)
     expect(page.get_by_test_id("empty-bots")).to_be_visible(timeout=20_000)
 
     page.get_by_role("button", name="Create bot").click()
@@ -49,8 +44,6 @@ def test_pair_create_memory_routine_and_settings(
     page.get_by_role("button", name="Save").click()
     expect(page.get_by_test_id("routine-row")).to_contain_text("Morning")
 
-    page.locator("header, .flex").get_by_text("CI Team", exact=False).first.click()
-    # Open settings via the thread header name
     page.locator('[data-testid="thread-pane"] button').filter(has_text="CI Team").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     page.get_by_role("button", name="Edit Profile").click()
@@ -60,14 +53,8 @@ def test_pair_create_memory_routine_and_settings(
 
 
 def test_unpair_returns_to_pairing(page: Page, client_url: str, host_url: str) -> None:
-    page.goto(client_url)
-    if page.get_by_test_id("pairing").count():
-        page.get_by_placeholder("https://host.example").fill(host_url)
-        page.get_by_placeholder("XXXX-XXXX").fill(mint_pairing_code())
-        page.get_by_role("button", name="Pair").click()
-        page.get_by_test_id("thread-pane").wait_for(timeout=20_000)
-
-    # Force an auth error by wiping the stored device token, then reload.
+    pair_fresh(page, client_url, host_url)
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.evaluate(
         """() => fetch('/local/unpair', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})"""
     )

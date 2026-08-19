@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import os
-import subprocess
 
 import pytest
 
-from tests.support import mask_secret
-
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    if os.environ.get("ARTEK_LIVE") != "1":
-        skip = pytest.mark.skip(reason="live suite runs only on GitHub Actions with ARTEK_LIVE=1")
-        for item in items:
-            item.add_marker(skip)
+    live_on = os.environ.get("ARTEK_LIVE") == "1"
+    ui_on = os.environ.get("ARTEK_UI") == "1" or live_on
+    skip_ui = pytest.mark.skip(reason="UI suite runs on Actions with ARTEK_UI=1")
+    skip_model = pytest.mark.skip(reason="model suite runs on Actions with ARTEK_LIVE=1")
+    for item in items:
+        model = "model" in item.keywords
+        if model and not live_on:
+            item.add_marker(skip_model)
+        elif (not model) and ("live" in item.keywords) and not ui_on:
+            item.add_marker(skip_ui)
 
 
 @pytest.fixture(scope="session")
@@ -28,12 +31,8 @@ def host_url() -> str:
     return (os.environ.get("ARTEK_HOST_URL") or "http://127.0.0.1:8080").rstrip("/")
 
 
-def mint_pairing_code() -> str:
-    raw = subprocess.check_output(
-        ["docker", "exec", "artek-buddy", "python", "-m", "artek_buddy", "pair"],
-        text=True,
-        stderr=subprocess.DEVNULL,
-    )
-    code = raw.strip().splitlines()[0].strip()
-    mask_secret(code)
-    return code
+@pytest.fixture(autouse=True)
+def _unpair_between_tests(client_url: str) -> None:
+    from tests.live.helpers import reset_pairing
+
+    reset_pairing(client_url)

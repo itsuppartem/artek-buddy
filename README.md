@@ -275,11 +275,14 @@ Tests run in Actions on every pull request and on pushes to `develop` and `main`
 | Job | What |
 | --- | --- |
 | `backend` | pytest host modules + HTTP API (`AGENT_RUNTIME=scripted`) + `.deb` proxy unit tests + `tsc` |
-| `live` | install the built `.deb`, real computer image, your Cursor key, Playwright against `artek-buddy --serve` |
+| `ui` | always. Built `.deb` + `--serve` against a scripted host (no Cursor key). Pairing, bots, memory, routines, scripted chat / fail / consent |
+| `live` | only if `CURSOR_API_KEY` is set. Same `.deb`, real computer image, Grok turns (reply + Allow/Deny browse) |
+
+`ui` is the merge gate for the window. `live` is a canary: Grok can flake without hiding a broken shell. Fork pull requests do not see the secret, so `live` is skipped there.
 
 The repository is public. Workflows never `echo` secrets, never dump `env`, never run `docker compose config`, and never upload `.env`, client logs, or Playwright traces. Generated host/DB tokens are `::add-mask::`’d. Failure logs pass through `infra/ci-redact-logs.sh`.
 
-Add one repository secret: **`CURSOR_API_KEY`** (Settings → Secrets and variables → Actions). Same key/model as the Pi. Fork pull requests do not see it, so `live` is skipped there. Do not put the key in the workflow file, in `GITHUB_OUTPUT`, or in a commit.
+Add one repository secret: **`CURSOR_API_KEY`** (Settings → Secrets and variables → Actions). Same key/model as the Pi. Do not put the key in the workflow file, in `GITHUB_OUTPUT`, or in a commit.
 
 ## License
 
