@@ -1,0 +1,22 @@
+---
+description: All work goes through GitHub issues. Do not cite foreign GitHub repos.
+alwaysApply: true
+---
+
+# Issues first
+
+Development tasks and ideas start as a GitHub issue on this repo. Do not implement a new feature, test plan, or process change until there is an issue (or you are creating it in the same turn).
+
+- Open or reuse an issue, then a `feature/` / `fix/` branch, then a PR into `develop`.
+- Issue title and body stay English. Say what to do and how we will know it is done.
+- Link the PR to the issue (`Closes #N` or `Refs #N`).
+
+## Foreign GitHub repos
+
+If the user points at another GitHub repo as a reference, treat it as private inspiration.
+
+- Do **not** put that URL, owner, or repo name in issues, PR titles/bodies, commit messages, README, or comments.
+- Write the requirement in our words (`scripted window tests on every PR`, `split model canary`).
+- Do not add “like &lt;other project&gt;” even without a link.
+
+Attribution that already lives in `NOTICE` / `README` stays there. Do not spread it.

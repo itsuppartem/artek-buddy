@@ -1,0 +1,41 @@
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+# Never inherit the Pi .env / ./data / live DATABASE_URL.
+if os.environ.get("ARTEK_LIVE") != "1":
+    _root = Path(tempfile.mkdtemp(prefix="artek-pytest-"))
+    os.environ["AGENT_HTTP_TOKEN"] = "ci-host-token-aabbccddeeff001122334455"
+    os.environ["AGENT_RUNTIME"] = "scripted"
+    os.environ["SANDBOX_PROVIDER"] = "fake"
+    os.environ["CONSENT_AUTO"] = "ask"
+    os.environ["CURSOR_API_KEY"] = ""
+    os.environ["CURSOR_MODEL"] = "scripted"
+    os.environ["DATABASE_URL"] = os.environ.get(
+        "ARTEK_TEST_DATABASE_URL",
+        "postgresql://artek:ci-postgres-only@127.0.0.1:5432/artek_buddy",
+    )
+    os.environ["AGENT_DATA_DIR"] = str(_root / "data")
+    os.environ["AGENT_CWD"] = str(_root / "workspace")
+    (_root / "data").mkdir()
+    (_root / "workspace").mkdir()
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+import pytest
+
+
+@pytest.fixture
+def host_token() -> str:
+    return os.environ["AGENT_HTTP_TOKEN"]
+
+
+@pytest.fixture
+def auth_header(host_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {host_token}"}

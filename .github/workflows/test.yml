@@ -1,0 +1,412 @@
+name: test
+
+# Public repo: never echo secrets, never `env`, never `docker compose config`,
+# never upload .env / client.log / Playwright traces. Generated tokens are masked.
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: artek_buddy
+          POSTGRES_USER: artek
+          POSTGRES_PASSWORD: ci-postgres-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U artek -d artek_buddy"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      ARTEK_TEST_DATABASE_URL: postgresql://artek:ci-postgres-only@127.0.0.1:5432/artek_buddy
+      AGENT_HTTP_TOKEN: ci-host-token-aabbccddeeff001122334455
+      AGENT_RUNTIME: scripted
+      SANDBOX_PROVIDER: fake
+      CURSOR_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/web/package-lock.json
+
+      - name: Install and test
+        run: |
+          set +x
+          python -m pip install -r requirements-dev.txt
+          python -m pytest tests/unit tests/api tests/client
+          (cd client/web && npm ci && npm run check)
+
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      ARTEK_UI: "1"
+      ARTEK_HOST_URL: http://127.0.0.1:8080
+      COMPOSE_FILE: docker-compose.ci.yml
+      SANDBOX_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/web/package-lock.json
+
+      - name: Mint ephemeral secrets
+        run: |
+          set +x
+          TOKEN=$(openssl rand -hex 24)
+          DBPASS=$(openssl rand -hex 16)
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$DBPASS"
+          umask 077
+          {
+            printf 'AGENT_HTTP_TOKEN=%s\n' "$TOKEN"
+            printf 'MEMORY_DB_PASSWORD=%s\n' "$DBPASS"
+            printf 'AGENT_RUNTIME=scripted\n'
+            printf 'SANDBOX_PROVIDER=fake\n'
+            printf 'CURSOR_API_KEY=\n'
+            printf 'CONSENT_AUTO=ask\n'
+          } > "$RUNNER_TEMP/artek.env"
+          {
+            echo "AGENT_HTTP_TOKEN=$TOKEN"
+            echo "MEMORY_DB_PASSWORD=$DBPASS"
+            echo "ARTEK_CI_ENV=$RUNNER_TEMP/artek.env"
+            echo "ARTEK_CI_DATA=$RUNNER_TEMP/artek-data"
+            echo "ARTEK_CI_WORKSPACE=$RUNNER_TEMP/artek-workspace"
+            echo "ARTEK_CLIENT_HOME=$RUNNER_TEMP/owner-home"
+            echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/ms-playwright"
+          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/artek-data" "$RUNNER_TEMP/artek-workspace" "$RUNNER_TEMP/owner-home/Downloads"
+          printf 'ci notes\n' > "$RUNNER_TEMP/owner-home/notes.txt"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('requirements-dev.txt') }}
+
+      - name: Pin Ubuntu apt mirrors
+        run: |
+          set +x
+          sudo find /etc/apt/sources.list.d -maxdepth 1 \( -type f -o -type l \) \
+            ! -name 'ubuntu*' -exec rm -f {} +
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf '%s\n' \
+              $'http://archive.ubuntu.com/ubuntu/\tpriority:1' \
+              $'http://security.ubuntu.com/ubuntu/\tpriority:2' \
+              | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          for src in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.list; do
+            if [ -f "$src" ]; then
+              sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' "$src"
+            fi
+          done
+
+      - name: Build host image
+        run: |
+          set +x
+          docker build -t artek-buddy:ci .
+
+      - name: Start stack
+        run: |
+          set +x
+          docker compose -f docker-compose.ci.yml up -d
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "host did not become healthy"
+          chmod +x infra/ci-redact-logs.sh
+          infra/ci-redact-logs.sh compose
+          exit 1
+
+      - name: Install client .deb
+        timeout-minutes: 20
+        run: |
+          set +x
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update -o Acquire::ForceIPv4=true
+          sudo apt-get install -y --no-install-recommends \
+            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils libnotify-bin \
+            libnss3 libnspr4 libgbm1 libasound2t64 libatk-bridge2.0-0 libxkbcommon0 \
+            libxcomposite1 libxdamage1 libxrandr2 libcups2
+          unset ARTEK_BAKE_URL
+          client/build-deb.sh
+          sudo dpkg -i "artek-buddy-client_$(tr -d '[:space:]' < VERSION)_all.deb"
+          sudo apt-get install -f -y
+
+      - name: Serve packaged client
+        timeout-minutes: 10
+        run: |
+          set +x
+          python -m pip install -r requirements-dev.txt
+          python -m playwright install chromium chromium-headless-shell
+          export HOME="$ARTEK_CLIENT_HOME"
+          mkdir -p "$HOME/.config/artek-buddy"
+          umask 077
+          printf 'http://127.0.0.1:8080\n' > "$HOME/.config/artek-buddy/url"
+          nohup artek-buddy --serve --port 4173 > "$RUNNER_TEMP/client-serve.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/client.pid"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173/local/status >/dev/null; then
+              echo "ARTEK_CLIENT_URL=http://127.0.0.1:4173" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "client proxy did not start"
+          sed -E 's/crsr_[A-Za-z0-9_-]+/[redacted]/g; s/Bearer [^[:space:]]+/Bearer [redacted]/g' "$RUNNER_TEMP/client-serve.log" || true
+          exit 1
+
+      - name: Scripted UI
+        timeout-minutes: 15
+        env:
+          ARTEK_UI: "1"
+        run: |
+          set +x
+          export HOME="$ARTEK_CLIENT_HOME"
+          python -m pytest tests/live -m "live and not model" --browser chromium -q
+
+      - name: Redacted logs on failure
+        if: failure()
+        run: |
+          set +x
+          chmod +x infra/ci-redact-logs.sh
+          infra/ci-redact-logs.sh compose
+          if [ -f "$RUNNER_TEMP/client-serve.log" ]; then
+            infra/ci-redact-logs.sh < "$RUNNER_TEMP/client-serve.log"
+          fi
+
+      - name: Stop stack
+        if: always()
+        run: |
+          set +x
+          if [ -f "$RUNNER_TEMP/client.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/client.pid")" 2>/dev/null || true
+          fi
+          docker compose -f docker-compose.ci.yml down -v --remove-orphans || true
+          rm -f "$RUNNER_TEMP/artek.env"
+
+  live_gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
+    steps:
+      - id: gate
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          set +x
+          if [ -n "$CURSOR_API_KEY" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  live:
+    needs: live_gate
+    if: needs.live_gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      ARTEK_LIVE: "1"
+      ARTEK_HOST_URL: http://127.0.0.1:8080
+      COMPOSE_FILE: docker-compose.ci.yml
+      SANDBOX_PROVIDER: docker
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/web/package-lock.json
+
+      - name: Mint ephemeral secrets
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          set +x
+          TOKEN=$(openssl rand -hex 24)
+          DBPASS=$(openssl rand -hex 16)
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$DBPASS"
+          umask 077
+          {
+            printf 'AGENT_HTTP_TOKEN=%s\n' "$TOKEN"
+            printf 'MEMORY_DB_PASSWORD=%s\n' "$DBPASS"
+            printf 'CURSOR_API_KEY=%s\n' "$CURSOR_API_KEY"
+            printf 'AGENT_RUNTIME=cursor\n'
+            printf 'SANDBOX_PROVIDER=docker\n'
+            printf 'CURSOR_MODEL=grok-4.6\n'
+            printf 'CURSOR_MODEL_EFFORT=xhigh\n'
+            printf 'CURSOR_MODEL_FAST=true\n'
+            printf 'CONSENT_AUTO=\n'
+          } > "$RUNNER_TEMP/artek.env"
+          {
+            echo "AGENT_HTTP_TOKEN=$TOKEN"
+            echo "MEMORY_DB_PASSWORD=$DBPASS"
+            echo "ARTEK_CI_ENV=$RUNNER_TEMP/artek.env"
+            echo "ARTEK_CI_DATA=$RUNNER_TEMP/artek-data"
+            echo "ARTEK_CI_WORKSPACE=$RUNNER_TEMP/artek-workspace"
+            echo "ARTEK_CLIENT_HOME=$RUNNER_TEMP/owner-home"
+            echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/ms-playwright"
+          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/artek-data" "$RUNNER_TEMP/artek-workspace" "$RUNNER_TEMP/owner-home/Downloads"
+          printf 'ci notes\n' > "$RUNNER_TEMP/owner-home/notes.txt"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('requirements-dev.txt') }}
+
+      - name: Pin Ubuntu apt mirrors
+        run: |
+          set +x
+          sudo find /etc/apt/sources.list.d -maxdepth 1 \( -type f -o -type l \) \
+            ! -name 'ubuntu*' -exec rm -f {} +
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf '%s\n' \
+              $'http://archive.ubuntu.com/ubuntu/\tpriority:1' \
+              $'http://security.ubuntu.com/ubuntu/\tpriority:2' \
+              | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          for src in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.list; do
+            if [ -f "$src" ]; then
+              sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' "$src"
+            fi
+          done
+
+      - name: Build images
+        run: |
+          set +x
+          docker build -t artek-buddy:ci .
+          docker build -t artek-buddy-computer:ci ./infra/computer
+
+      - name: Start stack
+        run: |
+          set +x
+          docker compose -f docker-compose.ci.yml up -d
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "host did not become healthy"
+          chmod +x infra/ci-redact-logs.sh
+          infra/ci-redact-logs.sh compose
+          exit 1
+
+      - name: Install client .deb
+        timeout-minutes: 20
+        run: |
+          set +x
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update -o Acquire::ForceIPv4=true
+          sudo apt-get install -y --no-install-recommends \
+            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils libnotify-bin \
+            libnss3 libnspr4 libgbm1 libasound2t64 libatk-bridge2.0-0 libxkbcommon0 \
+            libxcomposite1 libxdamage1 libxrandr2 libcups2
+          unset ARTEK_BAKE_URL
+          client/build-deb.sh
+          sudo dpkg -i "artek-buddy-client_$(tr -d '[:space:]' < VERSION)_all.deb"
+          sudo apt-get install -f -y
+
+      - name: Serve packaged client
+        timeout-minutes: 10
+        run: |
+          set +x
+          python -m pip install -r requirements-dev.txt
+          python -m playwright install chromium chromium-headless-shell
+          export HOME="$ARTEK_CLIENT_HOME"
+          mkdir -p "$HOME/.config/artek-buddy"
+          umask 077
+          printf 'http://127.0.0.1:8080\n' > "$HOME/.config/artek-buddy/url"
+          nohup artek-buddy --serve --port 4173 > "$RUNNER_TEMP/client-serve.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/client.pid"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173/local/status >/dev/null; then
+              echo "ARTEK_CLIENT_URL=http://127.0.0.1:4173" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "client proxy did not start"
+          sed -E 's/crsr_[A-Za-z0-9_-]+/[redacted]/g; s/Bearer [^[:space:]]+/Bearer [redacted]/g' "$RUNNER_TEMP/client-serve.log" || true
+          exit 1
+
+      - name: Live model
+        timeout-minutes: 45
+        env:
+          ARTEK_LIVE: "1"
+        run: |
+          set +x
+          export HOME="$ARTEK_CLIENT_HOME"
+          python -m pytest tests/live -m model --browser chromium -q
+
+      - name: Redacted logs on failure
+        if: failure()
+        run: |
+          set +x
+          chmod +x infra/ci-redact-logs.sh
+          infra/ci-redact-logs.sh compose
+          if [ -f "$RUNNER_TEMP/client-serve.log" ]; then
+            infra/ci-redact-logs.sh < "$RUNNER_TEMP/client-serve.log"
+          fi
+
+      - name: Stop stack
+        if: always()
+        run: |
+          set +x
+          if [ -f "$RUNNER_TEMP/client.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/client.pid")" 2>/dev/null || true
+          fi
+          docker compose -f docker-compose.ci.yml down -v --remove-orphans || true
+          rm -f "$RUNNER_TEMP/artek.env"
