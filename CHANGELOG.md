@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Client window map in `client/WINDOW.md` (pairing, shell, thread blocks, computer pane).
+
 ### Removed
 - The host, Vitest, Playwright, integration, and demo-recorder suite. GitHub no longer runs a `test` job. The suite will be rewritten from scratch.
 

@@ -6,6 +6,8 @@ Source: `artek_buddy.py` plus `web/`. Version: same as the product (`../VERSION`
 The window is the product shell: pairing, bot list, thread, computer pane. It talks to
 the host through a loopback proxy so the token never sits in the page.
 
+Window map (screens, controls, thread blocks): [WINDOW.md](WINDOW.md).
+
 ## Build and install
 
 GitHub Releases attach `artek-buddy-client_<version>_all.deb` when `VERSION` is bumped on `main`. Those packages do not bake a host URL. You can still build a local owner `.deb` (do not commit it).
