@@ -7,7 +7,7 @@ alwaysApply: true
 
 If the change touches the desktop shell UI, build a new `.deb` in the same turn. Do not wait for the user to ask.
 
-Counts as UI: `client/web/src/**`, `client/web/e2e/**`, `client/artek_buddy.py`, `client/url`, `client/VERSION`.
+Counts as UI: `client/web/src/**`, `client/artek_buddy.py`, `client/url`, `client/VERSION`.
 
 ```bash
 client/build-deb.sh

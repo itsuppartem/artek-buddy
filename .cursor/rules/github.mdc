@@ -31,8 +31,7 @@ Small owner work may commit on `develop` and push `origin develop`. That is the 
 
 1. Bump the one product version when behavior ships (`VERSION`, `src/artek_buddy/__init__.py`, `client/VERSION`).
 2. Update `README.md` in the same change: version, what a user can do, install example (`.deb` filename), compose/env if those changed.
-3. Run `make test`. If the window changed, also `make test-ui`. If tests fail, do not commit.
-4. Follow [precommit-hygiene.mdc](precommit-hygiene.mdc). Do not commit secrets.
+3. Follow [precommit-hygiene.mdc](precommit-hygiene.mdc). Do not commit secrets. The old test suite is gone.
 
 ## Do not commit
 

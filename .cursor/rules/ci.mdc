@@ -1,19 +1,8 @@
 ---
-description: Watch GitHub Actions and keep them green.
+description: Watch GitHub Actions and keep release.yml green.
 alwaysApply: true
 ---
 
 # GitHub Actions
 
-After a push or PR, check `gh run list` / `gh run view --log-failed`. If a workflow is red, fix it in the same session and land the fix through `develop` → `main`. Do not leave failing `test` or `release` jobs.
-
-`make test` must include what CI runs: host unit, integration, Vitest, and `npm run check` (tsc). `make test` green locally is not enough if `npm run check` was skipped.
-
-```bash
-# ❌ BAD
-# commit after make test while Actions tsc is red
-
-# ✅ GOOD
-# gh run view <id> --log-failed
-# fix, make test, PR to develop, then develop → main
-```
+There is no `test` workflow. After a push or PR, check `gh run list`. If `release` is red or hung, fix it in the same session through `develop` → `main`.

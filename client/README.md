@@ -38,12 +38,6 @@ Token search: `~/.config/artek-buddy/token` only. The packaged client never read
 
 Host URL: `~/.config/artek-buddy/url`, then `/usr/lib/artek-buddy-client/url`, then `client/url`, then `ARTEK_BUDDY_URL`. Default is `http://127.0.0.1:8080`.
 
-## Tests
-
-`make test` (repo root) runs Vitest for `web/`. `make test-ui` builds the page and drives
-Playwright against a throwaway scripted host. It must not use this machine's live token
-or `:8080`. See [CONTRIBUTING.md](../CONTRIBUTING.md).
-
 ## Live now
 
 `bots.list` / `bots.create` / `bots.delete`, `threads.get` / `threads.messages` /

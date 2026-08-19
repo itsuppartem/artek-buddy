@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+- The host, Vitest, Playwright, integration, and demo-recorder suite. GitHub no longer runs a `test` job. The suite will be rewritten from scratch.
+
 ## [0.10.22] - 2026-08-19
 
 ### Added

@@ -30,9 +30,6 @@ workspace/*.py
 # desktop UI toolchain
 client/web/node_modules/
 client/web/dist/
-client/web/playwright-report/
-client/web/test-results/
-client/web/blob-report/
 
 # host-side Cursor leftover; the live agent prompt is workspace/AGENTS.md
 /AGENTS.md
