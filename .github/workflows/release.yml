@@ -1,10 +1,18 @@
 name: release
 
-# Starts only when a PR lands on main. A VERSION bump publishes
-# the GitHub Release, the clean .deb, and GHCR images.
+# Starts when a PR lands on main. A VERSION bump (or a manual Force run)
+# publishes the GitHub Release, the clean .deb, and the host GHCR image.
+# The computer image is not built here: Chromium under QEMU hangs the job.
+# install-host.sh pulls it when present, otherwise builds on the Pi.
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Publish even if VERSION did not change
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -14,6 +22,7 @@ jobs:
   release:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,13 +33,14 @@ jobs:
         run: |
           NEW=$(tr -d '[:space:]' < VERSION)
           OLD=$(git show HEAD^:VERSION 2>/dev/null | tr -d '[:space:]' || true)
+          FORCE="${{ github.event.inputs.force }}"
           echo "new=$NEW" >> "$GITHUB_OUTPUT"
-          if [ -n "$NEW" ] && [ "$NEW" != "$OLD" ]; then
+          if [ -n "$NEW" ] && { [ "$NEW" != "$OLD" ] || [ "$FORCE" = "true" ]; }; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "VERSION new=$NEW old=${OLD:-none} changed=$( [ "$NEW" != "$OLD" ] && echo true || echo false )"
+          echo "VERSION new=$NEW old=${OLD:-none} force=${FORCE:-false}"
 
       - uses: actions/setup-node@v4
         if: steps.ver.outputs.changed == 'true'
@@ -48,7 +58,7 @@ jobs:
           client/build-deb.sh
           test ! -f client/url || echo "client/url exists locally but must not be baked"
           python3 - <<'PY'
-          import subprocess, tarfile, io, sys
+          import subprocess, sys
           deb = f"artek-buddy-client_{open('VERSION').read().strip()}_all.deb"
           data = subprocess.check_output(["dpkg-deb", "-c", deb], text=True)
           if "./usr/lib/artek-buddy-client/url" in data:
@@ -82,18 +92,6 @@ jobs:
             ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}
             ghcr.io/itsuppartem/artek-buddy:latest
 
-      - name: Push computer image
-        if: steps.ver.outputs.changed == 'true'
-        continue-on-error: true
-        uses: docker/build-push-action@v6
-        with:
-          context: ./infra/computer
-          platforms: linux/arm64
-          push: true
-          tags: |
-            ghcr.io/itsuppartem/artek-buddy-computer:${{ steps.ver.outputs.new }}
-            ghcr.io/itsuppartem/artek-buddy-computer:latest
-
       - name: GitHub Release
         if: steps.ver.outputs.changed == 'true'
         env:
@@ -101,7 +99,12 @@ jobs:
         run: |
           TAG="v${{ steps.ver.outputs.new }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "release $TAG already exists"
+            gh release upload "$TAG" \
+              "artek-buddy-client_${{ steps.ver.outputs.new }}_all.deb" \
+              SHA256SUMS \
+              install-host.sh \
+              --clobber
+            echo "updated assets on $TAG"
             exit 0
           fi
           gh release create "$TAG" \

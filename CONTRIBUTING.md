@@ -68,8 +68,9 @@ Build on a machine with Node 22. Install on Debian/Ubuntu. Do not commit `*.deb`
 Daily work is a pull request **into `develop`**. `main` is release-only:
 open `develop` → `main` when shipping. Never push `main` directly.
 A merge into `main` that changes `VERSION` starts `.github/workflows/release.yml`
-(clean `.deb`, `install-host.sh`, GHCR images). Only the five newest Releases stay;
-`infra/prune-releases.sh` deletes the rest and matching GHCR tags.
+(clean `.deb`, `install-host.sh`, host GHCR image). The computer image is not
+built in Actions. Only the five newest Releases stay; `infra/prune-releases.sh`
+deletes the rest and matching GHCR tags.
 
 - One product version for host and client (`VERSION`,
   `src/artek_buddy/__init__.py`, `client/VERSION`).
