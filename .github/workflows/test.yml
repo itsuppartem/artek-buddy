@@ -62,8 +62,26 @@ jobs:
           python -m pytest tests/unit tests/api tests/client
           (cd client/web && npm ci && npm run check)
 
+  live_gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
+    steps:
+      - id: gate
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          set +x
+          if [ -n "$CURSOR_API_KEY" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
   live:
-    if: ${{ secrets.CURSOR_API_KEY != '' }}
+    needs: live_gate
+    if: needs.live_gate.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
