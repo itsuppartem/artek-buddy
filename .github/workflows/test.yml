@@ -4,9 +4,8 @@ name: test
 # never upload .env / client.log / Playwright traces. Generated tokens are masked.
 on:
   pull_request:
-    branches: [develop, main]
   push:
-    branches: [develop, main]
+  workflow_dispatch:
 
 permissions:
   contents: read
