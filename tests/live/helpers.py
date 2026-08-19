@@ -58,8 +58,8 @@ def ensure_bot(page: Page, name: str) -> None:
     rows = page.get_by_test_id("bot-row")
     expect(empty.or_(rows.first)).to_be_visible(timeout=20_000)
     if empty.count() and empty.first.is_visible():
-        page.get_by_role("button", name="Create bot").click()
+        page.get_by_role("button", name="Create bot", exact=True).click()
         page.get_by_placeholder("Name this bot").fill(name)
-        page.get_by_role("button", name="Create").click()
+        page.get_by_role("button", name="Create", exact=True).click()
     expect(rows.first).to_be_visible(timeout=20_000)
     composer(page).wait_for(timeout=20_000)
