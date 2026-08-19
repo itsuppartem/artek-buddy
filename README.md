@@ -80,7 +80,6 @@ The home stays on the Pi disk (`data/homes/{home_key}`). Rebooting the Pi, Stop,
 | Piece | Machine | You install |
 | --- | --- | --- |
 | Host stack (API, Postgres, supervisor, worker, computer image) | Raspberry Pi (or any Linux box you leave on) | Docker + Compose, `.env`, Tailscale |
-| Tests (`make test` / `make test-ui`) | Pi or a laptop with the repo | Python 3.13, Node 22, Docker. Never the live `:8080` stack |
 | `.deb` **build** | Pi or laptop | Node 22, `dpkg-deb` |
 | `.deb` **install** + daily window | Debian / Ubuntu PC | The package + Tailscale. Pairing talks to the Pi |
 
@@ -262,36 +261,6 @@ Put that URL in the client (`client/url` or the pair form). **Never commit the h
 | Client log | `~/.config/artek-buddy/client.log` |
 
 The worker (`artek-buddy-worker`) wakes due routines through the same `threads.send` path. No extra GUI.
-
-## Tests
-
-Run tests from the **repo root** on a machine that is allowed to start throwaway Docker containers. The Pi is fine. **Do not** point tests at the live owner stack (`:8080` or Postgres `127.0.0.1:5432/artek_buddy`).
-
-| Command | What it runs | Where / extras | Required |
-| --- | --- | --- | --- |
-| `make test` | Host `unittest` + throwaway Postgres integration + Vitest | Repo root. Python 3.13, `pip install -r requirements.txt` (or `.venv`), Docker, Node 22 | Every change. GitHub Actions runs this. |
-| `make test-ui` | Vite build + Playwright against a scripted host | Repo root. Same as above, plus a browser for Playwright. Host is `127.0.0.1:18080`, token `ui-e2e-token` | Desktop UI / flow changes. Not in CI. |
-| `make demo` | Same throwaway host pattern, records `media/demo.mp4` | Host is `127.0.0.1:18081`. Optional `ffmpeg` for the MP4 | README video. Not in CI. |
-
-```bash
-# once per machine
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-cd client/web && npm ci && cd ../..
-
-make test      # host unit + isolated Postgres on loopback :55432 + npm test
-make test-ui   # builds client/web, then tests/run_ui.py (never live :8080)
-```
-
-Details:
-
-- `PYTHONPATH=src`. Unit tests use `ScriptedRuntime`. They do not call Cursor Cloud and do not need `.env`.
-- Integration (`tests/run_integration.py`) starts `postgres:16-alpine` as `artek-buddy-test-pg` on **55432**, database `artek_buddy_test`. It **refuses** the live compose URL. CI uses its own service container and `TEST_DATABASE_URL`.
-- `make test-ui` starts another throwaway Postgres on **55433**, a scripted FastAPI on **18080**, and `artek_buddy.py --serve` with a throwaway `HOME`. It never reads `~/.config/artek-buddy/token`. Screenshots land in `client/web/test-results/` (gitignored). `npx playwright test` without `make test-ui` is refused.
-- Host tests: `tests/test_*.py`. Client unit: `client/web/src/**/*.test.ts`. Window flows: `client/web/e2e/*.spec.ts`.
-- Do not set `TEST_DATABASE_URL` to the owner database.
-
-More: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Version
 
