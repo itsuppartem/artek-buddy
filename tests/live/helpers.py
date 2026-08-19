@@ -33,6 +33,10 @@ def reset_pairing(client_url: str) -> None:
         return
 
 
+def bot_row(page: Page, name: str):
+    return page.locator(f'[data-testid="bot-row"][data-bot-name="{name}"]')
+
+
 def composer(page: Page):
     return page.get_by_role("textbox", name="Message")
 
@@ -61,7 +65,7 @@ def create_named_bot(page: Page, name: str) -> None:
         page.get_by_title("New bot").click()
     page.get_by_placeholder("Name this bot").fill(name)
     page.get_by_role("button", name="Create", exact=True).click()
-    expect(page.get_by_test_id("bot-row")).to_contain_text(name, timeout=20_000)
+    expect(bot_row(page, name)).to_be_visible(timeout=20_000)
     composer(page).wait_for(timeout=20_000)
 
 
