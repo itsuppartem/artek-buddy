@@ -1,18 +1,37 @@
 ---
-description: GitHub is the remote. English commits and docs.
+description: GitHub is the remote. Work on develop. Never push main.
 alwaysApply: true
 ---
 
 # GitHub workflow
 
-This repo lives on GitHub: `git@github.com:itsuppartem/artek-buddy.git` (`origin`, branch `main`).
+This repo lives on GitHub: `git@github.com:itsuppartem/artek-buddy.git`.
+
+| Branch | Role |
+| --- | --- |
+| `develop` | Daily work. Default branch. |
+| `main` | Released product only. |
+
+## Never
+
+- Do not `git push` to `main` or `master`. Not even a fast-forward.
+- Do not commit on `main`. If you are on `main`, switch to `develop` or a feature branch first.
+- Do not open a feature PR against `main`.
+
+## Flow
+
+1. Branch from current `develop` (`feature/…` or `fix/…`).
+2. Commit there. Push that branch. Open a pull request **into `develop`**.
+3. A release is a pull request **`develop` → `main`**. Merge on GitHub. Never push `main`.
+
+Small owner work may commit on `develop` and push `origin develop`. That is the only branch that may be pushed without a PR.
 
 ## After a finished change
 
 1. Bump the one product version when behavior ships (`VERSION`, `src/artek_buddy/__init__.py`, `client/VERSION`).
 2. Update `README.md` in the same change: version, what a user can do, install example (`.deb` filename), compose/env if those changed.
 3. Run `make test`. If the window changed, also `make test-ui`. If tests fail, do not commit.
-3. Follow [precommit-hygiene.mdc](precommit-hygiene.mdc). Do not commit secrets.
+4. Follow [precommit-hygiene.mdc](precommit-hygiene.mdc). Do not commit secrets.
 
 ## Do not commit
 

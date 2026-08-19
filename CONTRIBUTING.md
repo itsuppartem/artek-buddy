@@ -11,11 +11,12 @@ the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 ## How to work
 
 1. Read [README.md](README.md), [CHANGELOG.md](CHANGELOG.md), and [SECURITY.md](SECURITY.md).
-2. Keep JSON on the wire `snake_case`.
-3. Do not add a second model provider. Cursor Cloud is the live runtime;
+2. Branch from `develop`. Do not commit or push `main`.
+3. Keep JSON on the wire `snake_case`.
+4. Do not add a second model provider. Cursor Cloud is the live runtime;
    `ScriptedRuntime` is for tests.
-4. Do not add a vendor cloud desktop or a laptop sandbox.
-5. Write the test in the same change as the code.
+5. Do not add a vendor cloud desktop or a laptop sandbox.
+6. Write the test in the same change as the code.
 
 ## Tests
 
@@ -63,6 +64,9 @@ Build on a machine with Node 22. Install on Debian/Ubuntu. Do not commit `*.deb`
   their own.
 
 ## Pull requests
+
+Daily work is a pull request **into `develop`**. `main` is release-only:
+open `develop` → `main` when shipping. Never push `main` directly.
 
 - One product version for host and client (`VERSION`,
   `src/artek_buddy/__init__.py`, `client/VERSION`).
