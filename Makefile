@@ -26,7 +26,7 @@ test-integration: ensure-host-py
 	$(host-py) tests/run_integration.py
 
 test-web:
-	cd client/web && npm test
+	cd client/web && npm test && npm run check
 
 test-ui: ensure-host-py
 	cd client/web && npm run build

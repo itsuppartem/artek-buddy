@@ -14,7 +14,7 @@ A finished change includes tests. Do not commit if they fail.
 - Playwright (`make test-ui`) uses its own throwaway host (`tests/run_ui.py`). It must never use compose `:8080`, the live database, or the owner device token.
 - Unit tests must not need the live host, Funnel, a token, or Postgres.
 - Integration tests must delete the bots, devices, pairing rows, and routines they create.
-- Before commit: run `make test` and `make test-ui` locally. Also GitHub Actions on `main` / PRs.
+- Before commit: run `make test` (includes `npm run check`) and `make test-ui` if the window changed. Watch GitHub Actions and fix red jobs.
 - Do not put the runner in `scripts/` (that folder is not in git).
 
 ```text

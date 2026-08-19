@@ -180,8 +180,8 @@ export async function readClipboardFiles(event?: {
 }): Promise<File[]> {
   const sync = event ? pastedFiles(event) : [];
   if (sync.length) return sync;
-  const clipboard = globalThis.navigator?.clipboard as
-    | { read?: () => Promise<Array<{ types: string[]; getType: (type: string) => Promise<Blob> }>> }
+  const clipboard = globalThis.navigator?.clipboard as unknown as
+    | { read?: () => Promise<Array<{ types: readonly string[]; getType: (type: string) => Promise<Blob> }>> }
     | undefined;
   if (!clipboard || typeof clipboard.read !== "function") return [];
   try {
