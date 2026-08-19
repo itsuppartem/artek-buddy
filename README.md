@@ -27,14 +27,18 @@ The result is **your Cursor key, your model quota, your Pi, and your client**. T
 ## What you can do today
 
 - **Keep separate agents for separate responsibilities.** Create bots for research, recurring monitoring, coding or operations tasks, or a personal assistant. Each bot has an independent thread, profile, memory, schedule, and desktop mode.
-- **Give an agent a real Linux workspace.** A bot can open URLs and local paths, launch or close graphical apps, inspect its screen, and interact with a Chromium desktop on this Pi. You can watch the view-only preview or take control when the agent needs you to complete a login, CAPTCHA, payment, or other human-only step. **Team** bots share one desktop; **Private** gives that bot its own container — see below.
+- **Give an agent a real Linux workspace.** A bot can open URLs and local paths, launch or close graphical apps, inspect its screen, and interact with a Chromium desktop on this Pi. Opening a website, filling a form, clicking, or typing shows **Allow once / Always / Deny** in the thread and does not run until you answer. You can watch the view-only preview or take control when the agent needs you to complete a login, CAPTCHA, payment, or other human-only step. **Team** bots share one desktop; **Private** gives that bot its own container — see below.
+- **Let an agent work on this Linux PC like SSH.** After you pair the `.deb`, it can read a file or list a folder under your home without a card. Writing a file or running a command that can change the PC asks **Allow once / Always / Deny** once for that bot — Always covers later writes and commands on this PC. Read-only shell (`ls`, `cat`, `echo`, …) does not ask. The host token never appears in the page. This is not a VNC of the laptop.
 - **Run work without keeping your laptop on.** The Pi runs the host continuously. Routine prompts run on a cron schedule; idle desktops sleep automatically.
 - **Retain useful context from chat.** Talk normally — name, city, tone, repo, a standing rule for this bot. The host writes a short card; there is no profile form. Every bot sees the owner book. Work notes (repo, branch) come back when the turn is about that work. A chat-local charter stays on that bot. The Memory panel shows the same cards. Replayable skills are later.
-- **Work on more than one thing at a time.** A lead agent can create workers for distinct tasks, show their progress in the chat, and stop, restart, or steer a worker when requirements change. Messages sent while a lead is busy are queued rather than lost.
+- **Work on more than one thing at a time.** A lead agent can create workers for distinct tasks, show their progress in the chat, and stop, restart, or steer a worker when requirements change. A message sent while a lead is working is injected at the next tool (like Codex steer / Grok follow-up). If nothing is left to inject, it runs as a follow-up after the turn.
 - **Use a chat that can ask back.** Agents can post a useful intermediate update, show multiple-choice question cards, and wait for your answer. Completed answers and actions stay in the thread history.
+- **Attach a file or a screenshot to the next send.** Plus, drop, or Ctrl+V. Copying a file on this PC (not only a screenshot) attaches the file — not the path as text. Images, video, and audio show a preview in the composer before you press Enter. The host copies them into that bot’s `inbox/`. Deleting the chat removes that chat’s inbox copies; a shared Team home and other bots’ files stay.
+- **Open the sandbox home on the desktop.** Take control, then right-click → **Files** (PCManFM). The computer pane is screen, memory, and routines — not a second file list.
+- **Download a file the agent made.** The bot posts a file card in the thread. Pictures, video, and audio show a preview there. Download opens the system Save dialog (Downloads / Загрузки by default). The copy stays on the Pi with that chat.
 - **Use the same agent from your Linux PC securely.** Pair the desktop window once over Tailscale. The client holds a device token; the Pi's host token and Docker access never leave the Pi.
 
-Typical uses include: a morning briefing routine, a research bot that opens sources on its desktop, a project assistant that remembers repository conventions, a long-running task delegated to workers, or a desktop automation task where you take over only for the final human step.
+Typical uses include: a morning briefing routine, a research bot that opens sources on its desktop after you Allow the site, a project assistant that remembers repository conventions, a bot that reads a notes file from your PC, a long-running task delegated to workers, or a desktop automation task where you take over only for the final human step.
 
 ### Team vs Private computer
 
@@ -205,7 +209,7 @@ That writes `artek-buddy-client_<version>_all.deb` in the repo root (gitignored)
 On the desktop PC:
 
 ```bash
-sudo dpkg -i artek-buddy-client_0.9.5_all.deb
+sudo dpkg -i artek-buddy-client_0.10.21_all.deb
 sudo apt-get install -f
 ```
 
@@ -222,7 +226,7 @@ Open **Artek Buddy** from the app menu (or `artek-buddy`).
 3. Device name (this computer).
 4. **Pair**.
 
-The window stores `~/.config/artek-buddy/{token,url}` (mode `600`). Then: **+** to create a bot, type in the composer, Enter to send. More client notes: [client/README.md](client/README.md).
+The window stores `~/.config/artek-buddy/{token,url}` (mode `600`). Then: **+** to create a bot, type in the composer, Shift+Enter for a new line, Enter to send. More client notes: [client/README.md](client/README.md).
 
 ### 6. Optional public HTTPS (Tailscale Funnel)
 
@@ -284,7 +288,7 @@ More: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Version
 
-`0.9.5` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md). How to report a vuln: [SECURITY.md](SECURITY.md).
+`0.10.21` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md). How to report a vuln: [SECURITY.md](SECURITY.md).
 
 Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel hostnames, local compose (`docker-compose.local.yml`), or local tooling.
 

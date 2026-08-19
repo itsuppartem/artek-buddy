@@ -21,8 +21,24 @@ _BROWSER_APPS = frozenset(
 )
 
 
+_FILE_APPS = frozenset(
+    {
+        "files",
+        "file-manager",
+        "filemanager",
+        "pcmanfm",
+        "thunar",
+        "nautilus",
+    }
+)
+
+
 def _is_browser_app(name: str) -> bool:
     return name.strip().lower() in _BROWSER_APPS
+
+
+def _is_files_app(name: str) -> bool:
+    return name.strip().lower() in _FILE_APPS
 
 
 def _close_app_command(raw_app: str) -> str:
@@ -37,6 +53,8 @@ def _close_app_command(raw_app: str) -> str:
             "pkill -x \"$comm\" >/dev/null 2>&1 || true; "
             "done"
         )
+    if _is_files_app(raw_app):
+        raw_app = "pcmanfm"
     safe = re.sub(r"[^A-Za-z0-9._+-]", "", raw_app.strip())
     if not safe:
         return "true"
@@ -179,7 +197,12 @@ def action_command(actions: list[dict]) -> str:
                     parts.append(f"nohup xdg-open {shell_quote(path)} >/tmp/artek/open.log 2>&1 &")
         elif kind == "launch":
             raw_app = str(item.get("name") or item.get("application") or "artek-browser").strip()
-            app = "artek-browser" if _is_browser_app(raw_app) else raw_app
+            if _is_browser_app(raw_app):
+                app = "artek-browser"
+            elif _is_files_app(raw_app):
+                app = "pcmanfm"
+            else:
+                app = raw_app
             uri = str(item.get("uri") or item.get("url") or "").strip()
             if uri:
                 parts.append(f"nohup {shell_quote(app)} {shell_quote(uri)} >/tmp/artek/launch.log 2>&1 &")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from artek_buddy.contracts.events import ThreadMessage
 from artek_buddy.contracts.ids import Id, MemoryScope, RunStatus, SandboxKind
@@ -233,6 +233,10 @@ class Artifact(BaseModel):
     created_at: str
 
 
+class ArtifactList(BaseModel):
+    artifacts: list[Artifact]
+
+
 class UsageRecord(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -285,6 +289,7 @@ class ComputerFileEntry(BaseModel):
     path: str
     kind: str
     size: int = 0
+    name: str = ""
 
 
 class ComputerFileList(BaseModel):
@@ -479,12 +484,48 @@ class ThreadMessagesInput(BaseModel):
     limit: int = 50
 
 
+class ThreadAttachmentInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    name: str = Field(min_length=1, max_length=200)
+    content_base64: str = Field(min_length=1)
+    mime_type: str | None = None
+
+
+class HostedAttachment(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: Id
+    name: str
+    mime_type: str
+    size: int
+    path: str
+
+
+class AttachmentList(BaseModel):
+    attachments: list[HostedAttachment]
+
+
+class AttachmentUploadInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    files: list[ThreadAttachmentInput]
+
+
 class ThreadSendInput(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    text: str = Field(min_length=1)
+    text: str = ""
     trigger: Literal["user", "routine", "resume", "follow_up", "spawn"] = "user"
     reply_to_id: Id | None = None
+    attachment_ids: list[Id] = Field(default_factory=list)
+    attachments: list[ThreadAttachmentInput] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def need_text_or_files(self) -> ThreadSendInput:
+        if not self.text.strip() and not self.attachment_ids and not self.attachments:
+            raise ValueError("text or attachments required")
+        return self
 
 
 class ThreadFollowUpInput(BaseModel):
@@ -501,6 +542,52 @@ class ThreadAnswerInput(BaseModel):
     run_id: Id
     message_id: Id
     answer: str = Field(min_length=1)
+
+
+class ConsentAnswerInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    decision: str = Field(min_length=1)
+
+
+class ConsentFileInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    name: str = Field(min_length=1)
+    text: str | None = None
+    content_base64: str | None = None
+
+
+class ConsentJob(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: Id
+    action_class: str
+    status: str = "pending"
+    path: str | None = None
+    command: str | None = None
+    cwd: str | None = None
+    kind: str | None = None
+    text: str | None = None
+    content_base64: str | None = None
+    summary: str | None = None
+    scope_key: str | None = None
+
+
+class ConsentResultInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    ok: bool = True
+    name: str | None = None
+    text: str | None = None
+    content_base64: str | None = None
+    stdout: str | None = None
+    stderr: str | None = None
+    exit_code: int | None = None
+    path: str | None = None
+    bytes: int | None = None
+    entries: list[dict[str, Any]] | None = None
+    error: str | None = None
 
 
 class ThreadSendResult(BaseModel):

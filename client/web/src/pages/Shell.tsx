@@ -1,5 +1,8 @@
 import {
+  type ClipboardEvent,
   type Dispatch,
+  type DragEvent,
+  type KeyboardEvent,
   type MouseEvent,
   type RefObject,
   type SetStateAction,
@@ -11,6 +14,20 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { abortableDelay, api, classifyError, isActive, type ShellErrorKind } from "../api";
+import { completeOwnerConsent, fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/consent";
+import {
+  addPendingFiles,
+  clipboardFilePaths,
+  clipboardHasAttachable,
+  droppedFiles,
+  filesFromAttachedPayload,
+  pastedFiles,
+  previewKind,
+  readClipboardFiles,
+  readFileBase64,
+  transferFilePaths,
+  type PendingFile,
+} from "../lib/uploads";
 import { isCronShape } from "../lib/cron";
 import { filterBots, inboxEmptyState, type SidebarView } from "../lib/sidebar";
 import {
@@ -35,6 +52,15 @@ import {
   type AttentionAlert,
 } from "../lib/alerts";
 import { ChatMarkdown } from "../lib/chat-markdown";
+import {
+  composerRedo,
+  composerUndo,
+  composerUndoKind,
+  createComposerHistory,
+  pushComposerChange,
+  resetComposerHistory,
+} from "../lib/composer-undo";
+import { artifactUrl, DownloadCancelled, downloadArtifact, formatBytes } from "../lib/files";
 import { stripMarkdown } from "../lib/markdown";
 import {
   isComputerStatusEvent,
@@ -73,6 +99,12 @@ export function ShellPage() {
   const [sidebarView, setSidebarView] = useState<SidebarView>("inbox");
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const [draft, setDraft] = useState("");
+  const draftHistory = useRef(createComposerHistory(""));
+  const draftChangeAt = useRef(0);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>("computer");
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
@@ -108,6 +140,7 @@ export function ShellPage() {
   const [replyTo, setReplyTo] = useState<ThreadMessage | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
   const discardedBotIds = useRef(new Set<string>());
+  const heldUnreadIds = useRef(new Set<string>());
   const messageScroll = useRef<HTMLDivElement>(null);
 
   const active = bots.find((bot) => bot.id === botId) ?? bots[0];
@@ -131,6 +164,28 @@ export function ShellPage() {
     botsRef.current = bots;
   }, [bots]);
 
+  useEffect(() => {
+    setPendingFiles([]);
+  }, [botId]);
+
+  function patchBotUnread(id: string, unread: boolean) {
+    setBots((list) => list.map((bot) => (bot.id === id ? { ...bot, unread } : bot)));
+    const stored = prevBotsRef.current.get(id);
+    if (stored) prevBotsRef.current.set(id, { ...stored, unread });
+    botsRef.current = botsRef.current.map((bot) => (bot.id === id ? { ...bot, unread } : bot));
+  }
+
+  function markOpenThreadRead(id: string) {
+    heldUnreadIds.current.delete(id);
+    patchBotUnread(id, false);
+    void api.threads.markRead(id).catch(() => undefined);
+  }
+
+  useEffect(() => {
+    if (!botId) return;
+    markOpenThreadRead(botId);
+  }, [botId]);
+
   function dispatchAlert(next: AttentionAlert, key: string, notifyOnFinish: boolean) {
     if (!allowAlert(next, notifyOnFinish)) return;
     if (seenAlertKeys.current.has(key)) return;
@@ -151,6 +206,12 @@ export function ShellPage() {
   }
 
   function considerEvent(incoming: ProductEvent, bot: Bot, subscribedAt: number) {
+    const granted = isAutoOwnerJob(incoming);
+    if (granted) {
+      void fulfillOwnerJob(granted.consentId).catch((err) => {
+        void reportOwnerJobError(granted.consentId, err);
+      });
+    }
     if (isHistoricalEvent(incoming, subscribedAt)) return;
     const next = attentionFromEvent(incoming, bot.name);
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
@@ -167,6 +228,14 @@ export function ShellPage() {
         if (alert) {
           dispatchAlert(alert, `${next.id}:${alert.kind}:${next.updatedAt}`, next.notifyOnFinish);
         }
+      }
+    }
+    const viewing = botId || activeIdRef.current;
+    if (viewing && !heldUnreadIds.current.has(viewing)) {
+      const open = list.find((item) => item.id === viewing);
+      if (open?.unread) {
+        open.unread = false;
+        void api.threads.markRead(viewing).catch(() => undefined);
       }
     }
     prevBotsRef.current = new Map(list.map((item) => [item.id, item]));
@@ -276,7 +345,8 @@ export function ShellPage() {
       screenUrlRef.current = null;
       setScreenUrl(null);
       setScreenError(null);
-      setDraft("");
+      writeDraft("", true);
+      setPendingFiles([]);
       setReplyTo(null);
     }
     setBots((list) => list.filter((item) => item.id !== id));
@@ -530,19 +600,140 @@ export function ShellPage() {
   );
   const emptyInbox = inboxEmptyState(bots.length, archivedBots.length);
 
+  function writeDraft(value: string, reset = false) {
+    if (reset) {
+      draftHistory.current = resetComposerHistory(value);
+      draftChangeAt.current = 0;
+    } else {
+      const now = Date.now();
+      draftHistory.current = pushComposerChange(draftHistory.current, value, now, draftChangeAt.current);
+      draftChangeAt.current = now;
+    }
+    setDraft(value);
+    window.requestAnimationFrame(() => sizeComposer());
+  }
+
+  function sizeComposer() {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }
+
+  function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    const kind = composerUndoKind(event);
+    if (kind === "undo") {
+      event.preventDefault();
+      const next = composerUndo(draftHistory.current);
+      if (next) {
+        draftHistory.current = next.history;
+        setDraft(next.value);
+        window.requestAnimationFrame(() => sizeComposer());
+      }
+      return;
+    }
+    if (kind === "redo") {
+      event.preventDefault();
+      const next = composerRedo(draftHistory.current);
+      if (next) {
+        draftHistory.current = next.history;
+        setDraft(next.value);
+        window.requestAnimationFrame(() => sizeComposer());
+      }
+      return;
+    }
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      void send();
+    }
+  }
+
+  function queueFiles(incoming: File[]) {
+    if (!active || !incoming.length) return;
+    const { files, error: attachError } = addPendingFiles(pendingFiles, incoming);
+    if (attachError) {
+      errorKindRef.current = "action";
+      setErrorKind("action");
+      setError(attachError);
+      return;
+    }
+    setPendingFiles(files);
+  }
+
+  function attachLocalPaths(paths: string[]) {
+    if (!active || !paths.length) return;
+    void api.local
+      .attachFiles(paths)
+      .then((payload) => queueFiles(filesFromAttachedPayload(payload.files)))
+      .catch((err: unknown) => {
+        const classified = classifyError(err);
+        errorKindRef.current = classified.kind;
+        setErrorKind(classified.kind);
+        setError(classified.message);
+      });
+  }
+
+  function onChatPaste(event: ClipboardEvent<HTMLElement>) {
+    const paths = clipboardFilePaths(event);
+    if (!clipboardHasAttachable(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const files = pastedFiles(event);
+    if (files.length) {
+      queueFiles(files);
+      return;
+    }
+    if (paths.length) {
+      attachLocalPaths(paths);
+      return;
+    }
+    void readClipboardFiles(event).then((extra) => {
+      if (extra.length) queueFiles(extra);
+    });
+  }
+
+  function onComposerDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    const files = droppedFiles(event);
+    if (files.length) {
+      queueFiles(files);
+      return;
+    }
+    attachLocalPaths(transferFilePaths(event.dataTransfer));
+  }
+
   async function send(textOverride?: string) {
     const text = (textOverride ?? draft).trim();
-    if (!active || !text) return;
+    const files = textOverride == null ? pendingFiles : [];
+    if (!active || sending || (!text && !files.length)) return;
     const replyId = replyTo?.id ?? null;
-    if (textOverride == null) setDraft("");
+    if (textOverride == null) {
+      writeDraft("", true);
+      setPendingFiles([]);
+    }
     setError(null);
+    setSending(true);
     try {
-      await api.threads.send(active.id, text, replyId);
+      const attachments = files.length
+        ? await Promise.all(
+            files.map(async (item) => ({
+              name: item.file.name,
+              contentBase64: await readFileBase64(item.file),
+              mimeType: item.file.type || undefined,
+            })),
+          )
+        : undefined;
+      await api.threads.send(active.id, text, replyId, attachments);
       setReplyTo(null);
       await refreshThread(active.id);
     } catch (err) {
-      if (textOverride == null) setDraft(text);
+      if (textOverride == null) {
+        writeDraft(text);
+        setPendingFiles(files);
+      }
       showError(err, "Send failed");
+    } finally {
+      setSending(false);
     }
   }
 
@@ -854,7 +1045,11 @@ export function ShellPage() {
         </div>
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col bg-[#0D0D0E]">
+      <main
+        data-testid="thread-pane"
+        className="flex min-w-0 flex-1 flex-col bg-[#0D0D0E]"
+        onPaste={onChatPaste}
+      >
         <div className="flex items-center justify-between border-b border-[#141416] px-[22px] py-[17px]">
           <button
             type="button"
@@ -886,7 +1081,7 @@ export function ShellPage() {
         <div
           ref={messageScroll}
           data-testid="thread"
-          className="ab-scroll flex flex-1 flex-col gap-[13px] overflow-y-auto px-7 py-6"
+          className="ab-scroll flex min-w-0 flex-1 flex-col gap-[13px] overflow-x-hidden overflow-y-auto px-7 py-6"
         >
           {error ? (
             <div
@@ -1033,25 +1228,58 @@ export function ShellPage() {
               </button>
             </div>
           ) : null}
-          <div className="flex items-center gap-3.5 rounded-full border border-[#202023] bg-[#131315] py-[9px] pr-2.5 pl-3">
-            <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-full border border-[#26262A] text-[18px] text-[#9A9AA0]">
-              +
-            </span>
+          {pendingFiles.length ? (
+            <div className="mb-2 flex flex-wrap items-end gap-2">
+              {pendingFiles.map((item) => (
+                <AttachChip
+                  key={item.id}
+                  item={item}
+                  onRemove={() =>
+                    setPendingFiles((list) => list.filter((entry) => entry.id !== item.id))
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
+          <div
+            data-testid="thread-composer"
+            className="flex items-end gap-3.5 rounded-[28px] border border-[#202023] bg-[#131315] py-[9px] pr-2.5 pl-3"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={onComposerDrop}
+          >
             <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              data-testid="attach-files"
+              onChange={(event) => {
+                queueFiles(Array.from(event.target.files || []));
+                event.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              aria-label="Attach files"
+              disabled={!active}
+              onClick={() => fileInputRef.current?.click()}
+              className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-full border border-[#26262A] text-[18px] text-[#9A9AA0] hover:bg-[#1B1B1E] disabled:opacity-40"
+            >
+              +
+            </button>
+            <textarea
+              ref={composerRef}
               value={draft}
+              rows={1}
               aria-label="Message"
               disabled={!active}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void send();
-                }
-              }}
+              onChange={(event) => writeDraft(event.target.value)}
+              onPaste={onChatPaste}
+              onKeyDown={(event) => onComposerKeyDown(event)}
               placeholder={
                 replyTo ? "Write a reply…" : active ? `Message ${active.name}` : "Create a bot to start"
               }
-              className="flex-1 bg-transparent text-[15.5px] text-[#E9E9EA] outline-none disabled:cursor-not-allowed disabled:opacity-40"
+              className="max-h-40 min-h-[22px] flex-1 resize-none bg-transparent py-1.5 text-[15.5px] leading-[22px] text-[#E9E9EA] outline-none disabled:cursor-not-allowed disabled:opacity-40"
             />
             {isBusy ? (
               <button
@@ -1067,7 +1295,7 @@ export function ShellPage() {
             <button
               type="button"
               aria-label="Send"
-              disabled={!active || !draft.trim()}
+              disabled={!active || sending || (!draft.trim() && pendingFiles.length === 0)}
               onClick={() => void send()}
               className="grid h-9 w-9 place-items-center rounded-full bg-[#F1F1EF] text-[#17171A] disabled:opacity-40"
             >
@@ -1154,11 +1382,14 @@ export function ShellPage() {
             setContextMenu(null);
             try {
               if (target.unread) {
+                heldUnreadIds.current.delete(target.id);
                 await api.threads.markRead(target.id);
+                patchBotUnread(target.id, false);
               } else {
+                heldUnreadIds.current.add(target.id);
                 await api.threads.markUnread(target.id);
+                patchBotUnread(target.id, true);
               }
-              await refreshBots();
             } catch (err) {
               showError(err, "Failed to toggle read status");
             }
@@ -1329,6 +1560,55 @@ export function ShellPage() {
   );
 }
 
+function AttachChip({ item, onRemove }: { item: PendingFile; onRemove: () => void }) {
+  const kind = previewKind(item.file);
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    if (kind === "file") return;
+    const next = URL.createObjectURL(item.file);
+    setUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [item.file, kind]);
+
+  return (
+    <span
+      data-testid="attach-chip"
+      data-kind={kind}
+      className="flex max-w-full items-center gap-2 rounded-xl border border-[#26262A] bg-[#1B1B1E] px-2 py-1.5 text-[13px] text-[#C9C9CE]"
+    >
+      {kind === "image" && url ? (
+        <img
+          data-testid="attach-preview"
+          src={url}
+          alt={item.file.name}
+          className="h-14 w-14 shrink-0 rounded-lg object-cover"
+        />
+      ) : null}
+      {kind === "video" && url ? (
+        <video
+          data-testid="attach-preview"
+          src={url}
+          controls
+          preload="metadata"
+          className="h-20 max-w-[200px] shrink-0 rounded-lg"
+        />
+      ) : null}
+      {kind === "audio" && url ? (
+        <audio data-testid="attach-preview" src={url} controls className="h-8 max-w-[220px]" />
+      ) : null}
+      <span className="max-w-[140px] truncate">{item.file.name}</span>
+      <button
+        type="button"
+        aria-label={`Remove ${item.file.name}`}
+        className="text-[#85858A] hover:text-[#ECECEE]"
+        onClick={onRemove}
+      >
+        ✕
+      </button>
+    </span>
+  );
+}
+
 function applyThreadEvent(
   event: ProductEvent,
   setSnapshot: Dispatch<SetStateAction<ThreadSnapshot | null>>,
@@ -1405,6 +1685,7 @@ function MessageView({
       data-testid="thread-message"
       data-role={message.role}
       data-message-id={message.id}
+      className="min-w-0"
       onContextMenu={(event) => {
         if (!onContextMenu) return;
         event.preventDefault();
@@ -1413,7 +1694,7 @@ function MessageView({
     >
       {quote ? (
         <div className={`mb-1 flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-          <div className="max-w-[70%] border-l-2 border-[#3D3D42] pl-2.5 text-[13px] leading-[1.4] text-[#85858A]">
+          <div className="max-w-[70%] min-w-0 break-words [overflow-wrap:anywhere] border-l-2 border-[#3D3D42] pl-2.5 text-[13px] leading-[1.4] text-[#85858A]">
             {stripMarkdown(quote.excerpt)}
           </div>
         </div>
@@ -1436,7 +1717,7 @@ function MessageView({
           }
           return (
             <div key={index} className="flex justify-start">
-              <div className="max-w-[74%] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]">
+              <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]">
                 <ChatMarkdown streaming>{block.text}</ChatMarkdown>
               </div>
             </div>
@@ -1542,7 +1823,7 @@ function MessageView({
         if (block.kind === "text" && message.role === "user") {
           return (
             <div key={index} className="flex justify-end">
-              <div className="max-w-[70%] rounded-[20px] bg-[#F1F1EF] px-[18px] py-3 text-[15.5px] leading-[1.45] text-[#1A1A1A]">
+              <div className="max-w-[70%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[20px] bg-[#F1F1EF] px-[18px] py-3 text-[15.5px] leading-[1.45] text-[#1A1A1A]">
                 {block.text}
               </div>
             </div>
@@ -1551,7 +1832,7 @@ function MessageView({
         if (block.kind === "text") {
           return (
             <div key={index} className="flex justify-start">
-              <div className="max-w-[74%] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]">
+              <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]">
                 <ChatMarkdown>{block.text}</ChatMarkdown>
               </div>
             </div>
@@ -1570,6 +1851,16 @@ function MessageView({
                   </div>
                 ))}
               </div>
+            </div>
+          );
+        }
+        if (block.kind === "file") {
+          return (
+            <div
+              key={index}
+              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              <FileCard block={block} />
             </div>
           );
         }
@@ -1608,6 +1899,75 @@ function MessageView({
 }
 
 type AskBlock = Extract<ThreadMessage["blocks"][number], { kind: "ask" }>;
+type FileBlock = Extract<ThreadMessage["blocks"][number], { kind: "file" }>;
+
+function FileCard({ block }: { block: FileBlock }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState("");
+  const kind = previewKind(new File([], block.name, { type: block.mimeType || "" }));
+  const preview = block.artifactId ? artifactUrl(block.artifactId) : "";
+
+  async function download() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    setSaved("");
+    try {
+      const result = await downloadArtifact(block.artifactId, block.name);
+      setSaved(result.path);
+    } catch (err) {
+      if (err instanceof DownloadCancelled) return;
+      setError(err instanceof Error ? err.message : "Could not download that file");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      data-testid="file-card"
+      className="min-w-0 max-w-[74%] rounded-[20px] border border-[#242428] bg-[#141417] px-5 py-[17px]"
+    >
+      <div className="break-words [overflow-wrap:anywhere] text-[15.5px] font-medium leading-[1.4] text-[#ECECEE]">{block.name}</div>
+      <div className="mt-1 text-[13px] text-[#85858A]">{formatBytes(block.size)}</div>
+      {kind === "image" && preview ? (
+        <img
+          data-testid="file-preview"
+          src={preview}
+          alt={block.name}
+          className="mt-3 max-h-64 w-full rounded-xl object-contain bg-[#0D0D0E]"
+        />
+      ) : null}
+      {kind === "video" && preview ? (
+        <video
+          data-testid="file-preview"
+          src={preview}
+          controls
+          preload="metadata"
+          className="mt-3 max-h-64 w-full rounded-xl"
+        />
+      ) : null}
+      {kind === "audio" && preview ? (
+        <audio data-testid="file-preview" src={preview} controls className="mt-3 w-full" />
+      ) : null}
+      <button
+        type="button"
+        className="mt-3 rounded-full bg-[#1B1B1E] px-3.5 py-1.5 text-[13.5px] text-[#C9C9CE] hover:bg-[#242428] disabled:opacity-60"
+        disabled={busy}
+        onClick={() => void download()}
+      >
+        {busy ? "Choose where…" : "Download"}
+      </button>
+      {saved ? (
+        <div data-testid="file-saved" className="mt-2 break-words [overflow-wrap:anywhere] text-[13px] text-[#4ECB71]">
+          Saved to {saved}
+        </div>
+      ) : null}
+      {error ? <div className="mt-2 text-[13px] text-[#E65707]">{error}</div> : null}
+    </div>
+  );
+}
 
 function AskCard({
   block,
@@ -1621,12 +1981,24 @@ function AskCard({
   const [editing, setEditing] = useState(false);
   const [answer, setAnswer] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [fileError, setFileError] = useState("");
+  const consentId = block.consentId || "";
 
-  async function submitAnswer(value: string) {
+  async function submitAnswer(value: string, decision?: string) {
     const text = value.trim();
     if (!text || submitting) return;
     setSubmitting(true);
+    setFileError("");
     try {
+      if (consentId) {
+        const picked = decision || text;
+        try {
+          await completeOwnerConsent(consentId, picked);
+        } catch (err) {
+          setFileError(err instanceof Error ? err.message : "Could not run that on this computer");
+        }
+        return;
+      }
       await onAnswer(text);
     } finally {
       setSubmitting(false);
@@ -1635,15 +2007,18 @@ function AskCard({
 
   return (
     <div
-      data-testid="ask-card"
+      data-testid={consentId ? "consent-card" : "ask-card"}
       data-status={block.status ?? "pending"}
-      className="max-w-[74%] rounded-[20px] border border-[#242428] bg-[#141417] px-5 py-[17px]"
+      className="min-w-0 max-w-[74%] rounded-[20px] border border-[#242428] bg-[#141417] px-5 py-[17px]"
     >
-      <div className="text-[15.5px] leading-[1.5] text-[#ECECEE]">
+      <div className="min-w-0 text-[15.5px] leading-[1.5] break-words [overflow-wrap:anywhere] text-[#ECECEE]">
         <ChatMarkdown>{block.text}</ChatMarkdown>
       </div>
       {block.detail ? (
-        <pre className="mt-3 rounded-xl bg-[#0E0E10] px-3.5 py-3 font-mono text-[12.5px] leading-[1.7] text-[#85858A]">
+        <pre
+          data-testid="ask-detail"
+          className="mt-3 max-w-full min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-xl bg-[#0E0E10] px-3.5 py-3 font-mono text-[12.5px] leading-[1.7] text-[#85858A]"
+        >
           {block.detail}
         </pre>
       ) : null}
@@ -1701,18 +2076,19 @@ function AskCard({
                     type="button"
                     data-testid="ask-option"
                     disabled={submitting}
-                    onClick={() => void submitAnswer(act.label)}
+                    onClick={() => void submitAnswer(act.label, act.id)}
                     className="group flex w-full items-center rounded-[12px] border border-[#242429] bg-[#17171B] px-3.5 py-2.5 text-left transition hover:border-[#383842] hover:bg-[#1E1E23] disabled:opacity-50"
                   >
                     <span className="mr-3 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#232328] text-[12px] font-semibold text-[#8E8E94] group-hover:bg-[#2A2A30] group-hover:text-[#DFDFE2]">
                       {letter}
                     </span>
-                    <span className="text-[14px] leading-[1.4] text-[#DFDFE2] group-hover:text-white">
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere] text-[14px] leading-[1.4] text-[#DFDFE2] group-hover:text-white">
                       {act.label}
                     </span>
                   </button>
                 );
               })}
+              {consentId ? null : (
               <button
                 type="button"
                 disabled={submitting}
@@ -1721,6 +2097,10 @@ function AskCard({
               >
                 Type custom reply…
               </button>
+              )}
+              {fileError ? (
+                <div className="mt-2 text-[13px] text-[#E25D5D]">{fileError}</div>
+              ) : null}
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">

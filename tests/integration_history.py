@@ -42,6 +42,9 @@ class HistoryIntegrationTest(unittest.TestCase):
             "memory_documents",
             "memory_revisions",
             "computers",
+            "consent_grants",
+            "consent_requests",
+            "artifacts",
         ):
             self.assertIn(table, names)
 
@@ -59,6 +62,21 @@ class HistoryIntegrationTest(unittest.TestCase):
         seqs = [item.seq for item in page.messages]
         self.assertIn(first.seq, seqs)
         self.assertIn(second.seq, seqs)
+
+    def test_cancel_does_not_post_a_stop_message(self) -> None:
+        bot = self.store.create_bot(name="integration-stop")
+        self.addCleanup(self.store.delete_bot, bot.id)
+        user, run = self.store.begin_turn(bot, "please stop")
+        message, finished = self.store.finish_turn(bot, run, "", "cancelled", error="Stopped.")
+        self.assertIsNone(message)
+        self.assertEqual(finished.status.value if hasattr(finished.status, "value") else finished.status, "cancelled")
+        self.assertEqual(finished.error, "Stopped.")
+        fresh = self.store.get_bot(bot.id)
+        self.assertEqual(fresh.status, "idle")
+        page = self.store.page_messages(bot.thread_id, limit=50)
+        texts = [block.text for item in page.messages for block in item.blocks if getattr(block, "kind", None) == "text"]
+        self.assertEqual(texts, ["please stop"])
+        self.assertEqual(user.role.value if hasattr(user.role, "value") else user.role, "user")
 
     def test_delete_bot_removes_history(self) -> None:
         bot = self.store.create_bot(name="integration-delete")
@@ -179,6 +197,32 @@ class HistoryIntegrationTest(unittest.TestCase):
         self.assertEqual(ask.answer, "Belgrade")
         self.assertEqual(self.store.answer_pending_asks(bot.thread_id, "Berlin"), [])
 
+    def test_save_and_list_artifact(self) -> None:
+        bot = self.store.create_bot(name="files")
+        self.addCleanup(self.store.delete_bot, bot.id)
+        saved = self.store.save_artifact(
+            bot_id=bot.id,
+            name="notes.txt",
+            mime_type="text/plain",
+            size=5,
+            storage_path="/tmp/notes.txt",
+            artifact_id="art_test1",
+        )
+        self.assertEqual(saved.id, "art_test1")
+        found = self.store.get_artifact("art_test1")
+        self.assertIsNotNone(found)
+        artifact, path = found
+        self.assertEqual(artifact.name, "notes.txt")
+        self.assertEqual(path, "/tmp/notes.txt")
+        listed = self.store.list_artifacts(bot.id)
+        self.assertEqual([item.id for item in listed], ["art_test1"])
+        posted = self.store.append_bot_message(
+            bot,
+            [{"kind": "file", "artifact_id": "art_test1", "name": "notes.txt", "mime_type": "text/plain", "size": 5}],
+        )
+        self.assertEqual(posted.blocks[0].kind, "file")
+        self.assertEqual(posted.blocks[0].name, "notes.txt")
+
     def test_begin_or_enqueue_turn_serializes_simultaneous_sends(self) -> None:
         bot = self.store.create_bot(name="atomic-send")
         self.addCleanup(self.store.delete_bot, bot.id)
@@ -218,6 +262,33 @@ class HistoryIntegrationTest(unittest.TestCase):
         self.assertEqual(self.store.inbox_count(bot.id), 0)
         self.assertEqual(self.store.active_run_count(bot.id), 1)
         self.assertEqual(follow_up.trigger, "follow_up")
+
+    def test_consent_grant_persists_and_deletes_with_bot(self) -> None:
+        bot = self.store.create_bot(name="consent-grant")
+        self.addCleanup(lambda: self.store.delete_bot(bot.id))
+        grant_id = self.store.save_consent_grant(
+            bot.id,
+            "browse",
+            "https://example.com",
+            device_id="dev_1",
+        )
+        self.assertTrue(grant_id)
+        self.assertEqual(
+            self.store.find_consent_grant(bot.id, "browse", "https://example.com", "dev_1"),
+            grant_id,
+        )
+        self.store.save_consent_grant(
+            bot.id,
+            "browse",
+            "https://example.com",
+            device_id="dev_1",
+        )
+        self.assertEqual(
+            self.store.find_consent_grant(bot.id, "browse", "https://example.com", "dev_1"),
+            grant_id,
+        )
+        self.assertTrue(self.store.delete_bot(bot.id))
+        self.assertIsNone(self.store.find_consent_grant(bot.id, "browse", "https://example.com", "dev_1"))
 
     def test_fail_orphaned_runs_clears_stuck_work_after_restart(self) -> None:
         bot = self.store.create_bot(name="orphaned-run")

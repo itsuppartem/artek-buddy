@@ -1,18 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import re
+import shutil
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from artek_buddy.auth import host_token_match, pairing_attempts
 from artek_buddy.bus import HEARTBEAT, REPLAY_GAP, EventHub
 from artek_buddy.config import Settings, get_settings
 from artek_buddy.contracts import (
+    ArtifactList,
+    AttachmentList,
+    AttachmentUploadInput,
+    HostedAttachment,
     Bot,
     BotIdInput,
     BotList,
@@ -56,6 +63,10 @@ from artek_buddy.contracts import (
     ThreadFollowUpInput,
     ThreadMessage,
     ThreadMessagePage,
+    ConsentAnswerInput,
+    ConsentFileInput,
+    ConsentJob,
+    ConsentResultInput,
     ThreadSendInput,
     ThreadSendResult,
     ThreadSnapshot,
@@ -76,6 +87,7 @@ from artek_buddy.db.shaping import (
     new_id,
     preview_snippet,
 )
+from artek_buddy.consent import ConsentHub
 from artek_buddy.memory import (
     MemoryConflict,
     MemoryPathError,
@@ -83,6 +95,13 @@ from artek_buddy.memory import (
     format_memory_context,
     format_subagent_context,
     wrap_turn_prompt,
+)
+from artek_buddy.uploads import (
+    UploadError,
+    format_user_turn,
+    ingest_uploads,
+    preview_for_upload,
+    user_file_blocks,
 )
 from artek_buddy.memory_gateway import GatewayClient
 from artek_buddy.memory_hub import MemoryHub, should_persist_ask
@@ -149,6 +168,9 @@ async def lifespan(app: FastAPI):
             memory = MemoryHub(store, GatewayClient(settings.memory_gateway_url))
             runtime.memory = memory
             app.state.memory = memory
+            consent = ConsentHub(store, app.state.hub, settings)
+            runtime.consent = consent
+            app.state.consent = consent
             subagents = SubagentService(store, runtime)
             subagents.bind(app.state.hub, asyncio.get_running_loop())
             runtime.subagents = subagents
@@ -204,6 +226,13 @@ def hub() -> EventHub:
 
 def computers() -> ComputerService:
     return app.state.computers
+
+
+def consent() -> ConsentHub:
+    hub = getattr(app.state, "consent", None)
+    if hub is None:
+        raise HTTPException(status_code=503, detail="consent is not available")
+    return hub
 
 
 def _bearer(authorization: str | None) -> str | None:
@@ -537,6 +566,29 @@ def _message_excerpt(message: ThreadMessage, limit: int = 400) -> str:
     return preview_snippet(blocks_text(raw), limit)
 
 
+def _ingest_thread_files(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    bot: Bot,
+    files: list[Any] | None,
+    existing_ids: list[str] | None,
+    *,
+    copy_to_inbox: bool,
+) -> list[dict[str, Any]]:
+    try:
+        return ingest_uploads(
+            store=history,
+            home=Path(rt.home_cwd(bot.id)),
+            data_dir=Path(rt.settings.agent_data_dir),
+            bot_id=bot.id,
+            files=files or [],
+            existing_ids=existing_ids or [],
+            copy_to_inbox=copy_to_inbox,
+        )
+    except UploadError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+
+
 async def _accept_turn(
     history: HistoryStore,
     rt: AgentRuntime,
@@ -545,8 +597,12 @@ async def _accept_turn(
     text: str,
     trigger: str = "user",
     reply_to_id: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> ThreadSendResult:
     bot = await _ensure_agent(history, rt, bot)
+    hosted = attachments or []
+    display = (text or "").strip()
+    prompt = format_user_turn(display, hosted) if hosted else display
     try:
         reply_msg = None
         if reply_to_id:
@@ -555,19 +611,21 @@ async def _accept_turn(
                 raise HTTPException(status_code=400, detail="reply target not found")
         user_msg, run, queued = history.begin_or_enqueue_turn(
             bot,
-            text,
+            prompt,
             model_provider=runtime_kind(rt.settings),
             model_id=rt.settings.cursor_model,
             trigger=trigger,
             reply_to_id=reply_msg.id if reply_msg else None,
             max_inbox=MAX_INBOX,
+            blocks=user_file_blocks(display, hosted) if hosted else None,
+            preview=preview_for_upload(display, hosted) if hosted else None,
         )
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
     except InboxFullError as err:
         raise HTTPException(status_code=409, detail=str(err)) from err
 
-    _emit_answered_asks(history, events, bot, text, run.id)
+    _emit_answered_asks(history, events, bot, display or prompt, run.id)
     _emit(
         events,
         bot,
@@ -596,7 +654,7 @@ async def _accept_turn(
             rt,
             events,
             bot,
-            text,
+            prompt,
             run,
             session_id=bot.cursor_agent_id,
             attach_agent=True,
@@ -677,8 +735,8 @@ async def _run_turn(
             log.info("turn %s waiting for takeover", run.id)
             return
         status = "cancelled"
-        error = "stopped by user"
-        reply_text = draft or "Stopped."
+        error = "Stopped."
+        reply_text = ""
         log.info("turn %s cancelled", run.id)
     except AgentRuntimeError as err:
         status = "failed"
@@ -701,7 +759,9 @@ async def _run_turn(
     has_sent = rt.has_sent_message_in_turn(run.id)
     rt.clear_active_turn(run_id=run.id)
 
-    if has_sent:
+    if status == "cancelled":
+        reply_text = ""
+    elif has_sent:
         reply_text = error if status != "completed" else ""
     elif not reply_text:
         reply_text = draft or error or ""
@@ -757,7 +817,7 @@ def _format_inbox(
     items: list[dict[str, str | None]],
     ) -> str:
     lines = [
-        "The user sent these messages while you were working. Respond conversationally, concisely, and practically.",
+        "The user sent these messages while you were working. They were not injected mid-turn. Apply them now.",
         "- If a message asks about progress, status, or a worker (e.g. 'еще делаешь?', 'сверил?', 'как там?'): check the actual state immediately (using inspect_subagent, list_subagents, or shell), give a quick direct update, and if a worker is stuck or failing, stop it (stop_subagent) and finish or fix the task directly.",
         "- If a message refines or corrects a worker's task: steer it immediately with steer_subagent.",
         "- If a message gives new substantive parallel tasks: spawn a subagent if appropriate, or execute directly.",
@@ -1169,6 +1229,10 @@ async def remove_bot(
             except Exception:
                 log.exception("failed to stop subagents while deleting bot %s", bot.id)
         try:
+            boxes.remove_bot_uploads(bot)
+        except Exception:
+            log.exception("failed to remove inbox copies while deleting bot %s", bot.id)
+        try:
             boxes.release_for_deleted_bot(bot)
         except Exception:
             log.exception("failed to release computer while deleting bot %s", bot.id)
@@ -1177,6 +1241,7 @@ async def remove_bot(
         raise _db_error(err) from err
     if not deleted:
         raise HTTPException(status_code=404, detail="bot not found")
+    shutil.rmtree(Path(app.state.settings.agent_data_dir) / "artifacts" / bot_id, ignore_errors=True)
     return OkResponse(ok=True)
 
 
@@ -1203,16 +1268,26 @@ async def thread_messages(
         raise _db_error(err) from err
 
 
-@app.post("/v1/threads/{bot_id}/messages", dependencies=[Depends(require_auth)])
+@app.post("/v1/threads/{bot_id}/messages")
 async def send_thread_message(
     bot_id: str,
     body: ThreadSendInput,
+    actor: str = Depends(require_auth),
     rt: AgentRuntime = Depends(runtime),
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> ThreadSendResult:
+    rt.set_turn_device(actor)
     try:
         bot = _require_bot(history, bot_id)
+        hosted = _ingest_thread_files(
+            history,
+            rt,
+            bot,
+            list(body.attachments),
+            list(body.attachment_ids),
+            copy_to_inbox=True,
+        ) if (body.attachments or body.attachment_ids) else []
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
     return await _accept_turn(
@@ -1223,7 +1298,142 @@ async def send_thread_message(
         body.text,
         trigger=body.trigger,
         reply_to_id=body.reply_to_id,
+        attachments=hosted,
     )
+
+
+@app.post("/v1/threads/{bot_id}/attachments", dependencies=[Depends(require_auth)])
+async def upload_thread_attachments(
+    bot_id: str,
+    body: AttachmentUploadInput,
+    history: HistoryStore = Depends(store),
+    rt: AgentRuntime = Depends(runtime),
+) -> AttachmentList:
+    try:
+        bot = _require_bot(history, bot_id)
+        hosted = _ingest_thread_files(history, rt, bot, list(body.files), [], copy_to_inbox=False)
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    return AttachmentList(
+        attachments=[
+            HostedAttachment(
+                id=item["id"],
+                name=item["name"],
+                mime_type=item["mime_type"],
+                size=item["size"],
+                path=item["path"],
+            )
+            for item in hosted
+        ]
+    )
+
+
+@app.get("/v1/consents/{consent_id}")
+async def get_consent(
+    consent_id: str,
+    _actor: str = Depends(require_auth),
+    hub: ConsentHub = Depends(consent),
+) -> ConsentJob:
+    job = hub.get_job(consent_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="consent not found")
+    return ConsentJob.model_validate(job)
+
+
+@app.post("/v1/consents/{consent_id}")
+async def answer_consent(
+    consent_id: str,
+    body: ConsentAnswerInput,
+    actor: str = Depends(require_auth),
+    hub: ConsentHub = Depends(consent),
+) -> OkResponse:
+    row = hub.answer(consent_id, body.decision, None if actor == "host" else actor)
+    if row is None:
+        raise HTTPException(status_code=400, detail="consent not pending")
+    return OkResponse(ok=True)
+
+
+@app.post("/v1/consents/{consent_id}/file")
+async def upload_consent_file(
+    consent_id: str,
+    body: ConsentFileInput,
+    _actor: str = Depends(require_auth),
+    hub: ConsentHub = Depends(consent),
+) -> OkResponse:
+    data = b""
+    if body.content_base64:
+        try:
+            data = base64.b64decode(body.content_base64)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="invalid content_base64") from exc
+    elif body.text is not None:
+        data = body.text.encode()
+    else:
+        raise HTTPException(status_code=400, detail="text or content_base64 required")
+    if len(data) > 1_000_000:
+        raise HTTPException(status_code=400, detail="file is larger than 1 MB")
+    if not hub.put_owner_file(consent_id, body.name, data):
+        raise HTTPException(status_code=404, detail="consent not found")
+    hub.put_owner_result(
+        consent_id,
+        {"ok": True, "name": body.name, "bytes": len(data), "_data": data, "content_base64": body.content_base64, "text": body.text},
+    )
+    return OkResponse(ok=True)
+
+
+@app.post("/v1/consents/{consent_id}/result")
+async def upload_consent_result(
+    consent_id: str,
+    body: ConsentResultInput,
+    _actor: str = Depends(require_auth),
+    hub: ConsentHub = Depends(consent),
+) -> OkResponse:
+    payload = body.model_dump(exclude_none=True)
+    if body.content_base64:
+        try:
+            payload["_data"] = base64.b64decode(body.content_base64)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="invalid content_base64") from exc
+    elif body.text is not None and "_data" not in payload:
+        payload["_data"] = body.text.encode()
+    if not hub.put_owner_result(consent_id, payload):
+        raise HTTPException(status_code=404, detail="consent not found")
+    return OkResponse(ok=True)
+
+
+@app.get("/v1/artifacts", dependencies=[Depends(require_auth)])
+async def list_artifacts(
+    bot_id: str = Query(...),
+    history: HistoryStore = Depends(store),
+) -> ArtifactList:
+    try:
+        _require_bot(history, bot_id)
+        return ArtifactList(artifacts=history.list_artifacts(bot_id))
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+
+
+@app.get("/v1/artifacts/{artifact_id}", dependencies=[Depends(require_auth)])
+async def download_artifact(
+    artifact_id: str,
+    history: HistoryStore = Depends(store),
+) -> FileResponse:
+    try:
+        found = history.get_artifact(artifact_id)
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    if found is None:
+        raise HTTPException(status_code=404, detail="file not found")
+    artifact, stored = found
+    root = (Path(app.state.settings.agent_data_dir) / "artifacts").resolve()
+    path = Path(stored).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as err:
+        raise HTTPException(status_code=404, detail="file not found") from err
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="file not found")
+    return FileResponse(path, filename=artifact.name, media_type=artifact.mime_type)
 
 
 @app.post("/v1/threads/{bot_id}/stop", dependencies=[Depends(require_auth)])
@@ -1255,14 +1465,16 @@ async def stop_thread(
     return OkResponse(ok=True)
 
 
-@app.post("/v1/threads/{bot_id}/follow-up", dependencies=[Depends(require_auth)])
+@app.post("/v1/threads/{bot_id}/follow-up")
 async def follow_up_thread_message(
     bot_id: str,
     body: ThreadFollowUpInput,
+    actor: str = Depends(require_auth),
     rt: AgentRuntime = Depends(runtime),
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> OkResponse:
+    rt.set_turn_device(actor)
     try:
         bot = _require_bot(history, bot_id)
     except DatabaseUnavailable as err:
@@ -1555,13 +1767,15 @@ async def remove_routine(
     return OkResponse(ok=True)
 
 
-@app.post("/v1/routines/{routine_id}/test", dependencies=[Depends(require_auth)])
+@app.post("/v1/routines/{routine_id}/test")
 async def test_routine(
     routine_id: str,
+    actor: str = Depends(require_auth),
     rt: AgentRuntime = Depends(runtime),
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> TestRunResult:
+    rt.set_turn_device(actor)
     try:
         routine = history.get_routine(routine_id)
         if routine is None:
@@ -1578,13 +1792,15 @@ async def test_routine(
     )
 
 
-@app.post("/v1/runs", dependencies=[Depends(require_auth)])
+@app.post("/v1/runs")
 async def create_run(
     body: RunRequest,
+    actor: str = Depends(require_auth),
     rt: AgentRuntime = Depends(runtime),
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> Run:
+    rt.set_turn_device(actor)
     try:
         bot = _resolve_bot(history, rt, bot_id=body.bot_id)
     except DatabaseUnavailable as err:
@@ -1772,11 +1988,12 @@ async def computer_input(
 async def computer_files(
     bot_id: str,
     path: str = Query(default="/"),
+    hidden: bool = Query(default=False),
     history: HistoryStore = Depends(store),
     boxes: ComputerService = Depends(computers),
 ) -> ComputerFileList:
     try:
-        return boxes.list_files(_require_bot(history, bot_id), path)
+        return boxes.list_files(_require_bot(history, bot_id), path, hidden=hidden)
     except (ComputerBusy, ComputerError) as err:
         raise _computer_http(err) from err
     except DatabaseUnavailable as err:
@@ -1796,6 +2013,22 @@ async def computer_read_file(
         raise _computer_http(err) from err
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
+
+
+@app.get("/v1/computer/{bot_id}/files/raw", dependencies=[Depends(require_auth)])
+async def computer_download_file(
+    bot_id: str,
+    path: str = Query(...),
+    history: HistoryStore = Depends(store),
+    boxes: ComputerService = Depends(computers),
+) -> FileResponse:
+    try:
+        target, name, mime = boxes.file_for_download(_require_bot(history, bot_id), path)
+    except (ComputerBusy, ComputerError) as err:
+        raise _computer_http(err) from err
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    return FileResponse(target, filename=name, media_type=mime)
 
 
 @app.api_route("/novnc/{rest:path}", methods=["GET", "HEAD"], dependencies=[Depends(require_auth)])

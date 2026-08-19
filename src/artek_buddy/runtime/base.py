@@ -33,9 +33,14 @@ class RuntimeBase:
         self.on_takeover_requested: Any | None = None
         self.default_agent_id: str | None = None
         self.memory: Any | None = None
+        self.consent: Any | None = None
         self.subagents: Any | None = None
         self.events: Any | None = None
         self.loop: Any | None = None
+        self.owner_file_reader: Any | None = None
+        self.owner_file_writer: Any | None = None
+        self.owner_dir_lister: Any | None = None
+        self.owner_command_runner: Any | None = None
         self._agents: dict[str, Any] = {}
         self._state_path = Path(settings.agent_data_dir) / "session.json"
         self._turn_lock = threading.Lock()
@@ -43,8 +48,15 @@ class RuntimeBase:
         self._last_turn: tuple[str | None, str | None, str | None] = (None, None, None)
         self._turn_roles: dict[str, str] = {}
         self._last_role: str = "lead"
+        self._last_device: str | None = None
         self._bot_by_agent: dict[str, str] = {}
         self._messages_sent_in_turn: set[str] = set()
+
+    def set_turn_device(self, device_id: str | None) -> None:
+        self._last_device = device_id if device_id and device_id != "host" else None
+
+    def resolve_turn_device(self) -> str | None:
+        return self._last_device
 
     def bind_agent_bot(self, agent_id: str | None, bot_id: str | None) -> None:
         if not agent_id or not bot_id:

@@ -19,6 +19,7 @@ from artek_buddy.auth import (
     normalize_pairing_code,
 )
 from artek_buddy.contracts.domain import (
+    Artifact,
     Bot,
     Device,
     DeviceCreated,
@@ -191,6 +192,8 @@ class HistoryStore:
                     )
                 else:
                     conn.execute("DELETE FROM memory_documents WHERE bot_id = %s", (bot_id,))
+                conn.execute("DELETE FROM consent_requests WHERE bot_id = %s", (bot_id,))
+                conn.execute("DELETE FROM consent_grants WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM routines WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM turn_inbox WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM subagents WHERE bot_id = %s", (bot_id,))
@@ -643,8 +646,12 @@ class HistoryStore:
         trigger: str = "user",
         reply_to_id: str | None = None,
         max_inbox: int = 20,
+        blocks: list[dict[str, Any]] | None = None,
+        preview: str | None = None,
     ) -> tuple[ThreadMessage, Run, bool]:
         """Atomically start a lead turn or queue behind the current lead."""
+        message_blocks = blocks or text_blocks(text)
+        preview_text = preview or text
         with self._conn() as conn:
             with conn.transaction():
                 locked = conn.execute(
@@ -688,7 +695,7 @@ class HistoryStore:
                             bot.thread_id,
                             seq,
                             MessageRole.user.value,
-                            Json(text_blocks(text)),
+                            Json(message_blocks),
                             reply_to_id,
                             now,
                         ),
@@ -702,7 +709,7 @@ class HistoryStore:
                     )
                     conn.execute(
                         "UPDATE bots SET preview = %s, unread = FALSE, updated_at = %s WHERE id = %s",
-                        (preview_snippet(text), now, bot.id),
+                        (preview_snippet(preview_text), now, bot.id),
                     )
                     run_id = active["id"]
                     queued_turn = True
@@ -721,7 +728,7 @@ class HistoryStore:
                             bot.thread_id,
                             seq,
                             MessageRole.user.value,
-                            Json(text_blocks(text)),
+                            Json(message_blocks),
                             run_id,
                             reply_to_id,
                             now,
@@ -755,7 +762,7 @@ class HistoryStore:
                         SET preview = %s, status = %s, unread = FALSE, updated_at = %s
                         WHERE id = %s
                         """,
-                        (preview_snippet(text), "running", now, bot.id),
+                        (preview_snippet(preview_text), "running", now, bot.id),
                     )
                     queued_turn = False
         user = self._get_message(msg_id)
@@ -850,7 +857,7 @@ class HistoryStore:
             with conn.transaction():
                 now = isoformat_utc()
                 body = (text or "").strip() if text else ""
-                if not body and error:
+                if not body and error and status != RunStatus.cancelled.value:
                     body = error
                 if body:
                     seq = self._lock_next_seq(conn, bot.thread_id)
@@ -885,8 +892,10 @@ class HistoryStore:
                 ).fetchone()
                 if still:
                     bot_status = "running"
+                elif status in {RunStatus.completed.value, RunStatus.cancelled.value}:
+                    bot_status = "idle"
                 else:
-                    bot_status = "idle" if status == RunStatus.completed.value else "error"
+                    bot_status = "error"
                 if body:
                     conn.execute(
                         """
@@ -943,9 +952,16 @@ class HistoryStore:
                 )
                 excerpt = ""
                 for b in blocks:
-                    if isinstance(b, dict) and b.get("text"):
+                    if not isinstance(b, dict):
+                        continue
+                    if b.get("text"):
                         excerpt = str(b["text"])
                         break
+                if not excerpt:
+                    for b in blocks:
+                        if isinstance(b, dict) and b.get("kind") == "file" and b.get("name"):
+                            excerpt = str(b["name"])
+                            break
                 if excerpt:
                     conn.execute(
                         "UPDATE bots SET preview = %s, unread = TRUE, updated_at = %s WHERE id = %s",
@@ -955,6 +971,72 @@ class HistoryStore:
         if message is None:
             raise RuntimeError("failed to persist bot message")
         return self._with_replies([message])[0]
+
+    def save_artifact(
+        self,
+        *,
+        bot_id: str,
+        name: str,
+        mime_type: str,
+        size: int,
+        storage_path: str,
+        run_id: str | None = None,
+        artifact_id: str | None = None,
+    ) -> Artifact:
+        artifact_id = artifact_id or new_id("art")
+        now = isoformat_utc()
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO artifacts (
+                    id, bot_id, run_id, name, mime_type, size, storage_path, created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (artifact_id, bot_id, run_id, name, mime_type, size, storage_path, now),
+            )
+            conn.commit()
+        return Artifact(
+            id=artifact_id,
+            bot_id=bot_id,
+            run_id=run_id,
+            name=name,
+            mime_type=mime_type,
+            size=size,
+            created_at=now,
+        )
+
+    def get_artifact(self, artifact_id: str) -> tuple[Artifact, str] | None:
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM artifacts WHERE id = %s", (artifact_id,)).fetchone()
+            conn.commit()
+        if row is None:
+            return None
+        return self._artifact_from_row(row), str(row["storage_path"])
+
+    def list_artifacts(self, bot_id: str) -> list[Artifact]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM artifacts
+                WHERE bot_id = %s
+                ORDER BY created_at DESC
+                """,
+                (bot_id,),
+            ).fetchall()
+            conn.commit()
+        return [self._artifact_from_row(row) for row in rows]
+
+    def _artifact_from_row(self, row: dict[str, Any]) -> Artifact:
+        return Artifact(
+            id=row["id"],
+            bot_id=row["bot_id"],
+            run_id=row.get("run_id"),
+            name=row["name"],
+            mime_type=row["mime_type"],
+            size=int(row["size"] or 0),
+            created_at=parse_iso(row["created_at"]),
+        )
 
     def append_user_message(
         self,
@@ -1033,6 +1115,185 @@ class HistoryStore:
             if message is not None:
                 out.append(message)
         return out
+
+    def answer_message_ask(self, message_id: str, answer: str) -> ThreadMessage | None:
+        text = (answer or "").strip()
+        if not text:
+            return None
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT id, blocks FROM messages WHERE id = %s",
+                (message_id,),
+            ).fetchone()
+            if row is None:
+                conn.commit()
+                return None
+            blocks = row["blocks"]
+            if isinstance(blocks, str):
+                import json
+
+                blocks = json.loads(blocks)
+            next_blocks, changed = answer_ask_blocks(
+                blocks if isinstance(blocks, list) else [],
+                text,
+                include_consent=True,
+            )
+            if changed:
+                conn.execute(
+                    "UPDATE messages SET blocks = %s WHERE id = %s",
+                    (Json(next_blocks), message_id),
+                )
+            conn.commit()
+        return self._get_message(message_id)
+
+    def find_consent_grant(
+        self,
+        bot_id: str,
+        action_class: str,
+        scope_key: str,
+        device_id: str | None = None,
+    ) -> str | None:
+        with self._conn() as conn:
+            if device_id:
+                row = conn.execute(
+                    """
+                    SELECT id FROM consent_grants
+                    WHERE bot_id = %s AND action_class = %s AND scope_key = %s
+                      AND (device_id IS NULL OR device_id = %s)
+                    LIMIT 1
+                    """,
+                    (bot_id, action_class, scope_key, device_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT id FROM consent_grants
+                    WHERE bot_id = %s AND action_class = %s AND scope_key = %s
+                    LIMIT 1
+                    """,
+                    (bot_id, action_class, scope_key),
+                ).fetchone()
+            conn.commit()
+        return row["id"] if row else None
+
+    def save_consent_grant(
+        self,
+        bot_id: str,
+        action_class: str,
+        scope_key: str,
+        device_id: str | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> str:
+        grant_id = new_id("cng")
+        now = isoformat_utc()
+        with self._conn() as conn:
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO consent_grants (
+                        id, workspace_id, bot_id, device_id, action_class, scope_key, created_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (grant_id, workspace_id, bot_id, device_id, action_class, scope_key, now),
+                )
+                conn.commit()
+            except UniqueViolation:
+                conn.rollback()
+        return grant_id
+
+    def create_consent_request(
+        self,
+        request_id: str,
+        *,
+        bot_id: str,
+        action_class: str,
+        scope_key: str,
+        summary: str,
+        run_id: str | None = None,
+        thread_id: str | None = None,
+        message_id: str | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO consent_requests (
+                    id, workspace_id, bot_id, run_id, thread_id, message_id,
+                    action_class, scope_key, summary, status, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s)
+                """,
+                (
+                    request_id,
+                    workspace_id,
+                    bot_id,
+                    run_id,
+                    thread_id,
+                    message_id,
+                    action_class,
+                    scope_key,
+                    summary,
+                    isoformat_utc(),
+                ),
+            )
+            conn.commit()
+
+    def get_consent_request(self, request_id: str) -> Any:
+        from artek_buddy.consent import ConsentRequest
+
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT id, bot_id, action_class, scope_key, summary, status, run_id, message_id
+                FROM consent_requests WHERE id = %s
+                """,
+                (request_id,),
+            ).fetchone()
+            conn.commit()
+        if row is None:
+            return None
+        return ConsentRequest(
+            id=row["id"],
+            bot_id=row["bot_id"],
+            action_class=row["action_class"],
+            scope_key=row["scope_key"],
+            summary=row["summary"],
+            status=row["status"],
+            run_id=row["run_id"],
+            message_id=row["message_id"],
+        )
+
+    def answer_consent_request(
+        self,
+        request_id: str,
+        decision: str,
+        device_id: str | None,
+    ) -> Any:
+        from artek_buddy.consent import ConsentRequest
+
+        now = isoformat_utc()
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE consent_requests
+                SET status = %s, device_id = %s, answered_at = %s
+                WHERE id = %s AND status = 'pending'
+                RETURNING id, bot_id, action_class, scope_key, summary, status, run_id, message_id
+                """,
+                (decision, device_id if device_id != "host" else None, now, request_id),
+            ).fetchone()
+            conn.commit()
+        if row is None:
+            return None
+        return ConsentRequest(
+            id=row["id"],
+            bot_id=row["bot_id"],
+            action_class=row["action_class"],
+            scope_key=row["scope_key"],
+            summary=row["summary"],
+            status=row["status"],
+            run_id=row["run_id"],
+            message_id=row["message_id"],
+        )
 
     def enqueue_inbox(
         self,
@@ -2609,6 +2870,46 @@ class HistoryStore:
             ).fetchone()
             conn.commit()
         return row is not None
+
+    def mark_run_waiting_input(self, run_id: str) -> Run | None:
+        now = isoformat_utc()
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE runs SET status = 'waiting_input' WHERE id = %s
+                RETURNING *
+                """,
+                (run_id,),
+            ).fetchone()
+            conn.execute(
+                """
+                UPDATE bots SET status = 'waiting_input', updated_at = %s
+                WHERE id = (SELECT bot_id FROM runs WHERE id = %s)
+                """,
+                (now, run_id),
+            )
+            conn.commit()
+        return self._run_from_row(row) if row else None
+
+    def mark_run_running(self, run_id: str) -> Run | None:
+        now = isoformat_utc()
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE runs SET status = 'running' WHERE id = %s AND status = 'waiting_input'
+                RETURNING *
+                """,
+                (run_id,),
+            ).fetchone()
+            conn.execute(
+                """
+                UPDATE bots SET status = 'running', updated_at = %s
+                WHERE id = (SELECT bot_id FROM runs WHERE id = %s)
+                """,
+                (now, run_id),
+            )
+            conn.commit()
+        return self._run_from_row(row) if row else None
 
     def mark_run_waiting_takeover(self, run_id: str) -> Run | None:
         now = isoformat_utc()

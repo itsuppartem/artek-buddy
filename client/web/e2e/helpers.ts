@@ -1,6 +1,20 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { readdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 export async function openShell(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "__artekAnchorDownloads", { value: 0, writable: true });
+    const proto = HTMLAnchorElement.prototype;
+    const original = proto.click;
+    proto.click = function (this: HTMLAnchorElement) {
+      if (this.hasAttribute("download")) {
+        (window as unknown as { __artekAnchorDownloads: number }).__artekAnchorDownloads += 1;
+      }
+      return original.call(this);
+    };
+  });
   await page.goto("/");
   await expect(page.getByPlaceholder("Search")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByLabel("Message")).toBeVisible();
@@ -51,6 +65,28 @@ export function botBubbles(page: Page) {
 
 export function userBubbles(page: Page) {
   return page.locator('[data-testid="thread-message"][data-role="user"]');
+}
+
+export async function downloadFileCard(page: Page, name = "notes.txt"): Promise<string> {
+  const posts: string[] = [];
+  await page.route("**/local/save-artifact", async (route) => {
+    posts.push(route.request().url());
+    await route.continue();
+  });
+  const card = page.getByTestId("file-card");
+  await card.getByRole("button", { name: "Download" }).click();
+  const saved = card.getByTestId("file-saved");
+  await expect(saved).toContainText("Saved to");
+  const stem = name.replace(/\.[^.]+$/, "");
+  await expect(saved).toContainText(stem);
+  expect(posts.length).toBeGreaterThan(0);
+  expect(await page.evaluate(() => (window as unknown as { __artekAnchorDownloads?: number }).__artekAnchorDownloads || 0)).toBe(0);
+  const home = process.env.ARTEK_E2E_HOME || homedir();
+  const folder = join(home, "Downloads");
+  const suffix = name.slice(stem.length);
+  const match = readdirSync(folder).filter((item) => item.startsWith(stem) && item.endsWith(suffix));
+  expect(match.length).toBeGreaterThan(0);
+  return join(folder, match[match.length - 1]);
 }
 
 export async function waitUntilIdle(page: Page): Promise<void> {

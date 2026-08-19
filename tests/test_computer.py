@@ -6,10 +6,12 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from artek_buddy.computer.client import FakeSupervisorClient
 from artek_buddy.computer.models import ComputerRecord
 from artek_buddy.computer.screen import embeddable_screen_url, mint_novnc_url, resolve_novnc_target
+from artek_buddy.computer import service as computer_service
 from artek_buddy.computer.service import (
     ComputerBusy,
     ComputerError,
@@ -280,6 +282,25 @@ class ComputerServiceTest(unittest.TestCase):
         self.assertNotIn(box_id, self.client.boxes)
         self.assertIn("destroy", [call[0] for call in self.client.calls])
 
+    def test_delete_team_bot_drops_that_chats_inbox_file(self) -> None:
+        self.store.others = 1
+        self.service.boot(self.bot)  # type: ignore[arg-type]
+        home = self.service.home_path(self.store.record)
+        inbox = home / "inbox"
+        inbox.mkdir()
+        shot = inbox / "shot.jpeg"
+        shot.write_bytes(b"from-this-chat")
+        keep = inbox / "keep.txt"
+        keep.write_text("other bot", encoding="utf-8")
+        note = Path(self.service.settings.agent_data_dir) / "artifacts" / self.bot.id
+        note.mkdir(parents=True)
+        (note / "art_1.inbox").write_text("inbox/shot.jpeg\n", encoding="utf-8")
+        self.service.remove_bot_uploads(self.bot)  # type: ignore[arg-type]
+        self.service.release_for_deleted_bot(self.bot)  # type: ignore[arg-type]
+        self.assertFalse(shot.exists())
+        self.assertEqual(keep.read_text(encoding="utf-8"), "other bot")
+        self.assertEqual(self.store.record.state, "running")
+
     def test_delete_keeps_a_shared_team_box(self) -> None:
         self.store.others = 1
         self.service.boot(self.bot)  # type: ignore[arg-type]
@@ -351,6 +372,47 @@ class ComputerServiceTest(unittest.TestCase):
         with self.assertRaises(ComputerUnavailable):
             self.service.screen_url(self.bot)  # type: ignore[arg-type]
 
+    def test_list_files_reads_the_host_home_even_when_running(self) -> None:
+        self.service.boot(self.bot)  # type: ignore[arg-type]
+        home = self.service.home_path(self.store.record)
+        (home / ".cache").mkdir()
+        inbox = home / "inbox"
+        inbox.mkdir()
+        (inbox / "notes.txt").write_text("hello from inbox", encoding="utf-8")
+        listing = self.service.list_files(self.bot)  # type: ignore[arg-type]
+        names = {entry.name for entry in listing.entries}
+        self.assertIn("inbox", names)
+        self.assertNotIn(".cache", names)
+        shown = self.service.list_files(self.bot, hidden=True)  # type: ignore[arg-type]
+        self.assertIn(".cache", {entry.name for entry in shown.entries})
+        nested = self.service.list_files(self.bot, "inbox")  # type: ignore[arg-type]
+        self.assertEqual(nested.entries[0].path, "inbox/notes.txt")
+        self.assertEqual(self.service.read_file(self.bot, "inbox/notes.txt").content, "hello from inbox")  # type: ignore[arg-type]
+        target, name, mime = self.service.file_for_download(self.bot, "inbox/notes.txt")  # type: ignore[arg-type]
+        self.assertEqual(name, "notes.txt")
+        self.assertEqual(target.read_text(encoding="utf-8"), "hello from inbox")
+        self.assertTrue(mime.startswith("text/"))
+        with self.assertRaises(ComputerError):
+            self.service.list_files(self.bot, "../etc")  # type: ignore[arg-type]
+
+    def test_home_paths_do_not_leave_the_sandbox(self) -> None:
+        home = self.service.home_path(self.store.record)
+        outside = Path(self.tmp.name) / "secret.txt"
+        outside.write_text("nope", encoding="utf-8")
+        (home / "link").symlink_to(outside)
+        with self.assertRaises(ComputerError):
+            self.service.read_file(self.bot, "link")  # type: ignore[arg-type]
+        with self.assertRaises(ComputerError):
+            self.service.file_for_download(self.bot, "/etc/passwd")  # type: ignore[arg-type]
+        with self.assertRaises(ComputerError):
+            self.service.read_file(self.bot, "missing.txt")  # type: ignore[arg-type]
+        (home / "tiny.bin").write_bytes(b"12345")
+        with patch.object(computer_service, "MAX_HOME_DOWNLOAD_BYTES", 4):
+            with self.assertRaises(ComputerError):
+                self.service.file_for_download(self.bot, "tiny.bin")  # type: ignore[arg-type]
+        with self.assertRaises(ComputerError):
+            self.service.list_files(self.bot, "no-such-dir")  # type: ignore[arg-type]
+
     def test_open_path_auto_boots_and_calls_act(self) -> None:
         self.assertEqual(self.store.record.state, "stopped")
         res = self.service.open_path(self.bot, "https://youtube.com")  # type: ignore[arg-type]
@@ -390,6 +452,9 @@ class ComputerServiceTest(unittest.TestCase):
 
         cmd_generic = action_command([{"kind": "launch", "application": "xterm"}])
         self.assertIn("nohup 'xterm'", cmd_generic)
+
+        cmd_files = action_command([{"kind": "launch", "application": "files"}])
+        self.assertIn("nohup 'pcmanfm'", cmd_files)
 
     def test_close_app_does_not_boot_a_stopped_box(self) -> None:
         self.assertEqual(self.store.record.state, "stopped")

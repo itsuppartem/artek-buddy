@@ -77,6 +77,18 @@ describe("attentionFromEvent", () => {
     expect(attentionFromEvent(event({ type: "run.waiting_input" }), "Weather")?.kind).toBe(
       "takeover",
     );
+    expect(
+      attentionFromEvent(
+        event({ type: "run.waiting_input", payload: { consentId: "cns_1" } }),
+        "Weather",
+      ),
+    ).toBeNull();
+    expect(
+      attentionFromEvent(
+        event({ type: "run.waiting_input", payload: { auto: true, path: "/tmp/a" } }),
+        "Weather",
+      ),
+    ).toBeNull();
   });
 
   it("alerts on a pending ask card, not on ordinary send_message text", () => {

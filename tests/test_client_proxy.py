@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import os
@@ -201,6 +202,118 @@ class ClientProxyTest(unittest.TestCase):
                         payload = json.loads(resp.read().decode())
                 self.assertTrue(payload["ok"])
                 notify.assert_called_once_with("Weather replied", "24C", "normal")
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+    def test_local_owner_read_under_home(self) -> None:
+        module = _load()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            notes = home / "notes.txt"
+            notes.write_text("hello from the owner pc\n", encoding="utf-8")
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve("http://127.0.0.1:9", "", 0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                port = httpd.server_address[1]
+                with patch.object(module.Path, "home", return_value=home):
+                    req = Request(
+                        f"http://127.0.0.1:{port}/local/owner-read",
+                        data=json.dumps({"path": str(notes)}).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(req, timeout=8) as resp:
+                        payload = json.loads(resp.read().decode())
+                self.assertTrue(payload["ok"])
+                self.assertEqual(payload["name"], "notes.txt")
+                self.assertIn("hello from the owner pc", payload["text"])
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+    def test_local_owner_read_rejects_outside_home(self) -> None:
+        module = _load()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw) / "home"
+            home.mkdir()
+            outside = Path(raw) / "secret.txt"
+            outside.write_text("nope\n", encoding="utf-8")
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve("http://127.0.0.1:9", "", 0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                port = httpd.server_address[1]
+                with patch.object(module.Path, "home", return_value=home):
+                    req = Request(
+                        f"http://127.0.0.1:{port}/local/owner-read",
+                        data=json.dumps({"path": str(outside)}).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    try:
+                        urlopen(req, timeout=8)
+                        self.fail("expected HTTPError")
+                    except HTTPError as err:
+                        self.assertEqual(err.code, 403)
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+    def test_local_owner_write_and_exec(self) -> None:
+        module = _load()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve("http://127.0.0.1:9", "", 0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                port = httpd.server_address[1]
+                with patch.object(module.Path, "home", return_value=home):
+                    write_req = Request(
+                        f"http://127.0.0.1:{port}/local/owner-write",
+                        data=json.dumps({"path": str(home / "hello.txt"), "text": "hi\n"}).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(write_req, timeout=8) as resp:
+                        written = json.loads(resp.read().decode())
+                    self.assertTrue(written["ok"])
+                    self.assertEqual((home / "hello.txt").read_text(encoding="utf-8"), "hi\n")
+                    list_req = Request(
+                        f"http://127.0.0.1:{port}/local/owner-list",
+                        data=json.dumps({"path": "~"}).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(list_req, timeout=8) as resp:
+                        listed = json.loads(resp.read().decode())
+                    self.assertTrue(listed["ok"])
+                    self.assertTrue(any(item["name"] == "hello.txt" for item in listed["entries"]))
+                    exec_req = Request(
+                        f"http://127.0.0.1:{port}/local/owner-exec",
+                        data=json.dumps({"command": "echo ssh-like", "cwd": "~"}).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(exec_req, timeout=8) as resp:
+                        ran = json.loads(resp.read().decode())
+                    self.assertTrue(ran["ok"])
+                    self.assertIn("ssh-like", ran["stdout"])
+                    self.assertEqual(ran["exit_code"], 0)
             finally:
                 httpd.shutdown()
                 httpd.server_close()
@@ -422,6 +535,324 @@ class ClientProxyTest(unittest.TestCase):
             httpd.shutdown()
             httpd.server_close()
 
+    def test_local_save_artifact_writes_downloads(self) -> None:
+        module = _load()
+
+        class FakeHost(BaseHTTPRequestHandler):
+            def log_message(self, fmt: str, *args) -> None:
+                return
+
+            def do_GET(self) -> None:
+                if self.path != "/v1/artifacts/art_1":
+                    self.send_error(404)
+                    return
+                data = b"hello from the bot"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        host = ThreadingHTTPServer(("127.0.0.1", 0), FakeHost)
+        thread = threading.Thread(target=host.serve_forever, daemon=True)
+        thread.start()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve(f"http://127.0.0.1:{host.server_address[1]}", "dev-token", 0)
+            proxy = threading.Thread(target=httpd.serve_forever, daemon=True)
+            proxy.start()
+            try:
+                port = httpd.server_address[1]
+                with patch.object(module.Path, "home", return_value=home):
+                    req = Request(
+                        f"http://127.0.0.1:{port}/local/save-artifact",
+                        data=json.dumps({"artifact_id": "art_1", "name": "notes.txt"}).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(req, timeout=8) as resp:
+                        payload = json.loads(resp.read().decode())
+                self.assertTrue(payload["ok"])
+                saved = home / "Downloads" / "notes.txt"
+                self.assertEqual(saved.read_text(encoding="utf-8"), "hello from the bot")
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                host.shutdown()
+                host.server_close()
+
+    def test_local_save_home_file_writes_downloads(self) -> None:
+        module = _load()
+
+        class FakeHost(BaseHTTPRequestHandler):
+            def log_message(self, fmt: str, *args) -> None:
+                return
+
+            def do_GET(self) -> None:
+                if not self.path.startswith("/v1/computer/bot_abc/files/raw"):
+                    self.send_error(404)
+                    return
+                data = b"from the sandbox"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        host = ThreadingHTTPServer(("127.0.0.1", 0), FakeHost)
+        thread = threading.Thread(target=host.serve_forever, daemon=True)
+        thread.start()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve(f"http://127.0.0.1:{host.server_address[1]}", "dev-token", 0)
+            proxy = threading.Thread(target=httpd.serve_forever, daemon=True)
+            proxy.start()
+            try:
+                port = httpd.server_address[1]
+                with patch.object(module.Path, "home", return_value=home):
+                    req = Request(
+                        f"http://127.0.0.1:{port}/local/save-home-file",
+                        data=json.dumps(
+                            {"bot_id": "bot_abc", "path": "inbox/notes.txt", "name": "notes.txt"}
+                        ).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(req, timeout=8) as resp:
+                        payload = json.loads(resp.read().decode())
+                self.assertTrue(payload["ok"])
+                saved = home / "Downloads" / "notes.txt"
+                self.assertEqual(saved.read_text(encoding="utf-8"), "from the sandbox")
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                host.shutdown()
+                host.server_close()
+
+    def test_local_save_home_file_rejects_escape_and_missing(self) -> None:
+        module = _load()
+
+        class FakeHost(BaseHTTPRequestHandler):
+            def log_message(self, fmt: str, *args) -> None:
+                return
+
+            def do_GET(self) -> None:
+                self.send_error(404)
+
+        host = ThreadingHTTPServer(("127.0.0.1", 0), FakeHost)
+        thread = threading.Thread(target=host.serve_forever, daemon=True)
+        thread.start()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve(f"http://127.0.0.1:{host.server_address[1]}", "dev-token", 0)
+            proxy = threading.Thread(target=httpd.serve_forever, daemon=True)
+            proxy.start()
+            try:
+                port = httpd.server_address[1]
+                with patch.object(module.Path, "home", return_value=home):
+                    escape = Request(
+                        f"http://127.0.0.1:{port}/local/save-home-file",
+                        data=json.dumps(
+                            {"bot_id": "bot_abc", "path": "../etc/passwd", "name": "passwd"}
+                        ).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with self.assertRaises(HTTPError) as err:
+                        urlopen(escape, timeout=8)
+                    self.assertEqual(err.exception.code, 400)
+                    missing = Request(
+                        f"http://127.0.0.1:{port}/local/save-home-file",
+                        data=json.dumps(
+                            {"bot_id": "bot_abc", "path": "inbox/gone.txt", "name": "gone.txt"}
+                        ).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with self.assertRaises(HTTPError) as gone:
+                        urlopen(missing, timeout=8)
+                    self.assertIn(gone.exception.code, {404, 502})
+                downloads = home / "Downloads"
+                if downloads.exists():
+                    self.assertEqual(list(downloads.iterdir()), [])
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                host.shutdown()
+                host.server_close()
+
+    def test_local_save_artifact_uses_russian_downloads_and_does_not_overwrite(self) -> None:
+        module = _load()
+
+        class FakeHost(BaseHTTPRequestHandler):
+            def log_message(self, fmt: str, *args) -> None:
+                return
+
+            def do_GET(self) -> None:
+                if self.path != "/v1/artifacts/art_1":
+                    self.send_error(404)
+                    return
+                data = b"second copy"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        host = ThreadingHTTPServer(("127.0.0.1", 0), FakeHost)
+        thread = threading.Thread(target=host.serve_forever, daemon=True)
+        thread.start()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            (home / "Загрузки").mkdir()
+            (home / "Загрузки" / "notes.txt").write_text("keep me", encoding="utf-8")
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve(f"http://127.0.0.1:{host.server_address[1]}", "dev-token", 0)
+            proxy = threading.Thread(target=httpd.serve_forever, daemon=True)
+            proxy.start()
+            try:
+                port = httpd.server_address[1]
+                with patch.object(module.Path, "home", return_value=home):
+                    req = Request(
+                        f"http://127.0.0.1:{port}/local/save-artifact",
+                        data=json.dumps({"artifact_id": "art_1", "name": "notes.txt"}).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(req, timeout=8) as resp:
+                        payload = json.loads(resp.read().decode())
+                self.assertTrue(payload["ok"])
+                self.assertEqual((home / "Загрузки" / "notes.txt").read_text(encoding="utf-8"), "keep me")
+                self.assertEqual((home / "Загрузки" / "notes-2.txt").read_text(encoding="utf-8"), "second copy")
+                self.assertFalse((home / "Downloads").exists())
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                host.shutdown()
+                host.server_close()
+
+    def test_choose_save_path_uses_hook_or_downloads_without_a_window(self) -> None:
+        module = _load()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            dest = home / "picked" / "kotik.png"
+            module.save_path_chooser = lambda name: dest
+            self.assertEqual(module.choose_save_path("kotik.png"), dest)
+            module.save_path_chooser = lambda name: None
+            self.assertIsNone(module.choose_save_path("kotik.png"))
+            module.save_path_chooser = None
+            with patch.object(module.Path, "home", return_value=home):
+                self.assertEqual(module.choose_save_path("kotik.png"), home / "Downloads" / "kotik.png")
+            with patch.dict(os.environ, {"ARTEK_SAVE_NO_DIALOG": "1"}):
+                module._GTK_WINDOWS.append(object())
+                try:
+                    with patch.object(module.Path, "home", return_value=home):
+                        self.assertEqual(
+                            module.choose_save_path("other.png"),
+                            home / "Downloads" / "other.png",
+                        )
+                finally:
+                    module._GTK_WINDOWS.clear()
+
+    def test_local_save_artifact_writes_chosen_path_and_honors_cancel(self) -> None:
+        module = _load()
+
+        class FakeHost(BaseHTTPRequestHandler):
+            def log_message(self, fmt: str, *args) -> None:
+                return
+
+            def do_GET(self) -> None:
+                if self.path != "/v1/artifacts/art_1":
+                    self.send_error(404)
+                    return
+                data = b"chosen bytes"
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        host = ThreadingHTTPServer(("127.0.0.1", 0), FakeHost)
+        thread = threading.Thread(target=host.serve_forever, daemon=True)
+        thread.start()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            picked = home / "Desktop" / "kotik.png"
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve(f"http://127.0.0.1:{host.server_address[1]}", "dev-token", 0)
+            proxy = threading.Thread(target=httpd.serve_forever, daemon=True)
+            proxy.start()
+            try:
+                port = httpd.server_address[1]
+                module.save_path_chooser = lambda name: picked
+                with patch.object(module.Path, "home", return_value=home):
+                    req = Request(
+                        f"http://127.0.0.1:{port}/local/save-artifact",
+                        data=json.dumps({"artifact_id": "art_1", "name": "kotik.png"}).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(req, timeout=8) as resp:
+                        payload = json.loads(resp.read().decode())
+                self.assertTrue(payload["ok"])
+                self.assertEqual(payload["path"], str(picked))
+                self.assertEqual(picked.read_bytes(), b"chosen bytes")
+                self.assertFalse((home / "Downloads").exists())
+
+                module.save_path_chooser = lambda name: None
+                cancel = Request(
+                    f"http://127.0.0.1:{port}/local/save-artifact",
+                    data=json.dumps({"artifact_id": "art_1", "name": "kotik.png"}).encode(),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with self.assertRaises(HTTPError) as err:
+                    urlopen(cancel, timeout=8)
+                self.assertEqual(err.exception.code, 409)
+                body = json.loads(err.exception.read().decode())
+                self.assertTrue(body.get("cancelled"))
+                self.assertEqual(picked.read_bytes(), b"chosen bytes")
+            finally:
+                module.save_path_chooser = None
+                httpd.shutdown()
+                httpd.server_close()
+                host.shutdown()
+                host.server_close()
+
+    def test_owner_path_maps_downloads_and_says_missing(self) -> None:
+        module = _load()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            (home / "Загрузки").mkdir()
+            (home / "Загрузки" / "shot.png").write_bytes(b"x")
+            found, err = module.inspect_owner_path("~/Downloads", home, as_dir=True)
+            self.assertEqual(err, "")
+            self.assertEqual(found, (home / "Загрузки").resolve())
+            missing, why = module.inspect_owner_path("~/no-such-dir", home, as_dir=True)
+            self.assertIsNone(missing)
+            self.assertEqual(why, "folder not found")
+            outside, jail = module.inspect_owner_path("/etc/passwd", home, must_exist=False)
+            self.assertIsNone(outside)
+            self.assertIn("outside", jail)
+
     def test_pairing_url_allowlist(self) -> None:
         module = _load()
         self.assertTrue(module.pairing_url_allowed("http://127.0.0.1:8080"))
@@ -464,6 +895,75 @@ class ClientProxyTest(unittest.TestCase):
                 with self.assertRaises(HTTPError) as raised:
                     urlopen(req, timeout=8)
                 self.assertEqual(raised.exception.code, 403)
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+    def test_local_attach_files_reads_home_file(self) -> None:
+        module = _load()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            pictures = home / "Изображения" / "Снимки экрана"
+            pictures.mkdir(parents=True)
+            shot = pictures / "edbc3632c9584b229513834046b1ab84.jpeg"
+            shot.write_bytes(b"\xff\xd8\xff jpeg-bytes")
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve("http://127.0.0.1:9", "", 0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                port = httpd.server_address[1]
+                with patch.object(module.Path, "home", return_value=home):
+                    req = Request(
+                        f"http://127.0.0.1:{port}/local/attach-files",
+                        data=json.dumps({"paths": [str(shot)]}).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urlopen(req, timeout=8) as resp:
+                        payload = json.loads(resp.read().decode())
+                self.assertTrue(payload["ok"])
+                self.assertEqual(payload["files"][0]["name"], shot.name)
+                self.assertEqual(payload["files"][0]["type"], "image/jpeg")
+                self.assertEqual(
+                    base64.b64decode(payload["files"][0]["content_base64"]),
+                    b"\xff\xd8\xff jpeg-bytes",
+                )
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+    def test_local_attach_files_rejects_outside_home(self) -> None:
+        module = _load()
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw) / "home"
+            home.mkdir()
+            outside = Path(raw) / "secret.bin"
+            outside.write_bytes(b"nope")
+            root = home / "web"
+            root.mkdir()
+            (root / "index.html").write_text("<div id='root'>Artek Buddy</div>\n", encoding="utf-8")
+            module.WEB_ROOTS = (root,)
+            httpd = module.serve("http://127.0.0.1:9", "", 0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                port = httpd.server_address[1]
+                with patch.object(module.Path, "home", return_value=home):
+                    req = Request(
+                        f"http://127.0.0.1:{port}/local/attach-files",
+                        data=json.dumps({"paths": [str(outside)]}).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    try:
+                        urlopen(req, timeout=8)
+                        self.fail("expected HTTPError")
+                    except HTTPError as err:
+                        self.assertEqual(err.code, 403)
             finally:
                 httpd.shutdown()
                 httpd.server_close()

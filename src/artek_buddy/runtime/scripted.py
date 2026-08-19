@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from artek_buddy.config import Settings
+from artek_buddy.consent import CLASS_BROWSE, CLASS_OWNER_EXEC, CLASS_PAGE, OWNER_HOME_SCOPE
 from artek_buddy.db.shaping import new_id
 from artek_buddy.runtime.base import RuntimeBase
 from artek_buddy.runtime.tools import ProductTools
@@ -29,11 +30,29 @@ class ScriptedStep:
     event: tuple[str, dict[str, Any]] | None = None
     tool: str | None = None
     args: dict[str, Any] = field(default_factory=dict)
+    consent: dict[str, Any] | None = None
     result: str | None = None
     status: str | None = None
     error: str | None = None
     raise_error: str | None = None
     delay_s: float | None = None
+
+
+def scripted_consent(
+    *,
+    action_class: str,
+    scope_key: str,
+    summary: str,
+    detail: str | None = None,
+) -> ScriptedStep:
+    return ScriptedStep(
+        consent={
+            "action_class": action_class,
+            "scope_key": scope_key,
+            "summary": summary,
+            "detail": detail,
+        }
+    )
 
 
 def scripted_text(text: str) -> ScriptedStep:
@@ -174,6 +193,57 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             scripted_delay(1.4),
             scripted_finish("Start with a riverside spot near Beton Hala, then Skadarlija."),
         ]
+    if "e2e-consent-page" in hay:
+        return [
+            scripted_consent(
+                action_class=CLASS_PAGE,
+                scope_key="https://example.com",
+                summary="Fill, type, or click on https://example.com in the remote browser?",
+                detail="page_input: https://example.com",
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-consent-exec-long" in hay:
+        command = (
+            'ls -la "/home/artek/Изображения/Снимки экрана/'
+            "edbc3632c9584b229513834046b1ab84.jpeg\" && "
+            'file "/home/artek/Изображения/Снимки экрана/'
+            "edbc3632c9584b229513834046b1ab84.jpeg\""
+        )
+        return [
+            scripted_consent(
+                action_class=CLASS_OWNER_EXEC,
+                scope_key=OWNER_HOME_SCOPE,
+                summary=f"Run `{command}` on your computer?",
+                detail=f"owner_exec: {command}\ncwd: ~",
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-consent-browse" in hay:
+        return [
+            scripted_consent(
+                action_class=CLASS_BROWSE,
+                scope_key="https://example.com",
+                summary="Open https://example.com on the remote desktop?",
+                detail="browse: https://example.com",
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-send-file-missing" in hay:
+        return [
+            scripted_tool("send_file", path="missing-notes.txt"),
+            scripted_finish("I could not find that file."),
+        ]
+    if "e2e-send-file" in hay:
+        return [
+            scripted_tool(
+                "send_file",
+                path="notes.txt",
+                content="hello from the bot",
+                text="Here is notes.txt",
+            ),
+            scripted_finish(""),
+        ]
     if "e2e-slow" in text:
         return [scripted_delay(2.5), scripted_finish(E2E_SLOW_ANSWER)]
     if "e2e-markdown-preview" in text:
@@ -275,6 +345,19 @@ class ScriptedRuntime(RuntimeBase):
                 continue
             if step.raise_error:
                 raise AgentRuntimeError(step.raise_error)
+            if step.consent:
+                hub = getattr(self, "consent", None)
+                if hub is not None:
+                    ctx_bot, ctx_run, _thread = self.resolve_turn_context(bot_id)
+                    hub.offer(
+                        bot_id=ctx_bot or bot_id or "",
+                        action_class=str(step.consent.get("action_class") or ""),
+                        scope_key=str(step.consent.get("scope_key") or "*"),
+                        summary=str(step.consent.get("summary") or "Allow this?"),
+                        run_id=ctx_run,
+                        detail=step.consent.get("detail"),
+                    )
+                continue
             if step.tool:
                 tool_result = tools.execute(step.tool, step.args, bound_bot_id=bot_id)
                 self.last_tool_results.append((step.tool, tool_result))

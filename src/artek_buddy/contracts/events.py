@@ -75,6 +75,7 @@ class AskBlock(BaseModel):
     status: Literal["pending", "answered"] | None = None
     answer: str | None = None
     actions: list[AskAction] | None = None
+    consent_id: str | None = None
 
 
 class ChoiceOption(BaseModel):
@@ -135,6 +136,14 @@ class ChildBotBlock(BaseModel):
     status: Literal["created", "archived", "deleted"]
 
 
+class FileBlock(BaseModel):
+    kind: Literal["file"] = "file"
+    artifact_id: str
+    name: str
+    mime_type: str
+    size: int
+
+
 MessageBlock = Annotated[
     TextBlock
     | CardBlock
@@ -145,7 +154,8 @@ MessageBlock = Annotated[
     | MetaBlock
     | ProgressBlock
     | SubagentBlock
-    | ChildBotBlock,
+    | ChildBotBlock
+    | FileBlock,
     Field(discriminator="kind"),
 ]
 

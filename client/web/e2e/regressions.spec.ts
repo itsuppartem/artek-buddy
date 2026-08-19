@@ -255,7 +255,9 @@ test.describe("live-window regressions", () => {
     await page.getByLabel("Stop").click();
     await waitUntilIdle(page);
     await expect(page.getByText(SLOW_ANSWER)).toHaveCount(0);
-    await expect(page.getByText("Stopped.")).toBeVisible();
+    await expect(page.getByTestId("run-error")).toHaveText("Stopped.");
+    await expect(page.getByText("Stopped.")).toHaveCount(1);
+    await expect(page.getByText("stopped by user")).toHaveCount(0);
   });
 
   test("sidebar preview strips markdown and bot switch does not leak the other thread", async ({

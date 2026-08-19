@@ -208,6 +208,28 @@ class TurnPipelineTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(store.finished[-1]["error"], "no cloud")
         self.assertIn(ProductEventType.RUN_FAILED, [item.type for item in events.replay(bot.id)])
 
+    async def test_mid_turn_message_is_injected_on_the_next_tool(self) -> None:
+        bot = _bot()
+        store = _Store(bot)
+        store.inbox = [
+            {"message_id": "m2", "text": "не спрашивай разрешение на чтение", "reply_to_id": None}
+        ]
+        runtime = ScriptedRuntime(_settings(), store=store)
+        runtime.owner_dir_lister = lambda path: [{"name": "a.txt", "kind": "file"}]
+        await runtime.start()
+        runtime.queue_turn(
+            scripted_tool("list_owner_dir", path="~"),
+            scripted_text("ok"),
+            scripted_finish("ok"),
+        )
+        events = EventHub()
+        await _run_turn(store, runtime, events, bot, "list home", _run(bot))
+        pending = [task for task in asyncio.all_tasks() if task.get_name() == "turn-run_inbox"]
+        self.assertEqual(pending, [])
+        self.assertEqual(store.inbox, [])
+        self.assertEqual(len(store.finished), 1)
+        self.assertEqual(runtime.last_tool_results[0][1]["owner_follow_up"], ["не спрашивай разрешение на чтение"])
+
     async def test_inbox_follow_up_uses_the_same_scripted_runtime(self) -> None:
         bot = _bot()
         store = _Store(bot)

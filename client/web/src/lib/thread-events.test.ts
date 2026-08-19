@@ -45,6 +45,39 @@ describe("thread event reduction", () => {
     expect(next.messages.map((item) => item.id)).toEqual(["m-0", "m-1", "m-2"]);
   });
 
+  it("a user stop leaves one banner and no extra bot bubble", () => {
+    const running = snapshot([{ ...message("m-user", [{ kind: "text", text: "stop" }], 1), role: "user" }]);
+    running.run = {
+      id: "run-1",
+      botId: "bot-1",
+      threadId: "thread-1",
+      taskId: "t1",
+      status: "running",
+      trigger: "user",
+      modelProvider: null,
+      modelId: null,
+      error: null,
+      startedAt: "2026-08-19T12:00:00.000Z",
+      completedAt: null,
+    };
+    const withDraft = reduceThreadSnapshot(
+      running,
+      event({ type: "thread.message.updated", seq: 4, payload: { text: "working" } }),
+    );
+    const stopped = reduceThreadSnapshot(
+      withDraft,
+      event({
+        type: "run.cancelled",
+        seq: 5,
+        payload: { error: "Stopped.", run: { id: "run-1", status: "cancelled", error: "Stopped." } },
+      }),
+    );
+    expect(stopped?.run?.status).toBe("cancelled");
+    expect(stopped?.run?.error).toBe("Stopped.");
+    expect(stopped?.messages.filter((item) => item.role === "bot")).toHaveLength(0);
+    expect(stopped?.messages.some((item) => item.blocks.some((block) => "text" in block && String(block.text).includes("stopped by user")))).toBe(false);
+  });
+
   it("accumulates progress deltas on one live bubble", () => {
     const first = reduceThreadSnapshot(
       snapshot([]),

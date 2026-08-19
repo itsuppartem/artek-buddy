@@ -147,12 +147,20 @@ class ContractsTest(unittest.TestCase):
             "computer.input",
             "computer.files",
             "computer.read_file",
+            "computer.download_file",
             "computer.screen_url",
             "computer.heartbeat",
             "subagents.list",
             "subagents.stop",
             "subagents.restart",
             "subagents.steer",
+            "consents.answer",
+            "consents.get",
+            "consents.file",
+            "consents.result",
+            "artifacts.list",
+            "artifacts.download",
+            "threads.attachments",
         ):
             self.assertTrue(PROCEDURES_BY_NAME[name].implemented, name)
 

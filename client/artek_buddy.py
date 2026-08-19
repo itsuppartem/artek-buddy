@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import http.client
 import ipaddress
 import json
@@ -21,7 +22,7 @@ import traceback
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 WEB_ROOTS = (
     Path("/usr/lib/artek-buddy-client/web"),
@@ -33,6 +34,245 @@ _GTK_WINDOWS: list[object] = []
 
 _NOVNC_LOG = re.compile(r"/novnc/\S+")
 _CGNAT = ipaddress.ip_network("100.64.0.0/10")
+OWNER_FILE_MAX = 1_000_000
+OWNER_OUTPUT_MAX = 200_000
+OWNER_EXEC_TIMEOUT = 60
+ATTACH_FILE_MAX = 25 * 1024 * 1024
+ATTACH_TOTAL_MAX = 50 * 1024 * 1024
+ATTACH_MAX_FILES = 10
+
+
+_FOLDER_ALIASES = {
+    "downloads": ("Downloads", "Загрузки"),
+    "загрузки": ("Downloads", "Загрузки"),
+    "desktop": ("Desktop", "Рабочий стол"),
+    "документы": ("Documents", "Документы"),
+    "documents": ("Documents", "Документы"),
+    "pictures": ("Pictures", "Изображения", "Картинки"),
+    "изображения": ("Pictures", "Изображения", "Картинки"),
+    "music": ("Music", "Музыка"),
+    "музыка": ("Music", "Музыка"),
+    "videos": ("Videos", "Видео"),
+    "видео": ("Videos", "Видео"),
+}
+
+
+def _owner_home(home: Path | None) -> Path:
+    return (home or Path.home()).expanduser().resolve()
+
+
+def _logical_under(path: Path, root: Path) -> bool:
+    try:
+        Path(os.path.normpath(str(path))).relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _expand_owner_text(raw: str, root: Path) -> Path:
+    text = raw.strip()
+    if text.startswith("~"):
+        rest = text[1:].lstrip("/\\")
+        return (root / rest) if rest else root
+    path = Path(text).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    return Path(os.path.normpath(str(path)))
+
+
+def _xdg_user_dirs(home: Path) -> dict[str, Path]:
+    cfg = home / ".config" / "user-dirs.dirs"
+    if not cfg.is_file():
+        return {}
+    try:
+        text = cfg.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    out: dict[str, Path] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("XDG_") or "=" not in line:
+            continue
+        key, raw = line.split("=", 1)
+        raw = raw.strip().strip('"').replace("$HOME", str(home))
+        label = key.removeprefix("XDG_").removesuffix("_DIR").lower()
+        path = Path(os.path.normpath(raw))
+        out[label] = path
+        out[f"{label}s"] = path
+    return out
+
+
+def _owner_candidates(wanted: Path, root: Path) -> list[Path]:
+    found = [wanted]
+    try:
+        rel = wanted.relative_to(root)
+    except ValueError:
+        return found
+    if len(rel.parts) != 1:
+        return found
+    key = rel.parts[0].lower()
+    xdg = _xdg_user_dirs(root)
+    if key in xdg:
+        found.append(xdg[key])
+    for alias in _FOLDER_ALIASES.get(key, ()):
+        found.append(root / alias)
+    unique: list[Path] = []
+    for item in found:
+        if item not in unique:
+            unique.append(item)
+    return unique
+
+
+def inspect_owner_path(
+    raw: str,
+    home: Path | None = None,
+    *,
+    must_exist: bool = True,
+    as_dir: bool = False,
+) -> tuple[Path | None, str]:
+    """Resolve a path under the owner home. Jail is the logical path, not the symlink target."""
+    text = (raw or "").strip() or ("." if as_dir else "")
+    if not text:
+        return None, "path required"
+    root = _owner_home(home)
+    wanted = _expand_owner_text(text, root)
+    last = "path is outside the home"
+    for candidate in _owner_candidates(wanted, root):
+        if not _logical_under(candidate, root):
+            last = "path is outside the home"
+            continue
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            last = "folder not found" if as_dir else "file not found"
+            continue
+        if must_exist:
+            if as_dir:
+                if resolved.is_dir():
+                    return resolved, ""
+                last = "not a folder" if resolved.exists() else "folder not found"
+            else:
+                if resolved.is_file():
+                    return resolved, ""
+                last = "not a file" if resolved.exists() else "file not found"
+        else:
+            if as_dir and resolved.exists() and not resolved.is_dir():
+                last = "not a folder"
+                continue
+            return resolved if resolved.exists() else candidate, ""
+    return None, last
+
+
+def resolve_owner_path(
+    raw: str,
+    home: Path | None = None,
+    *,
+    must_exist: bool = True,
+    as_dir: bool = False,
+) -> Path | None:
+    """Only paths under the owner's home. Used by /local/owner-*."""
+    path, _err = inspect_owner_path(raw, home, must_exist=must_exist, as_dir=as_dir)
+    return path
+
+
+def _owner_path_status(error: str) -> int:
+    if "outside" in error:
+        return 403
+    if "not found" in error:
+        return 404
+    return 400
+
+
+def owner_downloads_dir(home: Path | None = None) -> Path:
+    root = _owner_home(home)
+    found, _err = inspect_owner_path("~/Downloads", root, must_exist=True, as_dir=True)
+    if found is not None:
+        return found
+    dest = root / "Downloads"
+    dest.mkdir(parents=True, exist_ok=True)
+    return dest
+
+
+def unique_download_dest(folder: Path, name: str) -> Path:
+    safe = Path(str(name or "file").replace("\x00", "")).name.strip() or "file"
+    dest = folder / safe
+    if not dest.exists():
+        return dest
+    stem, suffix = dest.stem, dest.suffix
+    for index in range(2, 1000):
+        cand = folder / f"{stem}-{index}{suffix}"
+        if not cand.exists():
+            return cand
+    return folder / f"{stem}-{os.getpid()}{suffix}"
+
+
+save_path_chooser = None
+
+
+def _has_gtk_window() -> bool:
+    with _WINDOW_LOCK:
+        return bool(_GTK_WINDOWS)
+
+
+def _gtk_parent() -> object | None:
+    with _WINDOW_LOCK:
+        return _GTK_WINDOWS[0] if _GTK_WINDOWS else None
+
+
+def choose_save_path(name: str) -> Path | None:
+    """Ask where to put the file. The .deb window uses a GTK Save dialog."""
+    hook = save_path_chooser
+    if callable(hook):
+        return hook(name)
+    if os.environ.get("ARTEK_SAVE_NO_DIALOG") == "1":
+        return unique_download_dest(owner_downloads_dir(), name)
+    if _has_gtk_window():
+        return _gtk_choose_save_path(name)
+    return unique_download_dest(owner_downloads_dir(), name)
+
+
+def _gtk_choose_save_path(name: str) -> Path | None:
+    from gi.repository import GLib, Gtk
+
+    done = threading.Event()
+    chosen: list[Path | None] = [None]
+    safe = Path(str(name or "file").replace("\x00", "")).name.strip() or "file"
+
+    def show() -> bool:
+        dialog = None
+        try:
+            dialog = Gtk.FileChooserNative.new(
+                "Save file",
+                _gtk_parent(),
+                Gtk.FileChooserAction.SAVE,
+                "Save",
+                "Cancel",
+            )
+            dialog.set_current_name(safe)
+            try:
+                dialog.set_current_folder(str(owner_downloads_dir()))
+            except Exception:
+                pass
+            setter = getattr(dialog, "set_do_overwrite_confirmation", None)
+            if callable(setter):
+                setter(True)
+            response = dialog.run()
+            if response == Gtk.ResponseType.ACCEPT:
+                filename = dialog.get_filename()
+                if filename:
+                    chosen[0] = Path(filename)
+        except Exception:
+            chosen[0] = None
+        finally:
+            if dialog is not None:
+                dialog.destroy()
+            done.set()
+        return False
+
+    GLib.idle_add(show)
+    if not done.wait(timeout=600):
+        return None
+    return chosen[0]
 
 
 def _redact_client_log(message: str) -> str:
@@ -205,6 +445,27 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/local/notify":
             self._local_notify()
             return
+        if path == "/local/owner-read":
+            self._local_owner_read()
+            return
+        if path == "/local/owner-write":
+            self._local_owner_write()
+            return
+        if path == "/local/owner-list":
+            self._local_owner_list()
+            return
+        if path == "/local/owner-exec":
+            self._local_owner_exec()
+            return
+        if path == "/local/save-artifact":
+            self._local_save_artifact()
+            return
+        if path == "/local/save-home-file":
+            self._local_save_home_file()
+            return
+        if path == "/local/attach-files":
+            self._local_attach_files()
+            return
         if path.startswith("/v1/"):
             self._proxy()
             return
@@ -364,6 +625,301 @@ class Handler(BaseHTTPRequestHandler):
             urgency = "normal"
         _desktop_notify(title, body, urgency)
         self._json(200, {"ok": True})
+
+    def _local_owner_read(self) -> None:
+        if not self._local_only():
+            self.send_error(403)
+            return
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length) if length else b"{}"
+        try:
+            payload = json.loads(raw.decode("utf-8") or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._json(400, {"ok": False, "error": "invalid json"})
+            return
+        if not isinstance(payload, dict):
+            self._json(400, {"ok": False, "error": "invalid json"})
+            return
+        path, err = inspect_owner_path(str(payload.get("path") or ""))
+        if path is None:
+            self._json(_owner_path_status(err), {"ok": False, "error": err})
+            return
+        try:
+            data = path.read_bytes()
+        except OSError:
+            self._json(404, {"ok": False, "error": "could not read file"})
+            return
+        if len(data) > OWNER_FILE_MAX:
+            self._json(400, {"ok": False, "error": "file is larger than 1 MB"})
+            return
+        out: dict = {
+            "ok": True,
+            "name": path.name,
+            "bytes": len(data),
+            "content_base64": base64.b64encode(data).decode("ascii"),
+        }
+        try:
+            out["text"] = data.decode("utf-8")
+        except UnicodeDecodeError:
+            pass
+        self._json(200, out)
+
+    def _local_attach_files(self) -> None:
+        if not self._local_only():
+            self.send_error(403)
+            return
+        payload = self._local_json_body()
+        if payload is None:
+            return
+        raw_paths = payload.get("paths")
+        if not isinstance(raw_paths, list) or not raw_paths:
+            self._json(400, {"ok": False, "error": "paths required"})
+            return
+        if len(raw_paths) > ATTACH_MAX_FILES:
+            self._json(400, {"ok": False, "error": "At most 10 files"})
+            return
+        files: list[dict] = []
+        total = 0
+        for raw in raw_paths:
+            path, err = inspect_owner_path(str(raw or ""))
+            if path is None:
+                self._json(_owner_path_status(err), {"ok": False, "error": err})
+                return
+            try:
+                data = path.read_bytes()
+            except OSError:
+                self._json(404, {"ok": False, "error": "could not read file"})
+                return
+            if len(data) > ATTACH_FILE_MAX:
+                self._json(400, {"ok": False, "error": f"{path.name} is larger than 25 MB"})
+                return
+            total += len(data)
+            if total > ATTACH_TOTAL_MAX:
+                self._json(400, {"ok": False, "error": "Those files are too large together"})
+                return
+            mime, _enc = mimetypes.guess_type(path.name)
+            files.append(
+                {
+                    "name": path.name,
+                    "type": mime or "application/octet-stream",
+                    "bytes": len(data),
+                    "content_base64": base64.b64encode(data).decode("ascii"),
+                }
+            )
+        self._json(200, {"ok": True, "files": files})
+
+    def _local_json_body(self) -> dict | None:
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length) if length else b"{}"
+        try:
+            payload = json.loads(raw.decode("utf-8") or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._json(400, {"ok": False, "error": "invalid json"})
+            return None
+        if not isinstance(payload, dict):
+            self._json(400, {"ok": False, "error": "invalid json"})
+            return None
+        return payload
+
+    def _local_owner_write(self) -> None:
+        if not self._local_only():
+            self.send_error(403)
+            return
+        payload = self._local_json_body()
+        if payload is None:
+            return
+        path, err = inspect_owner_path(str(payload.get("path") or ""), must_exist=False)
+        if path is None:
+            self._json(_owner_path_status(err), {"ok": False, "error": err})
+            return
+        data = b""
+        if payload.get("content_base64"):
+            try:
+                data = base64.b64decode(str(payload.get("content_base64")))
+            except (ValueError, TypeError):
+                self._json(400, {"ok": False, "error": "invalid content_base64"})
+                return
+        elif payload.get("text") is not None:
+            data = str(payload.get("text")).encode()
+        else:
+            self._json(400, {"ok": False, "error": "text or content_base64 required"})
+            return
+        if len(data) > OWNER_FILE_MAX:
+            self._json(400, {"ok": False, "error": "file is larger than 1 MB"})
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        except OSError:
+            self._json(500, {"ok": False, "error": "could not write file"})
+            return
+        self._json(200, {"ok": True, "path": str(path), "name": path.name, "bytes": len(data)})
+
+    def _local_owner_list(self) -> None:
+        if not self._local_only():
+            self.send_error(403)
+            return
+        payload = self._local_json_body()
+        if payload is None:
+            return
+        path, err = inspect_owner_path(str(payload.get("path") or "~"), must_exist=True, as_dir=True)
+        if path is None:
+            self._json(_owner_path_status(err), {"ok": False, "error": err})
+            return
+        entries: list[dict] = []
+        try:
+            names = sorted(path.iterdir(), key=lambda item: item.name.lower())
+        except OSError:
+            self._json(500, {"ok": False, "error": "could not list folder"})
+            return
+        for item in names[:500]:
+            kind = "dir" if item.is_dir() else "file"
+            size = None
+            if kind == "file":
+                try:
+                    size = item.stat().st_size
+                except OSError:
+                    size = None
+            entries.append({"name": item.name, "kind": kind, "size": size})
+        self._json(200, {"ok": True, "path": str(path), "entries": entries})
+
+    def _local_owner_exec(self) -> None:
+        if not self._local_only():
+            self.send_error(403)
+            return
+        payload = self._local_json_body()
+        if payload is None:
+            return
+        command = str(payload.get("command") or "").strip()
+        if not command:
+            self._json(400, {"ok": False, "error": "command required"})
+            return
+        if len(command) > 8000:
+            self._json(400, {"ok": False, "error": "command is too long"})
+            return
+        cwd, err = inspect_owner_path(str(payload.get("cwd") or "~"), must_exist=True, as_dir=True)
+        if cwd is None:
+            self._json(_owner_path_status(err), {"ok": False, "error": f"cwd: {err}"})
+            return
+        try:
+            proc = subprocess.run(
+                command,
+                shell=True,
+                cwd=str(cwd),
+                capture_output=True,
+                timeout=OWNER_EXEC_TIMEOUT,
+                text=True,
+                errors="replace",
+            )
+        except subprocess.TimeoutExpired:
+            self._json(200, {"ok": False, "error": "command timed out", "stdout": "", "stderr": "", "exit_code": 124})
+            return
+        except OSError as exc:
+            self._json(500, {"ok": False, "error": str(exc)})
+            return
+        stdout = proc.stdout[:OWNER_OUTPUT_MAX]
+        stderr = proc.stderr[:OWNER_OUTPUT_MAX]
+        self._json(
+            200,
+            {
+                "ok": True,
+                "stdout": stdout,
+                "stderr": stderr,
+                "exit_code": proc.returncode,
+            },
+        )
+
+    def _local_save_artifact(self) -> None:
+        if not self._local_only():
+            self.send_error(403)
+            return
+        payload = self._local_json_body()
+        if payload is None:
+            return
+        artifact_id = str(payload.get("artifact_id") or payload.get("artifactId") or "").strip()
+        name = str(payload.get("name") or "file").strip() or "file"
+        if not artifact_id or "/" in artifact_id or "\\" in artifact_id:
+            self._json(400, {"ok": False, "error": "artifact_id required"})
+            return
+        token = self.server.token  # type: ignore[attr-defined]
+        url = self.server.upstream  # type: ignore[attr-defined]
+        if not token:
+            self._json(401, {"ok": False, "error": "This computer is no longer authorized. Pair it again to continue."})
+            return
+        try:
+            status, data = _host_request(
+                url,
+                "GET",
+                f"/v1/artifacts/{artifact_id}",
+                b"",
+                {
+                    "Accept": "*/*",
+                    "Authorization": f"Bearer {token}",
+                    "Connection": "close",
+                },
+            )
+        except OSError:
+            self._json(502, {"ok": False, "error": "Could not reach the host"})
+            return
+        if status != 200 or not data:
+            self._json(404 if status == 404 else 502, {"ok": False, "error": "Could not download that file"})
+            return
+        self._write_chosen_file(data, name)
+
+    def _local_save_home_file(self) -> None:
+        if not self._local_only():
+            self.send_error(403)
+            return
+        payload = self._local_json_body()
+        if payload is None:
+            return
+        bot_id = str(payload.get("bot_id") or payload.get("botId") or "").strip()
+        rel = str(payload.get("path") or "").strip().replace("\\", "/")
+        name = str(payload.get("name") or "file").strip() or "file"
+        if not bot_id or "/" in bot_id or "\\" in bot_id or not bot_id.startswith("bot_"):
+            self._json(400, {"ok": False, "error": "bot_id required"})
+            return
+        if not rel or ".." in rel.split("/"):
+            self._json(400, {"ok": False, "error": "path required"})
+            return
+        token = self.server.token  # type: ignore[attr-defined]
+        url = self.server.upstream  # type: ignore[attr-defined]
+        if not token:
+            self._json(401, {"ok": False, "error": "This computer is no longer authorized. Pair it again to continue."})
+            return
+        query = urlencode({"path": rel})
+        try:
+            status, data = _host_request(
+                url,
+                "GET",
+                f"/v1/computer/{bot_id}/files/raw?{query}",
+                b"",
+                {
+                    "Accept": "*/*",
+                    "Authorization": f"Bearer {token}",
+                    "Connection": "close",
+                },
+            )
+        except OSError:
+            self._json(502, {"ok": False, "error": "Could not reach the host"})
+            return
+        if status != 200 or not data:
+            self._json(404 if status == 404 else 502, {"ok": False, "error": "Could not download that file"})
+            return
+        self._write_chosen_file(data, name)
+
+    def _write_chosen_file(self, data: bytes, name: str) -> None:
+        dest = choose_save_path(name)
+        if dest is None:
+            self._json(409, {"ok": False, "cancelled": True, "error": "Save cancelled"})
+            return
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+        except OSError:
+            self._json(500, {"ok": False, "error": "Could not write the file"})
+            return
+        self._json(200, {"ok": True, "path": str(dest), "name": dest.name, "bytes": len(data)})
 
     def _proxy(self) -> None:
         if not self._accept_browser():

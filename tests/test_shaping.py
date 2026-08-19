@@ -25,6 +25,7 @@ class ShapingTest(unittest.TestCase):
         self.assertEqual(blocks, [{"kind": "text", "text": "hello"}])
         self.assertEqual(blocks_text(blocks), "hello")
         self.assertEqual(blocks_text([{"kind": "meta", "text": "note"}]), "note")
+        self.assertEqual(blocks_text([{"kind": "file", "name": "notes.txt", "size": 4}]), "notes.txt")
         self.assertEqual(blocks_text([]), "")
 
     def test_preview_snippet(self) -> None:
@@ -63,6 +64,21 @@ class ShapingTest(unittest.TestCase):
         empty, empty_changed = answer_ask_blocks(pending, "  ")
         self.assertFalse(empty_changed)
         self.assertEqual(empty, pending)
+        consent = [
+            {
+                "kind": "ask",
+                "text": "Open wikipedia.org?",
+                "status": "pending",
+                "consent_id": "cns_1",
+                "actions": [{"id": "once", "label": "Allow once"}],
+            }
+        ]
+        skipped, skip_changed = answer_ask_blocks(consent, "Allow once")
+        self.assertFalse(skip_changed)
+        self.assertEqual(skipped[0]["status"], "pending")
+        marked, marked_changed = answer_ask_blocks(consent, "Allow once", include_consent=True)
+        self.assertTrue(marked_changed)
+        self.assertEqual(marked[0]["status"], "answered")
 
     def test_product_run_status(self) -> None:
         self.assertEqual(product_run_status("finished"), "completed")

@@ -61,6 +61,7 @@ export default defineConfig({
       ARTEK_BUDDY_NOTIFY: "0",
       AGENT_HTTP_TOKEN: isolated.token,
       ARTEK_BUDDY_UNPAIRED: "",
+      ARTEK_SAVE_NO_DIALOG: "1",
     },
   },
 });

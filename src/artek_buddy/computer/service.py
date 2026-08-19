@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 import re
 import shutil
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,7 @@ from artek_buddy.config import Settings
 from artek_buddy.contracts.domain import (
     Bot,
     ComputerFileContent,
+    ComputerFileEntry,
     ComputerFileList,
     ComputerStatus,
     ScreenUrlResult,
@@ -22,11 +24,14 @@ from artek_buddy.contracts.domain import (
 )
 from artek_buddy.db.history import HistoryStore
 from artek_buddy.db.shaping import isoformat_utc, new_id
+from artek_buddy.uploads import remove_bot_inbox_copies
 
 log = logging.getLogger("artek_buddy")
 
 EXEC_TTL = timedelta(minutes=5)
 _HOME_KEY = re.compile(r"^[A-Za-z0-9._-]+$")
+MAX_HOME_READ_BYTES = 2 * 1024 * 1024
+MAX_HOME_DOWNLOAD_BYTES = 50 * 1024 * 1024
 
 
 def wipe_computer_home(data_dir: Path, home_key: str) -> Path:
@@ -151,6 +156,20 @@ class ComputerService:
             raise ComputerBusy(busy)
         self._destroy_box(record)
         return self.status(bot)
+
+    def remove_bot_uploads(self, bot: Bot) -> None:
+        """Drop this chat's inbox copies even when the Team home stays."""
+        record = self.store.get_computer_for_bot(bot)
+        artifacts = []
+        listing = getattr(self.store, "list_artifacts", None)
+        if callable(listing):
+            artifacts = listing(bot.id)
+        remove_bot_inbox_copies(
+            self.home_path(record),
+            Path(self.settings.agent_data_dir),
+            bot.id,
+            artifacts,
+        )
 
     def release_for_deleted_bot(self, bot: Bot) -> None:
         """Drop this bot's box. Shared Team stays if another bot still uses it."""
@@ -303,47 +322,74 @@ class ComputerService:
         self.store.save_computer(record)
         return ScreenUrlResult(url=url)
 
-    def list_files(self, bot: Bot, path: str = "/") -> ComputerFileList:
-        record = self.store.get_computer_for_bot(bot)
-        if record.state == "running" and record.provider_ref:
-            payload = self.client.list_files(record.provider_ref, path)
-            entries = [
-                {"path": str(item.get("path")), "kind": item.get("kind") or "file", "size": int(item.get("size") or 0)}
-                for item in payload.get("entries") or []
-            ]
-            return ComputerFileList(path=path, entries=entries)
-        home = self.home_path(record)
-        target = (home / path.lstrip("/")).resolve()
-        try:
-            target.relative_to(home.resolve())
-        except ValueError as err:
-            raise ComputerError("invalid path") from err
-        entries = []
-        if target.is_dir():
-            for child in sorted(target.iterdir()):
-                entries.append(
-                    {
-                        "path": child.name,
-                        "kind": "dir" if child.is_dir() else "file",
-                        "size": child.stat().st_size if child.is_file() else 0,
-                    }
-                )
-        return ComputerFileList(path=path, entries=entries)
+    def list_files(self, bot: Bot, path: str = "/", hidden: bool = False) -> ComputerFileList:
+        home, target = self._home_target(bot, path)
+        display = self._rel_home(home, target)
+        if target.is_file():
+            return ComputerFileList(path=display, entries=[self._file_entry(home, target)])
+        if not target.is_dir():
+            raise ComputerError("path not found")
+        children = sorted(target.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower()))
+        entries = [
+            self._file_entry(home, child)
+            for child in children
+            if hidden or not child.name.startswith(".")
+        ]
+        return ComputerFileList(path=display, entries=entries)
 
     def read_file(self, bot: Bot, path: str) -> ComputerFileContent:
-        record = self.store.get_computer_for_bot(bot)
-        home = self.home_path(record)
-        target = (home / path.lstrip("/")).resolve()
-        try:
-            target.relative_to(home.resolve())
-        except ValueError as err:
-            raise ComputerError("invalid path") from err
+        target = self._home_target(bot, path)[1]
         if not target.is_file():
             raise ComputerError("file not found")
         data = target.read_bytes()
-        if len(data) > 2 * 1024 * 1024:
+        if len(data) > MAX_HOME_READ_BYTES:
             raise ComputerError("file too large")
-        return ComputerFileContent(path=path, content=data.decode("utf-8", errors="replace"))
+        return ComputerFileContent(path=self._display_path(path), content=data.decode("utf-8", errors="replace"))
+
+    def file_for_download(self, bot: Bot, path: str) -> tuple[Path, str, str]:
+        target = self._home_target(bot, path)[1]
+        if not target.is_file():
+            raise ComputerError("file not found")
+        size = target.stat().st_size
+        if size > MAX_HOME_DOWNLOAD_BYTES:
+            raise ComputerError("file too large")
+        mime = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        return target, target.name, mime
+
+    def _home_target(self, bot: Bot, rel: str) -> tuple[Path, Path]:
+        record = self.store.get_computer_for_bot(bot)
+        home = self.home_path(record).resolve()
+        cleaned = (rel or "").replace("\\", "/").strip()
+        if cleaned in {"", ".", "/"}:
+            return home, home
+        parts = [part for part in cleaned.lstrip("/").split("/") if part and part != "."]
+        if not parts or any(part == ".." for part in parts):
+            raise ComputerError("invalid path")
+        target = home.joinpath(*parts).resolve()
+        try:
+            target.relative_to(home)
+        except ValueError as err:
+            raise ComputerError("invalid path") from err
+        return home, target
+
+    def _rel_home(self, home: Path, target: Path) -> str:
+        if target == home:
+            return ""
+        return str(target.relative_to(home)).replace("\\", "/")
+
+    def _display_path(self, rel: str) -> str:
+        cleaned = (rel or "").replace("\\", "/").strip().lstrip("/")
+        return "" if cleaned in {".", "/"} else cleaned
+
+    def _file_entry(self, home: Path, item: Path) -> ComputerFileEntry:
+        kind = "dir" if item.is_dir() else "file"
+        size = item.stat().st_size if item.is_file() else 0
+        return ComputerFileEntry(
+            path=self._rel_home(home, item),
+            name=item.name,
+            kind=kind,
+            size=size,
+        )
 
     def send_input(self, bot: Bot, kind: str, payload: dict[str, Any]) -> None:
         record = self.store.get_computer_for_bot(bot)
@@ -371,6 +417,10 @@ class ComputerService:
     def act(self, bot: Bot, actions: list[dict[str, Any]]) -> dict[str, Any]:
         record = self.ensure_running(bot)
         return self.client.act(record.provider_ref, actions)
+
+    def exec_command(self, bot: Bot, command: str) -> dict[str, Any]:
+        record = self.ensure_running(bot)
+        return self.client.execute(record.provider_ref, command)
 
     def open_path(self, bot: Bot, path: str) -> dict[str, Any]:
         record = self.ensure_running(bot)

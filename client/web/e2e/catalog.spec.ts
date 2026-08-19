@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { readClientLogTail } from "./client-log";
 import {
+  botBubbles,
   chooseMenu,
   createBot,
   deleteBots,
+  downloadFileCard,
   openBotMenu,
   openComputerPane,
   openShell,
@@ -66,6 +68,15 @@ test.describe("every shell function", () => {
     await expect(page.getByTestId("open-archived")).toHaveCount(0);
   });
 
+  test("a reply in the open chat does not leave the unread dot", async ({ page }) => {
+    await openShell(page);
+    const bot = await createBot(page, `e2e-seen-${Date.now().toString(36)}`);
+    created.push(bot.id);
+    await sendMessage(page, "hello there");
+    await waitUntilIdle(page);
+    await expect(page.getByTestId("unread-dot")).toHaveCount(0);
+  });
+
   test("pins, marks unread, duplicates, and edits a bot", async ({ page }) => {
     await openShell(page);
     const bot = await createBot(page, `e2e-menu-${Date.now().toString(36)}`);
@@ -81,6 +92,14 @@ test.describe("every shell function", () => {
 
     await openBotMenu(page, bot.name);
     await chooseMenu(page, "Mark as Read");
+    await expect(page.getByTestId("unread-dot")).toHaveCount(0);
+
+    const other = await createBot(page, `e2e-read-${Date.now().toString(36)}`);
+    created.push(other.id);
+    await openBotMenu(page, bot.name);
+    await chooseMenu(page, "Mark as Unread");
+    await expect(page.getByTestId("unread-dot")).toBeVisible();
+    await page.locator(`[data-testid="bot-row"][data-bot-name="${bot.name}"]`).click();
     await expect(page.getByTestId("unread-dot")).toHaveCount(0);
 
     await openBotMenu(page, bot.name);
@@ -175,6 +194,20 @@ test.describe("every shell function", () => {
     await page.getByLabel("Close settings").click();
     await page.getByTitle("Agent computer").click();
     await expect(page.getByText("Offline • Click to start")).toBeVisible();
+  });
+
+  test("agent file card downloads from the thread", async ({ page }) => {
+    await openShell(page);
+    const bot = await createBot(page, `e2e-file-${Date.now().toString(36)}`);
+    created.push(bot.id);
+    await sendMessage(page, "e2e-send-file");
+    await waitUntilIdle(page);
+    const card = page.getByTestId("file-card");
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("notes.txt");
+    await expect(card).toContainText("18 B");
+    await expect(botBubbles(page)).toContainText("Here is notes.txt");
+    await downloadFileCard(page, "notes.txt");
   });
 
   test("settings delete removes the last chat", async ({ page }) => {

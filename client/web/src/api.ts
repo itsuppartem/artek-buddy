@@ -2,6 +2,7 @@ import { camelize, snakify } from "./camel";
 import type { LocalStatus, PairedDevice } from "./lib/pairing";
 import type {
   Bot,
+  ComputerFileList,
   ComputerStatus,
   MemoryDocument,
   ProductEvent,
@@ -43,10 +44,10 @@ export function classifyError(err: unknown): { message: string; kind: ShellError
   return { message: "Something went wrong", kind: "action" };
 }
 
-export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   const init: RequestInit = { method, headers, signal: controller.signal };
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -106,6 +107,92 @@ export const api = {
     },
     notify(input: { title: string; body: string; urgency: "low" | "normal" | "critical" }) {
       return request<{ ok: boolean }>("POST", "/local/notify", input).catch(() => ({ ok: false }));
+    },
+    ownerRead(path: string) {
+      return request<{ ok: boolean; name: string; bytes: number; text?: string; contentBase64: string }>(
+        "POST",
+        "/local/owner-read",
+        { path },
+      );
+    },
+    ownerWrite(input: { path: string; text?: string; contentBase64?: string }) {
+      return request<{ ok: boolean; path: string; name: string; bytes: number }>("POST", "/local/owner-write", input);
+    },
+    ownerList(path: string) {
+      return request<{ ok: boolean; path: string; entries: { name: string; kind: string; size?: number | null }[] }>(
+        "POST",
+        "/local/owner-list",
+        { path },
+      );
+    },
+    ownerExec(input: { command: string; cwd?: string }) {
+      return request<{ ok: boolean; stdout: string; stderr: string; exitCode: number; error?: string }>(
+        "POST",
+        "/local/owner-exec",
+        input,
+      );
+    },
+    saveArtifact(input: { artifactId: string; name: string }) {
+      return request<{ ok: boolean; path: string; name: string; bytes: number }>(
+        "POST",
+        "/local/save-artifact",
+        input,
+        10 * 60 * 1000,
+      );
+    },
+    saveHomeFile(input: { botId: string; path: string; name: string }) {
+      return request<{ ok: boolean; path: string; name: string; bytes: number }>(
+        "POST",
+        "/local/save-home-file",
+        input,
+        10 * 60 * 1000,
+      );
+    },
+    attachFiles(paths: string[]) {
+      return request<{
+        ok: boolean;
+        files: { name: string; type: string; bytes: number; contentBase64: string }[];
+      }>("POST", "/local/attach-files", { paths });
+    },
+  },
+  consents: {
+    get(consentId: string) {
+      return request<{
+        id: string;
+        actionClass: string;
+        status: string;
+        path?: string | null;
+        command?: string | null;
+        cwd?: string | null;
+        kind?: string | null;
+        text?: string | null;
+        contentBase64?: string | null;
+        summary?: string | null;
+      }>("GET", `/v1/consents/${encodeURIComponent(consentId)}`);
+    },
+    answer(consentId: string, decision: string) {
+      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}`, { decision });
+    },
+    uploadFile(consentId: string, input: { name: string; text?: string; contentBase64?: string }) {
+      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}/file`, input);
+    },
+    uploadResult(
+      consentId: string,
+      input: {
+        ok?: boolean;
+        name?: string;
+        text?: string;
+        contentBase64?: string;
+        stdout?: string;
+        stderr?: string;
+        exitCode?: number;
+        path?: string;
+        bytes?: number;
+        entries?: unknown[];
+        error?: string;
+      },
+    ) {
+      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}/result`, input);
     },
   },
   health() {
@@ -311,6 +398,22 @@ export const api = {
     screenUrl(botId: string) {
       return request<{ url: string | null }>("GET", `/v1/computer/${botId}/screen`);
     },
+    files(botId: string, path = "", hidden = false) {
+      const query = new URLSearchParams();
+      if (path) query.set("path", path);
+      if (hidden) query.set("hidden", "true");
+      const suffix = query.toString() ? `?${query}` : "";
+      return request<ComputerFileList>("GET", `/v1/computer/${botId}/files${suffix}`);
+    },
+    readFile(botId: string, path: string) {
+      return request<{ path: string; content: string }>(
+        "GET",
+        `/v1/computer/${botId}/files/read?path=${encodeURIComponent(path)}`,
+      );
+    },
+    fileUrl(botId: string, path: string) {
+      return `/v1/computer/${botId}/files/raw?path=${encodeURIComponent(path)}`;
+    },
   },
   threads: {
     get(botId: string) {
@@ -320,11 +423,28 @@ export const api = {
       const query = before == null ? "" : `?before=${before}`;
       return request<ThreadMessagePage>("GET", `/v1/threads/${botId}/messages${query}`);
     },
-    send(botId: string, text: string, replyToId?: string | null) {
-      return request<ThreadSendResult>("POST", `/v1/threads/${botId}/messages`, {
-        text,
-        replyToId: replyToId || undefined,
-      });
+    send(
+      botId: string,
+      text: string,
+      replyToId?: string | null,
+      attachments?: { name: string; contentBase64: string; mimeType?: string }[],
+    ) {
+      return request<ThreadSendResult>(
+        "POST",
+        `/v1/threads/${botId}/messages`,
+        {
+          text,
+          replyToId: replyToId || undefined,
+          attachments: attachments?.length
+            ? attachments.map((item) => ({
+                name: item.name,
+                contentBase64: item.contentBase64,
+                mimeType: item.mimeType,
+              }))
+            : undefined,
+        },
+        attachments?.length ? 120_000 : REQUEST_TIMEOUT_MS,
+      );
     },
     stop(botId: string) {
       return request<{ ok: boolean }>("POST", `/v1/threads/${botId}/stop`);

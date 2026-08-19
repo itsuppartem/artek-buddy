@@ -82,6 +82,9 @@ export function attentionFromEvent(event: ProductEvent, botName: string): Attent
     return makeAlert("failed", botId, botName, error);
   }
   if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
+    if (event.type === "run.waiting_input" && (event.payload.auto === true || event.payload.consentId)) {
+      return null;
+    }
     const body =
       event.type === "run.waiting_input"
         ? "The bot is waiting for you."

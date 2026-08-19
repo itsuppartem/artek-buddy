@@ -1,4 +1,5 @@
 [begin] (Artek)
   [exec] (Browser) {artek-browser}
+  [exec] (Files) {pcmanfm /home/artek}
   [exec] (Terminal) {xterm -bg #111113 -fg #E8E8EA -cr #E8E8EA -title Terminal}
 [end]

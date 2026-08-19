@@ -38,6 +38,10 @@ def blocks_text(blocks: Iterable[Any] | None) -> str:
             value = block.get("text")
             if value:
                 parts.append(str(value))
+        elif kind == "file":
+            name = block.get("name")
+            if name:
+                parts.append(str(name))
         elif kind == "card":
             for line in block.get("lines") or []:
                 if isinstance(line, dict):
@@ -79,7 +83,12 @@ def preview_snippet(text: str, limit: int = PREVIEW_LIMIT) -> str:
     return compact[: max(0, limit - 1)].rstrip() + "…"
 
 
-def answer_ask_blocks(blocks: list[Any], answer: str) -> tuple[list[Any], bool]:
+def answer_ask_blocks(
+    blocks: list[Any],
+    answer: str,
+    *,
+    include_consent: bool = False,
+) -> tuple[list[Any], bool]:
     text = (answer or "").strip()
     if not text or not isinstance(blocks, list):
         return blocks, False
@@ -90,6 +99,7 @@ def answer_ask_blocks(blocks: list[Any], answer: str) -> tuple[list[Any], bool]:
             isinstance(block, dict)
             and block.get("kind") == "ask"
             and block.get("status") != "answered"
+            and (include_consent or not block.get("consent_id"))
         ):
             next_blocks.append({**block, "status": "answered", "answer": text})
             changed = True

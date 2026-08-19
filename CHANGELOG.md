@@ -1,5 +1,131 @@
 # Changelog
 
+## [0.10.21] - 2026-08-19
+
+### Changed
+- The computer pane no longer lists sandbox files. Use **Files** on the desktop (Take control) to browse that home.
+
+## [0.10.20] - 2026-08-19
+
+### Fixed
+- Deleting a chat removes that chat's copies from the sandbox `inbox/`. A shared Team home and other bots' files stay.
+
+## [0.10.19] - 2026-08-19
+
+### Fixed
+- Long owner-exec commands and file paths wrap inside consent cards and chat bubbles instead of stretching the thread.
+
+## [0.10.18] - 2026-08-19
+
+### Added
+- The Team/Private desktop menu has **Files** (PCManFM) next to Browser and Terminal. `launch_app(application='files')` opens the home folder. The client Files pane is unchanged.
+
+## [0.10.17] - 2026-08-19
+
+### Fixed
+- Opening a chat marks it read. A reply while that chat is open no longer leaves the unread dot. Right-click Mark as Unread still sticks until you leave and open the chat again.
+
+## [0.10.16] - 2026-08-19
+
+### Fixed
+- Copying a file on Linux (file manager, screenshot folder, any type) and pasting into the composer attaches the file. The clipboard often has only a `file://` URI or a home path; the `.deb` reads that file instead of inserting the path as text.
+
+## [0.10.15] - 2026-08-19
+
+### Fixed
+- Shift+Enter inserts a newline in the composer. The field is a textarea; Enter still sends.
+
+## [0.10.14] - 2026-08-19
+
+### Fixed
+- Ctrl+Z in the chat composer undoes typing (Ctrl+Shift+Z / Ctrl+Y redo). The controlled input had no native undo in the `.deb` window.
+
+## [0.10.13] - 2026-08-19
+
+### Changed
+- A message sent while the lead is working is injected on the next tool result (Codex/Grok-style steer). If the turn has no more tools, it still runs as a follow-up after.
+
+## [0.10.12] - 2026-08-19
+
+### Changed
+- Reading a file or listing a folder on the paired PC no longer shows Allow. Same for read-only shell (`ls`, `cat`, `echo`, `pwd`, `uname`, …). Writing a file or a command that can change the PC still asks. Always covers later writes and commands on that PC, not each folder.
+
+## [0.10.11] - 2026-08-19
+
+### Added
+- Image, video, and audio file cards in the thread show a preview, not only a Download row.
+- Download opens the system Save dialog (default folder Downloads / Загрузки). Cancel writes nothing.
+
+### Tests
+- Loopback chooser hook, cancel 409, thread `file-preview`, and a cancelled card that stays idle.
+
+## [0.10.10] - 2026-08-19
+
+### Fixed
+- Download (thread card and Files) succeeds only when the `.deb` writes the file through `/local/save-artifact` or `/local/save-home-file`. A silent WebKit `<a download>` click no longer reports Saved to.
+
+### Tests
+- Unhappy paths for the real window: loopback write to `Загрузки`, path escape, missing host file, paste that must not steal text, Allow still answers if the local job fails, Deny does not touch the PC, Stop is one banner with no extra bubble.
+
+## [0.10.9] - 2026-08-19
+
+### Added
+- The computer pane lists this bot's sandbox home (inbox, downloads, files the bot wrote). Open a folder, preview text or media, and Download saves to this PC. Works while the desktop is asleep.
+
+## [0.10.8] - 2026-08-19
+
+### Fixed
+- Ctrl+V of a screenshot into the composer attaches it. The clipboard image is read from `items` (WebKit often leaves `files` empty) after `preventDefault`, and unnamed clips become `screenshot-1.png`.
+
+### Added
+- Pending image, video, and audio attachments show a thumbnail or player above the send field so you can look or listen before the message goes out.
+
+## [0.10.7] - 2026-08-19
+
+### Fixed
+- Download on a file card saves into the owner `Downloads` (or `Загрузки`) through the `.deb`. WebKit has no browser download dialog; the old click did nothing.
+
+## [0.10.6] - 2026-08-19
+
+### Fixed
+- Stop no longer posts a second "stopped by user" bubble next to the banner. One "Stopped." line. A user stop does not mark the bot as failed.
+
+## [0.10.5] - 2026-08-19
+
+### Fixed
+- Clicking Allow on an owner-PC card still tells the host, even if the local path job fails. The agent gets the error instead of hanging.
+- `~/Downloads` on a Russian desktop maps to `~/Загрузки`. A missing folder says "folder not found", not "outside the home".
+- After Allow the tool result says the owner already answered. The model is told not to ask them to press Allow again.
+
+## [0.10.4] - 2026-08-19
+
+### Added
+- The composer plus button, paste, and drop attach several files to the next send. The host stores them as artifacts and copies them into that bot's `inbox/` so the agent can read the paths. Caps: 10 files, 25 MB each, 50 MB together.
+
+## [0.10.3] - 2026-08-19
+
+### Added
+- The agent can attach a file in the thread (`send_file`). The `.deb` shows a card with Download. Files stay on this Pi (`data/artifacts/{bot_id}`) and download through `GET /v1/artifacts/{id}`.
+
+## [0.10.2] - 2026-08-19
+
+### Changed
+- Filling a form, typing, or clicking on a site in the remote browser asks Allow once / Always / Deny first (`page_input`). Watching the screen still does not.
+- New `browser_act` (goto / fill / click / type / submit). The lead prompt no longer tells the model to use Playwright to skip that card.
+
+## [0.10.1] - 2026-08-19
+
+### Added
+- The paired PC is an SSH-like session, not only a file read. After Allow once / Always / Deny the client can create or overwrite a file, list a folder, or run a shell command under the owner home.
+- Tools: `write_owner_file`, `list_owner_dir`, `run_owner_command`. Loopback `/local/owner-write`, `/local/owner-list`, `/local/owner-exec`. `GET /v1/consents/{id}` and `POST /v1/consents/{id}/result`.
+
+## [0.10.0] - 2026-08-19
+
+### Added
+- Consent cards in the thread: **Allow once / Always / Deny**. Opening a site, clicking, typing, or reading a file from the owner PC waits for an answer. Always is stored on the Pi for that bot, device, action, and scope.
+- `read_owner_file` reads a file from the paired Linux PC through loopback `/local/owner-read`. The page never sees the host token. Paths must stay under the owner home. Max 1 MB. The file lands in that bot's `inbox/`.
+- `POST /v1/consents/{id}` and `POST /v1/consents/{id}/file`. Scripted tests auto-allow unless `CONSENT_AUTO=ask`.
+
 ## [0.9.5] - 2026-08-19
 
 ### Changed

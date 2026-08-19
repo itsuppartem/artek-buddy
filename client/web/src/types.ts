@@ -42,6 +42,18 @@ export type ComputerStatus = {
   busyBotName: string | null;
 };
 
+export type ComputerFileEntry = {
+  path: string;
+  name: string;
+  kind: "dir" | "file" | string;
+  size: number;
+};
+
+export type ComputerFileList = {
+  path: string;
+  entries: ComputerFileEntry[];
+};
+
 export type Run = {
   id: string;
   botId: string;
@@ -66,6 +78,7 @@ export type MessageBlock =
       status?: "pending" | "answered" | null;
       answer?: string | null;
       actions?: { id: string; label: string }[] | null;
+      consentId?: string | null;
     }
   | { kind: "computer"; state: string; text: string }
   | { kind: "meta"; text: string }
@@ -88,6 +101,13 @@ export type MessageBlock =
       name: string;
       title?: string | null;
       status: "created" | "archived" | "deleted";
+    }
+  | {
+      kind: "file";
+      artifactId: string;
+      name: string;
+      mimeType: string;
+      size: number;
     };
 
 export type MessageReply = {

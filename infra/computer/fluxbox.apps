@@ -7,3 +7,9 @@
 [app] (class=XTerm)
   [Maximized] {no}
 [end]
+[app] (class=PCManFM)
+  [Maximized] {no}
+[end]
+[app] (class=pcmanfm)
+  [Maximized] {no}
+[end]
