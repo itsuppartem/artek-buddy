@@ -28,7 +28,7 @@ Mentioning the *name* of an env var (`AGENT_HTTP_TOKEN`) in docs is fine. A real
 
 Describe Artek Buddy on its own terms: bots, threads, Cursor runtime, `.deb` client, per-user sandbox on this Raspberry Pi.
 
-Honest attribution belongs in `README.md` and `NOTICE`: the HTTP contract surface was adapted from Rakazo (Apache-2.0). Do not present this repo as their TypeScript sources. Do not put that name in source, tests, or commit messages.
+Honest attribution belongs in `README.md` and `NOTICE`: the HTTP contract surface was adapted from Rakazo (Apache-2.0). Do not present this repo as their TypeScript sources. Do not put that name in source or commit messages.
 
 Write "adapted from" in those attribution files. Do not claim the implementation is a verbatim dump of their repo.
 

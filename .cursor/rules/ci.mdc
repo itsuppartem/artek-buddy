@@ -5,4 +5,4 @@ alwaysApply: true
 
 # GitHub Actions
 
-There is no `test` workflow. After a push or PR, check `gh run list`. If `release` is red or hung, fix it in the same session through `develop` → `main`.
+After a push or PR, check `gh run list`. If `release` is red or hung, fix it in the same session through `develop` → `main`.
