@@ -111,21 +111,18 @@ class HistoryIntegrationTest(unittest.TestCase):
         self.assertEqual(duplicated.title, "New Title")
         self.assertEqual(duplicated.instructions, "Custom prompt")
 
-    def test_delete_bot_preserves_memories_when_requested(self) -> None:
+    def test_delete_bot_drops_charter_keeps_owner(self) -> None:
         bot = self.store.create_bot(name="memory-preserve-bot")
-        doc = self.store.create_memory("bot", "Important note", bot_id=bot.id, path="NOTES.md")
-        self.assertEqual(doc.scope, "bot")
-
-        # Delete with delete_memories=False
+        charter = self.store.create_memory("bot", "Important note", bot_id=bot.id, path="NOTES.md")
+        owner = self.store.create_memory("user", "Owner fact", path="PROFILE.md")
+        self.addCleanup(self.store.delete_memory, owner.id)
+        self.assertEqual(charter.scope, "bot")
         self.assertTrue(self.store.delete_bot(bot.id, delete_memories=False))
-        user_docs = self.store.list_memory()
-        matching = [d for d in user_docs if "Important note" in d.content]
-        self.assertTrue(len(matching) >= 1)
-        self.assertEqual(matching[0].scope, "user")
-        self.assertIn("bots/memory-preserve-bot", matching[0].path)
-        # Cleanup preserved memory
-        for m in matching:
-            self.store.delete_memory(m.id)
+        self.assertIsNone(self.store.get_memory(charter.id))
+        kept = self.store.get_memory(owner.id)
+        assert kept is not None
+        self.assertEqual(kept.scope, "user")
+        self.assertEqual(kept.content, "Owner fact")
 
     def test_reply_inbox_and_subagents(self) -> None:
         bot = self.store.create_bot(name="lead-inbox")

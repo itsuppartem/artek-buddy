@@ -95,6 +95,34 @@ class MemoryIntegrationTest(unittest.TestCase):
         self.assertIn("user fact", prompt)
         self.assertTrue(prompt.endswith("what do you know?"))
 
+    def test_shelves_tone_format_and_expired_work(self) -> None:
+        hub = MemoryHub(self.store, InMemoryGateway())
+        tone = hub.capture("без эмодзи", kind="preference", bot_id=self.bot.id)
+        fmt = hub.capture("пиши коротко", kind="preference", bot_id=self.bot.id)
+        work = hub.capture("repo artek-buddy on main this week", kind="project", bot_id=self.bot.id)
+        assert tone is not None and fmt is not None and work is not None
+        self.addCleanup(self.store.delete_memory, tone.document_id)
+        self.addCleanup(self.store.delete_memory, fmt.document_id)
+        self.addCleanup(self.store.delete_memory, work.document_id)
+        self.assertEqual(tone.slot, "tone")
+        self.assertEqual(fmt.slot, "format")
+        self.assertEqual(work.shelf, "work")
+        self.assertIsNotNone(work.until)
+        live = {entry.id: entry for entry in self.store.list_live_memory_entries(bot_id=self.bot.id)}
+        self.assertEqual(live[tone.id].shelf, "owner")
+        self.assertEqual(live[fmt.id].shelf, "owner")
+        self.assertIn(work.id, live)
+        with self.store._conn() as conn:
+            conn.execute(
+                "UPDATE memory_entries SET until = NOW() - INTERVAL '1 hour' WHERE id = %s",
+                (work.id,),
+            )
+            conn.commit()
+        hidden = {entry.id for entry in self.store.list_live_memory_entries(bot_id=self.bot.id)}
+        self.assertNotIn(work.id, hidden)
+        self.assertIn(tone.id, hidden)
+        self.assertIn(fmt.id, hidden)
+
     def test_shared_entries_survive_other_bot_and_delete(self) -> None:
         reader = self.store.create_bot(name="memory-reader")
         writer = self.store.create_bot(name="memory-writer")
