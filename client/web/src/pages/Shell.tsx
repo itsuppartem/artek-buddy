@@ -583,7 +583,7 @@ export function ShellPage() {
 
   useEffect(() => {
     if (!computerOpen) return;
-    function onKey(event: KeyboardEvent) {
+    function onKey(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") setComputerOpen(false);
     }
     window.addEventListener("keydown", onKey);

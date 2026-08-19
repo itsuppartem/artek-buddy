@@ -18,14 +18,17 @@ function file(name: string, size: number, type = "text/plain"): File {
 }
 
 function fileList(files: File[]): FileList {
-  return {
+  const list: Record<number, File> & {
+    length: number;
+    item: (index: number) => File | null;
+  } = {
     length: files.length,
     item: (index: number) => files[index] ?? null,
-    [Symbol.iterator]: function* () {
-      yield* files;
-    },
-    ...files,
-  } as unknown as FileList;
+  };
+  files.forEach((entry, index) => {
+    list[index] = entry;
+  });
+  return list as unknown as FileList;
 }
 
 describe("addPendingFiles", () => {
