@@ -158,16 +158,27 @@ jobs:
           exit 1
 
       - name: Install client .deb
+        timeout-minutes: 15
         run: |
           set +x
-          sudo apt-get update
-          sudo apt-get install -y dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils libnotify-bin
+          export DEBIAN_FRONTEND=noninteractive
+          # ubuntu-latest ships Chrome/Azure apt sources that hang update for 40+ min.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list \
+            /etc/apt/sources.list.d/microsoft-prod.list \
+            /etc/apt/sources.list.d/azure-cli.list
+          sudo timeout 90 apt-get update \
+            -o Acquire::Retries=2 \
+            -o Acquire::http::Timeout=20 \
+            -o Acquire::https::Timeout=20
+          sudo timeout 300 apt-get install -y --no-install-recommends \
+            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils libnotify-bin
           unset ARTEK_BAKE_URL
           client/build-deb.sh
           sudo dpkg -i "artek-buddy-client_$(tr -d '[:space:]' < VERSION)_all.deb"
           sudo apt-get install -f -y
 
       - name: Serve packaged client
+        timeout-minutes: 15
         run: |
           set +x
           python -m pip install -r requirements-dev.txt
@@ -190,6 +201,7 @@ jobs:
           exit 1
 
       - name: Live UI
+        timeout-minutes: 45
         env:
           ARTEK_LIVE: "1"
         run: |
