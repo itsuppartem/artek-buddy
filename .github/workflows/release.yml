@@ -110,3 +110,9 @@ jobs:
             "artek-buddy-client_${{ steps.ver.outputs.new }}_all.deb" \
             SHA256SUMS \
             install-host.sh
+
+      - name: Keep five GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTEK_RELEASE_KEEP: "5"
+        run: infra/prune-releases.sh

@@ -211,7 +211,7 @@ On the machine that has the repo and Node:
 client/build-deb.sh
 ```
 
-A merge into `main` that bumps `VERSION` also attaches that `.deb` to the GitHub Release (no baked host URL). Local builds stay in the repo root (gitignored). Copy the file to the desktop PC.
+A merge into `main` that bumps `VERSION` also attaches that `.deb` to the GitHub Release (no baked host URL). Only the five newest Releases are kept. Local builds stay in the repo root (gitignored). Copy the file to the desktop PC.
 
 On the desktop PC:
 
