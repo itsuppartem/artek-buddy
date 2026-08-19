@@ -132,6 +132,7 @@ jobs:
             echo "ARTEK_CI_DATA=$RUNNER_TEMP/artek-data"
             echo "ARTEK_CI_WORKSPACE=$RUNNER_TEMP/artek-workspace"
             echo "ARTEK_CLIENT_HOME=$RUNNER_TEMP/owner-home"
+            echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/ms-playwright"
           } >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/artek-data" "$RUNNER_TEMP/artek-workspace" "$RUNNER_TEMP/owner-home/Downloads"
           printf 'ci notes\n' > "$RUNNER_TEMP/owner-home/notes.txt"
@@ -194,7 +195,7 @@ jobs:
         run: |
           set +x
           python -m pip install -r requirements-dev.txt
-          python -m playwright install chromium
+          python -m playwright install chromium chromium-headless-shell
           export HOME="$ARTEK_CLIENT_HOME"
           mkdir -p "$HOME/.config/artek-buddy"
           umask 077
