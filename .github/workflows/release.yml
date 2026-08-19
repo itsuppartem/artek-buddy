@@ -1,0 +1,112 @@
+name: release
+
+# Starts only when a PR lands on main. A VERSION bump publishes
+# the GitHub Release, the clean .deb, and GHCR images.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect VERSION bump
+        id: ver
+        run: |
+          NEW=$(tr -d '[:space:]' < VERSION)
+          OLD=$(git show HEAD^:VERSION 2>/dev/null | tr -d '[:space:]' || true)
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          if [ -n "$NEW" ] && [ "$NEW" != "$OLD" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "VERSION new=$NEW old=${OLD:-none} changed=$( [ "$NEW" != "$OLD" ] && echo true || echo false )"
+
+      - uses: actions/setup-node@v4
+        if: steps.ver.outputs.changed == 'true'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/web/package-lock.json
+
+      - name: Build client .deb (no baked URL)
+        if: steps.ver.outputs.changed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev
+          unset ARTEK_BAKE_URL
+          client/build-deb.sh
+          test ! -f client/url || echo "client/url exists locally but must not be baked"
+          python3 - <<'PY'
+          import subprocess, tarfile, io, sys
+          deb = f"artek-buddy-client_{open('VERSION').read().strip()}_all.deb"
+          data = subprocess.check_output(["dpkg-deb", "-c", deb], text=True)
+          if "./usr/lib/artek-buddy-client/url" in data:
+              sys.exit("refusing to release a .deb that contains a baked host URL")
+          print("deb has no baked url")
+          PY
+          sha256sum "artek-buddy-client_${{ steps.ver.outputs.new }}_all.deb" > SHA256SUMS
+          cp infra/install-host.sh install-host.sh
+
+      - uses: docker/setup-qemu-action@v3
+        if: steps.ver.outputs.changed == 'true'
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.ver.outputs.changed == 'true'
+
+      - uses: docker/login-action@v3
+        if: steps.ver.outputs.changed == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push host image
+        if: steps.ver.outputs.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}
+            ghcr.io/itsuppartem/artek-buddy:latest
+
+      - name: Push computer image
+        if: steps.ver.outputs.changed == 'true'
+        continue-on-error: true
+        uses: docker/build-push-action@v6
+        with:
+          context: ./infra/computer
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ghcr.io/itsuppartem/artek-buddy-computer:${{ steps.ver.outputs.new }}
+            ghcr.io/itsuppartem/artek-buddy-computer:latest
+
+      - name: GitHub Release
+        if: steps.ver.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ steps.ver.outputs.new }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists"
+            exit 0
+          fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "Artek Buddy ${{ steps.ver.outputs.new }}. Client .deb has no baked host URL. On a Pi: curl -fsSL https://github.com/itsuppartem/artek-buddy/releases/download/${TAG}/install-host.sh | sh" \
+            "artek-buddy-client_${{ steps.ver.outputs.new }}_all.deb" \
+            SHA256SUMS \
+            install-host.sh
