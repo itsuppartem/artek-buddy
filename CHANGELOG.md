@@ -3,7 +3,7 @@
 ## [0.10.22] - 2026-08-19
 
 ### Added
-- Merging a `VERSION` bump into `main` publishes a GitHub Release: a `.deb` with no baked host URL, `install-host.sh`, and GHCR images. On a Pi, run the script, paste `CURSOR_API_KEY` into `.env`, run it again. Only the five newest Releases are kept.
+- Merging a `VERSION` bump into `main` publishes a GitHub Release: a `.deb` with no baked host URL, `install-host.sh`, and the host GHCR image. The computer image is built on the Pi (QEMU arm64 in Actions hangs). On a Pi, run the script, paste `CURSOR_API_KEY` into `.env`, run it again. Only the five newest Releases are kept.
 
 ## [0.10.21] - 2026-08-19
 
