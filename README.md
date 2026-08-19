@@ -122,13 +122,20 @@ Common ids you may see: `grok-4.6`, `composer-2.5`, `auto-smart` (Cursor Router,
 
 ### 3. Host on the Raspberry Pi
 
-On the Pi (this machine):
+One action after Docker is installed. The script writes `.env` with random tokens, then stops so you can paste `CURSOR_API_KEY`. Run it again to pull images and start the stack.
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git docker.io docker-compose-v2
+sudo apt-get install -y git docker.io docker-compose-v2 curl
 sudo usermod -aG docker "$USER"   # then log out and back in
+curl -fsSL https://github.com/itsuppartem/artek-buddy/releases/latest/download/install-host.sh | sh
 ```
+
+Edit `~/artek-buddy/.env`, set `CURSOR_API_KEY=crsr_…`, run the same `curl | sh` again.
+
+Manual clone and `docker compose up --build` still work. After the first GHCR publish, set each package visibility to **Public** so the Pi can pull without login.
+
+On the Pi (this machine), the long form:
 
 ```bash
 git clone https://github.com/itsuppartem/artek-buddy.git
@@ -204,12 +211,12 @@ On the machine that has the repo and Node:
 client/build-deb.sh
 ```
 
-That writes `artek-buddy-client_<version>_all.deb` in the repo root (gitignored). Copy it to the desktop PC.
+A merge into `main` that bumps `VERSION` also attaches that `.deb` to the GitHub Release (no baked host URL). Local builds stay in the repo root (gitignored). Copy the file to the desktop PC.
 
 On the desktop PC:
 
 ```bash
-sudo dpkg -i artek-buddy-client_0.10.21_all.deb
+sudo dpkg -i artek-buddy-client_0.10.22_all.deb
 sudo apt-get install -f
 ```
 
@@ -217,7 +224,7 @@ sudo apt-get install -f
 
 Upgrade later with a newer `.deb` of a **different version** (`dpkg -i` the new file). Do not overwrite the same filename in the repo when you bump `VERSION`. Remove with `sudo apt-get remove artek-buddy-client`. Pairing files stay in `~/.config/artek-buddy/` until you delete them.
 
-Optional untracked `client/url` (one line, e.g. `http://<pi-tailscale-ip>:8080`) is baked into the package and prefills the pair form. Never put a token in that file.
+Release packages leave the pair URL empty. `ARTEK_BAKE_URL=1 client/build-deb.sh` can copy untracked `client/url` into a local package only. Never put a token in that file.
 
 Open **Artek Buddy** from the app menu (or `artek-buddy`).
 
@@ -288,7 +295,7 @@ More: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Version
 
-`0.10.21` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
+`0.10.22` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
 
 Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel hostnames, local compose (`docker-compose.local.yml`), or local tooling.
 

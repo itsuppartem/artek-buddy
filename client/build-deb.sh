@@ -1,6 +1,7 @@
 #!/bin/sh
-# Build a local owner .deb. May bake untracked client/url (never the host token).
-# Do not commit the resulting file.
+# Build a local owner .deb. Do not commit the resulting file.
+# Official / CI packages never bake a host URL. Set ARTEK_BAKE_URL=1 to copy
+# untracked client/url into the package (never a token).
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 
@@ -32,7 +33,7 @@ mkdir -p "$LIB/web" "$BIN" "$APP" "$DOC" "$DEBIAN"
 cp client/artek_buddy.py "$LIB/artek_buddy.py"
 cp client/VERSION "$LIB/VERSION"
 cp -R client/web/dist/. "$LIB/web/"
-if [ -f client/url ]; then
+if [ "${ARTEK_BAKE_URL:-}" = "1" ] && [ -f client/url ]; then
   cp client/url "$LIB/url"
   chmod 644 "$LIB/url"
 fi
