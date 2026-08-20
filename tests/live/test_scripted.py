@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import ensure_bot, pair_fresh, send_message
+from tests.live.helpers import create_named_bot, pair_fresh, send_message
 
 pytestmark = pytest.mark.live
 
 
-def _open_thread(page: Page, client_url: str, host_url: str, name: str) -> None:
+def _open_thread(page: Page, client_url: str, host_url: str, prefix: str) -> None:
     pair_fresh(page, client_url, host_url)
-    ensure_bot(page, name)
+    create_named_bot(page, f"{prefix} {uuid.uuid4().hex[:8]}")
 
 
 def test_scripted_reply_appears(page: Page, client_url: str, host_url: str) -> None:

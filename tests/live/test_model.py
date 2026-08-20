@@ -8,7 +8,7 @@ from playwright.sync_api import Page, expect
 
 from tests.live.helpers import ensure_bot, pair_fresh, send_message
 
-pytestmark = [pytest.mark.live, pytest.mark.model]
+pytestmark = [pytest.mark.live, pytest.mark.model, pytest.mark.timeout(400)]
 
 
 def _ensure_paired(page: Page, client_url: str, host_url: str) -> None:

@@ -42,16 +42,6 @@ def composer(page: Page):
     return page.get_by_role("textbox", name="Message")
 
 
-def dismiss_attention(page: Page) -> None:
-    """The attention pill sits on top of Send/Stop. Playwright then waits 30s."""
-    banner = page.get_by_test_id("attention-alert")
-    try:
-        if banner.count() and banner.first.is_visible(timeout=0):
-            banner.first.click(timeout=1_000)
-    except Exception:
-        return
-
-
 def close_computer_pane(page: Page) -> None:
     """Create opens the computer pane; the noVNC iframe 502-loops and CDP sits."""
     for loc in (
@@ -90,10 +80,28 @@ def open_computer_pane(page: Page) -> None:
     expect(memory).to_be_visible(timeout=20_000)
 
 
+def fill_react_input(locator, text: str) -> None:
+    """Playwright fill() can set the DOM without React draft, then a rerender wipes it."""
+    locator.wait_for(timeout=8_000)
+    locator.evaluate(
+        """(el, value) => {
+          const proto = el.tagName === "TEXTAREA"
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+          setter.call(el, value);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        }""",
+        text,
+    )
+
+
 def send_message(page: Page, text: str) -> None:
+    """Type into the composer and press Enter. Do not click Send: the attention
+    pill covers it, and clicking the pill opens a leftover bot instead.
+    """
     arm_page(page)
     close_computer_pane(page)
-    dismiss_attention(page)
     booting = page.get_by_text("Booting up")
     try:
         if booting.count():
@@ -101,11 +109,12 @@ def send_message(page: Page, text: str) -> None:
     except Exception:
         pass
     box = composer(page)
-    box.wait_for(timeout=8_000)
-    box.fill(text, timeout=8_000)
-    send_btn = page.get_by_role("button", name="Send")
-    expect(send_btn).to_be_enabled(timeout=8_000)
-    send_btn.click(timeout=5_000, force=True)
+    box.click(timeout=8_000)
+    fill_react_input(box, text)
+    box.press("Enter")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=text)
+    ).to_be_visible(timeout=8_000)
 
 
 def open_settings(page: Page, name: str) -> None:
@@ -144,8 +153,8 @@ def create_named_bot(
 ) -> None:
     """+ is always in the sidebar. Private so Create does not paint Team Booting up.
     Create opens the computer pane (memory / routines live there). Thread tests
-    close it so noVNC cannot sit on later clicks; the memory test keeps it open
-    and uses Team, matching the develop window test that already passed."""
+    close it so noVNC cannot sit on later clicks; the memory test keeps it open.
+    """
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.get_by_title("New bot").click()
     box = page.get_by_placeholder("Name this bot")
@@ -157,10 +166,13 @@ def create_named_bot(
         page.get_by_role("button", name="Private").click()
     page.get_by_role("button", name="Create", exact=True).click()
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
+    bot_row(page, name).click()
+    expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=name)).to_be_visible(
+        timeout=8_000
+    )
     composer(page).wait_for(timeout=20_000)
     if close_pane:
         close_computer_pane(page)
-    dismiss_attention(page)
 
 
 def open_bot_menu(page: Page, name: str) -> None:
@@ -169,12 +181,14 @@ def open_bot_menu(page: Page, name: str) -> None:
 
 
 def ensure_bot(page: Page, name: str) -> None:
+    """Open this named chat. Leftover host bots must not steal Send."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
-    empty = page.get_by_test_id("empty-bots")
-    inbox = page.get_by_test_id("empty-inbox")
-    rows = page.get_by_test_id("bot-row")
-    expect(empty.or_(inbox).or_(rows.first)).to_be_visible(timeout=20_000)
-    if rows.count() and rows.first.is_visible(timeout=0):
+    row = bot_row(page, name)
+    if row.count() and row.first.is_visible(timeout=0):
+        row.click()
+        expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=name)).to_be_visible(
+            timeout=8_000
+        )
         composer(page).wait_for(timeout=20_000)
         return
     create_named_bot(page, name)

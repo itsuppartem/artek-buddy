@@ -5,7 +5,7 @@ import uuid
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import create_named_bot, dismiss_attention, pair_fresh, send_message
+from tests.live.helpers import create_named_bot, pair_fresh, send_message
 
 E2E_CARD_KEY = "City"
 E2E_CARD_VALUE = "Belgrade"
@@ -44,11 +44,10 @@ def test_thread_reply_attach_banner(page: Page, client_url: str, host_url: str) 
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
     send_message(page, "hello")
-    bot_msg = page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok").last
+    bot_msg = page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")
     expect(bot_msg).to_be_visible(timeout=15_000)
     # Replied banner auto-hides in 4s and is gated by notifyOnFinish. Skip that
     # race here; keep Reply + attach. Banner leftover stays on #32.
-    dismiss_attention(page)
 
     bot_msg.click(button="right", timeout=8_000)
     menu = page.get_by_role("menu", name="Message actions")

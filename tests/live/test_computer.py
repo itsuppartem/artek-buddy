@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import bot_row, create_named_bot, pair_fresh
+from tests.live.helpers import bot_row, close_computer_pane, create_named_bot, pair_fresh
 
 pytestmark = pytest.mark.live
 
@@ -42,3 +42,4 @@ def test_create_memory_routine_and_settings(
     page.get_by_test_id("bot-name-input").fill("CI Team Renamed")
     page.get_by_role("button", name="Save").click()
     expect(bot_row(page, "CI Team Renamed")).to_be_visible(timeout=20_000)
+    close_computer_pane(page)
