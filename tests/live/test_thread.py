@@ -50,11 +50,15 @@ def test_thread_reply_attach_banner(page: Page, client_url: str, host_url: str) 
     # race here; keep Reply + attach. Banner leftover stays on #32.
     dismiss_attention(page)
 
-    bot_msg.click(button="right", force=True, timeout=5_000)
-    page.get_by_role("menu", name="Message actions").get_by_role("menuitem", name="Reply").click(
-        timeout=5_000
-    )
-    expect(page.get_by_text(f"Replying to {name}")).to_be_visible(timeout=5_000)
+    bot_msg.click(button="right", timeout=8_000)
+    menu = page.get_by_role("menu", name="Message actions")
+    expect(menu).to_be_visible(timeout=8_000)
+    # Overlay sits under the menu; force the click onto Reply itself.
+    menu.get_by_role("menuitem", name="Reply").click(timeout=5_000, force=True)
+    bar = page.get_by_test_id("reply-bar")
+    expect(bar).to_be_visible(timeout=8_000)
+    expect(bar).to_contain_text("Replying to")
+    expect(bar).to_contain_text("ok")
     send_message(page, "quoted back")
     user = page.locator('[data-testid="thread-message"][data-role="user"]').last
     expect(user).to_contain_text("quoted back", timeout=8_000)

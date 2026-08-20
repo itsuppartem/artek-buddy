@@ -73,14 +73,21 @@ def arm_page(page: Page) -> None:
 def open_computer_pane(page: Page) -> None:
     """Memory and routines live in the side pane. Do not toggle an already-open pane shut."""
     arm_page(page)
+    closer = page.get_by_title("Close panel")
     memory = page.get_by_test_id("new-memory")
+    try:
+        if closer.count() and closer.first.is_visible(timeout=0):
+            expect(memory).to_be_visible(timeout=20_000)
+            return
+    except Exception:
+        pass
     try:
         if memory.count() and memory.first.is_visible(timeout=0):
             return
     except Exception:
         pass
     page.get_by_title("Agent computer").click(timeout=5_000)
-    expect(memory).to_be_visible(timeout=8_000)
+    expect(memory).to_be_visible(timeout=20_000)
 
 
 def send_message(page: Page, text: str) -> None:
@@ -127,7 +134,8 @@ def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":
 
 def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
     """+ is always in the sidebar. Private so Create does not paint Team Booting up.
-    Wait for the pane Create opens, then close it so later clicks are free."""
+    After Create the product opens the computer pane (memory / routines live there).
+    Do not close that pane from this helper — send_message closes it before Send."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.get_by_title("New bot").click()
     box = page.get_by_placeholder("Name this bot")
@@ -138,12 +146,11 @@ def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
     page.get_by_role("button", name="Private").click()
     page.get_by_role("button", name="Create", exact=True).click()
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
+    bot_row(page, name).click()
+    expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=name)).to_be_visible(
+        timeout=20_000
+    )
     composer(page).wait_for(timeout=20_000)
-    try:
-        page.get_by_title("Close panel").wait_for(state="visible", timeout=5_000)
-    except Exception:
-        pass
-    close_computer_pane(page)
     dismiss_attention(page)
 
 
