@@ -66,16 +66,23 @@ def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":
     )
 
 
-def create_named_bot(page: Page, name: str) -> None:
+def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
     empty = page.get_by_test_id("empty-bots")
     if empty.count() and empty.first.is_visible():
         page.get_by_role("button", name="Create bot", exact=True).click()
     else:
         page.get_by_title("New bot").click()
     page.get_by_placeholder("Name this bot").fill(name)
+    if title is not None:
+        page.get_by_placeholder("Describe what this bot does").fill(title)
     page.get_by_role("button", name="Create", exact=True).click()
     expect(bot_row(page, name)).to_be_visible(timeout=20_000)
     composer(page).wait_for(timeout=20_000)
+
+
+def open_bot_menu(page: Page, name: str) -> None:
+    bot_row(page, name).click(button="right")
+    expect(page.get_by_role("menu", name=f"Actions for {name}")).to_be_visible()
 
 
 def ensure_bot(page: Page, name: str) -> None:
