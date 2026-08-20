@@ -67,20 +67,35 @@ def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":
     )
 
 
+def _dismiss_boot_overlay(page: Page) -> None:
+    overlay = page.get_by_text("Booting up", exact=False)
+    if overlay.count():
+        expect(overlay).to_have_count(0, timeout=20_000)
+    closer = page.get_by_title("Close panel")
+    if closer.count() and closer.first.is_visible():
+        closer.click()
+
+
 def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
-    empty = page.get_by_test_id("empty-bots")
-    inbox = page.get_by_test_id("empty-inbox")
-    if empty.count() and empty.first.is_visible():
-        page.get_by_role("button", name="Create bot", exact=True).click()
-    elif inbox.count() and inbox.first.is_visible():
-        page.get_by_role("button", name="Create bot", exact=True).click()
-    else:
-        page.get_by_title("New bot").click()
-    page.get_by_placeholder("Name this bot").fill(name)
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    _dismiss_boot_overlay(page)
+    search = page.get_by_placeholder("Search")
+    if search.count():
+        search.fill("")
+    page.get_by_title("New bot").click()
+    name_box = page.get_by_placeholder("Name this bot")
+    expect(name_box).to_be_visible(timeout=10_000)
+    name_box.fill(name)
     if title is not None:
         page.get_by_placeholder("Describe what this bot does").fill(title)
-    page.get_by_role("button", name="Create", exact=True).click()
-    expect(bot_row(page, name)).to_be_visible(timeout=20_000)
+    page.get_by_role("button", name="Private").click()
+    create = page.get_by_role("button", name="Create", exact=True)
+    expect(create).to_be_enabled()
+    create.click()
+    row = bot_row(page, name)
+    expect(row).to_have_count(1, timeout=20_000)
+    row.scroll_into_view_if_needed()
+    _dismiss_boot_overlay(page)
     composer(page).wait_for(timeout=20_000)
 
 
@@ -91,17 +106,12 @@ def open_bot_menu(page: Page, name: str) -> None:
 
 def ensure_bot(page: Page, name: str) -> None:
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    _dismiss_boot_overlay(page)
     empty = page.get_by_test_id("empty-bots")
     inbox = page.get_by_test_id("empty-inbox")
     rows = page.get_by_test_id("bot-row")
     expect(empty.or_(inbox).or_(rows.first)).to_be_visible(timeout=20_000)
-    if empty.count() and empty.first.is_visible():
-        page.get_by_role("button", name="Create bot", exact=True).click()
-        page.get_by_placeholder("Name this bot").fill(name)
-        page.get_by_role("button", name="Create", exact=True).click()
-    elif inbox.count() and inbox.first.is_visible():
-        page.get_by_role("button", name="Create bot", exact=True).click()
-        page.get_by_placeholder("Name this bot").fill(name)
-        page.get_by_role("button", name="Create", exact=True).click()
-    expect(rows.first).to_be_visible(timeout=20_000)
-    composer(page).wait_for(timeout=20_000)
+    if rows.count() and rows.first.is_visible():
+        composer(page).wait_for(timeout=20_000)
+        return
+    create_named_bot(page, name)
