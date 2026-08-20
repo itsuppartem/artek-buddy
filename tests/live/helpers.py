@@ -108,7 +108,7 @@ def send_message(page: Page, text: str) -> None:
     last_error: Exception | None = None
     for _ in range(2):
         ignore_attention_overlay(page)
-        box.focus(force=True, timeout=8_000)
+        box.evaluate("el => el.focus()")
         box.press("Control+A")
         box.press_sequentially(text, delay=8)
         box.press("Enter")
