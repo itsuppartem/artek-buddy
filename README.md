@@ -215,7 +215,7 @@ A merge into `main` that bumps `VERSION` also attaches that `.deb` to the GitHub
 On the desktop PC:
 
 ```bash
-sudo dpkg -i artek-buddy-client_0.10.22_all.deb
+sudo dpkg -i artek-buddy-client_0.10.23_all.deb
 sudo apt-get install -f
 ```
 
@@ -264,7 +264,7 @@ The worker (`artek-buddy-worker`) wakes due routines through the same `threads.s
 
 ## Version
 
-`0.10.22` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
+`0.10.23` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
 
 Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel hostnames, local compose (`docker-compose.local.yml`), or local tooling.
 
@@ -275,7 +275,7 @@ Tests run in Actions on every pull request and on pushes to `develop` and `main`
 | Job | What |
 | --- | --- |
 | `backend` | pytest host modules + HTTP API (`AGENT_RUNTIME=scripted`) + `.deb` proxy unit tests + `tsc` |
-| `ui` | always. Built `.deb` + `--serve` against a scripted host (no Cursor key). Pairing, bots, memory, routines, scripted chat / fail / consent |
+| `ui` | always. Built `.deb` + `--serve` against a scripted host (no Cursor key). Pairing, boot/thread errors, sidebar, bots, memory, routines, scripted chat / fail / consent |
 | `live` | only if `CURSOR_API_KEY` is set. Same `.deb`, real computer image, Grok turns (reply + Allow/Deny browse) |
 
 `ui` is the merge gate for the window. `live` is a canary: Grok can flake without hiding a broken shell. Fork pull requests do not see the secret, so `live` is skipped there.
@@ -290,4 +290,4 @@ Artek Buddy is licensed under the [Apache License 2.0](LICENSE).
 
 The HTTP contract surface — nouns (`bots`, `threads`, `runs`, `memory`, `routines`, `computers`), procedure names, and run/event status vocabulary — was **adapted from** [elie222/rakazo](https://github.com/elie222/rakazo) (Apache License 2.0). See [NOTICE](NOTICE).
 
-Artek Buddy is not a port of that TypeScript monorepo. The host (Python / FastAPI / Cursor runtime), the Linux `.deb` client, bot colors, and bot avatar are original. The wire uses `snake_case`. Sandboxes run only on this Raspberry Pi.
+Artek Buddy is not a port of that TypeScript monorepo. The host (Python / FastAPI / Cursor runtime), the Linux `.deb` client, bot colors, and the bandicoot mascot (desktop icon and bot avatars) are original. The wire uses `snake_case`. Sandboxes run only on this Raspberry Pi.

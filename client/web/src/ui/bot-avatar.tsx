@@ -8,8 +8,10 @@ export function BotAvatar({
   className?: string;
 }) {
   const radius = Math.round(size * 0.26);
+  const inset = Math.max(2, Math.round(size * 0.08));
   return (
     <div
+      data-testid="bot-avatar"
       className={["relative overflow-hidden", className].filter(Boolean).join(" ")}
       style={{
         width: size,
@@ -17,17 +19,18 @@ export function BotAvatar({
         background: color,
         borderRadius: radius,
         flex: "none",
+        padding: inset,
         boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.22)",
       }}
       aria-hidden="true"
     >
-      <svg viewBox="0 0 40 40" width={size} height={size} className="absolute inset-0">
-        <path
-          d="M8 25.2 20 11.4 32 25.2h-6.2L20 18.1l-5.8 7.1H8Z"
-          fill="rgba(255,255,255,0.94)"
-        />
-        <rect x="13" y="27.2" width="14" height="3.1" rx="1.4" fill="rgba(255,255,255,0.78)" />
-      </svg>
+      <img
+        src="/bot-mark.png"
+        alt=""
+        draggable={false}
+        className="h-full w-full rounded-[inherit] object-cover"
+        style={{ background: "rgba(11,11,12,0.35)" }}
+      />
     </div>
   );
 }

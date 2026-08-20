@@ -15,9 +15,9 @@ client/.baked_token
 # local client bake (host URL / token) — never commit
 client/url
 
-# local agent handoff (machine context + local scan) — never commit
+# local agent handoff and Cursor rules — never commit
 .cursor/handoff/
-.cursor/rules/local*.mdc
+.cursor/rules/
 
 # local-only tooling — never commit
 scripts/

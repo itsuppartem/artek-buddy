@@ -1,8 +1,0 @@
----
-description: Watch GitHub Actions and keep release.yml green.
-alwaysApply: true
----
-
-# GitHub Actions
-
-After a push or PR, check `gh run list`. If `release` is red or hung, fix it in the same session through `develop` → `main`.
