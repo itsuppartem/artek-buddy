@@ -548,7 +548,7 @@ export function ShellPage() {
   }, [active?.id]);
 
   useEffect(() => {
-    if (panel !== "settings" || !active) return;
+    if ((panel !== "settings" && panel !== "computer") || !active) return;
     void api.computer.status(active.id).then(setComputer).catch(() => undefined);
   }, [panel, active?.id]);
 
@@ -757,8 +757,8 @@ export function ShellPage() {
     takeControl: boolean;
     overlay: boolean;
     force?: boolean;
-  }) {
-    if (!active) return;
+  }): Promise<boolean> {
+    if (!active) return false;
     sleepHeld.current = false;
     const needsBoot = force || computer?.state !== "running" || !screenUrlRef.current;
     if (overlay && needsBoot) setBooting(true);
@@ -772,8 +772,10 @@ export function ShellPage() {
         setComputer(await api.computer.status(active.id));
       }
       await ensureScreenUrl(active.id, true, takeControl || !screenUrlRef.current);
+      return true;
     } catch (err) {
       setLater(err instanceof Error ? err.message : "Could not boot the computer");
+      return false;
     } finally {
       setBooting(false);
     }
@@ -827,12 +829,12 @@ export function ShellPage() {
 
   async function openOverlay(source: "preview" | "button") {
     if (!active) return;
-    await bootComputer({
+    const ok = await bootComputer({
       takeControl: shouldTakeControl(source),
       overlay: computer?.state !== "running",
       force: computer?.state !== "running",
     });
-    setComputerOpen(true);
+    if (ok) setComputerOpen(true);
   }
 
   async function releaseComputer() {
@@ -2604,29 +2606,46 @@ function ComputerPane({
   const isRunning = computer?.state === "running";
   const isBooting = booting || computer?.state === "booting";
   const isError = computer?.state === "error";
-  const canOpen = Boolean(preview && isRunning);
+  const heldByOther = Boolean(computer?.busyBotName);
+  const paneState = isRunning ? "running" : isBooting ? "booting" : isError ? "error" : "offline";
 
   return (
     <div>
       <div className="mb-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isRunning ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(48,162,75,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#4ECB71]">
+            <span
+              data-testid="computer-state"
+              data-state={paneState}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(48,162,75,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#4ECB71]"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-[#30A24B] shadow-[0_0_6px_rgba(48,162,75,0.8)]" />
               Running
             </span>
           ) : isBooting ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(230,87,7,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FF8542]">
+            <span
+              data-testid="computer-state"
+              data-state={paneState}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(230,87,7,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FF8542]"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-[#E65707] animate-pulse" />
               Booting…
             </span>
           ) : isError ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(224,49,49,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FA5252]">
+            <span
+              data-testid="computer-state"
+              data-state={paneState}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(224,49,49,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FA5252]"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-[#E03131]" />
               Error
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1E1E22] px-2.5 py-0.5 text-[12px] font-medium text-[#85858A]">
+            <span
+              data-testid="computer-state"
+              data-state={paneState}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#1E1E22] px-2.5 py-0.5 text-[12px] font-medium text-[#85858A]"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-[#4E4E54]" />
               Offline
             </span>
@@ -2653,7 +2672,7 @@ function ComputerPane({
       </div>
 
       <div className="group relative aspect-[16/10] w-full overflow-hidden rounded-[14px] border border-[#232326] bg-[#0E0E10]">
-        {preview ? (
+        {!heldByOther && preview ? (
           <>
             <iframe
               ref={previewFrameRef}
@@ -2688,7 +2707,7 @@ function ComputerPane({
               </button>
             )}
           </>
-        ) : isRunning ? (
+        ) : !heldByOther && isRunning ? (
           <div className="grid h-full w-full place-items-center px-6 text-center">
             <div className="flex flex-col items-center gap-2 text-[#85858A]">
               {screenError ? (
@@ -2752,7 +2771,7 @@ function ComputerPane({
       </div>
 
       <div className="mt-3 flex items-center justify-between">
-        <span data-testid="computer-label" className="text-[13px] text-[#85858A]">
+        <span data-testid="computer-label" data-mode={mode} className="text-[13px] text-[#85858A]">
           {computer?.busyBotName
             ? `${computer.busyBotName} is using it`
             : computer?.controlHolder === "user"
@@ -2760,7 +2779,7 @@ function ComputerPane({
               : label}
         </span>
         <div className="flex items-center gap-2">
-          {isRunning ? (
+          {isRunning && !heldByOther ? (
             <Button type="button" variant="ghost" size="sm" onClick={onOpenFullscreen} className="text-[13px] text-[#ECECEE]">
               Open screen
             </Button>

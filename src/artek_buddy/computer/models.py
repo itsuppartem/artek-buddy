@@ -30,6 +30,8 @@ class ComputerRecord:
         holder = self.control_holder
         if holder == "user" and not self.control_lease_id:
             holder = "none"
+        if busy_bot_name:
+            holder = "none"
         return ComputerStatus(
             bot_id=bot_id,
             mode="dedicated" if mode == "dedicated" else "team",

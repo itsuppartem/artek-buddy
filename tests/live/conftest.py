@@ -36,3 +36,21 @@ def _unpair_between_tests(client_url: str) -> None:
     from tests.live.helpers import reset_pairing
 
     reset_pairing(client_url)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if report.when != "call" or not report.failed:
+        return
+    page = item.funcargs.get("page")
+    if page is None:
+        return
+    try:
+        url = page.url
+        text = page.locator("body").inner_text(timeout=1_000)[:4000]
+    except Exception as err:
+        print(f"\npage dump failed: {err}", flush=True)
+        return
+    print(f"\n----- page at failure url={url} -----\n{text}\n----- end page dump -----\n", flush=True)

@@ -2807,10 +2807,23 @@ class HistoryStore:
         return row is not None
 
     def busy_bot_name(self, computer: ComputerRecord, except_bot_id: str) -> str | None:
-        if computer.execution_bot_id and computer.execution_bot_id != except_bot_id:
+        holder_id = None
+        held = computer.state in {"running", "booting"}
+        if computer.scope == "team" and held:
+            if computer.execution_bot_id and computer.execution_bot_id != except_bot_id:
+                holder_id = computer.execution_bot_id
+            elif (
+                computer.control_bot_id
+                and computer.control_bot_id != except_bot_id
+                and computer.control_holder == "user"
+            ):
+                holder_id = computer.control_bot_id
+        if holder_id is None and computer.execution_bot_id and computer.execution_bot_id != except_bot_id:
             if self.has_active_run(computer.execution_bot_id):
-                other = self.get_bot(computer.execution_bot_id)
-                return other.name if other else computer.execution_bot_id
+                holder_id = computer.execution_bot_id
+        if holder_id:
+            other = self.get_bot(holder_id)
+            return other.name if other else holder_id
         with self._conn() as conn:
             row = conn.execute(
                 """
