@@ -70,6 +70,26 @@ def arm_page(page: Page) -> None:
     page.set_default_navigation_timeout(20_000)
 
 
+def seed_memory(page: Page, text: str) -> None:
+    """Scripted UI often swallows the memory Save click while leftover computers
+    boot. Create the document through the already-paired session instead."""
+    page.evaluate(
+        """async (content) => {
+          const r = await fetch('/v1/memory', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              scope: 'user',
+              path: 'entries/owner/note-' + Date.now() + '.md',
+              content,
+            }),
+          });
+          if (!r.ok) throw new Error(await r.text());
+        }""",
+        text,
+    )
+
+
 def open_computer_pane(page: Page) -> None:
     """Memory and routines live in the side pane. Do not toggle an already-open pane shut."""
     arm_page(page)

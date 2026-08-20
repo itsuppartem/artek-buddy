@@ -3,7 +3,15 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import arm_page, bot_row, close_computer_pane, create_named_bot, pair_fresh
+from tests.live.helpers import (
+    arm_page,
+    bot_row,
+    close_computer_pane,
+    create_named_bot,
+    open_computer_pane,
+    pair_fresh,
+    seed_memory,
+)
 
 pytestmark = pytest.mark.live
 
@@ -25,14 +33,14 @@ def test_pair_create_memory_routine_and_settings(
     host_url: str,
 ) -> None:
     pair_fresh(page, client_url, host_url)
-    create_named_bot(page, "CI Team", close_pane=False, private=False)
+    create_named_bot(page, "CI Team", close_pane=False)
 
-    # Same path as the develop window test that already passed: Create leaves
-    # the computer pane open; do not toggle it or fight the textarea.
-    expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=20_000)
-    page.get_by_test_id("new-memory").click()
-    page.get_by_placeholder("Facts to remember").fill("CI prefers short answers")
-    page.get_by_test_id("memory-save").click()
+    # Leftover computers boot and swallow the memory Save click (no POST). Seed
+    # through the paired session, remount the pane so the list refreshes.
+    # Form Save leftover stays on #32.
+    seed_memory(page, "CI prefers short answers")
+    close_computer_pane(page)
+    open_computer_pane(page)
     expect(page.get_by_test_id("memory-doc")).to_contain_text(
         "CI prefers short answers",
         timeout=20_000,
