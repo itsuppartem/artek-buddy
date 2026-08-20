@@ -57,6 +57,7 @@ def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | No
     if device_name is not None:
         page.get_by_label("Device name").fill(device_name)
     page.get_by_role("button", name="Pair").click()
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
 
 
 def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":"test"}') -> None:
@@ -66,25 +67,33 @@ def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":
     )
 
 
-def create_named_bot(page: Page, name: str) -> None:
-    empty = page.get_by_test_id("empty-bots")
-    if empty.count() and empty.first.is_visible():
-        page.get_by_role("button", name="Create bot", exact=True).click()
-    else:
-        page.get_by_title("New bot").click()
-    page.get_by_placeholder("Name this bot").fill(name)
+def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
+    """+ is always in the sidebar. After Create the product opens the computer pane
+    (memory / routines live there). Do not close that pane from this helper."""
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    page.get_by_title("New bot").click()
+    box = page.get_by_placeholder("Name this bot")
+    expect(box).to_be_visible(timeout=10_000)
+    box.fill(name)
+    if title is not None:
+        page.get_by_placeholder("Describe what this bot does").fill(title)
     page.get_by_role("button", name="Create", exact=True).click()
-    expect(bot_row(page, name)).to_be_visible(timeout=20_000)
+    expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
     composer(page).wait_for(timeout=20_000)
+
+
+def open_bot_menu(page: Page, name: str) -> None:
+    bot_row(page, name).click(button="right")
+    expect(page.get_by_role("menu", name=f"Actions for {name}")).to_be_visible(timeout=10_000)
 
 
 def ensure_bot(page: Page, name: str) -> None:
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     empty = page.get_by_test_id("empty-bots")
+    inbox = page.get_by_test_id("empty-inbox")
     rows = page.get_by_test_id("bot-row")
-    expect(empty.or_(rows.first)).to_be_visible(timeout=20_000)
-    if empty.count() and empty.first.is_visible():
-        page.get_by_role("button", name="Create bot", exact=True).click()
-        page.get_by_placeholder("Name this bot").fill(name)
-        page.get_by_role("button", name="Create", exact=True).click()
-    expect(rows.first).to_be_visible(timeout=20_000)
-    composer(page).wait_for(timeout=20_000)
+    expect(empty.or_(inbox).or_(rows.first)).to_be_visible(timeout=20_000)
+    if rows.count() and rows.first.is_visible():
+        composer(page).wait_for(timeout=20_000)
+        return
+    create_named_bot(page, name)
