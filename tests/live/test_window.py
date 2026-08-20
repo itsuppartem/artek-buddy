@@ -3,14 +3,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import (
-    arm_page,
-    bot_row,
-    create_named_bot,
-    open_computer_pane,
-    pair_fresh,
-    reset_pairing,
-)
+from tests.live.helpers import arm_page, bot_row, create_named_bot, pair_fresh, reset_pairing
 
 pytestmark = pytest.mark.live
 
@@ -32,10 +25,11 @@ def test_pair_create_memory_routine_and_settings(
     host_url: str,
 ) -> None:
     pair_fresh(page, client_url, host_url)
-    create_named_bot(page, "CI Team")
+    create_named_bot(page, "CI Team", private=False, close_computer=False)
 
-    # Memory sits in the computer pane. Reopen without toggling an already-open pane shut.
-    open_computer_pane(page)
+    # Memory sits in the computer pane Create just opened. Do not toggle
+    # Agent computer — that closes an already-open pane and reboots noVNC.
+    expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=20_000)
     page.get_by_test_id("new-memory").click(timeout=5_000)
     page.get_by_placeholder("Facts to remember").fill("CI prefers short answers")
     page.get_by_role("button", name="Save").click()
