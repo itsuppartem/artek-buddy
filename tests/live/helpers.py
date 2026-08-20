@@ -93,7 +93,7 @@ def ignore_attention_overlay(page: Page) -> None:
 
 
 def send_message(page: Page, text: str) -> None:
-    """Focus the composer and press Enter. Do not click Send or the attention pill."""
+    """Click the composer with the attention pill disabled, type, press Enter."""
     arm_page(page)
     close_computer_pane(page)
     ignore_attention_overlay(page)
@@ -104,13 +104,28 @@ def send_message(page: Page, text: str) -> None:
     except Exception:
         pass
     box = composer(page)
+    send_btn = page.get_by_role("button", name="Send")
     user = page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=text)
     last_error: Exception | None = None
     for _ in range(2):
         ignore_attention_overlay(page)
-        box.evaluate("el => el.focus()")
+        box.click(force=True, timeout=8_000)
         box.press("Control+A")
         box.press_sequentially(text, delay=8)
+        try:
+            expect(send_btn).to_be_enabled(timeout=8_000)
+        except AssertionError:
+            box.evaluate(
+                """(el, value) => {
+                  const setter = Object.getOwnPropertyDescriptor(
+                    window.HTMLTextAreaElement.prototype, "value"
+                  ).set;
+                  setter.call(el, value);
+                  el.dispatchEvent(new Event("input", { bubbles: true }));
+                }""",
+                text,
+            )
+            expect(send_btn).to_be_enabled(timeout=8_000)
         box.press("Enter")
         try:
             expect(user).to_be_visible(timeout=8_000)
