@@ -3,12 +3,13 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import fulfill_json, pair_fresh
+from tests.live.helpers import arm_page, fulfill_json, pair_fresh
 
 pytestmark = pytest.mark.live
 
 
 def test_proxy_error_retry_reloads_to_pairing(page: Page, client_url: str) -> None:
+    arm_page(page)
     page.route("**/local/status", lambda route: route.abort())
     page.goto(client_url)
     card = page.get_by_test_id("proxy-error")
@@ -19,6 +20,7 @@ def test_proxy_error_retry_reloads_to_pairing(page: Page, client_url: str) -> No
 
 
 def test_pairing_form_fields_and_rejected_url(page: Page, client_url: str) -> None:
+    arm_page(page)
     page.goto(client_url)
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)

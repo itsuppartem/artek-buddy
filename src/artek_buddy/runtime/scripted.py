@@ -157,7 +157,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                     "status": "archived",
                 },
             ),
-            scripted_finish(""),
+            scripted_finish("ok"),
         ]
     if "e2e-ask-free" in text:
         return [
@@ -454,6 +454,7 @@ class ScriptedRuntime(RuntimeBase):
                 )
                 if not posted.get("ok"):
                     raise AgentRuntimeError(str(posted.get("error") or "could not append blocks"))
+                await asyncio.sleep(0)
                 continue
             if step.tool:
                 tool_result = tools.execute(step.tool, step.args, bound_bot_id=bot_id)

@@ -3,12 +3,13 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import bot_row, create_named_bot, pair_fresh
+from tests.live.helpers import arm_page, bot_row, create_named_bot, pair_fresh
 
 pytestmark = pytest.mark.live
 
 
 def test_pairing_rejects_bad_code(page: Page, client_url: str, host_url: str) -> None:
+    arm_page(page)
     page.goto(client_url)
     form = page.get_by_test_id("pairing")
     form.wait_for()

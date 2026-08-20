@@ -46,8 +46,8 @@ def dismiss_attention(page: Page) -> None:
     """The attention pill sits on top of Send/Stop. Playwright then waits 30s."""
     banner = page.get_by_test_id("attention-alert")
     try:
-        if banner.count() and banner.is_visible():
-            banner.click(timeout=1_000)
+        if banner.count() and banner.first.is_visible(timeout=0):
+            banner.first.click(timeout=1_000)
     except Exception:
         return
 
@@ -59,23 +59,30 @@ def close_computer_pane(page: Page) -> None:
         page.get_by_label("Close computer"),
     ):
         try:
-            if loc.count() and loc.first.is_visible():
+            if loc.count() and loc.first.is_visible(timeout=0):
                 loc.first.click(timeout=2_000)
         except Exception:
             pass
 
 
-def _fail_fast_clicks(page: Page) -> None:
+def arm_page(page: Page) -> None:
     page.set_default_timeout(8_000)
     page.set_default_navigation_timeout(20_000)
 
 
 def send_message(page: Page, text: str) -> None:
-    _fail_fast_clicks(page)
+    arm_page(page)
+    close_computer_pane(page)
     dismiss_attention(page)
+    booting = page.get_by_text("Booting up")
+    try:
+        if booting.count():
+            booting.first.wait_for(state="hidden", timeout=8_000)
+    except Exception:
+        pass
     box = composer(page)
-    box.wait_for()
-    box.fill(text)
+    box.wait_for(timeout=8_000)
+    box.fill(text, timeout=8_000)
     page.get_by_role("button", name="Send").click(timeout=5_000, force=True)
 
 
@@ -85,7 +92,7 @@ def open_settings(page: Page, name: str) -> None:
 
 
 def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | None = None) -> None:
-    _fail_fast_clicks(page)
+    arm_page(page)
     page.goto(client_url)
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
@@ -133,7 +140,7 @@ def ensure_bot(page: Page, name: str) -> None:
     inbox = page.get_by_test_id("empty-inbox")
     rows = page.get_by_test_id("bot-row")
     expect(empty.or_(inbox).or_(rows.first)).to_be_visible(timeout=20_000)
-    if rows.count() and rows.first.is_visible():
+    if rows.count() and rows.first.is_visible(timeout=0):
         composer(page).wait_for(timeout=20_000)
         return
     create_named_bot(page, name)
