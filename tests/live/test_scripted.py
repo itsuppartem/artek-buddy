@@ -1,22 +1,20 @@
 from __future__ import annotations
 
-import uuid
-
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import create_named_bot, pair_fresh, send_message
+from tests.live.helpers import ensure_bot, pair_fresh, send_message
 
 pytestmark = pytest.mark.live
 
 
-def _open_thread(page: Page, client_url: str, host_url: str, prefix: str) -> None:
+def _open_thread(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
-    create_named_bot(page, f"{prefix} {uuid.uuid4().hex[:8]}")
+    ensure_bot(page, "Scripted")
 
 
 def test_scripted_reply_appears(page: Page, client_url: str, host_url: str) -> None:
-    _open_thread(page, client_url, host_url, "Scripted")
+    _open_thread(page, client_url, host_url)
     send_message(page, "hello")
     expect(page.locator('[data-testid=thread-message][data-role=bot]').last).to_contain_text(
         "ok",
@@ -25,13 +23,13 @@ def test_scripted_reply_appears(page: Page, client_url: str, host_url: str) -> N
 
 
 def test_scripted_fail_shows_run_error(page: Page, client_url: str, host_url: str) -> None:
-    _open_thread(page, client_url, host_url, "ScriptedFail")
+    _open_thread(page, client_url, host_url)
     send_message(page, "please e2e-fail now")
     expect(page.get_by_test_id("run-error")).to_be_visible(timeout=20_000)
 
 
 def test_scripted_consent_can_be_denied(page: Page, client_url: str, host_url: str) -> None:
-    _open_thread(page, client_url, host_url, "ScriptedConsent")
+    _open_thread(page, client_url, host_url)
     send_message(page, "e2e-consent-browse")
     card = page.get_by_test_id("consent-card")
     expect(card).to_be_visible(timeout=20_000)

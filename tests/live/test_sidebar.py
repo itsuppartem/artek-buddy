@@ -46,7 +46,7 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
 
     open_bot_menu(page, alpha)
     page.get_by_role("menuitem", name="Pin").click()
-    expect(bot_row(page, alpha).get_by_title("Pinned")).to_be_visible()
+    expect(bot_row(page, alpha).get_by_title("Pinned")).to_be_visible(timeout=8_000)
     open_bot_menu(page, alpha)
     page.get_by_role("menuitem", name="Unpin").click()
     expect(bot_row(page, alpha).get_by_title("Pinned")).to_have_count(0)

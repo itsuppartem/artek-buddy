@@ -166,6 +166,8 @@ def create_named_bot(
         page.get_by_role("button", name="Private").click()
     page.get_by_role("button", name="Create", exact=True).click()
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
+    if close_pane:
+        close_computer_pane(page)
     bot_row(page, name).click()
     expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=name)).to_be_visible(
         timeout=8_000
