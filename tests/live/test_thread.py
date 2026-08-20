@@ -6,7 +6,14 @@ import uuid
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import composer, create_named_bot, open_settings, pair_fresh, send_message
+from tests.live.helpers import (
+    composer,
+    create_named_bot,
+    dismiss_attention,
+    open_settings,
+    pair_fresh,
+    send_message,
+)
 
 # Keep in lockstep with artek_buddy.runtime.scripted (avoid importing the runtime here).
 E2E_ASK_QUESTION = "Which city?"
@@ -28,12 +35,6 @@ TINY_PNG = (
     b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
     b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
 )
-
-
-def _dismiss_banner(page: Page) -> None:
-    banner = page.get_by_test_id("attention-alert")
-    if banner.count():
-        banner.click(timeout=2_000)
 
 
 def test_thread_blocks_and_consent(page: Page, client_url: str, host_url: str) -> None:
@@ -103,7 +104,7 @@ def test_thread_chrome_attach_stop_banner(page: Page, client_url: str, host_url:
     )
     banner = page.get_by_test_id("attention-alert")
     expect(banner).to_contain_text(f"{name} replied", timeout=6_000)
-    _dismiss_banner(page)
+    dismiss_attention(page)
 
     page.locator('[data-testid=thread-message][data-role=bot]').last.click(button="right")
     page.get_by_role("menuitem", name="Reply").click()
@@ -132,13 +133,14 @@ def test_thread_chrome_attach_stop_banner(page: Page, client_url: str, host_url:
 
     send_message(page, "please e2e-slow now")
     expect(page.get_by_test_id("typing-indicator")).to_be_visible(timeout=5_000)
-    page.get_by_role("button", name="Stop").click(timeout=5_000)
+    dismiss_attention(page)
+    page.get_by_role("button", name="Stop").click(timeout=5_000, force=True)
     expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=10_000)
 
     send_message(page, "please e2e-fail now")
     expect(page.get_by_test_id("run-error")).to_be_visible(timeout=15_000)
     expect(page.get_by_test_id("attention-alert")).to_contain_text(f"{name} failed", timeout=6_000)
-    _dismiss_banner(page)
+    dismiss_attention(page)
 
     open_settings(page, name)
     notify = page.get_by_test_id("notify-on-finish")
@@ -152,7 +154,7 @@ def test_thread_chrome_attach_stop_banner(page: Page, client_url: str, host_url:
 
     send_message(page, "please e2e-takeover")
     expect(page.get_by_test_id("attention-alert")).to_contain_text(f"{name} needs you", timeout=6_000)
-    _dismiss_banner(page)
+    dismiss_attention(page)
 
     send_message(page, "please e2e-ask")
     expect(page.get_by_test_id("ask-card")).to_be_visible(timeout=15_000)

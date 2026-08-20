@@ -41,11 +41,22 @@ def composer(page: Page):
     return page.get_by_role("textbox", name="Message")
 
 
+def dismiss_attention(page: Page) -> None:
+    """The attention pill sits on top of Send/Stop. Playwright then waits 30s."""
+    banner = page.get_by_test_id("attention-alert")
+    try:
+        if banner.count() and banner.is_visible():
+            banner.click(timeout=1_000)
+    except Exception:
+        return
+
+
 def send_message(page: Page, text: str) -> None:
+    dismiss_attention(page)
     box = composer(page)
     box.wait_for()
     box.fill(text)
-    page.get_by_role("button", name="Send").click()
+    page.get_by_role("button", name="Send").click(timeout=5_000, force=True)
 
 
 def open_settings(page: Page, name: str) -> None:
