@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import uuid
 import urllib.error
 import urllib.request
 
@@ -34,6 +35,10 @@ def reset_pairing(client_url: str) -> None:
         return
 
 
+def unique_bot(prefix: str) -> str:
+    return f"{prefix} {uuid.uuid4().hex[:8]}"
+
+
 def bot_row(page: Page, name: str):
     return page.locator(f'[data-testid="bot-row"][data-bot-name="{name}"]')
 
@@ -42,17 +47,23 @@ def composer(page: Page):
     return page.get_by_role("textbox", name="Message")
 
 
+def thread_header(page: Page):
+    return page.get_by_test_id("thread-header")
+
+
 def close_computer_pane(page: Page) -> None:
-    """Hide the optional computer drawer if it is open."""
-    for loc in (
-        page.get_by_title("Close panel"),
-        page.get_by_label("Close computer"),
-    ):
-        try:
-            if loc.count() and loc.first.is_visible(timeout=0):
-                loc.first.click(timeout=2_000)
-        except Exception:
-            pass
+    closer = page.get_by_title("Close panel")
+    try:
+        if closer.count() and closer.first.is_visible(timeout=0):
+            closer.first.click(timeout=2_000)
+    except Exception:
+        pass
+    overlay = page.get_by_label("Close computer")
+    try:
+        if overlay.count() and overlay.first.is_visible(timeout=0):
+            overlay.first.click(timeout=2_000)
+    except Exception:
+        pass
 
 
 def arm_page(page: Page) -> None:
@@ -61,13 +72,13 @@ def arm_page(page: Page) -> None:
 
 
 def open_computer_pane(page: Page) -> None:
-    """Memory and routines live in the side pane."""
+    """Memory and routines live in the side pane. Gear does not boot the desktop."""
     arm_page(page)
     closer = page.get_by_title("Close panel")
     memory = page.get_by_test_id("new-memory")
     try:
         if closer.count() and closer.first.is_visible(timeout=0):
-            expect(memory).to_be_visible(timeout=20_000)
+            expect(memory).to_be_visible(timeout=8_000)
             return
     except Exception:
         pass
@@ -77,20 +88,23 @@ def open_computer_pane(page: Page) -> None:
     except Exception:
         pass
     page.get_by_title("Agent computer").click(timeout=5_000)
-    expect(memory).to_be_visible(timeout=20_000)
+    expect(memory).to_be_visible(timeout=8_000)
+
+
+def open_chat(page: Page, name: str) -> None:
+    bot_row(page, name).click()
+    expect(thread_header(page)).to_contain_text(name, timeout=8_000)
 
 
 def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
     """Open this chat if named, type, press Enter, wait for the user bubble."""
     arm_page(page)
     if bot_name:
-        bot_row(page, bot_name).click()
-        expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=bot_name)).to_be_visible(
-            timeout=8_000
-        )
+        open_chat(page, bot_name)
     box = composer(page)
     expect(box).to_be_enabled(timeout=8_000)
     box.fill(text)
+    expect(box).to_have_value(text)
     box.press("Enter")
     expect(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=text)
@@ -98,7 +112,8 @@ def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
 
 
 def open_settings(page: Page, name: str) -> None:
-    page.locator('[data-testid="thread-pane"] button').filter(has_text=name).click(timeout=5_000)
+    open_chat(page, name)
+    thread_header(page).click()
     expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=8_000)
 
 
@@ -126,10 +141,11 @@ def create_named_bot(
     page: Page,
     name: str,
     title: str | None = None,
+    description: str | None = None,
     *,
-    private: bool = True,
+    private: bool | None = None,
 ) -> None:
-    """+ is always in the sidebar. Private so Create does not share a Team desktop."""
+    """+ is always in the sidebar. Product default is Team; pass private=True for a dedicated desktop."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.get_by_title("New bot").click()
     box = page.get_by_placeholder("Name this bot")
@@ -137,14 +153,16 @@ def create_named_bot(
     box.fill(name)
     if title is not None:
         page.get_by_placeholder("Describe what this bot does").fill(title)
-    if private:
+    if description is not None:
+        page.get_by_placeholder("What this bot is for").fill(description)
+    if private is True:
         page.get_by_role("button", name="Private").click()
+    elif private is False:
+        page.get_by_role("button", name="Team").click()
     page.get_by_role("button", name="Create", exact=True).click()
+    expect(page.get_by_placeholder("Name this bot")).to_have_count(0, timeout=20_000)
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
-    bot_row(page, name).click()
-    expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=name)).to_be_visible(
-        timeout=8_000
-    )
+    open_chat(page, name)
     composer(page).wait_for(timeout=20_000)
 
 
@@ -153,15 +171,12 @@ def open_bot_menu(page: Page, name: str) -> None:
     expect(page.get_by_role("menu", name=f"Actions for {name}")).to_be_visible(timeout=10_000)
 
 
-def ensure_bot(page: Page, name: str) -> None:
+def ensure_bot(page: Page, name: str, *, private: bool | None = None) -> None:
     """Open this named chat, or create it."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     row = bot_row(page, name)
     if row.count() and row.first.is_visible(timeout=0):
-        row.click()
-        expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=name)).to_be_visible(
-            timeout=8_000
-        )
+        open_chat(page, name)
         composer(page).wait_for(timeout=20_000)
         return
-    create_named_bot(page, name)
+    create_named_bot(page, name, private=private)

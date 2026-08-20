@@ -38,7 +38,6 @@ import {
   previewPointerEvents,
   screenFrameLooksFailed,
   screenIframeSandbox,
-  shouldAutoBoot,
   shouldRefreshScreenUrl,
   shouldReplaceScreenUrl,
   shouldTakeControl,
@@ -49,6 +48,7 @@ import {
   attentionFromBotChange,
   attentionFromEvent,
   isHistoricalEvent,
+  shouldSendDesktopAlert,
   type AttentionAlert,
 } from "../lib/alerts";
 import { ChatMarkdown } from "../lib/chat-markdown";
@@ -143,7 +143,7 @@ export function ShellPage() {
   const heldUnreadIds = useRef(new Set<string>());
   const messageScroll = useRef<HTMLDivElement>(null);
 
-  const active = bots.find((bot) => bot.id === botId) ?? bots[0];
+  const active = bots.find((bot) => bot.id === botId) ?? (botId ? undefined : bots[0]);
   activeIdRef.current = active?.id;
   const thread = active ? snapshot : null;
   const isBusy = Boolean(
@@ -201,6 +201,16 @@ export function ShellPage() {
     if (seenAlertKeys.current.size > 250) {
       const oldest = seenAlertKeys.current.values().next().value;
       if (oldest) seenAlertKeys.current.delete(oldest);
+    }
+    const viewing = botId || activeIdRef.current || null;
+    if (
+      !shouldSendDesktopAlert({
+        windowFocused: true,
+        viewingBotId: viewing,
+        alertBotId: next.botId,
+      })
+    ) {
+      return;
     }
     setAttention(next);
   }
@@ -530,24 +540,8 @@ export function ShellPage() {
   }, [active?.id]);
 
   useEffect(() => {
-    if (panel !== "computer") {
-      autoBooted.current = null;
-      return;
-    }
-    if (!active) return;
-    if (sleepHeld.current) {
-      autoBooted.current = active.id;
-      return;
-    }
-    if (computer?.state === "booting") return;
-    if (!shouldAutoBoot(computer?.state, screenUrlRef.current, autoBooted.current === active.id)) return;
-    autoBooted.current = active.id;
-    void bootComputer({
-      takeControl: false,
-      overlay: false,
-      force: false,
-    });
-  }, [panel, active?.id, computer?.state]);
+    if (panel !== "computer") autoBooted.current = null;
+  }, [panel]);
 
   useEffect(() => {
     setComputerOpen(false);
@@ -644,6 +638,8 @@ export function ShellPage() {
     }
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
+      const typed = event.currentTarget.value;
+      if (composerRef.current) composerRef.current.value = typed;
       void send();
     }
   }
@@ -705,7 +701,11 @@ export function ShellPage() {
   async function send(textOverride?: string) {
     const text = (textOverride ?? composerRef.current?.value ?? draft).trim();
     const files = textOverride == null ? pendingFiles : [];
-    if (!active || sending || (!text && !files.length)) return;
+    if (!active) {
+      if (text || files.length) showError(new Error("No chat is open"), "Send failed");
+      return;
+    }
+    if (sending || (!text && !files.length)) return;
     const replyId = replyTo?.id ?? null;
     const targetId = active.id;
     if (textOverride == null) {
@@ -1055,6 +1055,7 @@ export function ShellPage() {
         <div className="flex items-center justify-between border-b border-[#141416] px-[22px] py-[17px]">
           <button
             type="button"
+            data-testid="thread-header"
             disabled={!active}
             onClick={() => setPanel("settings")}
             className="flex min-w-0 items-center gap-3 disabled:cursor-default"
@@ -1174,7 +1175,9 @@ export function ShellPage() {
               canAnswer
               message={message}
               onAnswer={(text) => send(text)}
-              onOpenBot={(id) => navigate(`/app/${id}`)}
+              onOpenBot={(id) => {
+                void refreshBots().then(() => navigate(`/app/${id}`));
+              }}
               onSubagentChange={() => {
                 if (active) void refreshThread(active.id);
               }}
@@ -2208,7 +2211,7 @@ function CreateBotForm({
     <div>
       <div className="mb-4 flex items-center justify-between">
         <span className="text-[13.5px] text-[#85858A]">New bot</span>
-        <button type="button" onClick={onCancel}>
+        <button type="button" aria-label="Cancel create" data-testid="create-cancel" onClick={onCancel}>
           ✕
         </button>
       </div>
@@ -2343,42 +2346,42 @@ function BotSettings({
 
       {editing ? (
         <div className="mt-4 flex flex-col gap-3">
-          <div>
-            <label className="text-[12px] text-[#85858A]">Name</label>
+          <label className="text-[12px] text-[#85858A]">
+            Name
             <input
               data-testid="bot-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="mt-1 w-full rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
             />
-          </div>
-          <div>
-            <label className="text-[12px] text-[#85858A]">Title</label>
+          </label>
+          <label className="text-[12px] text-[#85858A]">
+            Title
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Code Reviewer"
               className="mt-1 w-full rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
             />
-          </div>
-          <div>
-            <label className="text-[12px] text-[#85858A]">Description</label>
+          </label>
+          <label className="text-[12px] text-[#85858A]">
+            Description
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
               className="mt-1 w-full resize-none rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
             />
-          </div>
-          <div>
-            <label className="text-[12px] text-[#85858A]">Instructions (Prompt)</label>
+          </label>
+          <label className="text-[12px] text-[#85858A]">
+            Instructions (Prompt)
             <textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               rows={4}
               className="mt-1 w-full resize-none rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
             />
-          </div>
+          </label>
           <ComputerModePicker value={computerMode} onChange={setComputerMode} />
           <div className="mt-2 flex gap-2">
             <Button type="button" size="sm" disabled={saving || !name.trim()} onClick={() => void save()}>
@@ -2688,23 +2691,30 @@ function ComputerPane({
         ) : isRunning ? (
           <div className="grid h-full w-full place-items-center px-6 text-center">
             <div className="flex flex-col items-center gap-2 text-[#85858A]">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#3A3A40] border-t-[#30A24B]" />
+              {screenError ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#3A3A40] border-t-[#30A24B]" />
+              ) : null}
               <span
-                data-testid="computer-connecting"
+                data-testid={screenError ? "computer-connecting" : "computer-running"}
                 className="text-[13px] font-medium text-[#ECECEE]"
               >
-                {screenError || "Connecting desktop…"}
+                {screenError || "Desktop is running"}
               </span>
-              <Button type="button" variant="outline" size="sm" onClick={onRetryScreen}>
-                Retry
-              </Button>
+              {screenError ? (
+                <Button type="button" variant="outline" size="sm" onClick={onRetryScreen}>
+                  Retry
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : (
           <button
             type="button"
-            className="grid h-full w-full place-items-center px-6 text-center cursor-pointer"
+            data-testid="computer-start"
+            disabled={Boolean(computer?.busyBotName)}
+            className="grid h-full w-full place-items-center px-6 text-center cursor-pointer disabled:cursor-not-allowed"
             onClick={() => {
+              if (computer?.busyBotName) return;
               if (isRunning) onOpenFullscreen();
               else onTakeControl();
             }}
@@ -2760,7 +2770,13 @@ function ComputerPane({
               Release
             </Button>
           ) : (
-            <Button type="button" variant="outline" size="sm" onClick={onTakeControl}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={Boolean(computer?.busyBotName)}
+              onClick={onTakeControl}
+            >
               Take control
             </Button>
           )}

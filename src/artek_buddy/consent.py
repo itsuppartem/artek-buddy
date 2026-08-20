@@ -511,6 +511,11 @@ class ConsentHub:
             return None
         request_id = new_id("cns")
         self.last_request_id = request_id
+        self._jobs[request_id] = {
+            "action_class": CLASS_OWNER_READ,
+            "path": path,
+            "kind": "read",
+        }
         self.store.create_consent_request(
             request_id,
             bot_id=bot_id,

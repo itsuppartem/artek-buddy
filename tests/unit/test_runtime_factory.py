@@ -63,6 +63,7 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
         "child_bot",
     ]
     assert any(item.get("text") == E2E_META_TEXT for item in blocks[0].blocks)
+    assert any(item.get("bot_id") == "$new" for item in blocks[0].blocks)
     assert any(item.get("name") == E2E_CHILD_ARCHIVED for item in blocks[0].blocks)
     assert any(
         item.get("kind") == "card" and item["lines"][0]["v"] == E2E_CARD_VALUE

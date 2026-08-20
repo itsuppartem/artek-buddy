@@ -22,9 +22,8 @@ def test_pairing_rejects_bad_code(page: Page, client_url: str, host_url: str) ->
 def test_unpair_returns_to_pairing(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
-    page.evaluate("() => window.stop()")
     page.evaluate(
         """() => fetch('/local/unpair', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})"""
     )
-    page.goto(client_url, timeout=15_000, wait_until="commit")
+    page.goto(client_url, timeout=15_000, wait_until="domcontentloaded")
     expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)

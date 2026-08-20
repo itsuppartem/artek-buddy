@@ -5,7 +5,7 @@ import uuid
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import bot_row, create_named_bot, open_bot_menu, pair_fresh
+from tests.live.helpers import bot_row, create_named_bot, open_bot_menu, pair_fresh, thread_header
 
 pytestmark = pytest.mark.live
 
@@ -27,6 +27,7 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
     expect(page.get_by_text("Bot Settings")).to_have_count(0)
 
     create_named_bot(page, alpha, title=f"notes about cats {token}")
+    expect(bot_row(page, alpha)).to_contain_text(f"notes about cats {token}")
     create_named_bot(page, bravo, title="shipping desk")
 
     search = page.get_by_placeholder("Search")
@@ -42,7 +43,7 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
     expect(bot_row(page, alpha)).to_have_count(1)
     expect(bot_row(page, bravo)).to_have_count(1)
     bot_row(page, alpha).click()
-    expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=alpha)).to_be_visible()
+    expect(thread_header(page)).to_contain_text(alpha)
 
     open_bot_menu(page, alpha)
     page.get_by_role("menuitem", name="Pin").click()

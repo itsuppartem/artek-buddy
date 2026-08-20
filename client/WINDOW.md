@@ -23,7 +23,7 @@ flowchart LR
 └───────────────────────────────────────────────────────────────┴─────────────────────────────┴───────────────────┘
 ```
 
-The computer pane and Settings overlay sit on the right of the same shell. Fullscreen screen is a separate overlay.
+The computer pane and Settings overlay sit on the right of the same shell. Fullscreen screen is a separate overlay. Gear opens the pane and does **not** boot. Offline • Click to start boots and takes control.
 
 ## Screens
 
@@ -31,7 +31,7 @@ The computer pane and Settings overlay sit on the right of the same shell. Fulls
 | --- | --- | --- |
 | Proxy error | loopback `status` failed | Retry (reload) |
 | Pairing | not paired | Host URL, code `XXXX-XXXX`, device name, Pair. Fail text under the form. |
-| Shell | paired | sidebar + thread; optional Settings / Create / computer pane / fullscreen. Pairing does not open the pane. Create focuses the new chat. Gear opens the pane; Offline boots. |
+| Shell | paired | sidebar + thread; optional Settings / Create / computer pane / fullscreen. Pairing does not open the pane. Create focuses the new chat. Gear opens the pane without booting. Offline boots. |
 
 Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
@@ -64,7 +64,7 @@ SSE. Blocks in a message:
 | subagent | `#n name`, status, Stop while running, Restart after |
 | child_bot | click opens that chat (disabled if deleted/archived) |
 
-Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner sits at the top of the thread (`attention-alert`): replied / ask / takeover / failed. It does not cover Send. Title opens that chat; Dismiss (`attention-dismiss`) does not. `notifyOnFinish` mutes only replied / failed.
+Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner sits at the top of the thread (`attention-alert`): replied / ask / takeover / failed. It does not cover Send. It is not shown for the chat already on screen. Title opens that chat; Dismiss (`attention-dismiss`) does not. `notifyOnFinish` mutes only replied / failed. Thread header is `thread-header`. Send stays enabled while a bot is selected so Enter can post the live textarea; an empty click is a no-op.
 
 Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
 
@@ -80,7 +80,7 @@ Settings: the same fields plus instructions, mode change (rebinds the desktop; h
 
 ## Computer pane
 
-States: Offline, Booting, Running, Sleeping, Error. Click Offline to boot and take control. View-only preview iframe. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows the other bot’s name.
+States: Offline, Booting, Running, Sleeping, Error. Click Offline to boot and take control. Gear does not auto-boot. View-only preview iframe when the screen URL is `/novnc/…`. Fake sandbox has no noVNC URL, so the pane shows `computer-running` instead of spinning Connecting. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows the other bot’s name and disables Take / Restart / Stop / Reset.
 
 Memory (same pane): owner / work / charter list, New (this bot \| shared, `memory-save`), Edit, Outdated = delete, Export `.md`.
 
