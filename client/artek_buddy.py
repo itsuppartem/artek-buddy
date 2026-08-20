@@ -405,6 +405,47 @@ def web_root() -> Path:
     raise FileNotFoundError("web UI is missing; rebuild the package")
 
 
+def _icon_candidates() -> list[Path]:
+    here = Path(__file__).resolve().parent
+    return [
+        Path("/usr/share/icons/hicolor/256x256/apps/artek-buddy.png"),
+        Path("/usr/lib/artek-buddy-client/app-icon.png"),
+        here / "assets" / "app-icon.png",
+        here / "assets" / "hicolor" / "256x256" / "apps" / "artek-buddy.png",
+    ]
+
+
+def bundled_icon_path() -> Path | None:
+    for path in _icon_candidates():
+        if path.is_file():
+            return path
+    return None
+
+
+def notify_icon_args() -> list[str]:
+    icon = bundled_icon_path()
+    if icon is not None:
+        return [f"--icon={icon}"]
+    return ["--icon=artek-buddy"]
+
+
+def apply_window_icon(window: object) -> None:
+    icon = bundled_icon_path()
+    setter = getattr(window, "set_icon_from_file", None)
+    if icon is not None and callable(setter):
+        try:
+            setter(str(icon))
+            return
+        except Exception:
+            pass
+    name_setter = getattr(window, "set_icon_name", None)
+    if callable(name_setter):
+        try:
+            name_setter("artek-buddy")
+        except Exception:
+            pass
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "artek-buddy"
 
@@ -1152,6 +1193,7 @@ def _desktop_notify(title: str, body: str, urgency: str) -> None:
                 notify,
                 "--app-name=Artek Buddy",
                 f"--urgency={urgency}",
+                *notify_icon_args(),
                 "--",
                 title,
                 body,
@@ -1191,6 +1233,7 @@ def _open_webkit2(local_url: str) -> bool:
 
     window = Gtk.Window(title="Artek Buddy")
     window.set_default_size(1440, 900)
+    apply_window_icon(window)
     window.connect("destroy", lambda *_args: (_unregister_window(window), Gtk.main_quit()))
     window.connect("focus-in-event", _on_focus_in)
     view = WebKit2.WebView()
@@ -1212,6 +1255,11 @@ def _open_webkit6(local_url: str) -> bool:
     def on_activate(app: Gtk.Application) -> None:
         window = Gtk.ApplicationWindow(application=app, title="Artek Buddy")
         window.set_default_size(1440, 900)
+        apply_window_icon(window)
+        try:
+            Gtk.Window.set_default_icon_name("artek-buddy")
+        except Exception:
+            pass
         window.connect("notify::is-active", _on_gtk_active)
         window.connect("destroy", lambda *_args: _unregister_window(window))
         view = WebKit.WebView()

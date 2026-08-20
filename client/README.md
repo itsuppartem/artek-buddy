@@ -7,6 +7,7 @@ The window is the product shell: pairing, bot list, thread, computer pane. It ta
 the host through a loopback proxy so the token never sits in the page.
 
 Window map (screens, controls, thread blocks): [WINDOW.md](WINDOW.md).
+Marks (desktop icon, pairing, bot avatars): [assets/README.md](assets/README.md).
 
 ## Build and install
 
