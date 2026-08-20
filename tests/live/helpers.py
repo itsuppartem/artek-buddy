@@ -80,24 +80,8 @@ def open_computer_pane(page: Page) -> None:
     expect(memory).to_be_visible(timeout=20_000)
 
 
-def fill_react_input(locator, text: str) -> None:
-    """Playwright fill() can set the DOM without React draft, then a rerender wipes it."""
-    locator.wait_for(timeout=8_000)
-    locator.evaluate(
-        """(el, value) => {
-          const proto = el.tagName === "TEXTAREA"
-            ? window.HTMLTextAreaElement.prototype
-            : window.HTMLInputElement.prototype;
-          const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
-          setter.call(el, value);
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-        }""",
-        text,
-    )
-
-
 def send_message(page: Page, text: str) -> None:
-    """Type into the composer and press Enter. Do not click Send: the attention
+    """Type like a person and press Enter. Do not click Send: the attention
     pill covers it, and clicking the pill opens a leftover bot instead.
     """
     arm_page(page)
@@ -109,12 +93,22 @@ def send_message(page: Page, text: str) -> None:
     except Exception:
         pass
     box = composer(page)
-    box.click(timeout=8_000)
-    fill_react_input(box, text)
-    box.press("Enter")
-    expect(
-        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=text)
-    ).to_be_visible(timeout=8_000)
+    send_btn = page.get_by_role("button", name="Send")
+    user = page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=text)
+    last_error: Exception | None = None
+    for _ in range(2):
+        box.click(timeout=8_000)
+        box.fill("")
+        box.press_sequentially(text, delay=8)
+        expect(send_btn).to_be_enabled(timeout=8_000)
+        box.press("Enter")
+        try:
+            expect(user).to_be_visible(timeout=8_000)
+            return
+        except AssertionError as err:
+            last_error = err
+    assert last_error is not None
+    raise last_error
 
 
 def open_settings(page: Page, name: str) -> None:
