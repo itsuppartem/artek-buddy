@@ -48,13 +48,22 @@ def send_message(page: Page, text: str) -> None:
     page.get_by_role("button", name="Send").click()
 
 
-def pair_fresh(page: Page, client_url: str, host_url: str) -> None:
+def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | None = None) -> None:
     page.goto(client_url)
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
     page.get_by_placeholder("https://host.example").fill(host_url)
     page.get_by_placeholder("XXXX-XXXX").fill(mint_pairing_code())
+    if device_name is not None:
+        page.get_by_label("Device name").fill(device_name)
     page.get_by_role("button", name="Pair").click()
+
+
+def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":"test"}') -> None:
+    page.route(
+        url_glob,
+        lambda route: route.fulfill(status=status, content_type="application/json", body=body),
+    )
 
 
 def create_named_bot(page: Page, name: str) -> None:
