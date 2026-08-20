@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import arm_page, close_computer_pane, pair_fresh
+from tests.live.helpers import arm_page, pair_fresh
 
 pytestmark = pytest.mark.live
 
@@ -22,10 +22,7 @@ def test_pairing_rejects_bad_code(page: Page, client_url: str, host_url: str) ->
 def test_unpair_returns_to_pairing(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
-    close_computer_pane(page)
-    # Leftover bots auto-boot noVNC. reload/domcontentloaded then sits on 502s.
     page.evaluate("() => window.stop()")
-    page.route("**/novnc/**", lambda route: route.abort())
     page.evaluate(
         """() => fetch('/local/unpair', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})"""
     )

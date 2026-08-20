@@ -46,14 +46,21 @@ def test_thread_reply_attach_banner(page: Page, client_url: str, host_url: str) 
     send_message(page, "hello", name)
     bot_msg = page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")
     expect(bot_msg).to_be_visible(timeout=15_000)
-    # Replied banner auto-hides in 4s and is gated by notifyOnFinish. Skip that
-    # race here; keep Reply + attach. Banner leftover stays on #32.
+    banner = page.get_by_test_id("attention-alert").filter(has_text=name)
+    expect(banner).to_be_visible(timeout=8_000)
+    expect(banner).to_contain_text("replied")
+    send_box = page.get_by_role("button", name="Send", exact=True)
+    banner_box = banner.bounding_box()
+    send_hit = send_box.bounding_box()
+    assert banner_box and send_hit
+    assert banner_box["y"] + banner_box["height"] < send_hit["y"]
+    page.get_by_test_id("attention-dismiss").click()
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
 
     bot_msg.click(button="right", timeout=8_000)
     menu = page.get_by_role("menu", name="Message actions")
     expect(menu).to_be_visible(timeout=8_000)
-    # Overlay sits under the menu; force the click onto Reply itself.
-    menu.get_by_role("menuitem", name="Reply").click(timeout=5_000, force=True)
+    menu.get_by_role("menuitem", name="Reply").click(timeout=5_000)
     bar = page.get_by_test_id("reply-bar")
     expect(bar).to_be_visible(timeout=8_000)
     expect(bar).to_contain_text("Replying to")

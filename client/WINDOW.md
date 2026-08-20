@@ -19,7 +19,7 @@ flowchart LR
 │ bot rows  (unread · pin · preview)                            │ composer  +  textarea  ⏹ ➤  │ preview iframe    │
 │ Archived (n)                                                  │                             │ Open / Take / Rel │
 │ Plugins  (toast: later)                                       │ overlays: create / settings │ Memory            │
-│ You                                                           │                             │ Routines          │
+│ You                                                           │ attention (top, Dismiss)    │ Routines          │
 └───────────────────────────────────────────────────────────────┴─────────────────────────────┴───────────────────┘
 ```
 
@@ -31,7 +31,7 @@ The computer pane and Settings overlay sit on the right of the same shell. Fulls
 | --- | --- | --- |
 | Proxy error | loopback `status` failed | Retry (reload) |
 | Pairing | not paired | Host URL, code `XXXX-XXXX`, device name, Pair. Fail text under the form. |
-| Shell | paired | sidebar + thread; optional Settings / Create / computer pane / fullscreen |
+| Shell | paired | sidebar + thread; optional Settings / Create / computer pane / fullscreen. Pairing does not open the pane. Create focuses the new chat. Gear opens the pane; Offline boots. |
 
 Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
@@ -64,7 +64,7 @@ SSE. Blocks in a message:
 | subagent | `#n name`, status, Stop while running, Restart after |
 | child_bot | click opens that chat (disabled if deleted/archived) |
 
-Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner: replied / ask / takeover / failed. `notifyOnFinish` mutes only replied / failed.
+Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner sits at the top of the thread (`attention-alert`): replied / ask / takeover / failed. It does not cover Send. Title opens that chat; Dismiss (`attention-dismiss`) does not. `notifyOnFinish` mutes only replied / failed.
 
 Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
 

@@ -56,7 +56,7 @@ export function BotContextMenu({
       <div
         role="menu"
         aria-label={`Actions for ${bot.name}`}
-        className="fixed w-[264px] rounded-[18px] border border-[#343438] bg-[#1A1A1D] p-2 shadow-[0_24px_60px_rgba(0,0,0,.62)]"
+        className="fixed z-10 w-[264px] rounded-[18px] border border-[#343438] bg-[#1A1A1D] p-2 shadow-[0_24px_60px_rgba(0,0,0,.62)]"
         style={{ left: Math.max(margin, left), top: Math.max(margin, top) }}
       >
         <MenuItem

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import bot_row, close_computer_pane, create_named_bot, pair_fresh
+from tests.live.helpers import bot_row, close_computer_pane, create_named_bot, open_computer_pane, pair_fresh
 
 pytestmark = pytest.mark.live
 
@@ -13,9 +13,10 @@ def test_create_memory_routine_and_settings(
     client_url: str,
     host_url: str,
 ) -> None:
-    """Runs before scripted/sidebar/thread so leftover computers are not yet booting."""
+    """Memory and routines live in the computer pane; open it after Create."""
     pair_fresh(page, client_url, host_url)
-    create_named_bot(page, "CI Team", close_pane=False)
+    create_named_bot(page, "CI Team")
+    open_computer_pane(page)
 
     expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=20_000)
     page.get_by_test_id("new-memory").click()

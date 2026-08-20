@@ -105,7 +105,7 @@ export function ShellPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
-  const [panel, setPanel] = useState<Panel>("computer");
+  const [panel, setPanel] = useState<Panel>(null);
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const screenUrlRef = useRef<string | null>(null);
@@ -707,6 +707,7 @@ export function ShellPage() {
     const files = textOverride == null ? pendingFiles : [];
     if (!active || sending || (!text && !files.length)) return;
     const replyId = replyTo?.id ?? null;
+    const targetId = active.id;
     if (textOverride == null) {
       writeDraft("", true);
       setPendingFiles([]);
@@ -723,18 +724,19 @@ export function ShellPage() {
             })),
           )
         : undefined;
-      await api.threads.send(active.id, text, replyId, attachments);
+      await api.threads.send(targetId, text, replyId, attachments);
       setReplyTo(null);
-      await refreshThread(active.id);
     } catch (err) {
       if (textOverride == null) {
         writeDraft(text);
         setPendingFiles(files);
       }
       showError(err, "Send failed");
+      return;
     } finally {
       setSending(false);
     }
+    void refreshThread(targetId).catch(() => undefined);
   }
 
   async function stop() {
@@ -856,7 +858,7 @@ export function ShellPage() {
     });
     await refreshBots();
     navigate(`/app/${bot.id}`);
-    setPanel("computer");
+    setPanel(null);
   }
 
   async function deleteBot(bot: Bot, deleteMemories: boolean = false) {
@@ -1047,7 +1049,7 @@ export function ShellPage() {
 
       <main
         data-testid="thread-pane"
-        className="flex min-w-0 flex-1 flex-col bg-[#0D0D0E]"
+        className="relative flex min-w-0 flex-1 flex-col bg-[#0D0D0E]"
         onPaste={onChatPaste}
       >
         <div className="flex items-center justify-between border-b border-[#141416] px-[22px] py-[17px]">
@@ -1299,14 +1301,54 @@ export function ShellPage() {
             <button
               type="button"
               aria-label="Send"
-              disabled={!active || sending || (!draft.trim() && pendingFiles.length === 0)}
+              disabled={!active || sending}
               onClick={() => void send()}
-              className="grid h-9 w-9 place-items-center rounded-full bg-[#F1F1EF] text-[#17171A] disabled:opacity-40"
+              className={`grid h-9 w-9 place-items-center rounded-full bg-[#F1F1EF] text-[#17171A] disabled:opacity-40 ${
+                !draft.trim() && pendingFiles.length === 0 ? "opacity-40" : ""
+              }`}
             >
               ↑
             </button>
           </div>
         </div>
+        {attention || later ? (
+          <div className="pointer-events-none absolute top-16 left-1/2 z-20 flex w-full -translate-x-1/2 flex-col items-center gap-2 px-4">
+            {attention ? (
+              <div
+                data-testid="attention-alert"
+                className="pointer-events-auto flex max-w-[min(480px,90vw)] items-center gap-2 rounded-full bg-[#1A1A1D] py-2 pr-2 pl-4 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]"
+              >
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left hover:text-[#ECECEE]"
+                  onClick={() => {
+                    navigate(`/app/${attention.botId}`);
+                    setAttention(null);
+                  }}
+                >
+                  <span className="font-medium text-[#ECECEE]">{attention.title}</span>
+                  {attention.body ? (
+                    <span className="mt-0.5 block truncate text-[12.5px] text-[#85858A]">{attention.body}</span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  data-testid="attention-dismiss"
+                  aria-label="Dismiss alert"
+                  onClick={() => setAttention(null)}
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[#85858A] hover:bg-[#222226] hover:text-[#ECECEE]"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : null}
+            {later ? (
+              <div className="pointer-events-auto rounded-full bg-[#1A1A1D] px-4 py-2 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]">
+                {later}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </main>
 
       <aside
@@ -1439,32 +1481,6 @@ export function ShellPage() {
             }
           }}
         />
-      ) : null}
-
-      {attention || later ? (
-        <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2">
-          {attention ? (
-            <button
-              type="button"
-              data-testid="attention-alert"
-              onClick={() => {
-                navigate(`/app/${attention.botId}`);
-                setAttention(null);
-              }}
-              className="max-w-[min(480px,90vw)] rounded-full bg-[#1A1A1D] px-4 py-2 text-left text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)] hover:bg-[#222226]"
-            >
-              <span className="font-medium text-[#ECECEE]">{attention.title}</span>
-              {attention.body ? (
-                <span className="mt-0.5 block truncate text-[12.5px] text-[#85858A]">{attention.body}</span>
-              ) : null}
-            </button>
-          ) : null}
-          {later ? (
-            <div className="rounded-full bg-[#1A1A1D] px-4 py-2 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]">
-              {later}
-            </div>
-          ) : null}
-        </div>
       ) : null}
 
       {booting ? (
@@ -2969,7 +2985,7 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
               variant="cream"
               size="sm"
               data-testid="memory-save"
-              disabled={busy || !content.trim()}
+              disabled={busy}
               onClick={() => void create()}
             >
               Save

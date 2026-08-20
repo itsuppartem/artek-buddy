@@ -38,6 +38,7 @@ def test_pairing_form_fields_and_rejected_url(page: Page, client_url: str) -> No
 def test_pairing_with_device_name(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url, device_name="CI laptop")
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("new-memory")).to_have_count(0)
 
 
 def test_auth_error_repair_returns_to_pairing(page: Page, client_url: str, host_url: str) -> None:

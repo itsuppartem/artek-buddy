@@ -43,7 +43,7 @@ def composer(page: Page):
 
 
 def close_computer_pane(page: Page) -> None:
-    """Create opens the computer pane; the noVNC iframe 502-loops and CDP sits."""
+    """Hide the optional computer drawer if it is open."""
     for loc in (
         page.get_by_title("Close panel"),
         page.get_by_label("Close computer"),
@@ -61,7 +61,7 @@ def arm_page(page: Page) -> None:
 
 
 def open_computer_pane(page: Page) -> None:
-    """Memory and routines live in the side pane. Do not toggle an already-open pane shut."""
+    """Memory and routines live in the side pane."""
     arm_page(page)
     closer = page.get_by_title("Close panel")
     memory = page.get_by_test_id("new-memory")
@@ -80,61 +80,21 @@ def open_computer_pane(page: Page) -> None:
     expect(memory).to_be_visible(timeout=20_000)
 
 
-def ignore_attention_overlay(page: Page) -> None:
-    """The pill sits on the composer. Clicking it opens a leftover bot."""
-    page.evaluate(
-        """() => {
-          for (const el of document.querySelectorAll('[data-testid="attention-alert"]')) {
-            el.style.pointerEvents = "none";
-            el.style.visibility = "hidden";
-          }
-        }"""
-    )
-
-
 def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
-    """Stay on this chat, then type and force-click Send.
-
-    The attention pill covers the composer and opens a leftover bot. Hide it.
-    Select the named row so hello cannot land in the previous test's thread.
-    """
+    """Open this chat if named, type, press Enter, wait for the user bubble."""
     arm_page(page)
-    close_computer_pane(page)
-    ignore_attention_overlay(page)
     if bot_name:
         bot_row(page, bot_name).click()
         expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=bot_name)).to_be_visible(
             timeout=8_000
         )
-    booting = page.get_by_text("Booting up")
-    try:
-        if booting.count():
-            booting.first.wait_for(state="hidden", timeout=8_000)
-    except Exception:
-        pass
-    try:
-        page.get_by_role("button", name="Stop", exact=True).first.wait_for(state="hidden", timeout=8_000)
-    except Exception:
-        pass
     box = composer(page)
-    send_btn = page.get_by_role("button", name="Send", exact=True)
-    user = page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=text)
-    last_error: Exception | None = None
-    for _ in range(2):
-        ignore_attention_overlay(page)
-        if bot_name:
-            bot_row(page, bot_name).click()
-        box.click(force=True, timeout=8_000)
-        box.press("Control+A")
-        box.press_sequentially(text, delay=8)
-        send_btn.click(force=True, timeout=5_000)
-        try:
-            expect(user).to_be_visible(timeout=8_000)
-            return
-        except AssertionError as err:
-            last_error = err
-    assert last_error is not None
-    raise last_error
+    expect(box).to_be_enabled(timeout=8_000)
+    box.fill(text)
+    box.press("Enter")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=text)
+    ).to_be_visible(timeout=8_000)
 
 
 def open_settings(page: Page, name: str) -> None:
@@ -153,7 +113,6 @@ def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | No
         page.get_by_label("Device name").fill(device_name)
     page.get_by_role("button", name="Pair").click()
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
-    close_computer_pane(page)
 
 
 def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":"test"}') -> None:
@@ -168,13 +127,9 @@ def create_named_bot(
     name: str,
     title: str | None = None,
     *,
-    close_pane: bool = True,
     private: bool = True,
 ) -> None:
-    """+ is always in the sidebar. Private so Create does not paint Team Booting up.
-    Create opens the computer pane (memory / routines live there). Thread tests
-    close it so noVNC cannot sit on later clicks; the memory test keeps it open.
-    """
+    """+ is always in the sidebar. Private so Create does not share a Team desktop."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.get_by_title("New bot").click()
     box = page.get_by_placeholder("Name this bot")
@@ -186,15 +141,11 @@ def create_named_bot(
         page.get_by_role("button", name="Private").click()
     page.get_by_role("button", name="Create", exact=True).click()
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
-    if close_pane:
-        close_computer_pane(page)
     bot_row(page, name).click()
     expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=name)).to_be_visible(
         timeout=8_000
     )
     composer(page).wait_for(timeout=20_000)
-    if close_pane:
-        close_computer_pane(page)
 
 
 def open_bot_menu(page: Page, name: str) -> None:
@@ -203,7 +154,7 @@ def open_bot_menu(page: Page, name: str) -> None:
 
 
 def ensure_bot(page: Page, name: str) -> None:
-    """Open this named chat. Leftover host bots must not steal Send."""
+    """Open this named chat, or create it."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     row = bot_row(page, name)
     if row.count() and row.first.is_visible(timeout=0):

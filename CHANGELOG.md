@@ -9,6 +9,11 @@
 - `ui` job covers the sidebar: search, context menu (pin, unread, edit, duplicate, archive, delete), empty inbox, Plugins toast, You label.
 - `ui` job covers thread blocks, reply, attach chips, and the replied attention banner.
 
+### Fixed
+- The attention pill sat on Send and opened the leftover chat. It now sits at the top of the thread with Dismiss.
+- Pairing opened the computer pane and auto-booted. The pane stays closed until you open it.
+- Send stayed disabled when the textarea already had text. It sends what is in the box and does not stay busy until the thread GET returns.
+
 ### Removed
 - The previous host, Vitest, Playwright, integration, and demo-recorder suite.
 
