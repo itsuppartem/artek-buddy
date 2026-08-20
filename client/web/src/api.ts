@@ -464,57 +464,66 @@ export const api = {
       signal: AbortSignal,
     ): AsyncGenerator<ProductEvent> {
       const query = after ? `?after=${encodeURIComponent(after)}` : "";
-      const response = await fetch(`/v1/threads/${botId}/events${query}`, {
-        headers: { Accept: "text/event-stream" },
-        signal,
-      });
-      if (!response.ok || !response.body) {
-        if (response.status === 401 || response.status === 403) {
-          throw new ApiError("This computer is no longer authorized. Pair it again to continue.", response.status);
-        }
-        throw new ApiError(
-          "Live updates stopped. Check the host connection and try again.",
-          response.status || undefined,
-          true,
-        );
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let eventName = "message";
-      let dataLines: string[] = [];
-      while (!signal.aborted) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        while (true) {
-          const index = buffer.indexOf("\n");
-          if (index < 0) break;
-          const line = buffer.slice(0, index).replace(/\r$/, "");
-          buffer = buffer.slice(index + 1);
-          if (line === "") {
-            if (dataLines.length) {
-              const raw = dataLines.join("\n");
-              dataLines = [];
-              try {
-                const parsed = camelize<ProductEvent>(JSON.parse(raw));
-                if (eventName && eventName !== "message") parsed.type = eventName;
-                yield parsed;
-              } catch {
-                // ignore a broken frame and keep the stream
-              }
-            }
-            eventName = "message";
-            continue;
-          }
-          if (line.startsWith(":")) continue;
-          if (line.startsWith("event:")) eventName = line.slice(6).trim();
-          else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
-        }
-      }
+      yield* readSse(`/v1/threads/${botId}/events${query}`, signal);
+    },
+  },
+  events: {
+    async *subscribe(signal: AbortSignal): AsyncGenerator<ProductEvent> {
+      yield* readSse("/v1/events", signal);
     },
   },
 };
+
+async function* readSse(path: string, signal: AbortSignal): AsyncGenerator<ProductEvent> {
+  const response = await fetch(path, {
+    headers: { Accept: "text/event-stream" },
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ApiError("This computer is no longer authorized. Pair it again to continue.", response.status);
+    }
+    throw new ApiError(
+      "Live updates stopped. Check the host connection and try again.",
+      response.status || undefined,
+      true,
+    );
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let eventName = "message";
+  let dataLines: string[] = [];
+  while (!signal.aborted) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    while (true) {
+      const index = buffer.indexOf("\n");
+      if (index < 0) break;
+      const line = buffer.slice(0, index).replace(/\r$/, "");
+      buffer = buffer.slice(index + 1);
+      if (line === "") {
+        if (dataLines.length) {
+          const raw = dataLines.join("\n");
+          dataLines = [];
+          try {
+            const parsed = camelize<ProductEvent>(JSON.parse(raw));
+            if (eventName && eventName !== "message") parsed.type = eventName;
+            yield parsed;
+          } catch {
+            // ignore a broken frame and keep the stream
+          }
+        }
+        eventName = "message";
+        continue;
+      }
+      if (line.startsWith(":")) continue;
+      if (line.startsWith("event:")) eventName = line.slice(6).trim();
+      else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+    }
+  }
+}
 
 export function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {

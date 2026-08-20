@@ -127,7 +127,7 @@ class ComputerService:
                 self.client.stop(record.provider_ref)
             except Exception:
                 log.exception("supervisor stop failed")
-        record.state = "stopped"
+        record.state = "suspended"
         record.control_holder = "none"
         record.control_lease_id = None
         record.control_lease_expires_at = None

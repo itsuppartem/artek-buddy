@@ -129,6 +129,9 @@ export function ShellPage() {
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
   const botsRef = useRef<Bot[]>([]);
+  const considerEventRef = useRef<(incoming: ProductEvent, bot: Bot, subscribedAt: number) => void>(
+    () => undefined,
+  );
   const [contextMenu, setContextMenu] = useState<{
     bot: Bot;
     position: ContextMenuPosition;
@@ -149,15 +152,6 @@ export function ShellPage() {
   const isBusy = Boolean(
     (thread?.run && isActive(thread.run.status)) ||
       (thread && (hasLive(thread) || hasActiveWorkers(thread))),
-  );
-  const otherBotIds = useMemo(
-    () =>
-      bots
-        .map((bot) => bot.id)
-        .filter((id) => id !== active?.id)
-        .sort()
-        .join("\0"),
-    [bots, active?.id],
   );
 
   useEffect(() => {
@@ -226,6 +220,7 @@ export function ShellPage() {
     const next = attentionFromEvent(incoming, bot.name);
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
   }
+  considerEventRef.current = considerEvent;
 
   async function refreshBots() {
     const list = await api.bots.list();
@@ -499,40 +494,34 @@ export function ShellPage() {
   }, [active?.id]);
 
   useEffect(() => {
-    const ids = otherBotIds ? otherBotIds.split("\0") : [];
-    if (!ids.length) return;
     const abort = new AbortController();
     const subscribedAt = Date.now();
-    for (const id of ids) {
-      void (async () => {
-        let after: string | null = null;
-        let retryMs = 250;
-        while (!abort.signal.aborted) {
-          try {
-            for await (const event of api.threads.subscribe(id, after, abort.signal)) {
-              if (abort.signal.aborted) break;
-              after = event.id;
-              retryMs = 250;
-              const bot = botsRef.current.find((item) => item.id === id);
-              if (bot) considerEvent(event, bot, subscribedAt);
-            }
-          } catch (err) {
+    void (async () => {
+      let retryMs = 250;
+      while (!abort.signal.aborted) {
+        try {
+          for await (const event of api.events.subscribe(abort.signal)) {
             if (abort.signal.aborted) break;
-            if (classifyError(err).kind === "auth") break;
-            // Same reconnect as the active thread stream.
+            retryMs = 250;
+            if (event.botId === activeIdRef.current) continue;
+            const bot = botsRef.current.find((item) => item.id === event.botId);
+            if (bot) considerEventRef.current(event, bot, subscribedAt);
           }
+        } catch (err) {
           if (abort.signal.aborted) break;
-          try {
-            await abortableDelay(retryMs, abort.signal);
-          } catch {
-            break;
-          }
-          retryMs = Math.min(retryMs * 2, 5_000);
+          if (classifyError(err).kind === "auth") break;
         }
-      })();
-    }
+        if (abort.signal.aborted) break;
+        try {
+          await abortableDelay(retryMs, abort.signal);
+        } catch {
+          break;
+        }
+        retryMs = Math.min(retryMs * 2, 5_000);
+      }
+    })();
     return () => abort.abort();
-  }, [otherBotIds]);
+  }, []);
 
   useEffect(() => {
     setReplyTo(null);
@@ -851,16 +840,20 @@ export function ShellPage() {
     description: string;
     computerMode: ComputerMode;
   }) {
-    const bot = await api.bots.create({
-      name: input.name.trim(),
-      title: input.title,
-      description: input.description,
-      instructions: input.description,
-      computerMode: input.computerMode,
-    });
-    await refreshBots();
-    navigate(`/app/${bot.id}`);
-    setPanel(null);
+    try {
+      const bot = await api.bots.create({
+        name: input.name.trim(),
+        title: input.title,
+        description: input.description,
+        instructions: input.description,
+        computerMode: input.computerMode,
+      });
+      await refreshBots();
+      navigate(`/app/${bot.id}`);
+      setPanel(null);
+    } catch (err) {
+      showError(err, "Could not create chat");
+    }
   }
 
   async function deleteBot(bot: Bot, deleteMemories: boolean = false) {
@@ -2745,8 +2738,9 @@ function ComputerPane({
               </div>
             ) : computer?.busyBotName ? (
               <div className="flex flex-col items-center gap-1 text-[#85858A]">
-                <span className="text-[14px] font-medium text-[#ECECEE]">{computer.busyBotName}</span>
-                <span className="text-[12px]">is using the computer</span>
+                <span className="text-[14px] font-medium text-[#ECECEE]">
+                  {computer.busyBotName} is using the computer
+                </span>
               </div>
             ) : isError ? (
               <div className="flex flex-col items-center gap-1 text-[#FA5252]">

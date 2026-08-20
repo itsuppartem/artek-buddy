@@ -16,6 +16,11 @@ def test_v1_without_token_is_401(client) -> None:
     assert response.status_code == 401
 
 
+def test_workspace_events_without_token_is_401(client) -> None:
+    response = client.get("/v1/events")
+    assert response.status_code == 401
+
+
 def test_v1_wrong_token_is_403(client) -> None:
     response = client.get("/v1/bots", headers={"Authorization": "Bearer not-the-host-token-value-xx"})
     assert response.status_code == 403

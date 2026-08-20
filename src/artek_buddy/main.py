@@ -1503,6 +1503,29 @@ async def mark_thread_unread(bot_id: str, history: HistoryStore = Depends(store)
         raise _db_error(err) from err
 
 
+@app.get("/v1/events", dependencies=[Depends(require_auth)])
+async def subscribe_workspace_events(
+    events: EventHub = Depends(hub),
+) -> StreamingResponse:
+    async def gen():
+        async for item in events.subscribe_workspace():
+            if item is HEARTBEAT:
+                yield ": keepalive\n\n"
+                continue
+            data = item.model_dump_json()
+            yield f"id: {item.id}\nevent: {item.type.value}\ndata: {data}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.get("/v1/threads/{bot_id}/events", dependencies=[Depends(require_auth)])
 async def subscribe_thread_events(
     bot_id: str,

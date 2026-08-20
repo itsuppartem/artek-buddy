@@ -8,6 +8,7 @@ from artek_buddy.contracts.events import ProductEvent
 
 HEARTBEAT = object()
 REPLAY_GAP = object()
+WORKSPACE_CHANNEL = "*"
 
 
 class EventHub:
@@ -29,7 +30,11 @@ class EventHub:
         buf.append(event)
         if len(buf) > self.buffer_size:
             del buf[: len(buf) - self.buffer_size]
-        for queue in list(self._subs[bot_id]):
+        self._deliver(event, self._subs[bot_id])
+        self._deliver(event, self._subs[WORKSPACE_CHANNEL])
+
+    def _deliver(self, event: ProductEvent, queues: set[asyncio.Queue[ProductEvent]]) -> None:
+        for queue in list(queues):
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
@@ -80,3 +85,19 @@ class EventHub:
                     yield HEARTBEAT
         finally:
             self._subs[bot_id].discard(queue)
+
+    async def subscribe_workspace(
+        self,
+        heartbeat_s: float = 15.0,
+    ) -> AsyncIterator[ProductEvent | object]:
+        queue: asyncio.Queue[ProductEvent] = asyncio.Queue(maxsize=256)
+        self._subs[WORKSPACE_CHANNEL].add(queue)
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=heartbeat_s)
+                    yield event
+                except asyncio.TimeoutError:
+                    yield HEARTBEAT
+        finally:
+            self._subs[WORKSPACE_CHANNEL].discard(queue)

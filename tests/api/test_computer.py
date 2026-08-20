@@ -22,7 +22,7 @@ def test_computer_boot_stop_on_fake(client, auth_header) -> None:
 
     stopped = client.post(f"/v1/computer/{bot_id}/stop", headers=auth_header)
     assert stopped.status_code == 200
-    assert stopped.json()["state"] in {"stopped", "suspended"}
+    assert stopped.json()["state"] == "suspended"
 
 
 def test_team_status_names_the_bot_that_booted(client, auth_header) -> None:

@@ -66,6 +66,8 @@ SSE. Blocks in a message:
 
 Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner sits at the top of the thread (`attention-alert`): replied / ask / takeover / failed. It does not cover Send. It is not shown for the chat already on screen. Title opens that chat; Dismiss (`attention-dismiss`) does not. `notifyOnFinish` mutes only replied / failed. Thread header is `thread-header`. Send stays enabled while a bot is selected so Enter can post the live textarea; an empty click is a no-op.
 
+The open chat uses `/v1/threads/{id}/events`. Other inbox banners use one `/v1/events` stream. Chrome HTTP/1.1 allows six connections per host; one SSE per leftover chat would starve Create and pair.
+
 Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
 
 Errors: host Retry, auth re-pair, action Dismiss.
@@ -80,7 +82,7 @@ Settings: the same fields plus instructions, mode change (rebinds the desktop; h
 
 ## Computer pane
 
-States: Offline, Booting, Running, Sleeping, Error (`computer-state` / `data-state`). Click Offline to boot and take control. Gear does not auto-boot. View-only preview iframe when the screen URL is `/novnc/…`. Fake sandbox has no noVNC URL, so the pane shows `computer-running` instead of spinning Connecting. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows the other bot’s name (the bot that booted or holds the shared desktop, not only a bot with an active run) and disables Take / Restart / Stop / Reset. The pane keeps the start tile in that case instead of the running preview. Dedicated vs Team is `computer-label` `data-mode`.
+States: Offline, Booting, Running, Sleeping, Error (`computer-state` / `data-state`). Click Offline to boot and take control. Gear does not auto-boot. Stop in Settings is Sleeping (`suspended`), not Offline. View-only preview iframe when the screen URL is `/novnc/…`. Fake sandbox has no noVNC URL, so the pane shows `computer-running` instead of spinning Connecting. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows `{name} is using the computer` on the start tile (one line; the bot that booted or holds the shared desktop, not only a bot with an active run) and disables Take / Restart / Stop / Reset. The pane keeps the start tile in that case instead of the running preview. Dedicated vs Team is `computer-label` `data-mode`.
 
 Memory (same pane): owner / work / charter list, New (this bot \| shared, `memory-save`), Edit, Outdated = delete, Export `.md`.
 
