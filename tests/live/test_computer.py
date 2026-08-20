@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import bot_row, create_named_bot, pair_fresh, seed_memory
+from tests.live.helpers import bot_row, create_named_bot, pair_fresh
 
 pytestmark = pytest.mark.live
 
@@ -23,23 +23,8 @@ def test_create_memory_routine_and_settings(
     expect(facts).to_be_visible(timeout=20_000)
     facts.fill("CI prefers short answers")
     page.get_by_test_id("memory-save").click()
-    # Save is often swallowed once a computer iframe is in the page. Seed then
-    # tell the pane to reload (`artek-memory-changed`). Form Save stays on #32.
-    seed_memory(page, "CI prefers short answers")
-    contents = page.evaluate(
-        """async () => {
-          const parts = location.pathname.split('/').filter(Boolean);
-          const botId = parts[parts.length - 1] || '';
-          const r = await fetch('/v1/memory?bot_id=' + encodeURIComponent(botId));
-          const body = await r.json();
-          return (body.documents || []).map((row) => row.content);
-        }"""
-    )
-    assert any("CI prefers short answers" in (row or "") for row in contents), contents
-    page.evaluate("() => window.dispatchEvent(new Event('artek-memory-changed'))")
-    expect(page.get_by_test_id("memory-doc")).to_contain_text(
-        "CI prefers short answers",
-        timeout=15_000,
+    expect(page.get_by_test_id("memory-doc").filter(has_text="CI prefers short answers")).to_be_visible(
+        timeout=20_000
     )
 
     page.get_by_test_id("new-routine").click()

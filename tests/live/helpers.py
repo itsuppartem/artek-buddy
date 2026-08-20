@@ -70,28 +70,6 @@ def arm_page(page: Page) -> None:
     page.set_default_navigation_timeout(20_000)
 
 
-def seed_memory(page: Page, text: str) -> None:
-    """Create a memory document through the already-paired session, then tell
-    the pane to reload. Scripted UI often swallows the Save click while leftover
-    computers boot, so the form POST never leaves the browser."""
-    page.evaluate(
-        """async (content) => {
-          const r = await fetch('/v1/memory', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-              scope: 'user',
-              path: 'entries/owner/note-' + Date.now() + '.md',
-              content,
-            }),
-          });
-          if (!r.ok) throw new Error(await r.text());
-          window.dispatchEvent(new Event('artek-memory-changed'));
-        }""",
-        text,
-    )
-
-
 def open_computer_pane(page: Page) -> None:
     """Memory and routines live in the side pane. Do not toggle an already-open pane shut."""
     arm_page(page)
