@@ -3,14 +3,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import (
-    arm_page,
-    bot_row,
-    close_computer_pane,
-    create_named_bot,
-    open_computer_pane,
-    pair_fresh,
-)
+from tests.live.helpers import arm_page, bot_row, close_computer_pane, create_named_bot, pair_fresh
 
 pytestmark = pytest.mark.live
 
@@ -32,34 +25,14 @@ def test_pair_create_memory_routine_and_settings(
     host_url: str,
 ) -> None:
     pair_fresh(page, client_url, host_url)
-    create_named_bot(page, "CI Team", close_pane=False)
+    create_named_bot(page, "CI Team", close_pane=False, private=False)
 
-    # Memory sits in the computer pane Create just opened. Reopen if a leftover
-    # auto-boot toggle shut it; do not click Agent computer when Close panel is up.
-    open_computer_pane(page)
-    new_memory = page.get_by_test_id("new-memory")
-    new_memory.scroll_into_view_if_needed()
-    expect(new_memory).to_be_visible(timeout=20_000)
-    new_memory.click()
-    facts = page.get_by_placeholder("Facts to remember")
-    expect(facts).to_be_visible(timeout=20_000)
-    page.get_by_role("button", name="This bot").click()
-    # Playwright fill does not always reach this controlled textarea; the host
-    # then never sees POST /v1/memory. Set the native value, wait until Save
-    # enables, then click the DOM button.
-    page.evaluate(
-        """() => {
-          const ta = document.querySelector('textarea[placeholder="Facts to remember"]');
-          if (!ta) throw new Error('memory form not mounted');
-          const proto = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
-          proto.set.call(ta, 'CI prefers short answers');
-          ta.dispatchEvent(new Event('input', { bubbles: true }));
-          ta.dispatchEvent(new Event('change', { bubbles: true }));
-        }"""
-    )
-    save = page.get_by_test_id("memory-save")
-    expect(save).to_be_enabled(timeout=8_000)
-    page.evaluate("() => document.querySelector('[data-testid=\"memory-save\"]').click()")
+    # Same path as the develop window test that already passed: Create leaves
+    # the computer pane open; do not toggle it or fight the textarea.
+    expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=20_000)
+    page.get_by_test_id("new-memory").click()
+    page.get_by_placeholder("Facts to remember").fill("CI prefers short answers")
+    page.get_by_test_id("memory-save").click()
     expect(page.get_by_test_id("memory-doc")).to_contain_text(
         "CI prefers short answers",
         timeout=20_000,

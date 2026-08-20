@@ -2777,6 +2777,7 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
   const [content, setContent] = useState("");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const factsRef = useRef<HTMLTextAreaElement>(null);
 
   async function refresh() {
     setDocuments(await api.memory.list(botId));
@@ -2791,14 +2792,15 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
   }, [botId]);
 
   async function create() {
-    if (!content.trim()) return;
+    const text = (factsRef.current?.value ?? content).trim();
+    if (!text) return;
     setBusy(true);
     try {
       await api.memory.create({
         scope,
         botId: scope === "bot" ? botId : undefined,
         path: `entries/owner/note-${Date.now()}.md`,
-        content: content.trim(),
+        content: text,
       });
       setContent("");
       setCreating(false);
@@ -2939,6 +2941,7 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
             </button>
           </div>
           <textarea
+            ref={factsRef}
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder="Facts to remember"

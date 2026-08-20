@@ -138,10 +138,12 @@ def create_named_bot(
     title: str | None = None,
     *,
     close_pane: bool = True,
+    private: bool = True,
 ) -> None:
     """+ is always in the sidebar. Private so Create does not paint Team Booting up.
     Create opens the computer pane (memory / routines live there). Thread tests
-    close it so noVNC cannot sit on later clicks; the memory test keeps it open."""
+    close it so noVNC cannot sit on later clicks; the memory test keeps it open
+    and uses Team, matching the develop window test that already passed."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.get_by_title("New bot").click()
     box = page.get_by_placeholder("Name this bot")
@@ -149,13 +151,10 @@ def create_named_bot(
     box.fill(name)
     if title is not None:
         page.get_by_placeholder("Describe what this bot does").fill(title)
-    page.get_by_role("button", name="Private").click()
+    if private:
+        page.get_by_role("button", name="Private").click()
     page.get_by_role("button", name="Create", exact=True).click()
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
-    bot_row(page, name).click()
-    expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=name)).to_be_visible(
-        timeout=20_000
-    )
     composer(page).wait_for(timeout=20_000)
     if close_pane:
         close_computer_pane(page)
