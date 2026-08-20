@@ -22,7 +22,20 @@ E2E_CLOSE_STATUS = "Closing Chromium"
 E2E_SLOW_ANSWER = "slow done"
 E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C"
 E2E_ASK_QUESTION = "Which city?"
+E2E_ASK_FREE_QUESTION = "What should I call you?"
 E2E_FAIL_ERROR = "scripted fail"
+E2E_META_TEXT = "Remembered: Prefers short answers without emoji"
+E2E_PROGRESS_TEXT = "Checking the desktop"
+E2E_CARD_KEY = "City"
+E2E_CARD_VALUE = "Belgrade"
+E2E_COMPUTER_TEXT = "Opened Chromium"
+E2E_CHILD_NAME = "Spawned pal"
+E2E_CHILD_ARCHIVED = "Old pal"
+E2E_SUBAGENT_NAME = "Researcher"
+E2E_SUBAGENT_TASK = "please e2e-hang now"
+E2E_OLDER_PREFIX = "e2e-old-"
+E2E_OLDER_COUNT = 51
+E2E_HANG_S = 12.0
 
 
 @dataclass
@@ -31,6 +44,7 @@ class ScriptedStep:
     tool: str | None = None
     args: dict[str, Any] = field(default_factory=dict)
     consent: dict[str, Any] | None = None
+    blocks: list[dict[str, Any]] | None = None
     result: str | None = None
     status: str | None = None
     error: str | None = None
@@ -75,6 +89,20 @@ def scripted_finish(result: str = "ok", status: str = "completed", error: str | 
     return ScriptedStep(result=result, status=status, error=error)
 
 
+def scripted_blocks(*blocks: dict[str, Any]) -> ScriptedStep:
+    return ScriptedStep(blocks=list(blocks))
+
+
+def _bind_block_values(value: Any, bot_id: str | None) -> Any:
+    if value == "$bot":
+        return bot_id or "bot_unknown"
+    if isinstance(value, dict):
+        return {key: _bind_block_values(item, bot_id) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_bind_block_values(item, bot_id) for item in value]
+    return value
+
+
 def _user_tail(prompt: str) -> str:
     """Last wrap_turn_prompt segment is the user (or worker) text."""
     return (prompt or "").rsplit("\n\n", 1)[-1]
@@ -106,6 +134,42 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish("I'll remember that."),
         ]
+    if "e2e-thread-blocks" in text:
+        return [
+            scripted_blocks(
+                {"kind": "meta", "text": E2E_META_TEXT},
+                {"kind": "progress", "text": E2E_PROGRESS_TEXT},
+                {"kind": "card", "lines": [{"k": E2E_CARD_KEY, "v": E2E_CARD_VALUE}]},
+                {"kind": "text", "text": "Working on the desktop."},
+                {"kind": "computer", "state": "done", "text": E2E_COMPUTER_TEXT},
+                {
+                    "kind": "child_bot",
+                    "bot_id": "$bot",
+                    "name": E2E_CHILD_NAME,
+                    "title": "helper",
+                    "status": "created",
+                },
+                {
+                    "kind": "child_bot",
+                    "bot_id": "bot_gone",
+                    "name": E2E_CHILD_ARCHIVED,
+                    "title": None,
+                    "status": "archived",
+                },
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-ask-free" in text:
+        return [
+            scripted_blocks(
+                {
+                    "kind": "ask",
+                    "text": E2E_ASK_FREE_QUESTION,
+                    "status": "pending",
+                }
+            ),
+            scripted_finish(""),
+        ]
     if "e2e-ask" in text:
         return [
             scripted_tool(
@@ -115,6 +179,30 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(""),
         ]
+    if "e2e-subagent" in text:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name=E2E_SUBAGENT_NAME,
+                task=E2E_SUBAGENT_TASK,
+            ),
+            scripted_finish("worker started"),
+        ]
+    if "e2e-takeover" in text:
+        return [
+            ScriptedStep(event=("computer.takeover.requested", {})),
+            scripted_finish("need you"),
+        ]
+    if "e2e-load-earlier" in text:
+        return [
+            *(
+                scripted_blocks({"kind": "text", "text": f"{E2E_OLDER_PREFIX}{index:02d}"})
+                for index in range(E2E_OLDER_COUNT)
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-hang" in text:
+        return [scripted_delay(E2E_HANG_S), scripted_finish("hang done")]
     if "research a city" in hay or "which city should we research" in hay:
         return [
             scripted_progress("I need a city before I open sources."),
@@ -357,6 +445,15 @@ class ScriptedRuntime(RuntimeBase):
                         run_id=ctx_run,
                         detail=step.consent.get("detail"),
                     )
+                continue
+            if step.blocks:
+                posted = tools._append_bot_blocks(
+                    {},
+                    bot_id,
+                    _bind_block_values(step.blocks, bot_id),
+                )
+                if not posted.get("ok"):
+                    raise AgentRuntimeError(str(posted.get("error") or "could not append blocks"))
                 continue
             if step.tool:
                 tool_result = tools.execute(step.tool, step.args, bound_bot_id=bot_id)

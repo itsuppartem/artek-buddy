@@ -64,7 +64,9 @@ SSE. Blocks in a message:
 | subagent | `#n name`, status, Stop while running, Restart after |
 | child_bot | click opens that chat (disabled if deleted/archived) |
 
-Also: Reply on right-click (quote in the next user bubble), Load earlier, typing indicator, `run-error` for failed / cancelled, Stop (lead + workers). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner: replied / ask / takeover / failed. `notifyOnFinish` mutes only replied / failed.
+Also: Reply on right-click (quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner: replied / ask / takeover / failed. `notifyOnFinish` mutes only replied / failed.
+
+Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
 
 Errors: host Retry, auth re-pair, action Dismiss.
 

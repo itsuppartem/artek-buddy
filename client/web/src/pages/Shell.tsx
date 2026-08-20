@@ -1155,6 +1155,7 @@ export function ShellPage() {
           {thread?.olderCursor != null ? (
             <button
               type="button"
+              data-testid="load-earlier"
               disabled={loadingOlder}
               onClick={() => void loadOlderMessages()}
               className="self-center rounded-lg px-3 py-1.5 text-[13px] text-[#85858A] hover:bg-[#1A1A1D] hover:text-[#C9C9CE] disabled:opacity-50"
@@ -1704,6 +1705,7 @@ function MessageView({
           return (
             <div
               key={index}
+              data-testid="meta-block"
               className="flex items-center justify-center gap-2 py-1 text-[13.5px] text-[#85858A]"
             >
               <span className="text-[#E65707]">◷</span>
@@ -1716,7 +1718,7 @@ function MessageView({
             return null;
           }
           return (
-            <div key={index} className="flex justify-start">
+            <div key={index} className="flex justify-start" data-testid="progress-block">
               <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]">
                 <ChatMarkdown streaming>{block.text}</ChatMarkdown>
               </div>
@@ -1730,6 +1732,8 @@ function MessageView({
           return (
             <div
               key={index}
+              data-testid="subagent-card"
+              data-status={block.status}
               className="max-w-[74%] min-w-[340px] w-fit rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4"
             >
               <div className="flex items-center justify-between gap-3">
@@ -1802,6 +1806,8 @@ function MessageView({
             <button
               key={index}
               type="button"
+              data-testid="child-bot-card"
+              data-status={block.status}
               disabled={removed}
               onClick={() => onOpenBot(block.botId)}
               className="w-[min(340px,90%)] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4 text-left disabled:opacity-60"
@@ -1840,7 +1846,7 @@ function MessageView({
         }
         if (block.kind === "card") {
           return (
-            <div key={index} className="flex justify-start">
+            <div key={index} className="flex justify-start" data-testid="check-card">
               <div className="flex flex-col gap-2 rounded-[20px] bg-[#1A1A1D] px-5 py-4">
                 {block.lines.map((line) => (
                   <div key={line.k} className="flex items-baseline gap-2.5 text-[15px]">
@@ -1878,6 +1884,7 @@ function MessageView({
           return (
             <div
               key={index}
+              data-testid="computer-card"
               className="w-[340px] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4"
             >
               <div className="flex items-center justify-between">

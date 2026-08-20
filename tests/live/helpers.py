@@ -48,6 +48,11 @@ def send_message(page: Page, text: str) -> None:
     page.get_by_role("button", name="Send").click()
 
 
+def open_settings(page: Page, name: str) -> None:
+    page.locator('[data-testid="thread-pane"] button').filter(has_text=name).click()
+    expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=10_000)
+
+
 def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | None = None) -> None:
     page.goto(client_url)
     form = page.get_by_test_id("pairing")
