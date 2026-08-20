@@ -15,7 +15,7 @@ def _open_thread(page: Page, client_url: str, host_url: str) -> None:
 
 def test_scripted_reply_appears(page: Page, client_url: str, host_url: str) -> None:
     _open_thread(page, client_url, host_url)
-    send_message(page, "hello")
+    send_message(page, "hello", "Scripted")
     expect(page.locator('[data-testid=thread-message][data-role=bot]').last).to_contain_text(
         "ok",
         timeout=20_000,
@@ -24,13 +24,13 @@ def test_scripted_reply_appears(page: Page, client_url: str, host_url: str) -> N
 
 def test_scripted_fail_shows_run_error(page: Page, client_url: str, host_url: str) -> None:
     _open_thread(page, client_url, host_url)
-    send_message(page, "please e2e-fail now")
+    send_message(page, "please e2e-fail now", "Scripted")
     expect(page.get_by_test_id("run-error")).to_be_visible(timeout=20_000)
 
 
 def test_scripted_consent_can_be_denied(page: Page, client_url: str, host_url: str) -> None:
     _open_thread(page, client_url, host_url)
-    send_message(page, "e2e-consent-browse")
+    send_message(page, "e2e-consent-browse", "Scripted")
     card = page.get_by_test_id("consent-card")
     expect(card).to_be_visible(timeout=20_000)
     page.get_by_test_id("ask-option").filter(has_text="Deny").click()

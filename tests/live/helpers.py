@@ -92,18 +92,28 @@ def ignore_attention_overlay(page: Page) -> None:
     )
 
 
-def send_message(page: Page, text: str) -> None:
-    """Type in this chat and force-click Send. The attention pill covers Send
-    and navigates away if clicked; hide it first. Send can stay disabled when
-    React draft lags the DOM — the click still reads the textarea.
+def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
+    """Stay on this chat, then type and force-click Send.
+
+    The attention pill covers the composer and opens a leftover bot. Hide it.
+    Select the named row so hello cannot land in the previous test's thread.
     """
     arm_page(page)
     close_computer_pane(page)
     ignore_attention_overlay(page)
+    if bot_name:
+        bot_row(page, bot_name).click()
+        expect(page.locator('[data-testid="thread-pane"] button').filter(has_text=bot_name)).to_be_visible(
+            timeout=8_000
+        )
     booting = page.get_by_text("Booting up")
     try:
         if booting.count():
             booting.first.wait_for(state="hidden", timeout=8_000)
+    except Exception:
+        pass
+    try:
+        page.get_by_role("button", name="Stop", exact=True).first.wait_for(state="hidden", timeout=8_000)
     except Exception:
         pass
     box = composer(page)
@@ -112,6 +122,8 @@ def send_message(page: Page, text: str) -> None:
     last_error: Exception | None = None
     for _ in range(2):
         ignore_attention_overlay(page)
+        if bot_name:
+            bot_row(page, bot_name).click()
         box.click(force=True, timeout=8_000)
         box.press("Control+A")
         box.press_sequentially(text, delay=8)

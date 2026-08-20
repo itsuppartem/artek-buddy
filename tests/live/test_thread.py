@@ -28,7 +28,7 @@ def test_thread_blocks_render(page: Page, client_url: str, host_url: str) -> Non
     name = f"Blocks {uuid.uuid4().hex[:8]}"
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
-    send_message(page, "please e2e-thread-blocks")
+    send_message(page, "please e2e-thread-blocks", name)
     expect(page.get_by_test_id("meta-block")).to_contain_text(E2E_META_TEXT, timeout=15_000)
     expect(page.get_by_test_id("progress-block")).to_contain_text(E2E_PROGRESS_TEXT)
     card = page.get_by_test_id("check-card")
@@ -43,7 +43,7 @@ def test_thread_reply_attach_banner(page: Page, client_url: str, host_url: str) 
     name = f"Chrome {uuid.uuid4().hex[:8]}"
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
-    send_message(page, "hello")
+    send_message(page, "hello", name)
     bot_msg = page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")
     expect(bot_msg).to_be_visible(timeout=15_000)
     # Replied banner auto-hides in 4s and is gated by notifyOnFinish. Skip that
@@ -58,7 +58,7 @@ def test_thread_reply_attach_banner(page: Page, client_url: str, host_url: str) 
     expect(bar).to_be_visible(timeout=8_000)
     expect(bar).to_contain_text("Replying to")
     expect(bar).to_contain_text("ok")
-    send_message(page, "quoted back")
+    send_message(page, "quoted back", name)
     quoted = page.locator('[data-testid="thread-message"][data-role="user"]').filter(
         has_text="quoted back"
     )
