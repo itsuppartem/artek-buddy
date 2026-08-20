@@ -338,15 +338,21 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
     else:
         record = history.get_computer_for_bot(bot)
         status = record.status_for(bot.id, bot.computer_mode, history.busy_bot_name(record, bot.id))
+    run = history.latest_run(bot.id)
+    pending = None
+    run_status = getattr(getattr(run, "status", None), "value", None) or getattr(run, "status", None)
+    if run is not None and run_status == "waiting_input":
+        pending = history.pending_auto_consent_id(bot.id, run.id)
     return ThreadSnapshot(
         bot_id=bot.id,
         thread_id=bot.thread_id,
         cursor=history.latest_seq(bot.thread_id),
         messages=page.messages,
         older_cursor=page.older_cursor,
-        run=history.latest_run(bot.id),
+        run=run,
         computer=status,
         subagents=sorted(history.list_subagents(bot.id), key=lambda item: item.index),
+        pending_auto_consent_id=pending,
     )
 
 

@@ -1262,6 +1262,22 @@ class HistoryStore:
             message_id=row["message_id"],
         )
 
+    def pending_auto_consent_id(self, bot_id: str, run_id: str | None) -> str | None:
+        if not run_id:
+            return None
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT id FROM consent_requests
+                WHERE bot_id = %s AND run_id = %s AND status = 'pending' AND message_id IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (bot_id, run_id),
+            ).fetchone()
+            conn.commit()
+        return str(row["id"]) if row else None
+
     def answer_consent_request(
         self,
         request_id: str,

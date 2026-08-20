@@ -64,7 +64,7 @@ SSE. Blocks in a message:
 | subagent | `#n name`, status, Stop while running, Restart after |
 | child_bot | click opens that chat (disabled if deleted/archived) |
 
-Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner sits at the top of the thread (`attention-alert`): replied / ask / takeover / failed. It does not cover Send. It is not shown for the chat already on screen. Title opens that chat; Dismiss (`attention-dismiss`) does not. `notifyOnFinish` mutes only replied / failed. Thread header is `thread-header`. Send stays enabled while a bot is selected so Enter can post the live textarea; an empty click is a no-op.
+Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers, `thread-stop`). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner sits under the thread header (`attention-alert`): replied / ask / takeover / failed. It is in the layout, so it does not cover Send or Load earlier. Opening that chat dismisses it. It is not shown for the chat already on screen. Title opens that chat; Dismiss (`attention-dismiss`) does not. `notifyOnFinish` mutes only replied / failed. Thread header is `thread-header`. Send stays enabled while a bot is selected so Enter can post the live textarea; an empty click is a no-op.
 
 The open chat uses `/v1/threads/{id}/events`. Other inbox banners use one `/v1/events` stream. Chrome HTTP/1.1 allows six connections per host; one SSE per leftover chat would starve Create and pair.
 
@@ -90,7 +90,7 @@ Routines (same pane): New (name, cron, prompt; invalid cron disables Save), on/o
 
 ## Consent and this PC
 
-Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job marked `auto` runs without a card (`/local/owner-*`). After Allow the client reads, writes, lists, or execs under `$HOME` and posts the result. Paths outside `$HOME` are 403 and stay on the consent card. The composer Stop control is `aria-label="Stop"`; the thread title is `Open settings for {name}`.
+Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job marked `auto` runs without a card (`/local/owner-*`). After Allow the client reads, writes, lists, or execs under `$HOME` and posts the result. Paths outside `$HOME` are 403 and stay on the consent card. Composer Stop is `thread-stop` (`aria-label="Stop"`); the thread title is `Open settings for {name}`.
 
 ## Loopback proxy (`/local/*`)
 

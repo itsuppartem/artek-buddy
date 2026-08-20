@@ -554,6 +554,7 @@ class ScriptedRuntime(RuntimeBase):
                         device_id=None,
                     )
                     if request_id:
+                        await asyncio.sleep(0)
                         await asyncio.to_thread(hub.take_owner_file, request_id)
                     if ctx_run:
                         try:

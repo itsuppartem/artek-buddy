@@ -111,6 +111,7 @@ export function ShellPage() {
   const pendingAlerts = useRef(
     new Map<string, { alert: AttentionAlert; notifyOnFinish: boolean; key: string }>(),
   );
+  const fulfilledOwnerJobs = useRef(new Set<string>());
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const screenUrlRef = useRef<string | null>(null);
@@ -203,7 +204,10 @@ export function ShellPage() {
         alertBotId: next.botId,
       })
     ) {
-      pendingAlerts.current.set(next.botId, { alert: next, notifyOnFinish, key });
+      const held = pendingAlerts.current.get(next.botId);
+      if (!held || shouldReplaceAttention(held.alert, next)) {
+        pendingAlerts.current.set(next.botId, { alert: next, notifyOnFinish, key });
+      }
       return;
     }
     seenAlertKeys.current.add(key);
@@ -216,13 +220,18 @@ export function ShellPage() {
     setAttention((current) => (shouldReplaceAttention(current, next) ? next : current));
   }
 
+  function startOwnerFulfill(consentId: string) {
+    if (!consentId || fulfilledOwnerJobs.current.has(consentId)) return;
+    fulfilledOwnerJobs.current.add(consentId);
+    void fulfillOwnerJob(consentId).catch((err) => {
+      fulfilledOwnerJobs.current.delete(consentId);
+      void reportOwnerJobError(consentId, err);
+    });
+  }
+
   function considerEvent(incoming: ProductEvent, bot: Bot, subscribedAt: number) {
     const granted = isAutoOwnerJob(incoming);
-    if (granted) {
-      void fulfillOwnerJob(granted.consentId).catch((err) => {
-        void reportOwnerJobError(granted.consentId, err);
-      });
-    }
+    if (granted) startOwnerFulfill(granted.consentId);
     if (isHistoricalEvent(incoming, subscribedAt)) return;
     const next = attentionFromEvent(incoming, bot.name);
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
@@ -237,6 +246,10 @@ export function ShellPage() {
       dispatchAlert(held.alert, held.key, held.notifyOnFinish);
     }
   }, [active?.id]);
+
+  useEffect(() => {
+    if (attention && active?.id === attention.botId) setAttention(null);
+  }, [active?.id, attention]);
 
   async function refreshBots() {
     const list = await api.bots.list();
@@ -397,6 +410,7 @@ export function ShellPage() {
       mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId),
     );
     setComputer(snap.computer);
+    if (snap.pendingAutoConsentId) startOwnerFulfill(snap.pendingAutoConsentId);
     if (stickToEnd) {
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
@@ -519,8 +533,9 @@ export function ShellPage() {
           for await (const event of api.events.subscribe(abort.signal)) {
             if (abort.signal.aborted) break;
             retryMs = 250;
-            if (event.botId === activeIdRef.current) continue;
             const bot = botsRef.current.find((item) => item.id === event.botId);
+            const auto = Boolean(bot && isAutoOwnerJob(event));
+            if (event.botId === activeIdRef.current && !auto) continue;
             if (bot) considerEventRef.current(event, bot, subscribedAt);
           }
         } catch (err) {
@@ -1097,6 +1112,44 @@ export function ShellPage() {
             </svg>
           </button>
         </div>
+        {attention || later ? (
+          <div className="flex w-full shrink-0 flex-col items-center gap-2 px-4 py-2">
+            {attention ? (
+              <div
+                data-testid="attention-alert"
+                className="flex max-w-[min(480px,90vw)] items-center gap-2 rounded-full bg-[#1A1A1D] py-2 pr-2 pl-4 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]"
+              >
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left hover:text-[#ECECEE]"
+                  onClick={() => {
+                    navigate(`/app/${attention.botId}`);
+                    setAttention(null);
+                  }}
+                >
+                  <span className="font-medium text-[#ECECEE]">{attention.title}</span>
+                  {attention.body ? (
+                    <span className="mt-0.5 block truncate text-[12.5px] text-[#85858A]">{attention.body}</span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  data-testid="attention-dismiss"
+                  aria-label="Dismiss alert"
+                  onClick={() => setAttention(null)}
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[#85858A] hover:bg-[#222226] hover:text-[#ECECEE]"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : null}
+            {later ? (
+              <div className="rounded-full bg-[#1A1A1D] px-4 py-2 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]">
+                {later}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div
           ref={messageScroll}
           data-testid="thread"
@@ -1309,6 +1362,7 @@ export function ShellPage() {
             {isBusy ? (
               <button
                 type="button"
+                data-testid="thread-stop"
                 aria-label="Stop"
                 onClick={() => void stop()}
                 className="grid h-9 w-9 place-items-center rounded-full bg-[#E65707] text-white hover:bg-[#D44E06]"
@@ -1330,44 +1384,6 @@ export function ShellPage() {
             </button>
           </div>
         </div>
-        {attention || later ? (
-          <div className="pointer-events-none absolute top-16 left-1/2 z-20 flex w-full -translate-x-1/2 flex-col items-center gap-2 px-4">
-            {attention ? (
-              <div
-                data-testid="attention-alert"
-                className="pointer-events-auto flex max-w-[min(480px,90vw)] items-center gap-2 rounded-full bg-[#1A1A1D] py-2 pr-2 pl-4 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]"
-              >
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left hover:text-[#ECECEE]"
-                  onClick={() => {
-                    navigate(`/app/${attention.botId}`);
-                    setAttention(null);
-                  }}
-                >
-                  <span className="font-medium text-[#ECECEE]">{attention.title}</span>
-                  {attention.body ? (
-                    <span className="mt-0.5 block truncate text-[12.5px] text-[#85858A]">{attention.body}</span>
-                  ) : null}
-                </button>
-                <button
-                  type="button"
-                  data-testid="attention-dismiss"
-                  aria-label="Dismiss alert"
-                  onClick={() => setAttention(null)}
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[#85858A] hover:bg-[#222226] hover:text-[#ECECEE]"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : null}
-            {later ? (
-              <div className="pointer-events-auto rounded-full bg-[#1A1A1D] px-4 py-2 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]">
-                {later}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </main>
 
       <aside

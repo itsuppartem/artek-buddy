@@ -421,8 +421,11 @@ class ConsentHub:
         with self._lock:
             self._results[request_id] = dict(payload)
             waiter = self._result_waiters.get(request_id)
+            file_waiter = self._file_waiters.get(request_id)
         if waiter is not None:
             waiter.set()
+        if file_waiter is not None:
+            file_waiter.set()
         return True
 
     def take_owner_result(self, request_id: str | None) -> dict[str, Any] | None:
@@ -579,6 +582,8 @@ class ConsentHub:
         with self._lock:
             if request_id in self._files:
                 return self._files.pop(request_id)
+            if request_id in self._results:
+                return None
             self._file_waiters[request_id] = waiter
         waiter.wait(OWNER_FILE_WAIT)
         with self._lock:
