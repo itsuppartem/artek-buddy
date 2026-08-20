@@ -3,7 +3,14 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import arm_page, bot_row, close_computer_pane, create_named_bot, pair_fresh
+from tests.live.helpers import (
+    arm_page,
+    bot_row,
+    close_computer_pane,
+    create_named_bot,
+    open_computer_pane,
+    pair_fresh,
+)
 
 pytestmark = pytest.mark.live
 
@@ -25,11 +32,15 @@ def test_pair_create_memory_routine_and_settings(
     host_url: str,
 ) -> None:
     pair_fresh(page, client_url, host_url)
-    create_named_bot(page, "CI Team")
+    create_named_bot(page, "CI Team", close_pane=False)
 
-    # Memory sits in the computer pane Create just opened. Do not close it first.
-    expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=20_000)
-    page.get_by_test_id("new-memory").click()
+    # Memory sits in the computer pane Create just opened. Reopen if a leftover
+    # auto-boot toggle shut it; do not click Agent computer when Close panel is up.
+    open_computer_pane(page)
+    new_memory = page.get_by_test_id("new-memory")
+    new_memory.scroll_into_view_if_needed()
+    expect(new_memory).to_be_visible(timeout=20_000)
+    new_memory.click()
     facts = page.get_by_placeholder("Facts to remember")
     expect(facts).to_be_visible(timeout=20_000)
     facts.fill("CI prefers short answers")
@@ -60,9 +71,11 @@ def test_unpair_returns_to_pairing(page: Page, client_url: str, host_url: str) -
     pair_fresh(page, client_url, host_url)
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     close_computer_pane(page)
-    # reload() waits on the noVNC iframe. goto after HTTP unpair is the pairing path.
+    # Leftover bots auto-boot noVNC. reload/domcontentloaded then sits on 502s.
+    page.evaluate("() => window.stop()")
+    page.route("**/novnc/**", lambda route: route.abort())
     page.evaluate(
         """() => fetch('/local/unpair', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})"""
     )
-    page.goto(client_url, timeout=20_000, wait_until="domcontentloaded")
+    page.goto(client_url, timeout=15_000, wait_until="commit")
     expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)

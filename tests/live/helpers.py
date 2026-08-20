@@ -132,10 +132,16 @@ def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":
     )
 
 
-def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
+def create_named_bot(
+    page: Page,
+    name: str,
+    title: str | None = None,
+    *,
+    close_pane: bool = True,
+) -> None:
     """+ is always in the sidebar. Private so Create does not paint Team Booting up.
-    After Create the product opens the computer pane (memory / routines live there).
-    Do not close that pane from this helper — send_message closes it before Send."""
+    Create opens the computer pane (memory / routines live there). Thread tests
+    close it so noVNC cannot sit on later clicks; the memory test keeps it open."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.get_by_title("New bot").click()
     box = page.get_by_placeholder("Name this bot")
@@ -151,6 +157,8 @@ def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
         timeout=20_000
     )
     composer(page).wait_for(timeout=20_000)
+    if close_pane:
+        close_computer_pane(page)
     dismiss_attention(page)
 
 
