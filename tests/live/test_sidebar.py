@@ -30,6 +30,9 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
     expect(bot_row(page, alpha)).to_contain_text(f"notes about cats {token}")
     create_named_bot(page, bravo, title="shipping desk")
 
+    expect(bot_row(page, alpha).get_by_test_id("bot-avatar")).to_be_visible()
+    expect(bot_row(page, alpha).locator('img[src="/bot-mark.png"]')).to_have_count(1)
+
     search = page.get_by_placeholder("Search")
     search.fill(alpha)
     expect(bot_row(page, alpha)).to_have_count(1)

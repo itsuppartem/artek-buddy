@@ -17,6 +17,11 @@
 ### Removed
 - The previous host, Vitest, Playwright, integration, and demo-recorder suite.
 
+## [0.10.23] - 2026-08-20
+
+### Changed
+- Desktop launcher, GTK window, `notify-send`, pairing card, and bot avatars use an original bandicoot mascot (tech vest, headphone, teal ears) instead of the chevron mark and `utilities-terminal`.
+
 ## [0.10.22] - 2026-08-19
 
 ### Added

@@ -26,18 +26,28 @@ LIB="$ROOT/usr/lib/artek-buddy-client"
 BIN="$ROOT/usr/bin"
 APP="$ROOT/usr/share/applications"
 DOC="$ROOT/usr/share/doc/$NAME"
+ICONS="$ROOT/usr/share/icons/hicolor"
+PIXMAPS="$ROOT/usr/share/pixmaps"
 DEBIAN="$ROOT/DEBIAN"
 
-mkdir -p "$LIB/web" "$BIN" "$APP" "$DOC" "$DEBIAN"
+mkdir -p "$LIB/web" "$BIN" "$APP" "$DOC" "$PIXMAPS" "$DEBIAN"
 
 cp client/artek_buddy.py "$LIB/artek_buddy.py"
 cp client/VERSION "$LIB/VERSION"
+cp client/assets/app-icon.png "$LIB/app-icon.png"
 cp -R client/web/dist/. "$LIB/web/"
+for sz in 16 24 32 48 64 128 256 512; do
+  mkdir -p "$ICONS/${sz}x${sz}/apps"
+  cp "client/assets/hicolor/${sz}x${sz}/apps/artek-buddy.png" \
+    "$ICONS/${sz}x${sz}/apps/artek-buddy.png"
+done
+cp client/assets/hicolor/256x256/apps/artek-buddy.png "$PIXMAPS/artek-buddy.png"
 if [ "${ARTEK_BAKE_URL:-}" = "1" ] && [ -f client/url ]; then
   cp client/url "$LIB/url"
   chmod 644 "$LIB/url"
 fi
 chmod 755 "$LIB/artek_buddy.py"
+chmod 644 "$LIB/app-icon.png"
 chmod -R a+rX "$LIB/web"
 
 cat > "$BIN/artek-buddy" <<'EOF'
@@ -53,7 +63,7 @@ Name=Artek Buddy
 Comment=Desktop client for the Artek Buddy host
 Exec=/usr/bin/artek-buddy
 TryExec=/usr/bin/artek-buddy
-Icon=utilities-terminal
+Icon=artek-buddy
 Terminal=false
 Type=Application
 StartupNotify=true
@@ -64,6 +74,15 @@ EOF
 cat > "$DOC/copyright" <<'EOF'
 Artek Buddy client. Local owner package.
 EOF
+
+cat > "$DEBIAN/postinst" <<'EOF'
+#!/bin/sh
+set -e
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+fi
+EOF
+chmod 755 "$DEBIAN/postinst"
 
 cat > "$DEBIAN/control" <<EOF
 Package: $NAME

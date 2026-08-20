@@ -48,6 +48,7 @@ export function PairingPage({ onPaired }: { onPaired: () => void }) {
     <div className="flex h-full flex-col bg-[#050506] text-[#dfdfe2]">
       <div className="flex items-center gap-3 px-4 pt-3">
         <WindowChrome />
+        <img src="/favicon.png" alt="" width={18} height={18} className="rounded-[5px]" />
         <span className="text-[13px] text-[#6C6C70]">Artek Buddy</span>
       </div>
       <div className="flex flex-1 items-center justify-center px-6 pb-16">
@@ -56,6 +57,14 @@ export function PairingPage({ onPaired }: { onPaired: () => void }) {
           data-testid="pairing"
           className="w-full max-w-[420px] rounded-2xl border border-[#202023] bg-[#0D0D0E] p-6"
         >
+          <img
+            data-testid="app-mark"
+            src="/pairing-mark.png"
+            alt=""
+            width={80}
+            height={80}
+            className="mb-4 h-20 w-20 rounded-2xl object-cover"
+          />
           <div className="text-[21px] font-medium text-[#ECECEE]">Pair this computer</div>
           <p className="mt-2 text-[14px] leading-6 text-[#85858A]">
             On the host, mint a pairing code. Enter it here. The page never sees the device

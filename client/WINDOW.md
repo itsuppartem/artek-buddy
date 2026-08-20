@@ -30,7 +30,7 @@ The computer pane and Settings overlay sit on the right of the same shell. Fulls
 | Screen | When | Controls |
 | --- | --- | --- |
 | Proxy error | loopback `status` failed | Retry (reload) |
-| Pairing | not paired | Host URL, code `XXXX-XXXX`, device name, Pair. Fail text under the form. |
+| Pairing | not paired | Mascot mark, Host URL, code `XXXX-XXXX`, device name, Pair. Fail text under the form. |
 | Shell | paired | sidebar + thread; optional Settings / Create / computer pane / fullscreen. Pairing does not open the pane. Create focuses the new chat. Gear opens the pane without booting. Offline boots. |
 
 Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
