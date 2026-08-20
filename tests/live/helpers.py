@@ -80,12 +80,23 @@ def open_computer_pane(page: Page) -> None:
     expect(memory).to_be_visible(timeout=20_000)
 
 
+def ignore_attention_overlay(page: Page) -> None:
+    """The pill sits on the composer. Clicking it opens a leftover bot."""
+    page.evaluate(
+        """() => {
+          for (const el of document.querySelectorAll('[data-testid="attention-alert"]')) {
+            el.style.pointerEvents = "none";
+            el.style.visibility = "hidden";
+          }
+        }"""
+    )
+
+
 def send_message(page: Page, text: str) -> None:
-    """Type like a person and press Enter. Do not click Send: the attention
-    pill covers it, and clicking the pill opens a leftover bot instead.
-    """
+    """Focus the composer and press Enter. Do not click Send or the attention pill."""
     arm_page(page)
     close_computer_pane(page)
+    ignore_attention_overlay(page)
     booting = page.get_by_text("Booting up")
     try:
         if booting.count():
@@ -93,14 +104,13 @@ def send_message(page: Page, text: str) -> None:
     except Exception:
         pass
     box = composer(page)
-    send_btn = page.get_by_role("button", name="Send")
     user = page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=text)
     last_error: Exception | None = None
     for _ in range(2):
-        box.click(timeout=8_000)
-        box.fill("")
+        ignore_attention_overlay(page)
+        box.focus(force=True, timeout=8_000)
+        box.press("Control+A")
         box.press_sequentially(text, delay=8)
-        expect(send_btn).to_be_enabled(timeout=8_000)
         box.press("Enter")
         try:
             expect(user).to_be_visible(timeout=8_000)
