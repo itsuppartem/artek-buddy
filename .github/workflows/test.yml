@@ -202,7 +202,8 @@ jobs:
         run: |
           set +x
           export HOME="$ARTEK_CLIENT_HOME"
-          python -m pytest tests/live -m "live and not model" --browser chromium -q
+          export PYTHONUNBUFFERED=1
+          python -u -m pytest tests/live -m "live and not model" --browser chromium --tb=short
 
       - name: Redacted logs on failure
         if: failure()

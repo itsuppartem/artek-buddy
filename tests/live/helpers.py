@@ -14,6 +14,7 @@ def mint_pairing_code() -> str:
         ["docker", "exec", "artek-buddy", "python", "-m", "artek_buddy", "pair"],
         text=True,
         stderr=subprocess.DEVNULL,
+        timeout=20,
     )
     code = raw.strip().splitlines()[0].strip()
     mask_secret(code)
@@ -49,6 +50,19 @@ def dismiss_attention(page: Page) -> None:
             banner.click(timeout=1_000)
     except Exception:
         return
+
+
+def close_computer_pane(page: Page) -> None:
+    """Create opens the computer pane; the noVNC iframe 502-loops and CDP sits."""
+    for loc in (
+        page.get_by_title("Close panel"),
+        page.get_by_label("Close computer"),
+    ):
+        try:
+            if loc.count() and loc.first.is_visible():
+                loc.first.click(timeout=2_000)
+        except Exception:
+            pass
 
 
 def send_message(page: Page, text: str) -> None:

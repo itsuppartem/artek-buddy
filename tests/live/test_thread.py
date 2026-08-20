@@ -5,7 +5,7 @@ import uuid
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import create_named_bot, dismiss_attention, pair_fresh, send_message
+from tests.live.helpers import close_computer_pane, create_named_bot, dismiss_attention, pair_fresh, send_message
 
 E2E_CARD_KEY = "City"
 E2E_CARD_VALUE = "Belgrade"
@@ -28,6 +28,7 @@ def test_thread_blocks_render(page: Page, client_url: str, host_url: str) -> Non
     name = f"Blocks {uuid.uuid4().hex[:8]}"
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
+    close_computer_pane(page)
     send_message(page, "please e2e-thread-blocks")
     expect(page.get_by_test_id("meta-block")).to_contain_text(E2E_META_TEXT, timeout=15_000)
     expect(page.get_by_test_id("progress-block")).to_contain_text(E2E_PROGRESS_TEXT)
@@ -43,6 +44,7 @@ def test_thread_reply_attach_banner(page: Page, client_url: str, host_url: str) 
     name = f"Chrome {uuid.uuid4().hex[:8]}"
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
+    close_computer_pane(page)
     send_message(page, "hello")
     expect(page.locator('[data-testid=thread-message][data-role=bot]').last).to_contain_text(
         "ok",
