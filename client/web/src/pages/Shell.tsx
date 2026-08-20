@@ -2950,6 +2950,7 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
               type="button"
               variant="cream"
               size="sm"
+              data-testid="memory-save"
               disabled={busy || !content.trim()}
               onClick={() => void create()}
             >

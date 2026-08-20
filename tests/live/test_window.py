@@ -43,8 +43,11 @@ def test_pair_create_memory_routine_and_settings(
     new_memory.click()
     facts = page.get_by_placeholder("Facts to remember")
     expect(facts).to_be_visible(timeout=20_000)
+    page.get_by_role("button", name="This bot").click()
     facts.fill("CI prefers short answers")
-    page.get_by_role("button", name="Save").click()
+    save = page.get_by_test_id("memory-save")
+    expect(save).to_be_enabled(timeout=8_000)
+    save.click(force=True)
     expect(page.get_by_test_id("memory-doc")).to_contain_text(
         "CI prefers short answers",
         timeout=20_000,

@@ -82,7 +82,7 @@ Settings: the same fields plus instructions, mode change (rebinds the desktop; h
 
 States: Offline, Booting, Running, Sleeping, Error. Click Offline to boot and take control. View-only preview iframe. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows the other bot’s name.
 
-Memory (same pane): owner / work / charter list, New (this bot \| shared), Edit, Outdated = delete, Export `.md`.
+Memory (same pane): owner / work / charter list, New (this bot \| shared, `memory-save`), Edit, Outdated = delete, Export `.md`.
 
 Routines (same pane): New (name, cron, prompt; invalid cron disables Save), on/off, Run (`POST .../test`), Delete.
 
