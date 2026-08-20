@@ -8,7 +8,6 @@ from tests.live.helpers import (
     bot_row,
     close_computer_pane,
     create_named_bot,
-    open_computer_pane,
     pair_fresh,
     seed_memory,
 )
@@ -36,11 +35,10 @@ def test_pair_create_memory_routine_and_settings(
     create_named_bot(page, "CI Team", close_pane=False)
 
     # Leftover computers boot and swallow the memory Save click (no POST). Seed
-    # through the paired session, remount the pane so the list refreshes.
-    # Form Save leftover stays on #32.
+    # through the paired session and leave the pane open so the 10s list poll
+    # can paint the row. Form Save leftover stays on #32.
+    expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=20_000)
     seed_memory(page, "CI prefers short answers")
-    close_computer_pane(page)
-    open_computer_pane(page)
     expect(page.get_by_test_id("memory-doc")).to_contain_text(
         "CI prefers short answers",
         timeout=20_000,
