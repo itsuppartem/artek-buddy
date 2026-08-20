@@ -703,7 +703,7 @@ export function ShellPage() {
   }
 
   async function send(textOverride?: string) {
-    const text = (textOverride ?? draft).trim();
+    const text = (textOverride ?? composerRef.current?.value ?? draft).trim();
     const files = textOverride == null ? pendingFiles : [];
     if (!active || sending || (!text && !files.length)) return;
     const replyId = replyTo?.id ?? null;

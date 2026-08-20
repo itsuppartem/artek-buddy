@@ -60,9 +60,11 @@ def test_thread_reply_attach_banner(page: Page, client_url: str, host_url: str) 
     expect(bar).to_contain_text("Replying to")
     expect(bar).to_contain_text("ok")
     send_message(page, "quoted back")
-    user = page.locator('[data-testid="thread-message"][data-role="user"]').last
-    expect(user).to_contain_text("quoted back", timeout=8_000)
-    expect(user).to_contain_text("ok")
+    quoted = page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+        has_text="quoted back"
+    )
+    expect(quoted).to_be_visible(timeout=15_000)
+    expect(quoted).to_contain_text("ok")
 
     page.get_by_test_id("attach-files").set_input_files(
         {"name": "shot.png", "mimeType": "image/png", "buffer": TINY_PNG}

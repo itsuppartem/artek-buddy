@@ -103,7 +103,9 @@ def send_message(page: Page, text: str) -> None:
     box = composer(page)
     box.wait_for(timeout=8_000)
     box.fill(text, timeout=8_000)
-    page.get_by_role("button", name="Send").click(timeout=5_000, force=True)
+    send_btn = page.get_by_role("button", name="Send")
+    expect(send_btn).to_be_enabled(timeout=8_000)
+    send_btn.click(timeout=5_000, force=True)
 
 
 def open_settings(page: Page, name: str) -> None:
