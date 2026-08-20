@@ -44,26 +44,28 @@ def test_thread_reply_attach_banner(page: Page, client_url: str, host_url: str) 
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
     send_message(page, "hello")
-    expect(page.locator('[data-testid=thread-message][data-role=bot]').last).to_contain_text(
-        "ok",
-        timeout=15_000,
-    )
-    expect(page.get_by_test_id("attention-alert")).to_contain_text(f"{name} replied", timeout=6_000)
+    bot_msg = page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok").last
+    expect(bot_msg).to_be_visible(timeout=15_000)
+    # Banner auto-hides in 4s. Assert as soon as the reply is on screen.
+    banner = page.get_by_test_id("attention-alert")
+    expect(banner).to_contain_text(f"{name} replied", timeout=4_000)
     dismiss_attention(page)
 
-    page.locator('[data-testid=thread-message][data-role=bot]').last.click(button="right")
-    page.get_by_role("menuitem", name="Reply").click(timeout=5_000)
-    expect(page.get_by_text(f"Replying to {name}")).to_be_visible()
+    bot_msg.click(button="right", force=True, timeout=5_000)
+    page.get_by_role("menu", name="Message actions").get_by_role("menuitem", name="Reply").click(
+        timeout=5_000
+    )
+    expect(page.get_by_text(f"Replying to {name}")).to_be_visible(timeout=5_000)
     send_message(page, "quoted back")
-    user = page.locator('[data-testid=thread-message][data-role=user]').last
-    expect(user).to_contain_text("quoted back")
+    user = page.locator('[data-testid="thread-message"][data-role="user"]').last
+    expect(user).to_contain_text("quoted back", timeout=8_000)
     expect(user).to_contain_text("ok")
 
     page.get_by_test_id("attach-files").set_input_files(
         {"name": "shot.png", "mimeType": "image/png", "buffer": TINY_PNG}
     )
     chip = page.get_by_test_id("attach-chip")
-    expect(chip).to_contain_text("shot.png")
-    expect(page.get_by_test_id("attach-preview")).to_be_visible()
+    expect(chip).to_contain_text("shot.png", timeout=5_000)
+    expect(page.get_by_test_id("attach-preview")).to_be_visible(timeout=5_000)
     chip.get_by_label("Remove shot.png").click(timeout=5_000)
     expect(chip).to_have_count(0)

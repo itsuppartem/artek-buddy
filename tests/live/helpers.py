@@ -65,6 +65,19 @@ def close_computer_pane(page: Page) -> None:
             pass
 
 
+def open_computer_pane(page: Page) -> None:
+    """Memory and routines live in the side pane. Do not toggle an already-open pane shut."""
+    arm_page(page)
+    memory = page.get_by_test_id("new-memory")
+    try:
+        if memory.count() and memory.first.is_visible(timeout=0):
+            return
+    except Exception:
+        pass
+    page.get_by_title("Agent computer").click(timeout=5_000)
+    expect(memory).to_be_visible(timeout=8_000)
+
+
 def arm_page(page: Page) -> None:
     page.set_default_timeout(8_000)
     page.set_default_navigation_timeout(20_000)
@@ -87,13 +100,13 @@ def send_message(page: Page, text: str) -> None:
 
 
 def open_settings(page: Page, name: str) -> None:
-    page.locator('[data-testid="thread-pane"] button').filter(has_text=name).click()
-    expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=10_000)
+    page.locator('[data-testid="thread-pane"] button').filter(has_text=name).click(timeout=5_000)
+    expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=8_000)
 
 
 def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | None = None) -> None:
     arm_page(page)
-    page.goto(client_url)
+    page.goto(client_url, timeout=20_000, wait_until="domcontentloaded")
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
     page.get_by_placeholder("https://host.example").fill(host_url)
@@ -102,6 +115,8 @@ def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | No
         page.get_by_label("Device name").fill(device_name)
     page.get_by_role("button", name="Pair").click()
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    # Leftover host bots make the default computer pane auto-boot; close so CDP stays free.
+    close_computer_pane(page)
 
 
 def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":"test"}') -> None:
@@ -113,7 +128,7 @@ def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":
 
 def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
     """+ is always in the sidebar. Private so Create does not boot Team.
-    Close the computer pane and the attention banner so later clicks are free."""
+    Wait for the pane Create opens, then close it so later clicks are free."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.get_by_title("New bot").click()
     box = page.get_by_placeholder("Name this bot")
@@ -125,6 +140,10 @@ def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
     page.get_by_role("button", name="Create", exact=True).click()
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
     composer(page).wait_for(timeout=20_000)
+    try:
+        page.get_by_title("Close panel").wait_for(state="visible", timeout=5_000)
+    except Exception:
+        pass
     close_computer_pane(page)
     dismiss_attention(page)
 
