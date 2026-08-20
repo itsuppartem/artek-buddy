@@ -65,19 +65,9 @@ def close_computer_pane(page: Page) -> None:
             pass
 
 
-def block_novnc(page: Page) -> None:
-    """Fake sandbox /novnc 502-loops. Abort so CDP cannot sit on the iframe."""
-    try:
-        page.unroute("**/novnc/**")
-    except Exception:
-        pass
-    page.route("**/novnc/**", lambda route: route.abort())
-
-
 def arm_page(page: Page) -> None:
     page.set_default_timeout(8_000)
     page.set_default_navigation_timeout(20_000)
-    block_novnc(page)
 
 
 def open_computer_pane(page: Page) -> None:
@@ -135,16 +125,9 @@ def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":
     )
 
 
-def create_named_bot(
-    page: Page,
-    name: str,
-    title: str | None = None,
-    *,
-    private: bool = True,
-    close_computer: bool = True,
-) -> None:
+def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
     """+ is always in the sidebar. Private so Create does not paint Team Booting up.
-    Keep the computer pane when the caller needs memory / routines on it."""
+    Wait for the pane Create opens, then close it so later clicks are free."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.get_by_title("New bot").click()
     box = page.get_by_placeholder("Name this bot")
@@ -152,17 +135,15 @@ def create_named_bot(
     box.fill(name)
     if title is not None:
         page.get_by_placeholder("Describe what this bot does").fill(title)
-    if private:
-        page.get_by_role("button", name="Private").click()
+    page.get_by_role("button", name="Private").click()
     page.get_by_role("button", name="Create", exact=True).click()
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
     composer(page).wait_for(timeout=20_000)
-    if close_computer:
-        try:
-            page.get_by_title("Close panel").wait_for(state="visible", timeout=5_000)
-        except Exception:
-            pass
-        close_computer_pane(page)
+    try:
+        page.get_by_title("Close panel").wait_for(state="visible", timeout=5_000)
+    except Exception:
+        pass
+    close_computer_pane(page)
     dismiss_attention(page)
 
 
