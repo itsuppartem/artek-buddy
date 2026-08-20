@@ -139,6 +139,20 @@ export function shouldSendDesktopAlert(input: {
   return input.viewingBotId !== input.alertBotId;
 }
 
+const urgencyRank: Record<AttentionAlert["urgency"], number> = {
+  low: 0,
+  normal: 1,
+  critical: 2,
+};
+
+export function shouldReplaceAttention(
+  current: AttentionAlert | null,
+  next: AttentionAlert,
+): boolean {
+  if (!current) return true;
+  return urgencyRank[next.urgency] >= urgencyRank[current.urgency];
+}
+
 export function isHistoricalEvent(
   event: Pick<ProductEvent, "createdAt">,
   subscribedAtMs: number,

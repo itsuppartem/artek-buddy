@@ -62,3 +62,34 @@ async def _assert_workspace_fanout() -> None:
     hub.publish(_event("bot_b", "evt_b"))
     await asyncio.wait_for(task, timeout=1)
     assert received == ["bot_a", "bot_b"]
+
+
+def test_publish_from_worker_thread_wakes_subscriber() -> None:
+    """Auto owner jobs publish from a worker thread. asyncio.Queue must still wake SSE."""
+    asyncio.run(_assert_thread_publish())
+
+
+async def _assert_thread_publish() -> None:
+    import threading
+
+    hub = EventHub()
+    received: list[str] = []
+
+    async def collect() -> None:
+        async for item in hub.subscribe("bot_a", heartbeat_s=2.0):
+            if item is HEARTBEAT:
+                continue
+            received.append(item.id)
+            return
+
+    task = asyncio.create_task(collect())
+    await asyncio.sleep(0.05)
+
+    def worker() -> None:
+        hub.publish(_event("bot_a", "from_thread"))
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+    await asyncio.wait_for(task, timeout=1)
+    assert received == ["from_thread"]

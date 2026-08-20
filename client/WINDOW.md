@@ -23,7 +23,7 @@ flowchart LR
 └───────────────────────────────────────────────────────────────┴─────────────────────────────┴───────────────────┘
 ```
 
-The computer pane and Settings overlay sit on the right of the same shell. Fullscreen screen is a separate overlay. Gear opens the pane and does **not** boot. Offline • Click to start boots and takes control.
+The computer pane and Settings overlay sit on the right of the same shell. Gear on the pane opens Settings; closing Settings returns to the pane. Fullscreen screen is a separate overlay. Gear in the thread header opens Settings and does **not** boot. Offline • Click to start boots and takes control.
 
 ## Screens
 
@@ -39,7 +39,7 @@ Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
 - `+` opens Create.
 - Search filters inbox and archived by name / preview.
-- Bot row: name, pin mark, unread dot, status, preview. Click opens the chat. Right-click: Pin / Unpin, Mark read / unread, Edit Profile, Duplicate, Archive, Delete.
+- Bot row: name, pin mark, unread dot, status, preview. Accessible name is `Open chat {name}`. Click opens the chat. Right-click: Pin / Unpin, Mark read / unread, Edit Profile, Duplicate, Archive, Delete.
 - Empty inbox (all archived): Restore one from Archived, or create a new bot.
 - No bots: Create your first bot.
 - Archived list: Back to Inbox, Restore on each row.
@@ -76,7 +76,7 @@ Not in this window: `threads.followUp` (the host queues on send), `subagents.ste
 
 ## Create / Settings
 
-Create: name, title, description, Team | Private.
+Create: name, title, description, Team | Private (`computer-mode-team` / `computer-mode-private`).
 
 Settings: the same fields plus instructions, mode change (rebinds the desktop; home is not copied), Restart / Stop / Reset (Reset wipes that home; Team reset wipes the shared desktop), busy-bot name, notifyOnFinish, Delete with optional purge memories.
 
@@ -90,7 +90,7 @@ Routines (same pane): New (name, cron, prompt; invalid cron disables Save), on/o
 
 ## Consent and this PC
 
-Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job marked `auto` runs without a card (`/local/owner-*`). After Allow the client reads, writes, lists, or execs under `$HOME` and posts the result. Paths outside `$HOME` are 403.
+Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job marked `auto` runs without a card (`/local/owner-*`). After Allow the client reads, writes, lists, or execs under `$HOME` and posts the result. Paths outside `$HOME` are 403 and stay on the consent card. The composer Stop control is `aria-label="Stop"`; the thread title is `Open settings for {name}`.
 
 ## Loopback proxy (`/local/*`)
 

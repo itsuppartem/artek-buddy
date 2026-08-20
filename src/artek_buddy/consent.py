@@ -505,6 +505,31 @@ class ConsentHub:
         device_id: str | None,
     ) -> tuple[str, bytes] | None:
         """Always-grant path: no card, ask the paired client to send the file."""
+        request_id = self.start_auto_owner_read(
+            bot_id=bot_id,
+            path=path,
+            run_id=run_id,
+            device_id=device_id,
+        )
+        if not request_id:
+            return None
+        found = self.take_owner_file(request_id)
+        if run_id:
+            try:
+                self.store.mark_run_running(run_id)
+            except Exception:
+                log.exception("failed to resume run after owner file")
+        return found
+
+    def start_auto_owner_read(
+        self,
+        *,
+        bot_id: str,
+        path: str,
+        run_id: str | None,
+        device_id: str | None,
+    ) -> str | None:
+        """Publish the auto job on the caller’s thread (the event loop). Wait separately."""
         _ = device_id
         bot = self.store.get_bot(bot_id)
         if bot is None:
@@ -545,13 +570,7 @@ class ConsentHub:
             },
             run_id,
         )
-        found = self.take_owner_file(request_id)
-        if run_id:
-            try:
-                self.store.mark_run_running(run_id)
-            except Exception:
-                log.exception("failed to resume run after owner file")
-        return found
+        return request_id
 
     def take_owner_file(self, request_id: str | None) -> tuple[str, bytes] | None:
         if not request_id:

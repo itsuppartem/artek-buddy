@@ -547,14 +547,19 @@ class ScriptedRuntime(RuntimeBase):
                 hub = getattr(self, "consent", None)
                 if hub is not None:
                     ctx_bot, ctx_run, _thread = self.resolve_turn_context(bot_id)
-                    await asyncio.to_thread(
-                        lambda: hub.pull_owner_file(
-                            bot_id=ctx_bot or bot_id or "",
-                            path=step.owner_auto_path or "",
-                            run_id=ctx_run,
-                            device_id=None,
-                        )
+                    request_id = hub.start_auto_owner_read(
+                        bot_id=ctx_bot or bot_id or "",
+                        path=step.owner_auto_path or "",
+                        run_id=ctx_run,
+                        device_id=None,
                     )
+                    if request_id:
+                        await asyncio.to_thread(hub.take_owner_file, request_id)
+                    if ctx_run:
+                        try:
+                            self.store.mark_run_running(ctx_run)
+                        except Exception:
+                            log.exception("failed to resume run after owner file")
                 continue
             if step.raise_error:
                 raise AgentRuntimeError(step.raise_error)

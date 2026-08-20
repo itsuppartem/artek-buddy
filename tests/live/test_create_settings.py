@@ -38,7 +38,7 @@ def test_settings_edit_notify_reset_cancel_delete(page: Page, client_url: str, h
     page.get_by_placeholder("e.g. Code Reviewer").fill("new title")
     page.get_by_label("Description").fill("new desc")
     page.get_by_label("Instructions (Prompt)").fill("be terse")
-    page.get_by_role("button", name="Team").click()
+    page.get_by_test_id("computer-mode-team").click()
     page.get_by_role("button", name="Save").click()
     expect(page.get_by_text("Computer: Team")).to_be_visible(timeout=8_000)
     box = page.get_by_test_id("notify-on-finish")

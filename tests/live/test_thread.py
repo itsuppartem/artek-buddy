@@ -236,7 +236,7 @@ def test_typing_indicator_and_lead_stop(page: Page, client_url: str, host_url: s
     expect(box).to_have_value("please e2e-slow")
     box.press("Enter")
     expect(page.get_by_test_id("typing-indicator")).to_be_visible(timeout=8_000)
-    page.get_by_role("button", name="Stop").click()
+    page.get_by_label("Stop").click()
     expect(page.get_by_test_id("run-error")).to_be_visible(timeout=15_000)
 
 

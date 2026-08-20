@@ -156,9 +156,9 @@ def create_named_bot(
     if description is not None:
         page.get_by_placeholder("What this bot is for").fill(description)
     if private is True:
-        page.get_by_role("button", name="Private").click()
+        page.get_by_test_id("computer-mode-private").click()
     elif private is False:
-        page.get_by_role("button", name="Team").click()
+        page.get_by_test_id("computer-mode-team").click()
     page.get_by_role("button", name="Create", exact=True).click()
     expect(page.get_by_placeholder("Name this bot")).to_have_count(0, timeout=20_000)
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)

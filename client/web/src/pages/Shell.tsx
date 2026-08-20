@@ -48,6 +48,7 @@ import {
   attentionFromBotChange,
   attentionFromEvent,
   isHistoricalEvent,
+  shouldReplaceAttention,
   shouldSendDesktopAlert,
   type AttentionAlert,
 } from "../lib/alerts";
@@ -106,6 +107,10 @@ export function ShellPage() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
+  const panelAfterSettings = useRef<"computer" | null>(null);
+  const pendingAlerts = useRef(
+    new Map<string, { alert: AttentionAlert; notifyOnFinish: boolean; key: string }>(),
+  );
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const screenUrlRef = useRef<string | null>(null);
@@ -190,12 +195,6 @@ export function ShellPage() {
       seenAlertKeys.current.add(key);
       return;
     }
-    seenAlertKeys.current.add(key);
-    recentKindAt.current.set(kindKey, now);
-    if (seenAlertKeys.current.size > 250) {
-      const oldest = seenAlertKeys.current.values().next().value;
-      if (oldest) seenAlertKeys.current.delete(oldest);
-    }
     const viewing = botId || activeIdRef.current || null;
     if (
       !shouldSendDesktopAlert({
@@ -204,9 +203,17 @@ export function ShellPage() {
         alertBotId: next.botId,
       })
     ) {
+      pendingAlerts.current.set(next.botId, { alert: next, notifyOnFinish, key });
       return;
     }
-    setAttention(next);
+    seenAlertKeys.current.add(key);
+    recentKindAt.current.set(kindKey, now);
+    if (seenAlertKeys.current.size > 250) {
+      const oldest = seenAlertKeys.current.values().next().value;
+      if (oldest) seenAlertKeys.current.delete(oldest);
+    }
+    pendingAlerts.current.delete(next.botId);
+    setAttention((current) => (shouldReplaceAttention(current, next) ? next : current));
   }
 
   function considerEvent(incoming: ProductEvent, bot: Bot, subscribedAt: number) {
@@ -221,6 +228,15 @@ export function ShellPage() {
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
   }
   considerEventRef.current = considerEvent;
+
+  useEffect(() => {
+    const viewing = active?.id ?? null;
+    for (const [id, held] of [...pendingAlerts.current.entries()]) {
+      if (id === viewing) continue;
+      pendingAlerts.current.delete(id);
+      dispatchAlert(held.alert, held.key, held.notifyOnFinish);
+    }
+  }, [active?.id]);
 
   async function refreshBots() {
     const list = await api.bots.list();
@@ -950,6 +966,7 @@ export function ShellPage() {
                   data-testid="bot-row"
                   data-bot-id={bot.id}
                   data-bot-name={bot.name}
+                  aria-label={`Open chat ${bot.name}`}
                   onClick={() => navigate(`/app/${bot.id}`)}
                   onContextMenu={(event) => {
                     event.preventDefault();
@@ -1052,7 +1069,11 @@ export function ShellPage() {
             type="button"
             data-testid="thread-header"
             disabled={!active}
-            onClick={() => setPanel("settings")}
+            aria-label={active ? `Open settings for ${active.name}` : "Bot settings"}
+            onClick={() => {
+              panelAfterSettings.current = null;
+              setPanel("settings");
+            }}
             className="flex min-w-0 items-center gap-3 disabled:cursor-default"
           >
             {active ? <BotAvatar color={active.color} size={26} /> : null}
@@ -1363,7 +1384,7 @@ export function ShellPage() {
               <BotSettings
                 bot={active}
                 computer={computer ?? snapshot?.computer ?? null}
-                onClose={() => setPanel(null)}
+                onClose={() => setPanel(panelAfterSettings.current)}
                 onUpdated={() => void refreshBots()}
                 onDelete={(deleteMemories) => void deleteBot(active, deleteMemories)}
                 onRestart={() => restartComputer()}
@@ -1382,7 +1403,10 @@ export function ShellPage() {
                 previewFrameRef={previewFrameRef}
                 booting={booting}
                 onClose={() => setPanel(null)}
-                onSettings={() => setPanel("settings")}
+                onSettings={() => {
+                  panelAfterSettings.current = "computer";
+                  setPanel("settings");
+                }}
                 onOpenFullscreen={() => void openOverlay("preview")}
                 onTakeControl={() => void openOverlay("button")}
                 onRelease={() => void releaseComputer()}
@@ -1442,6 +1466,7 @@ export function ShellPage() {
             const target = contextMenu.bot;
             setContextMenu(null);
             navigate(`/app/${target.id}`);
+            panelAfterSettings.current = null;
             setPanel("settings");
           }}
           onDuplicate={async () => {
@@ -2122,9 +2147,6 @@ function AskCard({
                 Type custom reply…
               </button>
               )}
-              {fileError ? (
-                <div className="mt-2 text-[13px] text-[#E25D5D]">{fileError}</div>
-              ) : null}
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -2148,6 +2170,9 @@ function AskCard({
           )}
         </div>
       )}
+      {fileError ? (
+        <div className="mt-2 text-[13px] text-[#E25D5D]">{fileError}</div>
+      ) : null}
     </div>
   );
 }
@@ -2167,6 +2192,7 @@ function ComputerModePicker({
           <button
             key={mode}
             type="button"
+            data-testid={mode === "team" ? "computer-mode-team" : "computer-mode-private"}
             aria-pressed={value === mode}
             onClick={() => onChange(mode)}
             className={`rounded-[11px] border px-3.5 py-3 text-[14px] capitalize ${
