@@ -77,7 +77,10 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
     archived.get_by_test_id("restore-chat").click()
     expect(bot_row(page, bravo)).to_have_count(1, timeout=20_000)
 
-    page.locator('[data-testid="thread-pane"] button').filter(has_text=alpha).click()
+    # restore() navigates to Bravo. Open Alpha settings from the row menu.
+    bot_row(page, alpha).click()
+    open_bot_menu(page, alpha)
+    page.get_by_role("menuitem", name="Edit Profile").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     page.get_by_role("button", name="Delete chat…").click()
     page.get_by_role("button", name="Cancel").click()
