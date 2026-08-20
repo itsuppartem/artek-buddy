@@ -7,7 +7,7 @@
 - GitHub Actions `test` workflow on pull requests and on `develop` / `main`: `backend` (scripted/fake HTTP), `ui` (installed `.deb` + scripted window, no model key), and optional `live` Grok canary when `CURSOR_API_KEY` is set. Jobs never print tokens, keys, or compose config. The suite does not talk to the owner Pi stack.
 - `ui` job covers boot screens: proxy Retry, pairing URL/name fail and happy, thread auth / host / action banners.
 - `ui` job covers the sidebar: search, context menu (pin, unread, edit, duplicate, archive, delete), empty inbox, Plugins toast, You label.
-- `ui` job covers thread blocks, reply, attach chips, Stop, Load earlier, and the attention banner.
+- `ui` job covers thread blocks, reply, attach chips, and the replied attention banner.
 
 ### Removed
 - The previous host, Vitest, Playwright, integration, and demo-recorder suite.
