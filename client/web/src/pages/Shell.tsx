@@ -2784,12 +2784,27 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
   }
 
   useEffect(() => {
-    void refresh().catch((err: unknown) => {
-      onLater(err instanceof Error ? err.message : "Could not load memory");
-    });
-    const poll = window.setInterval(() => void refresh().catch(() => undefined), 10000);
-    return () => window.clearInterval(poll);
-  }, [botId]);
+    let cancelled = false;
+    async function reload() {
+      try {
+        const docs = await api.memory.list(botId);
+        if (!cancelled) setDocuments(docs);
+      } catch (err) {
+        if (!cancelled) {
+          onLater(err instanceof Error ? err.message : "Could not load memory");
+        }
+      }
+    }
+    void reload();
+    const poll = window.setInterval(() => void reload(), 10000);
+    const onChanged = () => void reload();
+    window.addEventListener("artek-memory-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.clearInterval(poll);
+      window.removeEventListener("artek-memory-changed", onChanged);
+    };
+  }, [botId, onLater]);
 
   async function create() {
     const text = (factsRef.current?.value ?? content).trim();

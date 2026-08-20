@@ -71,8 +71,9 @@ def arm_page(page: Page) -> None:
 
 
 def seed_memory(page: Page, text: str) -> None:
-    """Scripted UI often swallows the memory Save click while leftover computers
-    boot. Create the document through the already-paired session instead."""
+    """Create a memory document through the already-paired session, then tell
+    the pane to reload. Scripted UI often swallows the Save click while leftover
+    computers boot, so the form POST never leaves the browser."""
     page.evaluate(
         """async (content) => {
           const r = await fetch('/v1/memory', {
@@ -85,6 +86,7 @@ def seed_memory(page: Page, text: str) -> None:
             }),
           });
           if (!r.ok) throw new Error(await r.text());
+          window.dispatchEvent(new Event('artek-memory-changed'));
         }""",
         text,
     )
