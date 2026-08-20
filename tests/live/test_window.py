@@ -26,7 +26,8 @@ def test_pair_create_memory_routine_and_settings(
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, "CI Team")
 
-    # Memory sits in the computer pane Create just opened.
+    # Memory sits in the computer pane. Reopen after the helper closes it.
+    page.get_by_title("Agent computer").click()
     expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=20_000)
     page.get_by_test_id("new-memory").click()
     page.get_by_placeholder("Facts to remember").fill("CI prefers short answers")

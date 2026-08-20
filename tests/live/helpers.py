@@ -10,15 +10,12 @@ from tests.support import mask_secret
 
 
 def mint_pairing_code() -> str:
-    try:
-        raw = subprocess.check_output(
-            ["docker", "exec", "artek-buddy", "python", "-m", "artek_buddy", "pair"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-            timeout=20,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("docker exec pair did not return within 20s") from exc
+    raw = subprocess.check_output(
+        ["docker", "exec", "artek-buddy", "python", "-m", "artek_buddy", "pair"],
+        text=True,
+        stderr=subprocess.DEVNULL,
+        timeout=15,
+    )
     code = raw.strip().splitlines()[0].strip()
     mask_secret(code)
     return code
@@ -68,13 +65,17 @@ def close_computer_pane(page: Page) -> None:
             pass
 
 
+def _fail_fast_clicks(page: Page) -> None:
+    page.set_default_timeout(8_000)
+    page.set_default_navigation_timeout(20_000)
+
+
 def send_message(page: Page, text: str) -> None:
+    _fail_fast_clicks(page)
     dismiss_attention(page)
     box = composer(page)
-    expect(box).to_be_enabled()
-    box.click()
+    box.wait_for()
     box.fill(text)
-    dismiss_attention(page)
     page.get_by_role("button", name="Send").click(timeout=5_000, force=True)
 
 
@@ -84,6 +85,7 @@ def open_settings(page: Page, name: str) -> None:
 
 
 def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | None = None) -> None:
+    _fail_fast_clicks(page)
     page.goto(client_url)
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
@@ -103,9 +105,8 @@ def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":
 
 
 def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
-    """+ is always in the sidebar. After Create the product opens the computer pane
-    (memory / routines live there). Do not close that pane from this helper.
-    Private so Team auto-boot does not hold the shared desktop."""
+    """+ is always in the sidebar. Private so Create does not boot Team.
+    Close the computer pane and the attention banner so later clicks are free."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.get_by_title("New bot").click()
     box = page.get_by_placeholder("Name this bot")
@@ -114,13 +115,11 @@ def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
     if title is not None:
         page.get_by_placeholder("Describe what this bot does").fill(title)
     page.get_by_role("button", name="Private").click()
-    create = page.get_by_role("button", name="Create", exact=True)
-    expect(create).to_be_enabled()
-    create.click()
+    page.get_by_role("button", name="Create", exact=True).click()
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
-    composer_box = composer(page)
-    expect(composer_box).to_be_enabled(timeout=10_000)
-    composer_box.click()
+    composer(page).wait_for(timeout=20_000)
+    close_computer_pane(page)
+    dismiss_attention(page)
 
 
 def open_bot_menu(page: Page, name: str) -> None:

@@ -36,15 +36,3 @@ def _unpair_between_tests(client_url: str) -> None:
     from tests.live.helpers import reset_pairing
 
     reset_pairing(client_url)
-
-
-@pytest.fixture(autouse=True)
-def _fail_fast_clicks(request: pytest.FixtureRequest) -> None:
-    if "page" not in request.fixturenames:
-        return
-    from playwright.sync_api import expect
-
-    page = request.getfixturevalue("page")
-    page.set_default_timeout(8_000)
-    page.set_default_navigation_timeout(20_000)
-    expect.set_options(timeout=8_000)
