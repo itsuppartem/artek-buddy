@@ -82,7 +82,7 @@ def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
 
 def open_bot_menu(page: Page, name: str) -> None:
     bot_row(page, name).click(button="right")
-    expect(page.get_by_role("menu", name=f"Actions for {name}")).to_be_visible()
+    expect(page.get_by_role("menu", name=f"Actions for {name}")).to_be_visible(timeout=10_000)
 
 
 def ensure_bot(page: Page, name: str) -> None:

@@ -106,10 +106,14 @@ def test_archive_restore_and_empty_inbox(page: Page, client_url: str, host_url: 
     create_named_bot(page, first)
     create_named_bot(page, extra)
 
-    while page.get_by_test_id("bot-row").count():
+    for _ in range(20):
+        if page.get_by_test_id("bot-row").count() == 0:
+            break
         leftover = page.get_by_test_id("bot-row").first.get_attribute("data-bot-name")
         assert leftover
         _archive_named(page, leftover)
+    else:
+        raise AssertionError("inbox still had bot rows after 20 archives")
 
     expect(page.get_by_test_id("empty-inbox")).to_be_visible(timeout=20_000)
     page.get_by_role("button", name="Open archived").click()
