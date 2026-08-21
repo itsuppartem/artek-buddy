@@ -119,19 +119,17 @@ class FakeSupervisorClient:
             "files": {},
         }
         self.calls.append(("provision", home_key))
-        return SandboxBox(cid, 16080, 16081, "http://127.0.0.1:16080/embed.html", True, True)
+        return SandboxBox(cid, None, None, None, True, True)
 
     def inspect(self, provider_ref: str) -> SandboxBox:
         box = self.boxes.get(provider_ref)
         if box is None:
             raise RuntimeError("not found")
-        interactive = bool(box.get("interactive"))
-        port = 16081 if interactive else 16080
         return SandboxBox(
             provider_ref,
-            16080,
-            16081,
-            f"http://127.0.0.1:{port}/embed.html",
+            None,
+            None,
+            None,
             bool(box.get("running", True)),
             True,
         )

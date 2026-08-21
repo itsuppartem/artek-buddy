@@ -38,7 +38,6 @@ import {
   previewPointerEvents,
   screenFrameLooksFailed,
   screenIframeSandbox,
-  shouldAutoBoot,
   shouldRefreshScreenUrl,
   shouldReplaceScreenUrl,
   shouldTakeControl,
@@ -49,6 +48,8 @@ import {
   attentionFromBotChange,
   attentionFromEvent,
   isHistoricalEvent,
+  shouldReplaceAttention,
+  shouldSendDesktopAlert,
   type AttentionAlert,
 } from "../lib/alerts";
 import { ChatMarkdown } from "../lib/chat-markdown";
@@ -105,7 +106,12 @@ export function ShellPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
-  const [panel, setPanel] = useState<Panel>("computer");
+  const [panel, setPanel] = useState<Panel>(null);
+  const panelAfterSettings = useRef<"computer" | null>(null);
+  const pendingAlerts = useRef(
+    new Map<string, { alert: AttentionAlert; notifyOnFinish: boolean; key: string }>(),
+  );
+  const fulfilledOwnerJobs = useRef(new Set<string>());
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const screenUrlRef = useRef<string | null>(null);
@@ -128,7 +134,13 @@ export function ShellPage() {
   const recentKindAt = useRef(new Map<string, number>());
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
+  const botIdRef = useRef<string | undefined>(undefined);
   const botsRef = useRef<Bot[]>([]);
+  const shellOpenedAt = useRef(Date.now());
+  const refreshBotsRef = useRef<() => Promise<Bot[]>>(async () => []);
+  const considerEventRef = useRef<
+    (incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) => void
+  >(() => undefined);
   const [contextMenu, setContextMenu] = useState<{
     bot: Bot;
     position: ContextMenuPosition;
@@ -143,21 +155,13 @@ export function ShellPage() {
   const heldUnreadIds = useRef(new Set<string>());
   const messageScroll = useRef<HTMLDivElement>(null);
 
-  const active = bots.find((bot) => bot.id === botId) ?? bots[0];
+  const active = bots.find((bot) => bot.id === botId) ?? (botId ? undefined : bots[0]);
   activeIdRef.current = active?.id;
+  botIdRef.current = botId;
   const thread = active ? snapshot : null;
   const isBusy = Boolean(
     (thread?.run && isActive(thread.run.status)) ||
       (thread && (hasLive(thread) || hasActiveWorkers(thread))),
-  );
-  const otherBotIds = useMemo(
-    () =>
-      bots
-        .map((bot) => bot.id)
-        .filter((id) => id !== active?.id)
-        .sort()
-        .join("\0"),
-    [bots, active?.id],
   );
 
   useEffect(() => {
@@ -196,26 +200,67 @@ export function ShellPage() {
       seenAlertKeys.current.add(key);
       return;
     }
+    const viewing = activeIdRef.current || botIdRef.current || null;
+    if (
+      !shouldSendDesktopAlert({
+        windowFocused: true,
+        viewingBotId: viewing,
+        alertBotId: next.botId,
+      })
+    ) {
+      const held = pendingAlerts.current.get(next.botId);
+      if (!held || shouldReplaceAttention(held.alert, next)) {
+        pendingAlerts.current.set(next.botId, { alert: next, notifyOnFinish, key });
+      }
+      return;
+    }
     seenAlertKeys.current.add(key);
     recentKindAt.current.set(kindKey, now);
     if (seenAlertKeys.current.size > 250) {
       const oldest = seenAlertKeys.current.values().next().value;
       if (oldest) seenAlertKeys.current.delete(oldest);
     }
-    setAttention(next);
+    pendingAlerts.current.delete(next.botId);
+    setAttention((current) => (shouldReplaceAttention(current, next) ? next : current));
   }
 
-  function considerEvent(incoming: ProductEvent, bot: Bot, subscribedAt: number) {
+  function startOwnerFulfill(consentId: string) {
+    if (!consentId || fulfilledOwnerJobs.current.has(consentId)) return;
+    fulfilledOwnerJobs.current.add(consentId);
+    void fulfillOwnerJob(consentId).catch((err) => {
+      fulfilledOwnerJobs.current.delete(consentId);
+      void reportOwnerJobError(consentId, err);
+    });
+  }
+
+  function considerEvent(incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) {
     const granted = isAutoOwnerJob(incoming);
-    if (granted) {
-      void fulfillOwnerJob(granted.consentId).catch((err) => {
-        void reportOwnerJobError(granted.consentId, err);
-      });
-    }
-    if (isHistoricalEvent(incoming, subscribedAt)) return;
+    if (granted) startOwnerFulfill(granted.consentId);
+    if (!opts?.live && isHistoricalEvent(incoming, shellOpenedAt.current)) return;
     const next = attentionFromEvent(incoming, bot.name);
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
+    if (incoming.type === "run.started") {
+      const stored = prevBotsRef.current.get(bot.id);
+      if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "running" });
+    }
+    if (incoming.type === "run.completed" || incoming.type === "run.failed") {
+      void refreshBotsRef.current().catch(() => undefined);
+    }
   }
+  considerEventRef.current = considerEvent;
+
+  useEffect(() => {
+    const viewing = active?.id ?? null;
+    for (const [id, held] of [...pendingAlerts.current.entries()]) {
+      if (id === viewing) continue;
+      pendingAlerts.current.delete(id);
+      dispatchAlert(held.alert, held.key, held.notifyOnFinish);
+    }
+  }, [active?.id]);
+
+  useEffect(() => {
+    if (attention && active?.id === attention.botId) setAttention(null);
+  }, [active?.id, attention]);
 
   async function refreshBots() {
     const list = await api.bots.list();
@@ -226,11 +271,13 @@ export function ShellPage() {
         if (!before) continue;
         const alert = attentionFromBotChange(before, next);
         if (alert) {
+          const updated = Date.parse(next.updatedAt);
+          if (Number.isFinite(updated) && updated < shellOpenedAt.current) continue;
           dispatchAlert(alert, `${next.id}:${alert.kind}:${next.updatedAt}`, next.notifyOnFinish);
         }
       }
     }
-    const viewing = botId || activeIdRef.current;
+    const viewing = activeIdRef.current || botIdRef.current;
     if (viewing && !heldUnreadIds.current.has(viewing)) {
       const open = list.find((item) => item.id === viewing);
       if (open?.unread) {
@@ -245,11 +292,13 @@ export function ShellPage() {
     setArchivedBots(archivedList);
     if (archivedList.length === 0) setSidebarView("inbox");
     setBotsReady(true);
-    if (!botId || !list.some((bot) => bot.id === botId)) {
+    const routeId = botIdRef.current || activeIdRef.current;
+    if (!routeId || !list.some((bot) => bot.id === routeId)) {
       navigate(list[0] ? `/app/${list[0].id}` : "/app", { replace: true });
     }
     return list;
   }
+  refreshBotsRef.current = refreshBots;
 
   function showError(err: unknown, fallback: string) {
     const classified = classifyError(err);
@@ -268,7 +317,7 @@ export function ShellPage() {
       await api.health();
       const recovering = errorKindRef.current === "host";
       if (loadBots || recovering) {
-        await refreshBots();
+        await refreshBotsRef.current();
       }
       if (loadBots || recovering) {
         setError(null);
@@ -376,6 +425,7 @@ export function ShellPage() {
       mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId),
     );
     setComputer(snap.computer);
+    if (snap.pendingAutoConsentId) startOwnerFulfill(snap.pendingAutoConsentId);
     if (stickToEnd) {
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
@@ -433,7 +483,6 @@ export function ShellPage() {
     setComputer(null);
     expandedHistoryThread.current = null;
     const abort = new AbortController();
-    const subscribedAt = Date.now();
     void (async () => {
       const snap = await refreshThread(active.id).catch((err: unknown) => {
         showError(err, "Could not load thread");
@@ -460,9 +509,9 @@ export function ShellPage() {
             }
             applyThreadEvent(event, setSnapshot, setComputer);
             const bot = botsRef.current.find((item) => item.id === active.id) ?? active;
-            considerEvent(event, bot, subscribedAt);
+            considerEvent(event, bot);
             if (event.type === "run.completed" || event.type === "run.failed") {
-              void refreshBots().catch(() => undefined);
+              void refreshBotsRef.current().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
             }
           }
@@ -489,40 +538,32 @@ export function ShellPage() {
   }, [active?.id]);
 
   useEffect(() => {
-    const ids = otherBotIds ? otherBotIds.split("\0") : [];
-    if (!ids.length) return;
     const abort = new AbortController();
-    const subscribedAt = Date.now();
-    for (const id of ids) {
-      void (async () => {
-        let after: string | null = null;
-        let retryMs = 250;
-        while (!abort.signal.aborted) {
-          try {
-            for await (const event of api.threads.subscribe(id, after, abort.signal)) {
-              if (abort.signal.aborted) break;
-              after = event.id;
-              retryMs = 250;
-              const bot = botsRef.current.find((item) => item.id === id);
-              if (bot) considerEvent(event, bot, subscribedAt);
-            }
-          } catch (err) {
+    void (async () => {
+      let retryMs = 250;
+      while (!abort.signal.aborted) {
+        try {
+          for await (const event of api.events.subscribe(abort.signal)) {
             if (abort.signal.aborted) break;
-            if (classifyError(err).kind === "auth") break;
-            // Same reconnect as the active thread stream.
+            retryMs = 250;
+            const bot = botsRef.current.find((item) => item.id === event.botId);
+            if (bot) considerEventRef.current(event, bot, { live: true });
           }
+        } catch (err) {
           if (abort.signal.aborted) break;
-          try {
-            await abortableDelay(retryMs, abort.signal);
-          } catch {
-            break;
-          }
-          retryMs = Math.min(retryMs * 2, 5_000);
+          if (classifyError(err).kind === "auth") break;
         }
-      })();
-    }
+        if (abort.signal.aborted) break;
+        try {
+          await abortableDelay(retryMs, abort.signal);
+        } catch {
+          break;
+        }
+        retryMs = Math.min(retryMs * 2, 5_000);
+      }
+    })();
     return () => abort.abort();
-  }, [otherBotIds]);
+  }, []);
 
   useEffect(() => {
     setReplyTo(null);
@@ -530,31 +571,15 @@ export function ShellPage() {
   }, [active?.id]);
 
   useEffect(() => {
-    if (panel !== "computer") {
-      autoBooted.current = null;
-      return;
-    }
-    if (!active) return;
-    if (sleepHeld.current) {
-      autoBooted.current = active.id;
-      return;
-    }
-    if (computer?.state === "booting") return;
-    if (!shouldAutoBoot(computer?.state, screenUrlRef.current, autoBooted.current === active.id)) return;
-    autoBooted.current = active.id;
-    void bootComputer({
-      takeControl: false,
-      overlay: false,
-      force: false,
-    });
-  }, [panel, active?.id, computer?.state]);
+    if (panel !== "computer") autoBooted.current = null;
+  }, [panel]);
 
   useEffect(() => {
     setComputerOpen(false);
   }, [active?.id]);
 
   useEffect(() => {
-    if (panel !== "settings" || !active) return;
+    if ((panel !== "settings" && panel !== "computer") || !active) return;
     void api.computer.status(active.id).then(setComputer).catch(() => undefined);
   }, [panel, active?.id]);
 
@@ -644,6 +669,8 @@ export function ShellPage() {
     }
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
+      const typed = event.currentTarget.value;
+      if (composerRef.current) composerRef.current.value = typed;
       void send();
     }
   }
@@ -703,10 +730,15 @@ export function ShellPage() {
   }
 
   async function send(textOverride?: string) {
-    const text = (textOverride ?? draft).trim();
+    const text = (textOverride ?? composerRef.current?.value ?? draft).trim();
     const files = textOverride == null ? pendingFiles : [];
-    if (!active || sending || (!text && !files.length)) return;
+    if (!active) {
+      if (text || files.length) showError(new Error("No chat is open"), "Send failed");
+      return;
+    }
+    if (sending || (!text && !files.length)) return;
     const replyId = replyTo?.id ?? null;
+    const targetId = active.id;
     if (textOverride == null) {
       writeDraft("", true);
       setPendingFiles([]);
@@ -723,18 +755,19 @@ export function ShellPage() {
             })),
           )
         : undefined;
-      await api.threads.send(active.id, text, replyId, attachments);
+      await api.threads.send(targetId, text, replyId, attachments);
       setReplyTo(null);
-      await refreshThread(active.id);
     } catch (err) {
       if (textOverride == null) {
         writeDraft(text);
         setPendingFiles(files);
       }
       showError(err, "Send failed");
+      return;
     } finally {
       setSending(false);
     }
+    void refreshThread(targetId).catch(() => undefined);
   }
 
   async function stop() {
@@ -755,8 +788,8 @@ export function ShellPage() {
     takeControl: boolean;
     overlay: boolean;
     force?: boolean;
-  }) {
-    if (!active) return;
+  }): Promise<boolean> {
+    if (!active) return false;
     sleepHeld.current = false;
     const needsBoot = force || computer?.state !== "running" || !screenUrlRef.current;
     if (overlay && needsBoot) setBooting(true);
@@ -770,8 +803,10 @@ export function ShellPage() {
         setComputer(await api.computer.status(active.id));
       }
       await ensureScreenUrl(active.id, true, takeControl || !screenUrlRef.current);
+      return true;
     } catch (err) {
       setLater(err instanceof Error ? err.message : "Could not boot the computer");
+      return false;
     } finally {
       setBooting(false);
     }
@@ -825,12 +860,12 @@ export function ShellPage() {
 
   async function openOverlay(source: "preview" | "button") {
     if (!active) return;
-    await bootComputer({
+    const ok = await bootComputer({
       takeControl: shouldTakeControl(source),
       overlay: computer?.state !== "running",
       force: computer?.state !== "running",
     });
-    setComputerOpen(true);
+    if (ok) setComputerOpen(true);
   }
 
   async function releaseComputer() {
@@ -847,16 +882,20 @@ export function ShellPage() {
     description: string;
     computerMode: ComputerMode;
   }) {
-    const bot = await api.bots.create({
-      name: input.name.trim(),
-      title: input.title,
-      description: input.description,
-      instructions: input.description,
-      computerMode: input.computerMode,
-    });
-    await refreshBots();
-    navigate(`/app/${bot.id}`);
-    setPanel("computer");
+    try {
+      const bot = await api.bots.create({
+        name: input.name.trim(),
+        title: input.title,
+        description: input.description,
+        instructions: input.description,
+        computerMode: input.computerMode,
+      });
+      await refreshBots();
+      navigate(`/app/${bot.id}`);
+      setPanel(null);
+    } catch (err) {
+      showError(err, "Could not create chat");
+    }
   }
 
   async function deleteBot(bot: Bot, deleteMemories: boolean = false) {
@@ -875,12 +914,6 @@ export function ShellPage() {
     const timer = window.setTimeout(() => setLater(null), 2400);
     return () => window.clearTimeout(timer);
   }, [later]);
-
-  useEffect(() => {
-    if (!attention) return;
-    const timer = window.setTimeout(() => setAttention(null), 4000);
-    return () => window.clearTimeout(timer);
-  }, [attention]);
 
   return (
     <div className="relative flex h-full min-w-0 overflow-hidden bg-[#050506] text-[#DFDFE2]">
@@ -953,6 +986,7 @@ export function ShellPage() {
                   data-testid="bot-row"
                   data-bot-id={bot.id}
                   data-bot-name={bot.name}
+                  aria-label={`Open chat ${bot.name}`}
                   onClick={() => navigate(`/app/${bot.id}`)}
                   onContextMenu={(event) => {
                     event.preventDefault();
@@ -1047,14 +1081,19 @@ export function ShellPage() {
 
       <main
         data-testid="thread-pane"
-        className="flex min-w-0 flex-1 flex-col bg-[#0D0D0E]"
+        className="relative flex min-w-0 flex-1 flex-col bg-[#0D0D0E]"
         onPaste={onChatPaste}
       >
         <div className="flex items-center justify-between border-b border-[#141416] px-[22px] py-[17px]">
           <button
             type="button"
+            data-testid="thread-header"
             disabled={!active}
-            onClick={() => setPanel("settings")}
+            aria-label={active ? `Open settings for ${active.name}` : "Bot settings"}
+            onClick={() => {
+              panelAfterSettings.current = null;
+              setPanel("settings");
+            }}
             className="flex min-w-0 items-center gap-3 disabled:cursor-default"
           >
             {active ? <BotAvatar color={active.color} size={26} /> : null}
@@ -1078,6 +1117,44 @@ export function ShellPage() {
             </svg>
           </button>
         </div>
+        {attention || later ? (
+          <div className="flex w-full shrink-0 flex-col items-center gap-2 px-4 py-2">
+            {attention ? (
+              <div
+                data-testid="attention-alert"
+                className="flex max-w-[min(480px,90vw)] items-center gap-2 rounded-full bg-[#1A1A1D] py-2 pr-2 pl-4 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]"
+              >
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left hover:text-[#ECECEE]"
+                  onClick={() => {
+                    navigate(`/app/${attention.botId}`);
+                    setAttention(null);
+                  }}
+                >
+                  <span className="font-medium text-[#ECECEE]">{attention.title}</span>
+                  {attention.body ? (
+                    <span className="mt-0.5 block truncate text-[12.5px] text-[#85858A]">{attention.body}</span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  data-testid="attention-dismiss"
+                  aria-label="Dismiss alert"
+                  onClick={() => setAttention(null)}
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[#85858A] hover:bg-[#222226] hover:text-[#ECECEE]"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : null}
+            {later ? (
+              <div className="rounded-full bg-[#1A1A1D] px-4 py-2 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]">
+                {later}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div
           ref={messageScroll}
           data-testid="thread"
@@ -1155,6 +1232,7 @@ export function ShellPage() {
           {thread?.olderCursor != null ? (
             <button
               type="button"
+              data-testid="load-earlier"
               disabled={loadingOlder}
               onClick={() => void loadOlderMessages()}
               className="self-center rounded-lg px-3 py-1.5 text-[13px] text-[#85858A] hover:bg-[#1A1A1D] hover:text-[#C9C9CE] disabled:opacity-50"
@@ -1171,7 +1249,9 @@ export function ShellPage() {
               canAnswer
               message={message}
               onAnswer={(text) => send(text)}
-              onOpenBot={(id) => navigate(`/app/${id}`)}
+              onOpenBot={(id) => {
+                void refreshBots().then(() => navigate(`/app/${id}`));
+              }}
               onSubagentChange={() => {
                 if (active) void refreshThread(active.id);
               }}
@@ -1211,7 +1291,10 @@ export function ShellPage() {
         </div>
         <div className="px-6 pb-6 pt-3">
           {replyTo ? (
-            <div className="mb-2 flex items-center gap-3 rounded-[16px] border border-[#202023] bg-[#131315] px-3.5 py-2">
+            <div
+              data-testid="reply-bar"
+              className="mb-2 flex items-center gap-3 rounded-[16px] border border-[#202023] bg-[#131315] px-3.5 py-2"
+            >
               <div className="min-w-0 flex-1">
                 <div className="text-[12px] text-[#85858A]">
                   Replying to {replyTo.role === "bot" ? active?.name || "bot" : "you"}
@@ -1284,6 +1367,7 @@ export function ShellPage() {
             {isBusy ? (
               <button
                 type="button"
+                data-testid="thread-stop"
                 aria-label="Stop"
                 onClick={() => void stop()}
                 className="grid h-9 w-9 place-items-center rounded-full bg-[#E65707] text-white hover:bg-[#D44E06]"
@@ -1295,9 +1379,11 @@ export function ShellPage() {
             <button
               type="button"
               aria-label="Send"
-              disabled={!active || sending || (!draft.trim() && pendingFiles.length === 0)}
+              disabled={!active || sending}
               onClick={() => void send()}
-              className="grid h-9 w-9 place-items-center rounded-full bg-[#F1F1EF] text-[#17171A] disabled:opacity-40"
+              className={`grid h-9 w-9 place-items-center rounded-full bg-[#F1F1EF] text-[#17171A] disabled:opacity-40 ${
+                !draft.trim() && pendingFiles.length === 0 ? "opacity-40" : ""
+              }`}
             >
               ↑
             </button>
@@ -1319,7 +1405,7 @@ export function ShellPage() {
               <BotSettings
                 bot={active}
                 computer={computer ?? snapshot?.computer ?? null}
-                onClose={() => setPanel(null)}
+                onClose={() => setPanel(panelAfterSettings.current)}
                 onUpdated={() => void refreshBots()}
                 onDelete={(deleteMemories) => void deleteBot(active, deleteMemories)}
                 onRestart={() => restartComputer()}
@@ -1338,7 +1424,10 @@ export function ShellPage() {
                 previewFrameRef={previewFrameRef}
                 booting={booting}
                 onClose={() => setPanel(null)}
-                onSettings={() => setPanel("settings")}
+                onSettings={() => {
+                  panelAfterSettings.current = "computer";
+                  setPanel("settings");
+                }}
                 onOpenFullscreen={() => void openOverlay("preview")}
                 onTakeControl={() => void openOverlay("button")}
                 onRelease={() => void releaseComputer()}
@@ -1398,6 +1487,7 @@ export function ShellPage() {
             const target = contextMenu.bot;
             setContextMenu(null);
             navigate(`/app/${target.id}`);
+            panelAfterSettings.current = null;
             setPanel("settings");
           }}
           onDuplicate={async () => {
@@ -1435,32 +1525,6 @@ export function ShellPage() {
             }
           }}
         />
-      ) : null}
-
-      {attention || later ? (
-        <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2">
-          {attention ? (
-            <button
-              type="button"
-              data-testid="attention-alert"
-              onClick={() => {
-                navigate(`/app/${attention.botId}`);
-                setAttention(null);
-              }}
-              className="max-w-[min(480px,90vw)] rounded-full bg-[#1A1A1D] px-4 py-2 text-left text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)] hover:bg-[#222226]"
-            >
-              <span className="font-medium text-[#ECECEE]">{attention.title}</span>
-              {attention.body ? (
-                <span className="mt-0.5 block truncate text-[12.5px] text-[#85858A]">{attention.body}</span>
-              ) : null}
-            </button>
-          ) : null}
-          {later ? (
-            <div className="rounded-full bg-[#1A1A1D] px-4 py-2 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]">
-              {later}
-            </div>
-          ) : null}
-        </div>
       ) : null}
 
       {booting ? (
@@ -1704,6 +1768,7 @@ function MessageView({
           return (
             <div
               key={index}
+              data-testid="meta-block"
               className="flex items-center justify-center gap-2 py-1 text-[13.5px] text-[#85858A]"
             >
               <span className="text-[#E65707]">◷</span>
@@ -1716,7 +1781,7 @@ function MessageView({
             return null;
           }
           return (
-            <div key={index} className="flex justify-start">
+            <div key={index} className="flex justify-start" data-testid="progress-block">
               <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]">
                 <ChatMarkdown streaming>{block.text}</ChatMarkdown>
               </div>
@@ -1730,6 +1795,8 @@ function MessageView({
           return (
             <div
               key={index}
+              data-testid="subagent-card"
+              data-status={block.status}
               className="max-w-[74%] min-w-[340px] w-fit rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4"
             >
               <div className="flex items-center justify-between gap-3">
@@ -1802,6 +1869,8 @@ function MessageView({
             <button
               key={index}
               type="button"
+              data-testid="child-bot-card"
+              data-status={block.status}
               disabled={removed}
               onClick={() => onOpenBot(block.botId)}
               className="w-[min(340px,90%)] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4 text-left disabled:opacity-60"
@@ -1840,7 +1909,7 @@ function MessageView({
         }
         if (block.kind === "card") {
           return (
-            <div key={index} className="flex justify-start">
+            <div key={index} className="flex justify-start" data-testid="check-card">
               <div className="flex flex-col gap-2 rounded-[20px] bg-[#1A1A1D] px-5 py-4">
                 {block.lines.map((line) => (
                   <div key={line.k} className="flex items-baseline gap-2.5 text-[15px]">
@@ -1878,6 +1947,7 @@ function MessageView({
           return (
             <div
               key={index}
+              data-testid="computer-card"
               className="w-[340px] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4"
             >
               <div className="flex items-center justify-between">
@@ -2098,9 +2168,6 @@ function AskCard({
                 Type custom reply…
               </button>
               )}
-              {fileError ? (
-                <div className="mt-2 text-[13px] text-[#E25D5D]">{fileError}</div>
-              ) : null}
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -2124,6 +2191,9 @@ function AskCard({
           )}
         </div>
       )}
+      {fileError ? (
+        <div className="mt-2 text-[13px] text-[#E25D5D]">{fileError}</div>
+      ) : null}
     </div>
   );
 }
@@ -2143,6 +2213,7 @@ function ComputerModePicker({
           <button
             key={mode}
             type="button"
+            data-testid={mode === "team" ? "computer-mode-team" : "computer-mode-private"}
             aria-pressed={value === mode}
             onClick={() => onChange(mode)}
             className={`rounded-[11px] border px-3.5 py-3 text-[14px] capitalize ${
@@ -2182,7 +2253,7 @@ function CreateBotForm({
     <div>
       <div className="mb-4 flex items-center justify-between">
         <span className="text-[13.5px] text-[#85858A]">New bot</span>
-        <button type="button" onClick={onCancel}>
+        <button type="button" aria-label="Cancel create" data-testid="create-cancel" onClick={onCancel}>
           ✕
         </button>
       </div>
@@ -2317,42 +2388,42 @@ function BotSettings({
 
       {editing ? (
         <div className="mt-4 flex flex-col gap-3">
-          <div>
-            <label className="text-[12px] text-[#85858A]">Name</label>
+          <label className="text-[12px] text-[#85858A]">
+            Name
             <input
               data-testid="bot-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="mt-1 w-full rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
             />
-          </div>
-          <div>
-            <label className="text-[12px] text-[#85858A]">Title</label>
+          </label>
+          <label className="text-[12px] text-[#85858A]">
+            Title
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Code Reviewer"
               className="mt-1 w-full rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
             />
-          </div>
-          <div>
-            <label className="text-[12px] text-[#85858A]">Description</label>
+          </label>
+          <label className="text-[12px] text-[#85858A]">
+            Description
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
               className="mt-1 w-full resize-none rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
             />
-          </div>
-          <div>
-            <label className="text-[12px] text-[#85858A]">Instructions (Prompt)</label>
+          </label>
+          <label className="text-[12px] text-[#85858A]">
+            Instructions (Prompt)
             <textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               rows={4}
               className="mt-1 w-full resize-none rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
             />
-          </div>
+          </label>
           <ComputerModePicker value={computerMode} onChange={setComputerMode} />
           <div className="mt-2 flex gap-2">
             <Button type="button" size="sm" disabled={saving || !name.trim()} onClick={() => void save()}>
@@ -2575,29 +2646,46 @@ function ComputerPane({
   const isRunning = computer?.state === "running";
   const isBooting = booting || computer?.state === "booting";
   const isError = computer?.state === "error";
-  const canOpen = Boolean(preview && isRunning);
+  const heldByOther = Boolean(computer?.busyBotName);
+  const paneState = isRunning ? "running" : isBooting ? "booting" : isError ? "error" : "offline";
 
   return (
     <div>
       <div className="mb-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isRunning ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(48,162,75,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#4ECB71]">
+            <span
+              data-testid="computer-state"
+              data-state={paneState}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(48,162,75,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#4ECB71]"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-[#30A24B] shadow-[0_0_6px_rgba(48,162,75,0.8)]" />
               Running
             </span>
           ) : isBooting ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(230,87,7,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FF8542]">
+            <span
+              data-testid="computer-state"
+              data-state={paneState}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(230,87,7,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FF8542]"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-[#E65707] animate-pulse" />
               Booting…
             </span>
           ) : isError ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(224,49,49,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FA5252]">
+            <span
+              data-testid="computer-state"
+              data-state={paneState}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(224,49,49,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FA5252]"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-[#E03131]" />
               Error
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1E1E22] px-2.5 py-0.5 text-[12px] font-medium text-[#85858A]">
+            <span
+              data-testid="computer-state"
+              data-state={paneState}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#1E1E22] px-2.5 py-0.5 text-[12px] font-medium text-[#85858A]"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-[#4E4E54]" />
               Offline
             </span>
@@ -2624,7 +2712,7 @@ function ComputerPane({
       </div>
 
       <div className="group relative aspect-[16/10] w-full overflow-hidden rounded-[14px] border border-[#232326] bg-[#0E0E10]">
-        {preview ? (
+        {!heldByOther && preview ? (
           <>
             <iframe
               ref={previewFrameRef}
@@ -2659,26 +2747,33 @@ function ComputerPane({
               </button>
             )}
           </>
-        ) : isRunning ? (
+        ) : !heldByOther && isRunning ? (
           <div className="grid h-full w-full place-items-center px-6 text-center">
             <div className="flex flex-col items-center gap-2 text-[#85858A]">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#3A3A40] border-t-[#30A24B]" />
+              {screenError ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#3A3A40] border-t-[#30A24B]" />
+              ) : null}
               <span
-                data-testid="computer-connecting"
+                data-testid={screenError ? "computer-connecting" : "computer-running"}
                 className="text-[13px] font-medium text-[#ECECEE]"
               >
-                {screenError || "Connecting desktop…"}
+                {screenError || "Desktop is running"}
               </span>
-              <Button type="button" variant="outline" size="sm" onClick={onRetryScreen}>
-                Retry
-              </Button>
+              {screenError ? (
+                <Button type="button" variant="outline" size="sm" onClick={onRetryScreen}>
+                  Retry
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : (
           <button
             type="button"
-            className="grid h-full w-full place-items-center px-6 text-center cursor-pointer"
+            data-testid="computer-start"
+            disabled={Boolean(computer?.busyBotName)}
+            className="grid h-full w-full place-items-center px-6 text-center cursor-pointer disabled:cursor-not-allowed"
             onClick={() => {
+              if (computer?.busyBotName) return;
               if (isRunning) onOpenFullscreen();
               else onTakeControl();
             }}
@@ -2690,8 +2785,9 @@ function ComputerPane({
               </div>
             ) : computer?.busyBotName ? (
               <div className="flex flex-col items-center gap-1 text-[#85858A]">
-                <span className="text-[14px] font-medium text-[#ECECEE]">{computer.busyBotName}</span>
-                <span className="text-[12px]">is using the computer</span>
+                <span className="text-[14px] font-medium text-[#ECECEE]">
+                  {computer.busyBotName} is using the computer
+                </span>
               </div>
             ) : isError ? (
               <div className="flex flex-col items-center gap-1 text-[#FA5252]">
@@ -2716,7 +2812,7 @@ function ComputerPane({
       </div>
 
       <div className="mt-3 flex items-center justify-between">
-        <span data-testid="computer-label" className="text-[13px] text-[#85858A]">
+        <span data-testid="computer-label" data-mode={mode} className="text-[13px] text-[#85858A]">
           {computer?.busyBotName
             ? `${computer.busyBotName} is using it`
             : computer?.controlHolder === "user"
@@ -2724,7 +2820,7 @@ function ComputerPane({
               : label}
         </span>
         <div className="flex items-center gap-2">
-          {isRunning ? (
+          {isRunning && !heldByOther ? (
             <Button type="button" variant="ghost" size="sm" onClick={onOpenFullscreen} className="text-[13px] text-[#ECECEE]">
               Open screen
             </Button>
@@ -2734,7 +2830,13 @@ function ComputerPane({
               Release
             </Button>
           ) : (
-            <Button type="button" variant="outline" size="sm" onClick={onTakeControl}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={Boolean(computer?.busyBotName)}
+              onClick={onTakeControl}
+            >
               Take control
             </Button>
           )}
@@ -2767,28 +2869,45 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
   const [content, setContent] = useState("");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const factsRef = useRef<HTMLTextAreaElement>(null);
 
   async function refresh() {
     setDocuments(await api.memory.list(botId));
   }
 
   useEffect(() => {
-    void refresh().catch((err: unknown) => {
-      onLater(err instanceof Error ? err.message : "Could not load memory");
-    });
-    const poll = window.setInterval(() => void refresh().catch(() => undefined), 10000);
-    return () => window.clearInterval(poll);
-  }, [botId]);
+    let cancelled = false;
+    async function reload() {
+      try {
+        const docs = await api.memory.list(botId);
+        if (!cancelled) setDocuments(docs);
+      } catch (err) {
+        if (!cancelled) {
+          onLater(err instanceof Error ? err.message : "Could not load memory");
+        }
+      }
+    }
+    void reload();
+    const poll = window.setInterval(() => void reload(), 10000);
+    const onChanged = () => void reload();
+    window.addEventListener("artek-memory-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.clearInterval(poll);
+      window.removeEventListener("artek-memory-changed", onChanged);
+    };
+  }, [botId, onLater]);
 
   async function create() {
-    if (!content.trim()) return;
+    const text = (factsRef.current?.value ?? content).trim();
+    if (!text) return;
     setBusy(true);
     try {
       await api.memory.create({
         scope,
         botId: scope === "bot" ? botId : undefined,
         path: `entries/owner/note-${Date.now()}.md`,
-        content: content.trim(),
+        content: text,
       });
       setContent("");
       setCreating(false);
@@ -2929,6 +3048,7 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
             </button>
           </div>
           <textarea
+            ref={factsRef}
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder="Facts to remember"
@@ -2940,7 +3060,8 @@ function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string
               type="button"
               variant="cream"
               size="sm"
-              disabled={busy || !content.trim()}
+              data-testid="memory-save"
+              disabled={busy}
               onClick={() => void create()}
             >
               Save

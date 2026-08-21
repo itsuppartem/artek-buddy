@@ -127,7 +127,7 @@ class ComputerService:
                 self.client.stop(record.provider_ref)
             except Exception:
                 log.exception("supervisor stop failed")
-        record.state = "stopped"
+        record.state = "suspended"
         record.control_holder = "none"
         record.control_lease_id = None
         record.control_lease_expires_at = None
@@ -283,6 +283,8 @@ class ComputerService:
         record = self.store.get_computer_for_bot(bot)
         record = self._expire_lease(record)
         if record.state not in {"running", "booting"} or not record.provider_ref:
+            return ScreenUrlResult(url=None)
+        if record.kind == "fake" or self.settings.sandbox_provider == "fake":
             return ScreenUrlResult(url=None)
         interactive = self._user_has_control(record)
         control_ready = False
@@ -456,7 +458,11 @@ class ComputerService:
             box = self.client.inspect(provider_ref)
         except Exception:
             return False
-        return bool(box.running and (box.view_port or box.control_port))
+        if not box.running:
+            return False
+        if self.settings.sandbox_provider == "fake" or (box.id or "").startswith("fake-"):
+            return True
+        return bool(box.view_port or box.control_port)
 
     def _touch(self, record: ComputerRecord) -> ComputerRecord:
         record.sleep_at = isoformat_utc(datetime.now(timezone.utc) + self._idle_ttl())

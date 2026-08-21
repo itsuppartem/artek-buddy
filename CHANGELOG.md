@@ -2,15 +2,20 @@
 
 ## Unreleased
 
-### Added
-- Client window map in `client/WINDOW.md` (pairing, shell, thread blocks, computer pane).
-- GitHub Actions `test` workflow on pull requests and on `develop` / `main`: `backend` (scripted/fake HTTP), `ui` (installed `.deb` + scripted window, no model key), and optional `live` Grok canary when `CURSOR_API_KEY` is set. Jobs never print tokens, keys, or compose config. The suite does not talk to the owner Pi stack.
-- `ui` job covers boot screens: proxy Retry, pairing URL/name fail and happy, thread auth / host / action banners.
-- `ui` job covers the sidebar: search, context menu (pin, unread, edit, duplicate, archive, delete), empty inbox, Plugins toast, You label.
-- `ui` job covers thread blocks, reply, attach chips, and the replied attention banner.
+## [0.10.24] - 2026-08-21
 
-### Removed
-- The previous host, Vitest, Playwright, integration, and demo-recorder suite.
+### Fixed
+- The attention pill no longer covers Send or Load earlier. It sits under the thread header. Opening that chat or Dismiss clears it. Another bot finishing does not steal the open chat.
+- Pairing no longer opens the computer pane or auto-boots the desktop.
+- Switching chats no longer drops `run.completed`, so the replied / failed pill can show for the other chat.
+- Auto owner-file jobs no longer hang the host when the client never posts the file.
+- A 403 on an owner path still shows on the consent card after Answered.
+- Settings opened from the computer pane returns to that pane. Team Reset stays disabled while another bot holds the box.
+- Stop on a running computer leaves it Sleeping, not a dead preview.
+- The fake CI desktop does not mint a noVNC URL, so the pane does not sit on Connecting.
+
+### Added
+- Scripted UI coverage for boot, sidebar, thread, attach, consent, computer pane, Create/Settings, and attention banners.
 
 ## [0.10.23] - 2026-08-20
 

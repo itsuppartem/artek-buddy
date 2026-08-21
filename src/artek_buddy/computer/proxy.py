@@ -49,9 +49,13 @@ def signed_target(url: str, secret: str) -> Any:
 def fetch_novnc(url: str, method: str) -> Response:
     request = urllib.request.Request(url, method=method)
     deadline = time.monotonic() + SCREEN_STARTUP_RETRY_SECONDS
+    last_err: OSError | None = None
     while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
         try:
-            with urllib.request.urlopen(request, timeout=30) as resp:
+            with urllib.request.urlopen(request, timeout=max(0.1, remaining)) as resp:
                 data = resp.read()
                 content_type = resp.headers.get("Content-Type") or "application/octet-stream"
                 return Response(content=data, media_type=content_type, status_code=resp.status)
@@ -61,15 +65,15 @@ def fetch_novnc(url: str, method: str) -> Response:
             # A computer is marked running just before noVNC begins accepting
             # connections. Keep the original iframe request open for this small
             # startup window instead of serving a transient 502 JSON page.
-            if time.monotonic() >= deadline:
-                log.warning("screen unreachable: %s", err)
-                return Response(
-                    content=SCREEN_UNREACHABLE_HTML,
-                    media_type="text/html; charset=utf-8",
-                    status_code=502,
-                    headers={"Cache-Control": "no-store"},
-                )
-            time.sleep(SCREEN_STARTUP_RETRY_INTERVAL_SECONDS)
+            last_err = err
+            time.sleep(min(SCREEN_STARTUP_RETRY_INTERVAL_SECONDS, max(0.0, deadline - time.monotonic())))
+    log.warning("screen unreachable: %s", last_err)
+    return Response(
+        content=SCREEN_UNREACHABLE_HTML,
+        media_type="text/html; charset=utf-8",
+        status_code=502,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 async def proxy_novnc_http(request: Request, secret: str) -> Response:

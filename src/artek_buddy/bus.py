@@ -8,6 +8,7 @@ from artek_buddy.contracts.events import ProductEvent
 
 HEARTBEAT = object()
 REPLAY_GAP = object()
+WORKSPACE_CHANNEL = "*"
 
 
 class EventHub:
@@ -18,10 +19,17 @@ class EventHub:
         self._subs: dict[str, set[asyncio.Queue[ProductEvent]]] = defaultdict(set)
         self._buf: dict[str, list[ProductEvent]] = defaultdict(list)
         self._seq: dict[str, int] = defaultdict(int)
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     def next_seq(self, bot_id: str) -> int:
         self._seq[bot_id] += 1
         return self._seq[bot_id]
+
+    def _bind_loop(self) -> None:
+        try:
+            self._loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
 
     def publish(self, event: ProductEvent) -> None:
         bot_id = event.bot_id
@@ -29,7 +37,15 @@ class EventHub:
         buf.append(event)
         if len(buf) > self.buffer_size:
             del buf[: len(buf) - self.buffer_size]
-        for queue in list(self._subs[bot_id]):
+        self._deliver(event, self._subs[bot_id])
+        self._deliver(event, self._subs[WORKSPACE_CHANNEL])
+
+    def _deliver(self, event: ProductEvent, queues: set[asyncio.Queue[ProductEvent]]) -> None:
+        for queue in list(queues):
+            self._enqueue(queue, event)
+
+    def _enqueue(self, queue: asyncio.Queue[ProductEvent], event: ProductEvent) -> None:
+        def put() -> None:
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
@@ -41,6 +57,16 @@ class EventHub:
                     queue.put_nowait(event)
                 except asyncio.QueueFull:
                     pass
+
+        loop = self._loop
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if loop is not None and loop.is_running() and running is not loop:
+            loop.call_soon_threadsafe(put)
+        else:
+            put()
 
     def has_event(self, bot_id: str, event_id: str) -> bool:
         return any(event.id == event_id for event in self._buf.get(bot_id, ()))
@@ -65,6 +91,7 @@ class EventHub:
         heartbeat_s: float = 15.0,
     ) -> AsyncIterator[ProductEvent | object]:
         queue: asyncio.Queue[ProductEvent] = asyncio.Queue(maxsize=256)
+        self._bind_loop()
         self._subs[bot_id].add(queue)
         try:
             if after and not self.has_event(bot_id, after):
@@ -80,3 +107,20 @@ class EventHub:
                     yield HEARTBEAT
         finally:
             self._subs[bot_id].discard(queue)
+
+    async def subscribe_workspace(
+        self,
+        heartbeat_s: float = 15.0,
+    ) -> AsyncIterator[ProductEvent | object]:
+        queue: asyncio.Queue[ProductEvent] = asyncio.Queue(maxsize=256)
+        self._bind_loop()
+        self._subs[WORKSPACE_CHANNEL].add(queue)
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=heartbeat_s)
+                    yield event
+                except asyncio.TimeoutError:
+                    yield HEARTBEAT
+        finally:
+            self._subs[WORKSPACE_CHANNEL].discard(queue)

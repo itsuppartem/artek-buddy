@@ -1,0 +1,321 @@
+from __future__ import annotations
+
+import pytest
+from playwright.sync_api import Page, expect
+
+from tests.live.helpers import (
+    bot_row,
+    composer,
+    create_named_bot,
+    open_chat,
+    pair_fresh,
+    send_message,
+    thread_header,
+    unique_bot,
+)
+
+E2E_CARD_KEY = "City"
+E2E_CARD_VALUE = "Belgrade"
+E2E_CHILD_ARCHIVED = "Old pal"
+E2E_CHILD_NAME = "Spawned pal"
+E2E_COMPUTER_TEXT = "Opened Chromium"
+E2E_META_TEXT = "Remembered: Prefers short answers without emoji"
+E2E_PROGRESS_TEXT = "Checking the desktop"
+E2E_ASK_QUESTION = "Which city?"
+E2E_ASK_DETAIL = "I can open Wikipedia on the desktop after you pick one."
+E2E_ASK_FREE_QUESTION = "What should I call you?"
+E2E_DRAFT_LEAK = "grade's current weather from a public API"
+E2E_OLDER_PREFIX = "e2e-old-"
+
+pytestmark = pytest.mark.live
+
+TINY_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+def _named(page: Page, client_url: str, host_url: str, prefix: str) -> str:
+    name = unique_bot(prefix)
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    return name
+
+
+def test_thread_blocks_render_and_child_opens_other_chat(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Blocks")
+    send_message(page, "please e2e-thread-blocks", name)
+    expect(page.get_by_test_id("meta-block")).to_contain_text(E2E_META_TEXT, timeout=15_000)
+    expect(page.get_by_test_id("progress-block")).to_contain_text(E2E_PROGRESS_TEXT)
+    card = page.get_by_test_id("check-card")
+    expect(card).to_contain_text(E2E_CARD_KEY)
+    expect(card).to_contain_text(E2E_CARD_VALUE)
+    expect(page.get_by_test_id("computer-card")).to_contain_text(E2E_COMPUTER_TEXT)
+    child = page.get_by_test_id("child-bot-card").filter(has_text=E2E_CHILD_NAME)
+    expect(child).to_be_enabled()
+    expect(page.get_by_test_id("child-bot-card").filter(has_text=E2E_CHILD_ARCHIVED)).to_be_disabled()
+    child.click()
+    expect(thread_header(page)).to_contain_text(E2E_CHILD_NAME, timeout=8_000)
+    expect(thread_header(page)).not_to_contain_text(name)
+
+
+def test_open_chat_has_no_replied_banner(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Here")
+    send_message(page, "hello", name)
+    expect(page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")).to_be_visible(
+        timeout=15_000
+    )
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+
+
+def test_other_chat_replied_banner_opens_that_bot(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("Talk")
+    watcher = unique_bot("Watch")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-slow")
+    expect(box).to_have_value("please e2e-slow")
+    box.press("Enter")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="please e2e-slow")
+    ).to_be_visible()
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    banner = page.get_by_test_id("attention-alert")
+    expect(banner).to_contain_text(f"{speaker} replied", timeout=15_000)
+    expect(thread_header(page)).to_contain_text(watcher)
+    send_box = page.get_by_role("button", name="Send", exact=True)
+    banner_box = banner.bounding_box()
+    send_hit = send_box.bounding_box()
+    assert banner_box and send_hit
+    assert banner_box["y"] + banner_box["height"] < send_hit["y"]
+    banner.get_by_role("button").first.click()
+    expect(thread_header(page)).to_contain_text(speaker, timeout=8_000)
+
+
+def test_thread_reply_quote_and_cancel(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Quote")
+    send_message(page, "hello", name)
+    bot_msg = page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")
+    expect(bot_msg).to_be_visible(timeout=15_000)
+    bot_msg.click(button="right", timeout=8_000)
+    menu = page.get_by_role("menu", name="Message actions")
+    expect(menu).to_be_visible(timeout=8_000)
+    menu.get_by_role("menuitem", name="Reply").click(timeout=5_000)
+    bar = page.get_by_test_id("reply-bar")
+    expect(bar).to_be_visible(timeout=8_000)
+    expect(bar).to_contain_text("Replying to")
+    page.get_by_label("Cancel reply").click()
+    expect(bar).to_have_count(0)
+    bot_msg.click(button="right", timeout=8_000)
+    page.get_by_role("menuitem", name="Reply").click(timeout=5_000)
+    expect(bar).to_be_visible()
+    send_message(page, "quoted back", name)
+    quoted = page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="quoted back")
+    expect(quoted).to_be_visible(timeout=15_000)
+    expect(quoted).to_contain_text("ok")
+
+
+def test_composer_drop_attaches_chip(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Drop")
+    page.get_by_test_id("thread-composer").evaluate(
+        """el => {
+          const data = new DataTransfer();
+          data.items.add(new File([new Uint8Array([65, 66, 67])], "drop.txt", {type: "text/plain"}));
+          el.dispatchEvent(new DragEvent("drop", {bubbles: true, cancelable: true, dataTransfer: data}));
+        }"""
+    )
+    expect(page.get_by_test_id("attach-chip")).to_contain_text("drop.txt", timeout=5_000)
+
+
+def test_attach_via_plus(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Plus")
+    with page.expect_file_chooser() as chooser:
+        page.get_by_role("button", name="Attach files").click()
+    chooser.value.set_files({"name": "shot.png", "mimeType": "image/png", "buffer": TINY_PNG})
+    chip = page.get_by_test_id("attach-chip")
+    expect(chip).to_contain_text("shot.png", timeout=5_000)
+    expect(page.get_by_test_id("attach-preview")).to_be_visible(timeout=5_000)
+    chip.get_by_label("Remove shot.png").click(timeout=5_000)
+    expect(chip).to_have_count(0)
+
+
+def test_composer_shift_enter_and_undo(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Keys")
+    box = composer(page)
+    box.fill("line one")
+    box.press("Shift+Enter")
+    box.type("line two")
+    expect(box).to_have_value("line one\nline two")
+    box.press("Control+z")
+    expect(box).not_to_have_value("line one\nline two")
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
+
+
+def test_load_earlier_messages(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Older")
+    other = unique_bot("Other")
+    send_message(page, "please e2e-load-earlier", name)
+    create_named_bot(page, other)
+    open_chat(page, name)
+    earlier = page.get_by_test_id("load-earlier")
+    expect(earlier).to_be_visible(timeout=15_000)
+    earlier.click()
+    expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible(timeout=15_000)
+
+
+def test_ask_options_custom_and_detail(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Ask")
+    send_message(page, "please e2e-ask", name)
+    card = page.get_by_test_id("ask-card")
+    expect(card).to_be_visible(timeout=15_000)
+    expect(card).to_contain_text(E2E_ASK_QUESTION)
+    expect(page.get_by_test_id("ask-detail")).to_contain_text(E2E_ASK_DETAIL)
+    page.get_by_text("Type custom reply…").click()
+    page.get_by_label("Answer").fill("Lisbon")
+    page.get_by_role("button", name="Send answer").click()
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="Lisbon")).to_be_visible(
+        timeout=8_000
+    )
+
+
+def test_ask_free_edit_first(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Free")
+    send_message(page, "please e2e-ask-free", name)
+    card = page.get_by_test_id("ask-card")
+    expect(card).to_be_visible(timeout=15_000)
+    expect(card).to_contain_text(E2E_ASK_FREE_QUESTION)
+    page.get_by_role("button", name="Edit first").click()
+    page.get_by_label("Answer").fill("Sam")
+    page.get_by_role("button", name="Send answer").click()
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="Sam")).to_be_visible(
+        timeout=8_000
+    )
+
+
+def test_ask_free_send_it(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "SendIt")
+    send_message(page, "please e2e-ask-free", name)
+    page.get_by_role("button", name="Send it").click()
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="approved")).to_be_visible(
+        timeout=8_000
+    )
+
+
+def test_hidden_live_draft_is_not_shown(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Draft")
+    send_message(page, "please e2e-hide-draft", name)
+    expect(page.get_by_text(E2E_DRAFT_LEAK)).to_have_count(0)
+    expect(page.locator('[data-testid="thread-message"][data-role="bot"]').last).to_contain_text(
+        "Belgrade is 22°C",
+        timeout=15_000,
+    )
+
+
+def test_file_download_and_image_preview(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "File")
+    send_message(page, "please e2e-send-file", name)
+    card = page.get_by_test_id("file-card")
+    expect(card).to_contain_text("notes.txt", timeout=15_000)
+    card.get_by_role("button", name="Download").click()
+    expect(page.get_by_test_id("file-saved")).to_contain_text("Saved to", timeout=8_000)
+    send_message(page, "please e2e-send-image", name)
+    image = page.get_by_test_id("file-card").filter(has_text="shot.png")
+    expect(image).to_be_visible(timeout=15_000)
+    expect(image.get_by_test_id("file-preview")).to_be_visible()
+
+
+def test_typing_indicator_and_lead_stop(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Stop")
+    box = composer(page)
+    box.fill("please e2e-slow")
+    expect(box).to_have_value("please e2e-slow")
+    box.press("Enter")
+    expect(page.get_by_test_id("typing-indicator")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("thread-stop").click()
+    expect(page.get_by_test_id("run-error")).to_be_visible(timeout=15_000)
+
+
+def test_subagent_stop_while_running(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Worker")
+    send_message(page, "please e2e-subagent-hang", name)
+    card = page.get_by_test_id("subagent-card")
+    expect(card).to_be_visible(timeout=15_000)
+    expect(card).to_contain_text("#")
+    card.get_by_role("button", name="Stop").click()
+    expect(card.get_by_role("button", name="Restart")).to_be_visible(timeout=20_000)
+
+
+def test_takeover_banner_on_other_chat(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("Need")
+    watcher = unique_bot("Idle")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-takeover")
+    expect(box).to_have_value("please e2e-takeover")
+    box.press("Enter")
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    banner = page.get_by_test_id("attention-alert")
+    expect(banner).to_contain_text(f"{speaker} needs you", timeout=15_000)
+    expect(thread_header(page)).to_contain_text(watcher)
+    page.get_by_test_id("attention-dismiss").click()
+    expect(banner).to_have_count(0)
+
+
+def test_notify_off_mutes_replied_not_ask(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("Mute")
+    watcher = unique_bot("Hear")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    thread_header(page).click()
+    expect(page.get_by_text("Bot Settings")).to_be_visible()
+    page.get_by_test_id("notify-on-finish").uncheck()
+    page.get_by_label("Close settings").click()
+    create_named_bot(page, watcher)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-slow")
+    expect(box).to_have_value("please e2e-slow")
+    box.press("Enter")
+    open_chat(page, watcher)
+    expect(bot_row(page, speaker)).to_contain_text("slow done", timeout=15_000)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("research a city")
+    expect(box).to_have_value("research a city")
+    box.press("Enter")
+    open_chat(page, watcher)
+    expect(page.get_by_test_id("attention-alert")).to_contain_text(f"{speaker} is asking", timeout=15_000)
+
+
+def test_failed_banner_on_other_chat(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("Boom")
+    watcher = unique_bot("See")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-fail-slow")
+    expect(box).to_have_value("please e2e-fail-slow")
+    box.press("Enter")
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    banner = page.get_by_test_id("attention-alert")
+    expect(banner).to_contain_text(f"{speaker} failed", timeout=15_000)
+    expect(thread_header(page)).to_contain_text(watcher)
+    page.get_by_test_id("attention-dismiss").click()
+    expect(banner).to_have_count(0)

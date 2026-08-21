@@ -421,8 +421,11 @@ class ConsentHub:
         with self._lock:
             self._results[request_id] = dict(payload)
             waiter = self._result_waiters.get(request_id)
+            file_waiter = self._file_waiters.get(request_id)
         if waiter is not None:
             waiter.set()
+        if file_waiter is not None:
+            file_waiter.set()
         return True
 
     def take_owner_result(self, request_id: str | None) -> dict[str, Any] | None:
@@ -505,12 +508,42 @@ class ConsentHub:
         device_id: str | None,
     ) -> tuple[str, bytes] | None:
         """Always-grant path: no card, ask the paired client to send the file."""
+        request_id = self.start_auto_owner_read(
+            bot_id=bot_id,
+            path=path,
+            run_id=run_id,
+            device_id=device_id,
+        )
+        if not request_id:
+            return None
+        found = self.take_owner_file(request_id)
+        if run_id:
+            try:
+                self.store.mark_run_running(run_id)
+            except Exception:
+                log.exception("failed to resume run after owner file")
+        return found
+
+    def start_auto_owner_read(
+        self,
+        *,
+        bot_id: str,
+        path: str,
+        run_id: str | None,
+        device_id: str | None,
+    ) -> str | None:
+        """Publish the auto job on the caller’s thread (the event loop). Wait separately."""
         _ = device_id
         bot = self.store.get_bot(bot_id)
         if bot is None:
             return None
         request_id = new_id("cns")
         self.last_request_id = request_id
+        self._jobs[request_id] = {
+            "action_class": CLASS_OWNER_READ,
+            "path": path,
+            "kind": "read",
+        }
         self.store.create_consent_request(
             request_id,
             bot_id=bot_id,
@@ -540,13 +573,7 @@ class ConsentHub:
             },
             run_id,
         )
-        found = self.take_owner_file(request_id)
-        if run_id:
-            try:
-                self.store.mark_run_running(run_id)
-            except Exception:
-                log.exception("failed to resume run after owner file")
-        return found
+        return request_id
 
     def take_owner_file(self, request_id: str | None) -> tuple[str, bytes] | None:
         if not request_id:
@@ -555,6 +582,8 @@ class ConsentHub:
         with self._lock:
             if request_id in self._files:
                 return self._files.pop(request_id)
+            if request_id in self._results:
+                return None
             self._file_waiters[request_id] = waiter
         waiter.wait(OWNER_FILE_WAIT)
         with self._lock:

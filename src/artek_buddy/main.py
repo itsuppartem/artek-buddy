@@ -338,15 +338,21 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
     else:
         record = history.get_computer_for_bot(bot)
         status = record.status_for(bot.id, bot.computer_mode, history.busy_bot_name(record, bot.id))
+    run = history.latest_run(bot.id)
+    pending = None
+    run_status = getattr(getattr(run, "status", None), "value", None) or getattr(run, "status", None)
+    if run is not None and run_status == "waiting_input":
+        pending = history.pending_auto_consent_id(bot.id, run.id)
     return ThreadSnapshot(
         bot_id=bot.id,
         thread_id=bot.thread_id,
         cursor=history.latest_seq(bot.thread_id),
         messages=page.messages,
         older_cursor=page.older_cursor,
-        run=history.latest_run(bot.id),
+        run=run,
         computer=status,
         subagents=sorted(history.list_subagents(bot.id), key=lambda item: item.index),
+        pending_auto_consent_id=pending,
     )
 
 
@@ -1501,6 +1507,29 @@ async def mark_thread_unread(bot_id: str, history: HistoryStore = Depends(store)
         return OkResponse(ok=True)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
+
+
+@app.get("/v1/events", dependencies=[Depends(require_auth)])
+async def subscribe_workspace_events(
+    events: EventHub = Depends(hub),
+) -> StreamingResponse:
+    async def gen():
+        async for item in events.subscribe_workspace():
+            if item is HEARTBEAT:
+                yield ": keepalive\n\n"
+                continue
+            data = item.model_dump_json()
+            yield f"id: {item.id}\nevent: {item.type.value}\ndata: {data}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/v1/threads/{bot_id}/events", dependencies=[Depends(require_auth)])

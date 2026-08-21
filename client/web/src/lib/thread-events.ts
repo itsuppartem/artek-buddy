@@ -81,10 +81,19 @@ export function reduceThreadSnapshot(
   }
   if (event.type === "run.waiting_input") {
     const run = prev.run;
-    if (!run || (event.runId && run.id !== event.runId) || run.status === "waiting_input") {
+    if (!run || (event.runId && run.id !== event.runId)) {
       return prev;
     }
-    return { ...prev, cursor: event.seq, run: { ...run, status: "waiting_input" } };
+    const autoId =
+      event.payload.auto === true && typeof event.payload.consentId === "string"
+        ? event.payload.consentId
+        : prev.pendingAutoConsentId ?? null;
+    return {
+      ...prev,
+      cursor: event.seq,
+      run: { ...run, status: "waiting_input" },
+      pendingAutoConsentId: autoId,
+    };
   }
   if (
     event.type === "run.completed" ||
@@ -106,6 +115,7 @@ export function reduceThreadSnapshot(
       ...prev,
       cursor: event.seq,
       messages: cleanMessages,
+      pendingAutoConsentId: null,
       run: prev.run ? { ...prev.run, status, error: error ?? null } : prev.run,
     };
   }

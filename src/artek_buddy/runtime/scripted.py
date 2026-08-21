@@ -4,10 +4,18 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from artek_buddy.config import Settings
-from artek_buddy.consent import CLASS_BROWSE, CLASS_OWNER_EXEC, CLASS_PAGE, OWNER_HOME_SCOPE
+from artek_buddy.consent import (
+    CLASS_BROWSE,
+    CLASS_OWNER_EXEC,
+    CLASS_OWNER_READ,
+    CLASS_OWNER_WRITE,
+    CLASS_PAGE,
+    OWNER_HOME_SCOPE,
+)
 from artek_buddy.db.shaping import new_id
 from artek_buddy.runtime.base import RuntimeBase
 from artek_buddy.runtime.tools import ProductTools
@@ -22,7 +30,26 @@ E2E_CLOSE_STATUS = "Closing Chromium"
 E2E_SLOW_ANSWER = "slow done"
 E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C"
 E2E_ASK_QUESTION = "Which city?"
+E2E_ASK_FREE_QUESTION = "What should I call you?"
 E2E_FAIL_ERROR = "scripted fail"
+E2E_META_TEXT = "Remembered: Prefers short answers without emoji"
+E2E_PROGRESS_TEXT = "Checking the desktop"
+E2E_CARD_KEY = "City"
+E2E_CARD_VALUE = "Belgrade"
+E2E_COMPUTER_TEXT = "Opened Chromium"
+E2E_CHILD_NAME = "Spawned pal"
+E2E_CHILD_ARCHIVED = "Old pal"
+E2E_SUBAGENT_NAME = "Researcher"
+E2E_SUBAGENT_TASK = "please e2e-slow now"
+E2E_OLDER_PREFIX = "e2e-old-"
+E2E_OLDER_COUNT = 51
+E2E_HANG_S = 12.0
+E2E_ASK_DETAIL = "I can open Wikipedia on the desktop after you pick one."
+E2E_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
 
 
 @dataclass
@@ -31,11 +58,14 @@ class ScriptedStep:
     tool: str | None = None
     args: dict[str, Any] = field(default_factory=dict)
     consent: dict[str, Any] | None = None
+    blocks: list[dict[str, Any]] | None = None
     result: str | None = None
     status: str | None = None
     error: str | None = None
     raise_error: str | None = None
     delay_s: float | None = None
+    write_home: tuple[str, bytes] | None = None
+    owner_auto_path: str | None = None
 
 
 def scripted_consent(
@@ -44,6 +74,8 @@ def scripted_consent(
     scope_key: str,
     summary: str,
     detail: str | None = None,
+    path: str | None = None,
+    job: dict[str, Any] | None = None,
 ) -> ScriptedStep:
     return ScriptedStep(
         consent={
@@ -51,6 +83,8 @@ def scripted_consent(
             "scope_key": scope_key,
             "summary": summary,
             "detail": detail,
+            "path": path,
+            "job": job,
         }
     )
 
@@ -73,6 +107,35 @@ def scripted_delay(seconds: float) -> ScriptedStep:
 
 def scripted_finish(result: str = "ok", status: str = "completed", error: str | None = None) -> ScriptedStep:
     return ScriptedStep(result=result, status=status, error=error)
+
+
+def scripted_blocks(*blocks: dict[str, Any]) -> ScriptedStep:
+    return ScriptedStep(blocks=list(blocks))
+
+
+def _bind_block_values(value: Any, bot_id: str | None) -> Any:
+    if value == "$bot":
+        return bot_id or "bot_unknown"
+    if isinstance(value, dict):
+        return {key: _bind_block_values(item, bot_id) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_bind_block_values(item, bot_id) for item in value]
+    return value
+
+
+def _materialize_blocks(store: Any, blocks: list[dict[str, Any]], parent_bot_id: str | None) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for raw in blocks:
+        block = dict(raw)
+        if block.get("kind") == "child_bot" and block.get("bot_id") == "$new" and store is not None:
+            child = store.create_bot(
+                name=str(block.get("name") or "Child"),
+                title=str(block.get("title") or ""),
+            )
+            block["bot_id"] = child.id
+            block["status"] = "created"
+        out.append(_bind_block_values(block, parent_bot_id))
+    return out
 
 
 def _user_tail(prompt: str) -> str:
@@ -106,15 +169,85 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish("I'll remember that."),
         ]
+    if "e2e-thread-blocks" in text:
+        return [
+            scripted_blocks(
+                {"kind": "meta", "text": E2E_META_TEXT},
+                {"kind": "progress", "text": E2E_PROGRESS_TEXT},
+                {"kind": "card", "lines": [{"k": E2E_CARD_KEY, "v": E2E_CARD_VALUE}]},
+                {"kind": "text", "text": "Working on the desktop."},
+                {"kind": "computer", "state": "done", "text": E2E_COMPUTER_TEXT},
+                {
+                    "kind": "child_bot",
+                    "bot_id": "$new",
+                    "name": E2E_CHILD_NAME,
+                    "title": "helper",
+                    "status": "created",
+                },
+                {
+                    "kind": "child_bot",
+                    "bot_id": "bot_gone",
+                    "name": E2E_CHILD_ARCHIVED,
+                    "title": None,
+                    "status": "archived",
+                },
+            ),
+            scripted_finish("ok"),
+        ]
+    if "e2e-ask-free" in text:
+        return [
+            scripted_blocks(
+                {
+                    "kind": "ask",
+                    "text": E2E_ASK_FREE_QUESTION,
+                    "status": "pending",
+                }
+            ),
+            scripted_finish(""),
+        ]
     if "e2e-ask" in text:
         return [
             scripted_tool(
                 "ask_user",
                 question=E2E_ASK_QUESTION,
                 options=["Belgrade", "Berlin"],
+                detail=E2E_ASK_DETAIL,
             ),
             scripted_finish(""),
         ]
+    if "e2e-subagent-hang" in text:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name=E2E_SUBAGENT_NAME,
+                task="please e2e-hang now",
+            ),
+            scripted_finish("worker started"),
+        ]
+    if "e2e-subagent" in text:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name=E2E_SUBAGENT_NAME,
+                task=E2E_SUBAGENT_TASK,
+            ),
+            scripted_finish("worker started"),
+        ]
+    if "e2e-takeover" in text:
+        return [
+            ScriptedStep(event=("computer.takeover.requested", {})),
+            scripted_finish("need you"),
+        ]
+    if "e2e-load-earlier" in text:
+        return [
+            *(
+                scripted_blocks({"kind": "text", "text": f"{E2E_OLDER_PREFIX}{index:02d}"})
+                for index in range(E2E_OLDER_COUNT)
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-hang" in text:
+        return [scripted_delay(E2E_HANG_S), scripted_finish("hang done")]
     if "research a city" in hay or "which city should we research" in hay:
         return [
             scripted_progress("I need a city before I open sources."),
@@ -229,6 +362,65 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(""),
         ]
+    if "e2e-consent-read-escape" in hay:
+        return [
+            scripted_consent(
+                action_class=CLASS_OWNER_READ,
+                scope_key=OWNER_HOME_SCOPE,
+                summary="Read /etc/passwd from your computer?",
+                detail="owner_read: /etc/passwd",
+                path="/etc/passwd",
+                job={"kind": "read", "path": "/etc/passwd"},
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-consent-read" in hay:
+        return [
+            scripted_consent(
+                action_class=CLASS_OWNER_READ,
+                scope_key=OWNER_HOME_SCOPE,
+                summary="Read notes.txt from your computer?",
+                detail="owner_read: notes.txt",
+                path="notes.txt",
+                job={"kind": "read", "path": "notes.txt"},
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-consent-write" in hay:
+        return [
+            scripted_consent(
+                action_class=CLASS_OWNER_WRITE,
+                scope_key=OWNER_HOME_SCOPE,
+                summary="Write ci-out.txt on your computer?",
+                detail="owner_write: ci-out.txt",
+                path="ci-out.txt",
+                job={"kind": "write", "path": "ci-out.txt", "text": "ci wrote this\n"},
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-consent-list" in hay:
+        return [
+            scripted_consent(
+                action_class=CLASS_OWNER_READ,
+                scope_key=OWNER_HOME_SCOPE,
+                summary="List ~ on your computer?",
+                detail="owner_list: ~",
+                path="~",
+                job={"kind": "list", "path": "~"},
+            ),
+            scripted_finish(""),
+        ]
+    if "e2e-consent-auto-read" in hay:
+        return [
+            ScriptedStep(owner_auto_path="notes.txt"),
+            scripted_finish("got notes"),
+        ]
+    if "e2e-send-image" in hay:
+        return [
+            ScriptedStep(write_home=("shot.png", E2E_PNG)),
+            scripted_tool("send_file", path="shot.png", name="shot.png", text="Here is shot.png"),
+            scripted_finish(""),
+        ]
     if "e2e-send-file-missing" in hay:
         return [
             scripted_tool("send_file", path="missing-notes.txt"),
@@ -248,6 +440,8 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         return [scripted_delay(2.5), scripted_finish(E2E_SLOW_ANSWER)]
     if "e2e-markdown-preview" in text:
         return [scripted_finish(E2E_MARKDOWN_ANSWER)]
+    if "e2e-fail-slow" in text:
+        return [scripted_delay(2.5), scripted_finish(E2E_FAIL_ERROR, status="failed", error=E2E_FAIL_ERROR)]
     if "e2e-fail" in text:
         return [scripted_finish(E2E_FAIL_ERROR, status="failed", error=E2E_FAIL_ERROR)]
     return [scripted_text("ok"), scripted_finish("ok")]
@@ -343,6 +537,31 @@ class ScriptedRuntime(RuntimeBase):
             if step.delay_s:
                 await asyncio.sleep(step.delay_s)
                 continue
+            if step.write_home:
+                name, data = step.write_home
+                home = Path(self.home_cwd(bot_id))
+                home.mkdir(parents=True, exist_ok=True)
+                (home / Path(name).name).write_bytes(data)
+                continue
+            if step.owner_auto_path:
+                hub = getattr(self, "consent", None)
+                if hub is not None:
+                    ctx_bot, ctx_run, _thread = self.resolve_turn_context(bot_id)
+                    request_id = hub.start_auto_owner_read(
+                        bot_id=ctx_bot or bot_id or "",
+                        path=step.owner_auto_path or "",
+                        run_id=ctx_run,
+                        device_id=None,
+                    )
+                    if request_id:
+                        await asyncio.sleep(0)
+                        await asyncio.to_thread(hub.take_owner_file, request_id)
+                    if ctx_run:
+                        try:
+                            self.store.mark_run_running(ctx_run)
+                        except Exception:
+                            log.exception("failed to resume run after owner file")
+                continue
             if step.raise_error:
                 raise AgentRuntimeError(step.raise_error)
             if step.consent:
@@ -356,7 +575,19 @@ class ScriptedRuntime(RuntimeBase):
                         summary=str(step.consent.get("summary") or "Allow this?"),
                         run_id=ctx_run,
                         detail=step.consent.get("detail"),
+                        path=step.consent.get("path"),
+                        job=step.consent.get("job"),
                     )
+                continue
+            if step.blocks:
+                posted = tools._append_bot_blocks(
+                    {},
+                    bot_id,
+                    _materialize_blocks(self.store, step.blocks, bot_id),
+                )
+                if not posted.get("ok"):
+                    raise AgentRuntimeError(str(posted.get("error") or "could not append blocks"))
+                await asyncio.sleep(0)
                 continue
             if step.tool:
                 tool_result = tools.execute(step.tool, step.args, bound_bot_id=bot_id)
