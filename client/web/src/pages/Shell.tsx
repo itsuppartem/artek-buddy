@@ -135,9 +135,8 @@ export function ShellPage() {
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
   const botsRef = useRef<Bot[]>([]);
-  const considerEventRef = useRef<(incoming: ProductEvent, bot: Bot, subscribedAt: number) => void>(
-    () => undefined,
-  );
+  const shellOpenedAt = useRef(Date.now());
+  const considerEventRef = useRef<(incoming: ProductEvent, bot: Bot) => void>(() => undefined);
   const [contextMenu, setContextMenu] = useState<{
     bot: Bot;
     position: ContextMenuPosition;
@@ -229,10 +228,10 @@ export function ShellPage() {
     });
   }
 
-  function considerEvent(incoming: ProductEvent, bot: Bot, subscribedAt: number) {
+  function considerEvent(incoming: ProductEvent, bot: Bot) {
     const granted = isAutoOwnerJob(incoming);
     if (granted) startOwnerFulfill(granted.consentId);
-    if (isHistoricalEvent(incoming, subscribedAt)) return;
+    if (isHistoricalEvent(incoming, shellOpenedAt.current)) return;
     const next = attentionFromEvent(incoming, bot.name);
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
   }
@@ -260,6 +259,8 @@ export function ShellPage() {
         if (!before) continue;
         const alert = attentionFromBotChange(before, next);
         if (alert) {
+          const updated = Date.parse(next.updatedAt);
+          if (Number.isFinite(updated) && updated < shellOpenedAt.current) continue;
           dispatchAlert(alert, `${next.id}:${alert.kind}:${next.updatedAt}`, next.notifyOnFinish);
         }
       }
@@ -468,7 +469,6 @@ export function ShellPage() {
     setComputer(null);
     expandedHistoryThread.current = null;
     const abort = new AbortController();
-    const subscribedAt = Date.now();
     void (async () => {
       const snap = await refreshThread(active.id).catch((err: unknown) => {
         showError(err, "Could not load thread");
@@ -495,7 +495,7 @@ export function ShellPage() {
             }
             applyThreadEvent(event, setSnapshot, setComputer);
             const bot = botsRef.current.find((item) => item.id === active.id) ?? active;
-            considerEvent(event, bot, subscribedAt);
+            considerEvent(event, bot);
             if (event.type === "run.completed" || event.type === "run.failed") {
               void refreshBots().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
@@ -525,7 +525,6 @@ export function ShellPage() {
 
   useEffect(() => {
     const abort = new AbortController();
-    const subscribedAt = Date.now();
     void (async () => {
       let retryMs = 250;
       while (!abort.signal.aborted) {
@@ -534,7 +533,7 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             retryMs = 250;
             const bot = botsRef.current.find((item) => item.id === event.botId);
-            if (bot) considerEventRef.current(event, bot, subscribedAt);
+            if (bot) considerEventRef.current(event, bot);
           }
         } catch (err) {
           if (abort.signal.aborted) break;
