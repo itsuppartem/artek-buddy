@@ -4,6 +4,10 @@
 
 ### Fixed
 - Restart or steer on a missing subagent is 404, same as stop.
+- Switching chats no longer follows the latest-updated row, blanks the thread, or jumps inbox order under the pointer.
+- The computer pane stays open after Settings, Release, and creating a bot.
+- An attachment chip cleared by Send cannot come back from a late native attach or clipboard read.
+- Focusing Name on Create does not mint a bot; Create is a form submit with an in-flight lock.
 
 ### Changed
 - SSE sends a keepalive as soon as the client connects, so the stream is live before the next event.

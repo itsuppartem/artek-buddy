@@ -29,7 +29,7 @@ import {
   type PendingFile,
 } from "../lib/uploads";
 import { isCronShape } from "../lib/cron";
-import { filterBots, inboxEmptyState, type SidebarView } from "../lib/sidebar";
+import { filterBots, inboxEmptyState, sortInboxBots, type SidebarView } from "../lib/sidebar";
 import {
   computerLabel,
   computerModeHint,
@@ -108,6 +108,9 @@ export function ShellPage() {
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const panelAfterSettings = useRef<"computer" | null>(null);
+  const panelAfterCreate = useRef<"computer" | null>(null);
+  const creatingBot = useRef(false);
+  const filesEpoch = useRef(0);
   const pendingAlerts = useRef(
     new Map<string, { alert: AttentionAlert; notifyOnFinish: boolean; key: string }>(),
   );
@@ -155,10 +158,10 @@ export function ShellPage() {
   const heldUnreadIds = useRef(new Set<string>());
   const messageScroll = useRef<HTMLDivElement>(null);
 
-  const active = bots.find((bot) => bot.id === botId) ?? (botId ? undefined : bots[0]);
+  const active = bots.find((bot) => bot.id === botId);
   activeIdRef.current = active?.id;
   botIdRef.current = botId;
-  const thread = active ? snapshot : null;
+  const thread = active && snapshot?.botId === active.id ? snapshot : null;
   const isBusy = Boolean(
     (thread?.run && isActive(thread.run.status)) ||
       (thread && (hasLive(thread) || hasActiveWorkers(thread))),
@@ -169,6 +172,7 @@ export function ShellPage() {
   }, [bots]);
 
   useEffect(() => {
+    filesEpoch.current += 1;
     setPendingFiles([]);
   }, [botId]);
 
@@ -292,10 +296,6 @@ export function ShellPage() {
     setArchivedBots(archivedList);
     if (archivedList.length === 0) setSidebarView("inbox");
     setBotsReady(true);
-    const routeId = botIdRef.current || activeIdRef.current;
-    if (!routeId || !list.some((bot) => bot.id === routeId)) {
-      navigate(list[0] ? `/app/${list[0].id}` : "/app", { replace: true });
-    }
     return list;
   }
   refreshBotsRef.current = refreshBots;
@@ -464,7 +464,21 @@ export function ShellPage() {
   }, []);
 
   useEffect(() => {
+    if (!botsReady) return;
+    if (botId && bots.some((bot) => bot.id === botId)) return;
+    const fallback = sortInboxBots(bots)[0];
+    if (!botId && fallback) {
+      navigate(`/app/${fallback.id}`, { replace: true });
+      return;
+    }
+    if (botId && !bots.some((bot) => bot.id === botId)) {
+      navigate(fallback ? `/app/${fallback.id}` : "/app", { replace: true });
+    }
+  }, [botsReady, botId, bots, navigate]);
+
+  useEffect(() => {
     if (!active) {
+      if (botId) return;
       sleepHeld.current = false;
       setSnapshot(null);
       setComputer(null);
@@ -479,7 +493,7 @@ export function ShellPage() {
     setScreenError(null);
     setScreenEpoch(0);
     screenRetries.current = 0;
-    setSnapshot(null);
+    setSnapshot((prev) => (prev?.botId === active.id ? prev : null));
     setComputer(null);
     expandedHistoryThread.current = null;
     const abort = new AbortController();
@@ -616,7 +630,7 @@ export function ShellPage() {
   }, [computerOpen]);
 
   const filtered = useMemo(
-    () => filterBots(bots, query, (bot) => stripMarkdown(bot.preview || bot.title)),
+    () => filterBots(sortInboxBots(bots), query, (bot) => stripMarkdown(bot.preview || bot.title)),
     [bots, query],
   );
   const filteredArchived = useMemo(
@@ -689,10 +703,15 @@ export function ShellPage() {
 
   function attachLocalPaths(paths: string[]) {
     if (!active || !paths.length) return;
+    const epoch = filesEpoch.current;
     void api.local
       .attachFiles(paths)
-      .then((payload) => queueFiles(filesFromAttachedPayload(payload.files)))
+      .then((payload) => {
+        if (epoch !== filesEpoch.current) return;
+        queueFiles(filesFromAttachedPayload(payload.files));
+      })
       .catch((err: unknown) => {
+        if (epoch !== filesEpoch.current) return;
         const classified = classifyError(err);
         errorKindRef.current = classified.kind;
         setErrorKind(classified.kind);
@@ -714,7 +733,9 @@ export function ShellPage() {
       attachLocalPaths(paths);
       return;
     }
+    const epoch = filesEpoch.current;
     void readClipboardFiles(event).then((extra) => {
+      if (epoch !== filesEpoch.current) return;
       if (extra.length) queueFiles(extra);
     });
   }
@@ -740,6 +761,7 @@ export function ShellPage() {
     const replyId = replyTo?.id ?? null;
     const targetId = active.id;
     if (textOverride == null) {
+      filesEpoch.current += 1;
       writeDraft("", true);
       setPendingFiles([]);
     }
@@ -882,9 +904,12 @@ export function ShellPage() {
     description: string;
     computerMode: ComputerMode;
   }) {
+    const name = input.name.trim();
+    if (!name || creatingBot.current) return;
+    creatingBot.current = true;
     try {
       const bot = await api.bots.create({
-        name: input.name.trim(),
+        name,
         title: input.title,
         description: input.description,
         instructions: input.description,
@@ -892,10 +917,18 @@ export function ShellPage() {
       });
       await refreshBots();
       navigate(`/app/${bot.id}`);
-      setPanel(null);
+      setPanel(panelAfterCreate.current);
+      panelAfterCreate.current = null;
     } catch (err) {
       showError(err, "Could not create chat");
+    } finally {
+      creatingBot.current = false;
     }
+  }
+
+  function openCreate() {
+    panelAfterCreate.current = panel === "computer" ? "computer" : null;
+    setPanel("create");
   }
 
   async function deleteBot(bot: Bot, deleteMemories: boolean = false) {
@@ -922,7 +955,7 @@ export function ShellPage() {
           <WindowChrome />
           <button
             type="button"
-            onClick={() => setPanel("create")}
+            onClick={() => openCreate()}
             className="app-no-drag text-[21px] text-[#7A7A80] hover:text-[#C9C9CE]"
             title="New bot"
             aria-label="New bot"
@@ -1206,7 +1239,7 @@ export function ShellPage() {
                 <Button type="button" onClick={() => setSidebarView("archived")}>
                   Open archived
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setPanel("create")}>
+                <Button type="button" variant="outline" onClick={() => openCreate()}>
                   Create bot
                 </Button>
               </div>
@@ -1224,7 +1257,7 @@ export function ShellPage() {
               <p className="mt-2 text-[14px] leading-5 text-[#85858A]">
                 Give it a purpose, then it gets its own chat, memory, routines, and computer.
               </p>
-              <Button type="button" className="mt-5" onClick={() => setPanel("create")}>
+              <Button type="button" className="mt-5" onClick={() => openCreate()}>
                 Create bot
               </Button>
             </div>
@@ -1399,7 +1432,13 @@ export function ShellPage() {
         {panel && (active || panel === "create") ? (
           <div className="ab-scroll h-full w-[384px] overflow-y-auto px-5 py-[17px]">
             {panel === "create" ? (
-              <CreateBotForm onCancel={() => setPanel(null)} onCreate={(input) => void createBot(input)} />
+              <CreateBotForm
+                onCancel={() => {
+                  setPanel(panelAfterCreate.current);
+                  panelAfterCreate.current = null;
+                }}
+                onCreate={(input) => void createBot(input)}
+              />
             ) : null}
             {panel === "settings" && active ? (
               <BotSettings
@@ -2250,7 +2289,13 @@ function CreateBotForm({
   const [description, setDescription] = useState("");
   const [computerMode, setComputerMode] = useState<ComputerMode>("team");
   return (
-    <div>
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!name.trim()) return;
+        onCreate({ name, title, description, computerMode });
+      }}
+    >
       <div className="mb-4 flex items-center justify-between">
         <span className="text-[13.5px] text-[#85858A]">New bot</span>
         <button type="button" aria-label="Cancel create" data-testid="create-cancel" onClick={onCancel}>
@@ -2287,14 +2332,13 @@ function CreateBotForm({
       </label>
       <ComputerModePicker value={computerMode} onChange={setComputerMode} />
       <button
-        type="button"
+        type="submit"
         disabled={!name.trim()}
-        onClick={() => onCreate({ name, title, description, computerMode })}
         className="mt-5 rounded-[11px] bg-[#F1F1EF] px-4 py-2 text-[#17171A] disabled:opacity-40"
       >
         Create
       </button>
-    </div>
+    </form>
   );
 }
 

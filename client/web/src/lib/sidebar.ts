@@ -6,6 +6,15 @@ export function inboxEmptyState(inboxCount: number, archivedCount: number): Inbo
   return archivedCount > 0 ? "archived" : "create";
 }
 
+export function sortInboxBots<T extends { id: string; pinned: boolean; createdAt: string }>(bots: T[]): T[] {
+  return [...bots].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    const created = a.createdAt.localeCompare(b.createdAt);
+    if (created) return created;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 export function filterBots<T extends { name: string; preview?: string | null; title?: string | null }>(
   bots: T[],
   query: string,

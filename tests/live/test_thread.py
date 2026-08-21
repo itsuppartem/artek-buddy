@@ -232,6 +232,23 @@ def test_file_download_and_image_preview(page: Page, client_url: str, host_url: 
     expect(image.get_by_test_id("file-preview")).to_be_visible()
 
 
+def test_attachment_chip_does_not_return_on_later_send(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Chip")
+    with page.expect_file_chooser() as chooser:
+        page.get_by_role("button", name="Attach files").click()
+    chooser.value.set_files({"name": "once.txt", "mimeType": "text/plain", "buffer": b"once"})
+    expect(page.get_by_test_id("attach-chip")).to_contain_text("once.txt", timeout=5_000)
+    send_message(page, "with file", name)
+    expect(page.get_by_test_id("attach-chip")).to_have_count(0)
+    first = page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="with file")
+    expect(first.get_by_test_id("file-card")).to_be_visible(timeout=8_000)
+    send_message(page, "plain later", name)
+    later = page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="plain later")
+    expect(later).to_be_visible(timeout=8_000)
+    expect(later.get_by_test_id("file-card")).to_have_count(0)
+    expect(page.get_by_test_id("attach-chip")).to_have_count(0)
+
+
 def test_typing_indicator_and_lead_stop(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Stop")
     box = composer(page)

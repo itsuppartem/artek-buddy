@@ -156,6 +156,31 @@ def test_team_busy_shows_other_bot(page: Page, client_url: str, host_url: str) -
     expect(page.get_by_test_id("computer-reset")).to_be_disabled()
 
 
+def test_computer_pane_stays_open_after_settings_release_and_create(
+    page: Page,
+    client_url: str,
+    host_url: str,
+) -> None:
+    first = unique_bot("Stay")
+    second = unique_bot("Next")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    open_computer_pane(page)
+    expect(page.get_by_test_id("new-memory")).to_be_visible()
+    page.get_by_title("Settings").click()
+    expect(page.get_by_text("Bot Settings")).to_be_visible()
+    page.get_by_label("Close settings").click()
+    expect(page.get_by_test_id("new-memory")).to_be_visible()
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
+    page.get_by_label("Close computer").click()
+    page.get_by_role("button", name="Release").click()
+    expect(page.get_by_test_id("new-memory")).to_be_visible()
+    create_named_bot(page, second)
+    expect(page.get_by_test_id("new-memory")).to_be_visible()
+    expect(page.get_by_test_id("computer-label")).to_be_visible()
+
+
 def test_computer_boot_error_shows_failed(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("Err")
     pair_fresh(page, client_url, host_url)
