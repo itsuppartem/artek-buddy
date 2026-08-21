@@ -41,7 +41,18 @@ def test_pairing_form_fields_and_rejected_url(page: Page, client_url: str) -> No
     page.get_by_placeholder("https://host.example").fill("https://evil.example")
     page.get_by_placeholder("XXXX-XXXX").fill("ABCD-EFGH")
     page.get_by_role("button", name="Pair").click()
-    expect(page.get_by_test_id("pairing-error")).to_be_visible()
+    expect(page.get_by_test_id("pairing-error")).to_have_text("invalid url")
+
+
+def test_pairing_rejects_glued_host_url(page: Page, client_url: str) -> None:
+    arm_page(page)
+    page.goto(client_url)
+    form = page.get_by_test_id("pairing")
+    expect(form).to_be_visible(timeout=20_000)
+    page.get_by_placeholder("https://host.example").fill("http://127.0.0.1:8080http://127.0.0.1:8080")
+    page.get_by_placeholder("XXXX-XXXX").fill("ABCD-EFGH")
+    page.get_by_role("button", name="Pair").click()
+    expect(page.get_by_test_id("pairing-error")).to_have_text("invalid url")
 
 
 def test_pairing_with_device_name_shows_empty_bots(page: Page, client_url: str, host_url: str) -> None:

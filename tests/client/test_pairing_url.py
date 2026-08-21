@@ -14,6 +14,8 @@ import pytest
         ("https://evil.example", False),
         ("ftp://127.0.0.1", False),
         ("", False),
+        ("http://127.0.0.1:8080http://127.0.0.1:8080", False),
+        ("http://127.0.0.1:8080http:", False),
     ],
 )
 def test_pairing_url_allowed(client_mod, url: str, ok: bool) -> None:
