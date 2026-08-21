@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## [0.10.25] - 2026-08-21
+
+### Changed
+- A GitHub Release waits until `test` on that `main` commit is green. A red `backend` or `ui` PR into `main` cannot merge.
+
 ### Fixed
 - Pairing rejects a glued Host URL instead of crashing the loopback proxy. The form uses the host from boot status and does not overwrite the field while you type.
 - Stop on a missing chat is 404.

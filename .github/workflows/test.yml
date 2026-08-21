@@ -2,6 +2,7 @@ name: test
 
 # Public repo: never echo secrets, never `env`, never `docker compose config`,
 # never upload .env / client.log / Playwright traces. Generated tokens are masked.
+# A green push of this workflow on main is what starts release.yml (not a parallel push).
 on:
   pull_request:
   push:

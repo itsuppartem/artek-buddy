@@ -1,11 +1,15 @@
 name: release
 
-# Starts when a PR lands on main. A VERSION bump (or a manual Force run)
-# publishes the GitHub Release, the clean .deb, and the host GHCR image.
+# Publishes the GitHub Release, clean .deb, and host GHCR image.
+# Does not run on push. It starts only after the `test` workflow succeeds
+# on a push to main (or a manual Force run from main). A red PR into main
+# cannot merge: ruleset "Protect main" requires jobs backend and ui.
 # The computer image is not built here: Chromium under QEMU hangs the job.
 # install-host.sh pulls it when present, otherwise builds on the Pi.
 on:
-  push:
+  workflow_run:
+    workflows: [test]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -20,13 +24,21 @@ permissions:
 
 jobs:
   release:
-    if: github.ref == 'refs/heads/main'
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      || (
+        github.event_name == 'workflow_run'
+        && github.event.workflow_run.conclusion == 'success'
+        && github.event.workflow_run.event == 'push'
+        && github.event.workflow_run.head_branch == 'main'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Detect VERSION bump
         id: ver
