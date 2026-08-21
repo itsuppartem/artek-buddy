@@ -32,6 +32,7 @@ class RuntimeBase:
         self.computers = computers
         self.on_takeover_requested: Any | None = None
         self.default_agent_id: str | None = None
+        self.last_prompt: str | None = None
         self.memory: Any | None = None
         self.consent: Any | None = None
         self.subagents: Any | None = None

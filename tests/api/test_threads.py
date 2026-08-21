@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from tests.api.helpers import create_bot, wait_run, wait_run_status
+from tests.api.helpers import create_bot, message_texts, wait_run, wait_run_status
 
 
 def test_scripted_turn_happy(client, auth_header) -> None:
@@ -79,6 +79,134 @@ def test_stop_cancels_slow_turn(client, auth_header) -> None:
     assert stopped.status_code == 200
     snap = wait_run(client, auth_header, bot_id, run_id)
     assert snap["run"]["status"] == "cancelled"
+
+
+def _last_prompt() -> str:
+    from artek_buddy.main import app
+
+    runtime = getattr(app.state, "runtime", None)
+    return str(getattr(runtime, "last_prompt", None) or "")
+
+
+def test_stop_does_not_complete_cancelled_body(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_SLOW_ANSWER
+
+    bot_id = create_bot(client, auth_header, "StopBody")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    stopped = client.post(f"/v1/threads/{bot_id}/stop", headers=auth_header)
+    assert stopped.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, run_id)
+    assert snap["run"]["status"] == "cancelled"
+    assert E2E_SLOW_ANSWER not in message_texts(snap)
+    time.sleep(3)
+    later = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert later.status_code == 200
+    assert later.json()["run"]["status"] == "cancelled"
+    assert E2E_SLOW_ANSWER not in message_texts(later.json())
+
+
+def test_send_while_waiting_takeover_starts_turn(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "TakeoverSend")["id"]
+    parked = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-park-takeover"},
+    )
+    assert parked.status_code == 200
+    run_id = parked.json()["run_id"]
+    wait_run_status(client, auth_header, bot_id, run_id, "waiting_takeover")
+    queued_park = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now"},
+    )
+    assert queued_park.status_code == 200
+    payload = queued_park.json()
+    assert payload.get("queued") is not True
+    new_run = payload["run_id"]
+    assert new_run != run_id
+    behind = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "while the new run is live"},
+    )
+    assert behind.status_code == 200
+    assert behind.json().get("queued") is True
+    snap = wait_run(client, auth_header, bot_id, new_run)
+    assert snap["run"]["status"] == "completed"
+    leftover = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert leftover.status_code == 200
+    assert leftover.json()["run"]["status"] != "waiting_takeover"
+
+
+def test_stop_keeps_queued_owner_lines_on_next_send(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "KeepInbox")["id"]
+    before = client.get(f"/v1/computer/{bot_id}", headers=auth_header)
+    assert before.status_code == 200
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now"},
+    )
+    assert sent.status_code == 200
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "count the foxes on the desk"},
+    )
+    assert first.status_code == 200
+    assert first.json().get("queued") is True
+    second = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "also note the red one"},
+    )
+    assert second.status_code == 200
+    assert second.json().get("queued") is True
+    stopped = client.post(f"/v1/threads/{bot_id}/stop", headers=auth_header)
+    assert stopped.status_code == 200
+    after_stop = client.get(f"/v1/computer/{bot_id}", headers=auth_header)
+    assert after_stop.status_code == 200
+    assert after_stop.json()["state"] == before.json()["state"]
+    follow = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "continue"},
+    )
+    assert follow.status_code == 200
+    assert follow.json().get("queued") is not True
+    wait_run(client, auth_header, bot_id, follow.json()["run_id"])
+    prompt = _last_prompt()
+    assert "count the foxes on the desk" in prompt
+    assert "also note the red one" in prompt
+    assert prompt.strip() != "continue"
+
+
+def test_turn_prompt_includes_thread_not_only_last_line(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "ThreadCtx")["id"]
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "the fox count is seven"},
+    )
+    assert first.status_code == 200
+    wait_run(client, auth_header, bot_id, first.json()["run_id"])
+    follow = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "continue"},
+    )
+    assert follow.status_code == 200
+    wait_run(client, auth_header, bot_id, follow.json()["run_id"])
+    prompt = _last_prompt()
+    assert "the fox count is seven" in prompt
+    assert prompt.strip() != "continue"
 
 
 def test_follow_up_starts_a_new_turn(client, auth_header) -> None:

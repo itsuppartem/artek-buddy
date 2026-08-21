@@ -8,6 +8,7 @@ import {
   type SetStateAction,
   type SyntheticEvent,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -45,6 +46,8 @@ import {
 } from "../lib/screen";
 import {
   allowAlert,
+  answeredAskBody,
+  attentionFingerprint,
   attentionFromBotChange,
   attentionFromEvent,
   isHistoricalEvent,
@@ -134,6 +137,8 @@ export function ShellPage() {
   const [later, setLater] = useState<string | null>(null);
   const [attention, setAttention] = useState<AttentionAlert | null>(null);
   const seenAlertKeys = useRef(new Set<string>());
+  const dismissedAlerts = useRef(new Set<string>());
+  const stickToLatest = useRef(true);
   const recentKindAt = useRef(new Map<string, number>());
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
@@ -197,6 +202,10 @@ export function ShellPage() {
   function dispatchAlert(next: AttentionAlert, key: string, notifyOnFinish: boolean) {
     if (!allowAlert(next, notifyOnFinish)) return;
     if (seenAlertKeys.current.has(key)) return;
+    if (dismissedAlerts.current.has(attentionFingerprint(next))) {
+      seenAlertKeys.current.add(key);
+      return;
+    }
     const kindKey = `${next.botId}:${next.kind}`;
     const now = Date.now();
     const last = recentKindAt.current.get(kindKey) ?? 0;
@@ -228,6 +237,14 @@ export function ShellPage() {
     setAttention((current) => (shouldReplaceAttention(current, next) ? next : current));
   }
 
+  function dismissAttention(alert: AttentionAlert | null = attention) {
+    if (alert) {
+      dismissedAlerts.current.add(attentionFingerprint(alert));
+      pendingAlerts.current.delete(alert.botId);
+    }
+    setAttention(null);
+  }
+
   function startOwnerFulfill(consentId: string) {
     if (!consentId || fulfilledOwnerJobs.current.has(consentId)) return;
     fulfilledOwnerJobs.current.add(consentId);
@@ -242,6 +259,11 @@ export function ShellPage() {
     if (granted) startOwnerFulfill(granted.consentId);
     if (!opts?.live && isHistoricalEvent(incoming, shellOpenedAt.current)) return;
     const next = attentionFromEvent(incoming, bot.name);
+    const answered = answeredAskBody(incoming);
+    if (answered) {
+      dismissedAlerts.current.add(`${bot.id}:ask:${answered}`);
+      pendingAlerts.current.delete(bot.id);
+    }
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
     if (incoming.type === "run.started") {
       const stored = prevBotsRef.current.get(bot.id);
@@ -263,7 +285,10 @@ export function ShellPage() {
   }, [active?.id]);
 
   useEffect(() => {
-    if (attention && active?.id === attention.botId) setAttention(null);
+    if (attention && active?.id === attention.botId) {
+      dismissedAlerts.current.add(attentionFingerprint(attention));
+      setAttention(null);
+    }
   }, [active?.id, attention]);
 
   async function refreshBots() {
@@ -550,6 +575,16 @@ export function ShellPage() {
     })();
     return () => abort.abort();
   }, [active?.id]);
+
+  useEffect(() => {
+    stickToLatest.current = true;
+  }, [active?.id]);
+
+  useLayoutEffect(() => {
+    if (!stickToLatest.current) return;
+    const element = messageScroll.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [thread?.messages, thread?.run?.status, active?.id]);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -1161,6 +1196,7 @@ export function ShellPage() {
                   type="button"
                   className="min-w-0 flex-1 text-left hover:text-[#ECECEE]"
                   onClick={() => {
+                    dismissedAlerts.current.add(attentionFingerprint(attention));
                     navigate(`/app/${attention.botId}`);
                     setAttention(null);
                   }}
@@ -1174,7 +1210,7 @@ export function ShellPage() {
                   type="button"
                   data-testid="attention-dismiss"
                   aria-label="Dismiss alert"
-                  onClick={() => setAttention(null)}
+                  onClick={() => dismissAttention()}
                   className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[#85858A] hover:bg-[#222226] hover:text-[#ECECEE]"
                 >
                   ✕
@@ -1191,6 +1227,12 @@ export function ShellPage() {
         <div
           ref={messageScroll}
           data-testid="thread"
+          onScroll={() => {
+            const element = messageScroll.current;
+            if (!element) return;
+            stickToLatest.current =
+              element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+          }}
           className="ab-scroll flex min-w-0 flex-1 flex-col gap-[13px] overflow-x-hidden overflow-y-auto px-7 py-6"
         >
           {error ? (

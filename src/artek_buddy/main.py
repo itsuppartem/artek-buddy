@@ -91,6 +91,7 @@ from artek_buddy.consent import ConsentHub
 from artek_buddy.memory import (
     MemoryConflict,
     MemoryPathError,
+    compact_thread_context,
     export_markdown,
     format_memory_context,
     format_subagent_context,
@@ -610,6 +611,16 @@ async def _accept_turn(
     display = (text or "").strip()
     prompt = format_user_turn(display, hosted) if hosted else display
     try:
+        parked = history.waiting_takeover_run(bot.id)
+        if parked is not None:
+            _msg, finished = history.finish_turn(bot, parked, "", "cancelled", error="Stopped.")
+            _emit(
+                events,
+                bot,
+                ProductEventType.RUN_CANCELLED,
+                {"run": finished.model_dump(mode="json"), "error": "Stopped."},
+                run_id=finished.id,
+            )
         reply_msg = None
         if reply_to_id:
             reply_msg = history.get_message_in_thread(bot.thread_id, reply_to_id)
@@ -654,6 +665,7 @@ async def _accept_turn(
         {"run": run.model_dump(mode="json")},
         run_id=run.id,
     )
+    inbox_items = history.drain_inbox(bot.id)
     task = asyncio.create_task(
         _run_turn(
             history,
@@ -665,6 +677,7 @@ async def _accept_turn(
             session_id=bot.cursor_agent_id,
             attach_agent=True,
             reply=reply_msg,
+            inbox_items=inbox_items,
         ),
         name=f"turn-{run.id}",
     )
@@ -682,6 +695,7 @@ async def _run_turn(
     session_id: str | None = None,
     attach_agent: bool = True,
     reply: ThreadMessage | None = None,
+    inbox_items: list[dict[str, str | None]] | None = None,
 ) -> None:
     agent_id = session_id or bot.cursor_agent_id
     rt.set_current_turn_context(bot.id, run.id, bot.thread_id, agent_id=agent_id, role="lead")
@@ -691,6 +705,9 @@ async def _run_turn(
     error: str | None = None
     status = "failed"
     try:
+        page = history.page_messages(bot.thread_id, limit=40)
+        thread_context = compact_thread_context(page.messages)
+        inbox_context = _format_inbox(history, bot, inbox_items) if inbox_items else None
         memory_prompt = wrap_turn_prompt(
             text,
             _memory_context(history, rt, bot, text),
@@ -702,6 +719,8 @@ async def _run_turn(
             ),
             role="lead",
             subagent_context=format_subagent_context(history.list_subagents(bot.id)),
+            thread_context=thread_context,
+            inbox_context=inbox_context,
         )
         async for item in rt.stream(memory_prompt, session_id=agent_id, bot_id=bot.id):
             if isinstance(item, RunRecord):
@@ -1458,7 +1477,6 @@ async def stop_thread(
         service = getattr(app.state, "subagents", None)
         if service is not None:
             service.stop_all(bot)
-        history.clear_inbox(bot_id)
         cancelled_ids = history.cancel_active_runs(bot_id)
         for run_id in cancelled_ids:
             _emit(

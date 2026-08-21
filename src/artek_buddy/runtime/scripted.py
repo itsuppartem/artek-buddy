@@ -144,17 +144,16 @@ def _user_tail(prompt: str) -> str:
 
 
 def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
-    text = prompt or ""
-    user = _user_tail(text)
+    user = _user_tail(prompt or "")
     hay = user.lower()
-    if "e2e-hide-draft" in text:
+    if "e2e-hide-draft" in hay:
         return [
             scripted_progress("planning the lookup"),
             scripted_text(E2E_DRAFT_LEAK),
             scripted_delay(0.6),
             scripted_finish(E2E_DRAFT_ANSWER),
         ]
-    if "e2e-close-browser" in text:
+    if "e2e-close-browser" in hay:
         return [
             scripted_tool("send_message", text=E2E_CLOSE_STATUS),
             scripted_tool("close_app", application="chromium"),
@@ -169,7 +168,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish("I'll remember that."),
         ]
-    if "e2e-thread-blocks" in text:
+    if "e2e-thread-blocks" in hay:
         return [
             scripted_blocks(
                 {"kind": "meta", "text": E2E_META_TEXT},
@@ -194,7 +193,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish("ok"),
         ]
-    if "e2e-ask-free" in text:
+    if "e2e-ask-free" in hay:
         return [
             scripted_blocks(
                 {
@@ -205,7 +204,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(""),
         ]
-    if "e2e-ask" in text:
+    if "e2e-ask" in hay:
         return [
             scripted_tool(
                 "ask_user",
@@ -215,7 +214,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(""),
         ]
-    if "e2e-subagent-hang" in text:
+    if "e2e-subagent-hang" in hay:
         return [
             scripted_tool(
                 "spawn_subagent",
@@ -224,7 +223,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish("worker started"),
         ]
-    if "e2e-subagent" in text:
+    if "e2e-subagent" in hay:
         return [
             scripted_tool(
                 "spawn_subagent",
@@ -233,12 +232,18 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish("worker started"),
         ]
-    if "e2e-takeover" in text:
+    if "e2e-park-takeover" in hay:
+        return [
+            scripted_tool("request_takeover"),
+            scripted_delay(E2E_HANG_S),
+            scripted_finish("should not finish"),
+        ]
+    if "e2e-takeover" in hay:
         return [
             ScriptedStep(event=("computer.takeover.requested", {})),
             scripted_finish("need you"),
         ]
-    if "e2e-load-earlier" in text:
+    if "e2e-load-earlier" in hay:
         return [
             *(
                 scripted_blocks({"kind": "text", "text": f"{E2E_OLDER_PREFIX}{index:02d}"})
@@ -246,7 +251,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(""),
         ]
-    if "e2e-hang" in text:
+    if "e2e-hang" in hay:
         return [scripted_delay(E2E_HANG_S), scripted_finish("hang done")]
     if "research a city" in hay or "which city should we research" in hay:
         return [
@@ -436,13 +441,13 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(""),
         ]
-    if "e2e-slow" in text:
+    if "e2e-slow" in hay:
         return [scripted_delay(2.5), scripted_finish(E2E_SLOW_ANSWER)]
-    if "e2e-markdown-preview" in text:
+    if "e2e-markdown-preview" in hay:
         return [scripted_finish(E2E_MARKDOWN_ANSWER)]
-    if "e2e-fail-slow" in text:
+    if "e2e-fail-slow" in hay:
         return [scripted_delay(2.5), scripted_finish(E2E_FAIL_ERROR, status="failed", error=E2E_FAIL_ERROR)]
-    if "e2e-fail" in text:
+    if "e2e-fail" in hay:
         return [scripted_finish(E2E_FAIL_ERROR, status="failed", error=E2E_FAIL_ERROR)]
     return [scripted_text("ok"), scripted_finish("ok")]
 
@@ -527,6 +532,7 @@ class ScriptedRuntime(RuntimeBase):
     ) -> AsyncIterator[ProductStreamEvent | RunRecord]:
         agent_id = await self.ensure_session(session_id, bot_id=bot_id, role=role)
         self.bind_agent_bot(agent_id, bot_id)
+        self.last_prompt = prompt
         steps = self._queue.pop(0) if self._queue else steps_for_prompt(prompt)
         tools = ProductTools(self)
         result = ""

@@ -8,6 +8,12 @@
 - The computer pane stays open after Settings, Release, and creating a bot.
 - An attachment chip cleared by Send cannot come back from a late native attach or clipboard read.
 - Focusing Name on Create does not mint a bot; Create is a form submit with an in-flight lock.
+- Stop keeps the run cancelled: a late complete cannot append the essay.
+- A follow-up while `waiting_takeover` starts a turn instead of only enqueueing.
+- Stop keeps queued owner lines and prepends them to the next send.
+- Each lead prompt includes a compact summary of this chat, not only the last line.
+- Dismissed attention pills stay gone after switching chats.
+- A thread pinned to the bottom stays on the latest cards; a switch lands on the latest messages.
 
 ### Changed
 - SSE sends a keepalive as soon as the client connects, so the stream is live before the next event.
