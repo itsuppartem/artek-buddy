@@ -147,6 +147,7 @@ from artek_buddy.http.turns import (
     _emit,
     _emit_computer,
     _ingest_thread_files,
+    _memory_hub,
     _resume_parked_takeover,
 )
 
