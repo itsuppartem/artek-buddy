@@ -110,7 +110,10 @@ def test_computer_input_needs_takeover(client, auth_header) -> None:
     assert beat.status_code == 200
     released = client.post(f"/v1/computer/{bot_id}/release", headers=auth_header)
     assert released.status_code == 200
-    assert released.json()["control_holder"] != "user"
+    assert released.json()["ok"] is True
+    after = client.get(f"/v1/computer/{bot_id}", headers=auth_header)
+    assert after.status_code == 200
+    assert after.json()["control_holder"] != "user"
 
 
 def test_computer_requires_auth(client) -> None:

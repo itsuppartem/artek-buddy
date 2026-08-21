@@ -5,6 +5,9 @@
 ### Fixed
 - Stop on a missing chat is 404.
 - Answering a missing consent is 404, not a generic "not pending".
+- Revoking a device a second time is 404.
+- Run timestamps include microseconds so a follow-up in the same second is the latest run.
+- Scripted consent waits for Allow/Deny instead of finishing the turn with the card still pending.
 
 ### Added
 - HTTP API tests on the `backend` job for pairing leftovers, session, bots duplicate/pin, thread stop/follow-up/read, consent deny, computer files/input, and exact memory/cron error codes.

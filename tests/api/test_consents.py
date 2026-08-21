@@ -21,7 +21,7 @@ def test_browse_consent_deny(client, auth_header) -> None:
     )
     assert denied.status_code == 200
     finished = wait_run(client, auth_header, bot_id, run_id)
-    assert finished["run"]["status"] in {"completed", "failed", "cancelled"}
+    assert finished["run"]["status"] == "failed"
     again = client.post(
         f"/v1/consents/{consent_id}",
         headers=auth_header,

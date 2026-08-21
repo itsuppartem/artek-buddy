@@ -568,7 +568,7 @@ class ScriptedRuntime(RuntimeBase):
                 hub = getattr(self, "consent", None)
                 if hub is not None:
                     ctx_bot, ctx_run, _thread = self.resolve_turn_context(bot_id)
-                    hub.offer(
+                    request_id = hub.offer(
                         bot_id=ctx_bot or bot_id or "",
                         action_class=str(step.consent.get("action_class") or ""),
                         scope_key=str(step.consent.get("scope_key") or "*"),
@@ -578,6 +578,17 @@ class ScriptedRuntime(RuntimeBase):
                         path=step.consent.get("path"),
                         job=step.consent.get("job"),
                     )
+                    if request_id:
+                        decision = await asyncio.to_thread(hub.wait_decision, request_id)
+                        if ctx_run:
+                            try:
+                                self.store.mark_run_running(ctx_run)
+                            except Exception:
+                                log.exception("failed to resume run after consent")
+                        if decision not in {"once", "always"}:
+                            status = "failed"
+                            error = "denied"
+                            break
                 continue
             if step.blocks:
                 posted = tools._append_bot_blocks(
