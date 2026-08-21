@@ -130,3 +130,11 @@ def test_subagents_empty_and_missing_stop(client, auth_header) -> None:
     assert listed.json()["subagents"] == []
     stopped = client.post(f"/v1/bots/{bot_id}/subagents/sub_missing/stop", headers=auth_header)
     assert stopped.status_code == 404
+    restarted = client.post(f"/v1/bots/{bot_id}/subagents/sub_missing/restart", headers=auth_header)
+    assert restarted.status_code == 404
+    steered = client.post(
+        f"/v1/bots/{bot_id}/subagents/sub_missing/steer",
+        headers=auth_header,
+        json={"text": "keep going"},
+    )
+    assert steered.status_code == 404

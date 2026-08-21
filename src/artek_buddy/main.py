@@ -1153,7 +1153,7 @@ async def restart_subagent(
             raise HTTPException(status_code=503, detail="subagents unavailable")
         return service.restart(bot, subagent_id)
     except SubagentError as err:
-        raise HTTPException(status_code=409, detail=str(err)) from err
+        raise HTTPException(status_code=404, detail=str(err)) from err
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
 
@@ -1172,6 +1172,8 @@ async def steer_subagent(
             raise HTTPException(status_code=503, detail="subagents unavailable")
         return service.steer(bot, subagent_id, body.text)
     except SubagentError as err:
+        if str(err) == "subagent not found":
+            raise HTTPException(status_code=404, detail=str(err)) from err
         raise HTTPException(status_code=409, detail=str(err)) from err
     except DatabaseUnavailable as err:
         raise _db_error(err) from err

@@ -88,6 +88,45 @@ def test_computer_files_and_path_jail(client, auth_header) -> None:
     assert missing.status_code == 400
 
 
+def test_computer_file_download(client, auth_header, tmp_path) -> None:
+    bot_id = create_bot(client, auth_header, "RawBox", computer_mode="dedicated")["id"]
+    booted = client.post(f"/v1/computer/{bot_id}/boot", headers=auth_header)
+    assert booted.status_code == 200
+    home = tmp_path / "data" / "homes" / bot_id
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "hello.txt").write_bytes(b"from the box\n")
+
+    listed = client.get(f"/v1/computer/{bot_id}/files", headers=auth_header)
+    assert listed.status_code == 200
+    names = [entry["name"] for entry in listed.json()["entries"]]
+    assert "hello.txt" in names
+
+    raw = client.get(
+        f"/v1/computer/{bot_id}/files/raw",
+        headers=auth_header,
+        params={"path": "hello.txt"},
+    )
+    assert raw.status_code == 200
+    assert raw.content == b"from the box\n"
+    disposition = raw.headers.get("content-disposition") or ""
+    assert "hello.txt" in disposition
+
+    missing = client.get(
+        f"/v1/computer/{bot_id}/files/raw",
+        headers=auth_header,
+        params={"path": "no-such-file.txt"},
+    )
+    assert missing.status_code == 400
+    escaped = client.get(
+        f"/v1/computer/{bot_id}/files/raw",
+        headers=auth_header,
+        params={"path": "../secret"},
+    )
+    assert escaped.status_code == 400
+    no_path = client.get(f"/v1/computer/{bot_id}/files/raw", headers=auth_header)
+    assert no_path.status_code == 422
+
+
 def test_computer_input_needs_takeover(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "InputBox", computer_mode="dedicated")["id"]
     booted = client.post(f"/v1/computer/{bot_id}/boot", headers=auth_header)

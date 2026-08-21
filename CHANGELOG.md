@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+- Restart or steer on a missing subagent is 404, same as stop.
+
+### Changed
+- SSE sends a keepalive as soon as the client connects, so the stream is live before the next event.
+
+### Added
+- HTTP tests for thread attachments, message pagination, `GET /v1/messages`, bounded SSE, and computer `files/raw` download.
+
 ## [0.10.25] - 2026-08-21
 
 ### Changed
