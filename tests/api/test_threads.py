@@ -86,3 +86,11 @@ def test_auto_owner_read_exposes_pending_consent(client, auth_header) -> None:
     body = job.json()
     assert body["action_class"] == "owner_read"
     assert body["path"] == "notes.txt"
+    uploaded = client.post(
+        f"/v1/consents/{pending}/file",
+        headers=auth_header,
+        json={"name": "notes.txt", "text": "notes from owner"},
+    )
+    assert uploaded.status_code == 200
+    finished = _wait_run(client, auth_header, bot_id, run_id)
+    assert finished["run"]["status"] == "completed"

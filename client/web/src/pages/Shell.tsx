@@ -534,8 +534,6 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             retryMs = 250;
             const bot = botsRef.current.find((item) => item.id === event.botId);
-            const auto = Boolean(bot && isAutoOwnerJob(event));
-            if (event.botId === activeIdRef.current && !auto) continue;
             if (bot) considerEventRef.current(event, bot, subscribedAt);
           }
         } catch (err) {
