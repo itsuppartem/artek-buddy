@@ -23,7 +23,7 @@ flowchart LR
 └───────────────────────────────────────────────────────────────┴─────────────────────────────┴───────────────────┘
 ```
 
-The computer pane and Settings overlay sit on the right of the same shell. Gear on the pane opens Settings; closing Settings returns to the pane. Fullscreen screen is a separate overlay. Gear in the thread header opens Settings and does **not** boot. Offline • Click to start boots and takes control.
+The computer pane and Settings overlay sit on the right of the same shell. Gear on the pane opens Settings; closing Settings returns to the pane. Create opened while the pane is up returns to the pane after Create or Cancel. Release does not close the pane. Fullscreen screen is a separate overlay. Gear in the thread header opens Settings and does **not** boot. Offline • Click to start boots and takes control.
 
 ## Screens
 
@@ -39,7 +39,8 @@ Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
 - `+` opens Create.
 - Search filters inbox and archived by name / preview.
-- Bot row: name, pin mark, unread dot, status, preview. Accessible name is `Open chat {name}`. Click opens the chat. Right-click: Pin / Unpin, Mark read / unread, Edit Profile, Duplicate, Archive, Delete.
+- Bot row: name, pin mark, unread dot, status, preview. Accessible name is `Open chat {name}`. Click opens the chat. Right-click: Pin / Unpin, Mark read / unread, Edit Profile, Duplicate, Archive, Delete. Inbox order is pinned first, then created; a later message does not jump a row under the pointer.
+- The selected row, thread header, composer, and computer pane always name the same bot. The thread never blanks to an empty column on a switch.
 - Empty inbox (all archived): Restore one from Archived, or create a new bot.
 - No bots: Create your first bot.
 - Archived list: Back to Inbox, Restore on each row.
