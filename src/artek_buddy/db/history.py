@@ -1914,7 +1914,7 @@ class HistoryStore:
                 """
                 UPDATE devices
                 SET revoked_at = COALESCE(revoked_at, %s)
-                WHERE id = %s
+                WHERE id = %s AND revoked_at IS NULL
                 RETURNING id, name, platform, created_at, last_seen_at, revoked_at
                 """,
                 (now, device_id),

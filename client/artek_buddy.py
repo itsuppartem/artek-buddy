@@ -283,8 +283,14 @@ def pairing_url_allowed(url: str) -> bool:
     parsed = urlsplit(url)
     if parsed.scheme not in {"http", "https"}:
         return False
-    host = (parsed.hostname or "").lower()
+    try:
+        host = (parsed.hostname or "").lower()
+        port = parsed.port
+    except ValueError:
+        return False
     if not host:
+        return False
+    if port is not None and not (1 <= port <= 65535):
         return False
     if host in {"localhost", "127.0.0.1", "::1"}:
         return True
@@ -587,6 +593,10 @@ class Handler(BaseHTTPRequestHandler):
                 body,
                 {"Accept": "application/json", "Content-Type": "application/json", "Connection": "close"},
             )
+        except ValueError:
+            _log("pair failed: invalid url")
+            self._json(400, {"ok": False, "error": "invalid url"})
+            return
         except OSError:
             _log("pair failed: host unreachable")
             self._json(502, {"ok": False, "error": "host unreachable"})

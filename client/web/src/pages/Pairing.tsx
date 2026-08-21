@@ -1,26 +1,15 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { api } from "../api";
 import { formatPairingCode } from "../lib/pairing";
 import { Button } from "../ui/button";
 import { WindowChrome } from "../ui/window-chrome";
 
-export function PairingPage({ onPaired }: { onPaired: () => void }) {
-  const [url, setUrl] = useState("");
+export function PairingPage({ onPaired, initialUrl = "" }: { onPaired: () => void; initialUrl?: string }) {
+  const [url, setUrl] = useState(initialUrl);
   const [code, setCode] = useState("");
   const [name, setName] = useState("This computer");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.local
-      .status()
-      .then((status) => {
-        if (status.url) setUrl(status.url);
-      })
-      .catch(() => {
-        // stay on the form; the loopback status route is optional while typing
-      });
-  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

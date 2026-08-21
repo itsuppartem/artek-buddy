@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## [0.10.25] - 2026-08-21
+
+### Changed
+- A GitHub Release waits until `test` on that `main` commit is green. A red `backend` or `ui` PR into `main` cannot merge.
+
+### Fixed
+- Pairing rejects a glued Host URL instead of crashing the loopback proxy. The form uses the host from boot status and does not overwrite the field while you type.
+- Stop on a missing chat is 404.
+- Answering a missing consent is 404, not a generic "not pending".
+- Revoking a device a second time is 404.
+- Run timestamps include microseconds so a follow-up in the same second is the latest run.
+- Scripted consent waits for Allow/Deny instead of finishing the turn with the card still pending.
+
+### Added
+- HTTP API tests on the `backend` job for pairing leftovers, session, bots duplicate/pin, thread stop/follow-up/read, consent deny, computer files/input, and exact memory/cron error codes.
+
 ## [0.10.24] - 2026-08-21
 
 ### Fixed
