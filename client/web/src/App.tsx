@@ -7,6 +7,7 @@ import { ShellPage } from "./pages/Shell";
 export function App() {
   const [paired, setPaired] = useState<boolean | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [savedHostUrl, setSavedHostUrl] = useState("");
 
   useEffect(() => {
     api.local
@@ -14,6 +15,7 @@ export function App() {
       .then((status) => {
         setBootError(null);
         setPaired(status.paired);
+        setSavedHostUrl(status.url || "");
       })
       .catch((err: unknown) => {
         setBootError(err instanceof Error ? err.message : "Could not reach the local client");
@@ -40,7 +42,7 @@ export function App() {
     return <div className="h-full bg-[#050506]" />;
   }
   if (!paired) {
-    return <PairingPage onPaired={() => setPaired(true)} />;
+    return <PairingPage onPaired={() => setPaired(true)} initialUrl={savedHostUrl} />;
   }
   return (
     <Routes>

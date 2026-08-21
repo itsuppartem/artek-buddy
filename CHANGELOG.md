@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Pairing rejects a glued Host URL instead of crashing the loopback proxy. The form uses the host from boot status and does not overwrite the field while you type.
 - Stop on a missing chat is 404.
 - Answering a missing consent is 404, not a generic "not pending".
 - Revoking a device a second time is 404.
