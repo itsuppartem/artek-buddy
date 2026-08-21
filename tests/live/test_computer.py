@@ -164,7 +164,7 @@ def test_computer_pane_stays_open_after_settings_release_and_create(
     first = unique_bot("Stay")
     second = unique_bot("Next")
     pair_fresh(page, client_url, host_url)
-    create_named_bot(page, first)
+    create_named_bot(page, first, private=True)
     open_computer_pane(page)
     expect(page.get_by_test_id("new-memory")).to_be_visible()
     page.get_by_title("Settings").click()
@@ -176,7 +176,7 @@ def test_computer_pane_stays_open_after_settings_release_and_create(
     page.get_by_label("Close computer").click()
     page.get_by_role("button", name="Release").click()
     expect(page.get_by_test_id("new-memory")).to_be_visible()
-    create_named_bot(page, second)
+    create_named_bot(page, second, private=True)
     expect(page.get_by_test_id("new-memory")).to_be_visible()
     expect(page.get_by_test_id("computer-label")).to_be_visible()
 

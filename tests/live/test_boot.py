@@ -81,20 +81,6 @@ def test_create_cancel_and_disabled_until_named(page: Page, client_url: str, hos
     expect(page.get_by_test_id("bot-row").filter(has_text="soon")).to_have_count(0)
 
 
-def test_create_does_not_run_on_name_focus(page: Page, client_url: str, host_url: str) -> None:
-    name = unique_bot("Focus")
-    pair_fresh(page, client_url, host_url)
-    page.get_by_title("New bot").click()
-    box = page.get_by_placeholder("Name this bot")
-    expect(box).to_be_visible()
-    box.click()
-    box.fill(name)
-    expect(page.get_by_role("button", name="Create", exact=True)).to_be_enabled()
-    expect(bot_row(page, name)).to_have_count(0)
-    page.get_by_role("button", name="Create", exact=True).click()
-    expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
-
-
 def test_archive_only_bot_shows_empty_inbox(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("Solo")
     pair_fresh(page, client_url, host_url)
@@ -111,6 +97,20 @@ def test_archive_only_bot_shows_empty_inbox(page: Page, client_url: str, host_ur
     expect(page.locator('[data-testid="archived-bot-row"]').filter(has_text=name)).to_have_count(1)
     page.get_by_test_id("back-inbox").click()
     expect(inbox).to_be_visible()
+
+
+def test_create_does_not_run_on_name_focus(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Focus")
+    pair_fresh(page, client_url, host_url)
+    page.get_by_title("New bot").click()
+    box = page.get_by_placeholder("Name this bot")
+    expect(box).to_be_visible()
+    box.click()
+    box.fill(name)
+    expect(page.get_by_role("button", name="Create", exact=True)).to_be_enabled()
+    expect(bot_row(page, name)).to_have_count(0)
+    page.get_by_role("button", name="Create", exact=True).click()
+    expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
 
 
 def test_auth_error_repair_returns_to_pairing(page: Page, client_url: str, host_url: str) -> None:
