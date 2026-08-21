@@ -270,13 +270,16 @@ def test_stop_does_not_append_completed_essay(page: Page, client_url: str, host_
     page.get_by_test_id("thread-stop").click()
     expect(page.get_by_test_id("run-error")).to_be_visible(timeout=15_000)
     page.wait_for_timeout(3_000)
-    expect(page.get_by_text("slow done")).to_have_count(0)
+    expect(page.get_by_test_id("thread").get_by_text("slow done")).to_have_count(0)
+    expect(bot_row(page, name)).not_to_contain_text("slow done")
 
 
 def test_streaming_turn_keeps_last_card_in_view(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Pin")
     send_message(page, "please e2e-load-earlier", name)
-    last = page.get_by_text(f"{E2E_OLDER_PREFIX}50")
+    last = page.get_by_test_id("thread").locator(
+        '[data-testid="thread-message"][data-role="bot"]'
+    ).filter(has_text=f"{E2E_OLDER_PREFIX}50")
     expect(last).to_be_visible(timeout=15_000)
     expect(last).to_be_in_viewport()
 
@@ -289,7 +292,9 @@ def test_switch_back_lands_on_latest_messages(page: Page, client_url: str, host_
     send_message(page, "please e2e-load-earlier", first)
     create_named_bot(page, second)
     open_chat(page, first)
-    last = page.get_by_text(f"{E2E_OLDER_PREFIX}50")
+    last = page.get_by_test_id("thread").locator(
+        '[data-testid="thread-message"][data-role="bot"]'
+    ).filter(has_text=f"{E2E_OLDER_PREFIX}50")
     expect(last).to_be_visible(timeout=15_000)
     expect(last).to_be_in_viewport()
 

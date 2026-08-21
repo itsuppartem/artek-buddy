@@ -138,11 +138,25 @@ def test_send_while_waiting_takeover_starts_turn(client, auth_header) -> None:
     )
     assert behind.status_code == 200
     assert behind.json().get("queued") is True
-    snap = wait_run(client, auth_header, bot_id, new_run)
-    assert snap["run"]["status"] == "completed"
-    leftover = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
-    assert leftover.status_code == 200
-    assert leftover.json()["run"]["status"] != "waiting_takeover"
+    deadline = time.time() + 15
+    last: dict = {}
+    while time.time() < deadline:
+        response = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+        assert response.status_code == 200
+        last = response.json()
+        run = last.get("run") or {}
+        if run.get("trigger") == "follow_up" and run.get("status") in {
+            "completed",
+            "failed",
+            "cancelled",
+        }:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"queued follow-up did not finish after takeover send: {last.get('run')}")
+    assert last["run"]["id"] != run_id
+    assert last["run"]["status"] != "waiting_takeover"
+    assert "while the new run is live" in message_texts(last)
 
 
 def test_stop_keeps_queued_owner_lines_on_next_send(client, auth_header) -> None:
