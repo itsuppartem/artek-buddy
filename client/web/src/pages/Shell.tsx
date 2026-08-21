@@ -136,7 +136,9 @@ export function ShellPage() {
   const activeIdRef = useRef<string | undefined>(undefined);
   const botsRef = useRef<Bot[]>([]);
   const shellOpenedAt = useRef(Date.now());
-  const considerEventRef = useRef<(incoming: ProductEvent, bot: Bot) => void>(() => undefined);
+  const considerEventRef = useRef<
+    (incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) => void
+  >(() => undefined);
   const [contextMenu, setContextMenu] = useState<{
     bot: Bot;
     position: ContextMenuPosition;
@@ -228,12 +230,19 @@ export function ShellPage() {
     });
   }
 
-  function considerEvent(incoming: ProductEvent, bot: Bot) {
+  function considerEvent(incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) {
     const granted = isAutoOwnerJob(incoming);
     if (granted) startOwnerFulfill(granted.consentId);
-    if (isHistoricalEvent(incoming, shellOpenedAt.current)) return;
+    if (!opts?.live && isHistoricalEvent(incoming, shellOpenedAt.current)) return;
     const next = attentionFromEvent(incoming, bot.name);
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
+    if (incoming.type === "run.started") {
+      const stored = prevBotsRef.current.get(bot.id);
+      if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "running" });
+    }
+    if (incoming.type === "run.completed" || incoming.type === "run.failed") {
+      void refreshBots().catch(() => undefined);
+    }
   }
   considerEventRef.current = considerEvent;
 
@@ -533,7 +542,7 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             retryMs = 250;
             const bot = botsRef.current.find((item) => item.id === event.botId);
-            if (bot) considerEventRef.current(event, bot);
+            if (bot) considerEventRef.current(event, bot, { live: true });
           }
         } catch (err) {
           if (abort.signal.aborted) break;

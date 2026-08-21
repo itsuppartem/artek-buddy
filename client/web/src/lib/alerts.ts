@@ -128,11 +128,17 @@ export function attentionFromBotChange(
     return makeAlert("ask", next.id, name, next.preview, at);
   }
   const leftBusy = busyStatus.has(prev.status) && !busyStatus.has(next.status);
-  if (!leftBusy || !next.unread) return null;
-  if (next.status === "error") {
+  const becameUnread = next.unread && !prev.unread;
+  if (next.status === "error" && (leftBusy || becameUnread)) {
     return makeAlert("failed", next.id, name, next.preview, at);
   }
-  return makeAlert("replied", next.id, name, next.preview, at);
+  if (leftBusy && next.unread) {
+    return makeAlert("replied", next.id, name, next.preview, at);
+  }
+  if (becameUnread && !busyStatus.has(next.status)) {
+    return makeAlert("replied", next.id, name, next.preview, at);
+  }
+  return null;
 }
 
 export function allowAlert(alert: AttentionAlert, notifyOnFinish: boolean): boolean {
