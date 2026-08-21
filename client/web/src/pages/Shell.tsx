@@ -134,8 +134,10 @@ export function ShellPage() {
   const recentKindAt = useRef(new Map<string, number>());
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
+  const botIdRef = useRef<string | undefined>(undefined);
   const botsRef = useRef<Bot[]>([]);
   const shellOpenedAt = useRef(Date.now());
+  const refreshBotsRef = useRef<() => Promise<Bot[]>>(async () => []);
   const considerEventRef = useRef<
     (incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) => void
   >(() => undefined);
@@ -155,6 +157,7 @@ export function ShellPage() {
 
   const active = bots.find((bot) => bot.id === botId) ?? (botId ? undefined : bots[0]);
   activeIdRef.current = active?.id;
+  botIdRef.current = botId;
   const thread = active ? snapshot : null;
   const isBusy = Boolean(
     (thread?.run && isActive(thread.run.status)) ||
@@ -197,7 +200,7 @@ export function ShellPage() {
       seenAlertKeys.current.add(key);
       return;
     }
-    const viewing = botId || activeIdRef.current || null;
+    const viewing = activeIdRef.current || botIdRef.current || null;
     if (
       !shouldSendDesktopAlert({
         windowFocused: true,
@@ -241,7 +244,7 @@ export function ShellPage() {
       if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "running" });
     }
     if (incoming.type === "run.completed" || incoming.type === "run.failed") {
-      void refreshBots().catch(() => undefined);
+      void refreshBotsRef.current().catch(() => undefined);
     }
   }
   considerEventRef.current = considerEvent;
@@ -274,7 +277,7 @@ export function ShellPage() {
         }
       }
     }
-    const viewing = botId || activeIdRef.current;
+    const viewing = activeIdRef.current || botIdRef.current;
     if (viewing && !heldUnreadIds.current.has(viewing)) {
       const open = list.find((item) => item.id === viewing);
       if (open?.unread) {
@@ -289,11 +292,13 @@ export function ShellPage() {
     setArchivedBots(archivedList);
     if (archivedList.length === 0) setSidebarView("inbox");
     setBotsReady(true);
-    if (!botId || !list.some((bot) => bot.id === botId)) {
+    const routeId = botIdRef.current || activeIdRef.current;
+    if (!routeId || !list.some((bot) => bot.id === routeId)) {
       navigate(list[0] ? `/app/${list[0].id}` : "/app", { replace: true });
     }
     return list;
   }
+  refreshBotsRef.current = refreshBots;
 
   function showError(err: unknown, fallback: string) {
     const classified = classifyError(err);
@@ -312,7 +317,7 @@ export function ShellPage() {
       await api.health();
       const recovering = errorKindRef.current === "host";
       if (loadBots || recovering) {
-        await refreshBots();
+        await refreshBotsRef.current();
       }
       if (loadBots || recovering) {
         setError(null);
@@ -506,7 +511,7 @@ export function ShellPage() {
             const bot = botsRef.current.find((item) => item.id === active.id) ?? active;
             considerEvent(event, bot);
             if (event.type === "run.completed" || event.type === "run.failed") {
-              void refreshBots().catch(() => undefined);
+              void refreshBotsRef.current().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
             }
           }
@@ -909,12 +914,6 @@ export function ShellPage() {
     const timer = window.setTimeout(() => setLater(null), 2400);
     return () => window.clearTimeout(timer);
   }, [later]);
-
-  useEffect(() => {
-    if (!attention) return;
-    const timer = window.setTimeout(() => setAttention(null), 4000);
-    return () => window.clearTimeout(timer);
-  }, [attention]);
 
   return (
     <div className="relative flex h-full min-w-0 overflow-hidden bg-[#050506] text-[#DFDFE2]">

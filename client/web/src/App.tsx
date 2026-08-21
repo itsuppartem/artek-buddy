@@ -45,8 +45,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/app" replace />} />
-      <Route path="/app" element={<ShellPage />} />
-      <Route path="/app/:botId" element={<ShellPage />} />
+      <Route path="/app/:botId?" element={<ShellPage />} />
     </Routes>
   );
 }
