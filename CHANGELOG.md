@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.10.26] - 2026-08-21
+
 ### Fixed
 - Restart or steer on a missing subagent is 404, same as stop.
 - Switching chats no longer follows the latest-updated row, blanks the thread, or jumps inbox order under the pointer.
