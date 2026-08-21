@@ -556,7 +556,7 @@ class ScriptedRuntime(RuntimeBase):
         agent_id = await self.ensure_session(session_id, bot_id=bot_id, role=role)
         self.bind_agent_bot(agent_id, bot_id)
         self.last_prompt = prompt
-        hay = prompt.lower()
+        hay = _user_tail(prompt).lower()
         if "e2e-auth-error" in hay:
             run_id = new_id("run")
             if self._pending_recover:
