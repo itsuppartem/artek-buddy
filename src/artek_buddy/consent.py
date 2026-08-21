@@ -391,6 +391,13 @@ class ConsentHub:
             waiter.set()
         return row
 
+    def wait_decision(self, request_id: str, timeout: float = WAIT_SECONDS) -> str:
+        with self._lock:
+            waiter = self._waiters.get(request_id)
+        if waiter is not None:
+            waiter.wait(timeout)
+        return self._decisions.get(request_id, "deny")
+
     def get_job(self, request_id: str) -> dict[str, Any] | None:
         row = self.store.get_consent_request(request_id)
         if row is None:

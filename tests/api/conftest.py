@@ -39,3 +39,12 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_ok: None, h
 
     with TestClient(app) as session:
         yield session
+
+
+@pytest.fixture(autouse=True)
+def reset_pairing_limiter() -> Iterator[None]:
+    from artek_buddy.auth import pairing_attempts
+
+    pairing_attempts._hits.clear()
+    yield
+    pairing_attempts._hits.clear()
