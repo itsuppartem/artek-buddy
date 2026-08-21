@@ -412,13 +412,34 @@ class ComputerService:
         self.store.save_computer(record)
         return record
 
-    def observe(self, bot: Bot) -> dict[str, Any]:
-        record = self.ensure_running(bot)
-        return self.client.observe(record.provider_ref)
+    def observe(self, bot: Bot, include_image: bool = False) -> dict[str, Any]:
+        from artek_buddy.computer.observe import image_reason, shape_observe, should_attach_image
 
-    def act(self, bot: Bot, actions: list[dict[str, Any]]) -> dict[str, Any]:
         record = self.ensure_running(bot)
-        return self.client.act(record.provider_ref, actions)
+        slim = self.client.observe(record.provider_ref, include_image=False)
+        title = ""
+        try:
+            from artek_buddy.computer.observe import parse_observe_output
+
+            title = str(parse_observe_output(str(slim.get("output") or "")).get("title") or "")
+        except Exception:
+            title = ""
+        reason = image_reason(title, include_image)
+        if not should_attach_image(title, include_image):
+            return shape_observe(slim, image_b64=None, reason=reason)
+        shot = self.client.observe(record.provider_ref, include_image=True)
+        image = str(shot.get("image_png_base64") or "") or None
+        return shape_observe(shot, image_b64=image, reason=reason)
+
+    def act(self, bot: Bot, actions: list[dict[str, Any]], return_observe: bool = False) -> dict[str, Any]:
+        from artek_buddy.computer.observe import log_tool_result
+
+        record = self.ensure_running(bot)
+        result = self.client.act(record.provider_ref, actions)
+        if return_observe:
+            result = {**result, "observe": self.observe(bot, include_image=False)}
+        log_tool_result("computer_act", result, image=str((result.get("observe") or {}).get("image_reason") or "none"))
+        return result
 
     def exec_command(self, bot: Bot, command: str) -> dict[str, Any]:
         record = self.ensure_running(bot)

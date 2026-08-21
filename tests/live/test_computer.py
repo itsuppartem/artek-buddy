@@ -156,6 +156,31 @@ def test_team_busy_shows_other_bot(page: Page, client_url: str, host_url: str) -
     expect(page.get_by_test_id("computer-reset")).to_be_disabled()
 
 
+def test_computer_pane_stays_open_after_settings_release_and_create(
+    page: Page,
+    client_url: str,
+    host_url: str,
+) -> None:
+    first = unique_bot("Stay")
+    second = unique_bot("Next")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first, private=True)
+    open_computer_pane(page)
+    expect(page.get_by_test_id("new-memory")).to_be_visible()
+    page.get_by_title("Settings").click()
+    expect(page.get_by_text("Bot Settings")).to_be_visible()
+    page.get_by_label("Close settings").click()
+    expect(page.get_by_test_id("new-memory")).to_be_visible()
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
+    page.get_by_label("Close computer").click()
+    page.get_by_role("button", name="Release").click()
+    expect(page.get_by_test_id("new-memory")).to_be_visible()
+    create_named_bot(page, second, private=True)
+    expect(page.get_by_test_id("new-memory")).to_be_visible()
+    expect(page.get_by_test_id("computer-label")).to_be_visible()
+
+
 def test_computer_boot_error_shows_failed(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("Err")
     pair_fresh(page, client_url, host_url)
@@ -167,3 +192,52 @@ def test_computer_boot_error_shows_failed(page: Page, client_url: str, host_url:
     open_computer_pane(page)
     page.get_by_test_id("computer-start").click()
     expect(page.get_by_text("boom").or_(page.get_by_text("Failed to start"))).to_be_visible(timeout=8_000)
+
+
+def test_preview_click_opens_screen_without_control(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Prev")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    open_computer_pane(page)
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
+    page.get_by_label("Close computer").click()
+    page.get_by_role("button", name="Release").click()
+    expect(page.get_by_test_id("computer-running")).to_be_visible()
+    expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
+    page.get_by_test_id("computer-preview").click()
+    expect(page.get_by_label("Close computer")).to_be_visible(timeout=8_000)
+    expect(page.get_by_text("You have control")).to_have_count(0)
+    expect(page.get_by_test_id("computer-running")).to_be_visible()
+    overlay = page.get_by_test_id("computer-overlay")
+    overlay.get_by_role("button", name="Take control").click()
+    expect(page.get_by_test_id("computer-label")).to_contain_text("You have control")
+    expect(page.get_by_test_id("computer-overlay-holder")).to_have_text("You have control")
+    expect(overlay.get_by_role("button", name="Release")).to_be_visible()
+    overlay.get_by_role("button", name="Release").click()
+    expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
+    page.get_by_label("Close computer").click()
+    expect(page.get_by_label("Close computer")).to_have_count(0)
+    expect(page.get_by_test_id("computer-running")).to_be_visible()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "running")
+    expect(page.get_by_text("Offline • Click to start")).to_have_count(0)
+
+
+def test_settings_stop_shows_sleeping_on_pane(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Sleep")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    open_computer_pane(page)
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
+    page.get_by_label("Close computer").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "running", timeout=8_000)
+    expect(page.get_by_test_id("computer-running")).to_be_visible()
+    page.get_by_title("Settings").click()
+    expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
+    page.get_by_test_id("computer-stop").click()
+    expect(page.get_by_test_id("computer-power-state")).to_contain_text("Sleeping", timeout=8_000)
+    page.get_by_label("Close settings").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "sleeping", timeout=8_000)
+    expect(page.get_by_text("Sleeping • Click to start")).to_be_visible()
+    expect(page.get_by_text("Offline • Click to start")).to_have_count(0)

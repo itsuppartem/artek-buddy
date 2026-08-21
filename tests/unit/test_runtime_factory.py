@@ -88,3 +88,10 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     takeover = steps_for_prompt("please e2e-takeover")
     assert takeover[0].event is not None
     assert takeover[0].event[0] == "computer.takeover.requested"
+
+    parked = steps_for_prompt("please e2e-park-takeover")
+    assert parked[0].tool == "request_takeover"
+    assert "Pass the site check" in parked[0].args["reason"]
+
+    released = steps_for_prompt("The owner released the desktop. Continue the same task.")
+    assert released[0].result == "continuing after takeover"

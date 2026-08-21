@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## [0.10.26] - 2026-08-21
+
+### Fixed
+- Restart or steer on a missing subagent is 404, same as stop.
+- Switching chats no longer follows the latest-updated row, blanks the thread, or jumps inbox order under the pointer.
+- The computer pane stays open after Settings, Release, and creating a bot.
+- An attachment chip cleared by Send cannot come back from a late native attach or clipboard read.
+- Focusing Name on Create does not mint a bot; Create is a form submit with an in-flight lock.
+- Stop keeps the run cancelled: a late complete cannot append the essay.
+- A follow-up while `waiting_takeover` starts a turn instead of only enqueueing.
+- Stop keeps queued owner lines and prepends them to the next send.
+- Each lead prompt includes a compact summary of this chat, not only the last line.
+- Dismissed attention pills stay gone after switching chats.
+- A thread pinned to the bottom stays on the latest cards; a switch lands on the latest messages.
+- Computer pane Sleeping matches Settings Stop; preview click does not take control.
+- Handing the desktop to the owner clears typing dots and Stop; Release resumes the same run.
+- Default `computer_observe` is slim (no screenshot JSON); Caps Lock reaches the control session.
+- Cursor `wait()` status and store `error_code` are logged and stored; a dead auth bridge is recycled.
+
+### Changed
+- SSE sends a keepalive as soon as the client connects, so the stream is live before the next event.
+- History, `/v1` routes, agent tools, and the window shell are split along existing seams. HTTP paths and public imports are unchanged.
+
+### Added
+- HTTP tests for thread attachments, message pagination, `GET /v1/messages`, bounded SSE, and computer `files/raw` download.
+
 ## [0.10.25] - 2026-08-21
 
 ### Changed

@@ -74,6 +74,17 @@ export function shouldAutoBoot(
   return true;
 }
 
+export function computerPaneState(
+  state: string | null | undefined,
+  booting: boolean,
+): "running" | "booting" | "error" | "sleeping" | "offline" {
+  if (booting || state === "booting") return "booting";
+  if (state === "running") return "running";
+  if (state === "error") return "error";
+  if (state === "suspended") return "sleeping";
+  return "offline";
+}
+
 export function computerLabel(mode: string | null | undefined, name: string): string {
   return mode === "dedicated" ? `${name}’s computer` : "Team computer";
 }

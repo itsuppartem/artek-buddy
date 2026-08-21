@@ -215,7 +215,7 @@ A merge into `main` that bumps `VERSION` attaches that `.deb` to the GitHub Rele
 On the desktop PC:
 
 ```bash
-sudo dpkg -i artek-buddy-client_0.10.25_all.deb
+sudo dpkg -i artek-buddy-client_0.10.26_all.deb
 sudo apt-get install -f
 ```
 
@@ -264,7 +264,7 @@ The worker (`artek-buddy-worker`) wakes due routines through the same `threads.s
 
 ## Version
 
-`0.10.25` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
+`0.10.26` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
 
 Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel hostnames, local compose (`docker-compose.local.yml`), or local tooling.
 

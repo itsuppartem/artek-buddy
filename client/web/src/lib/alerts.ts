@@ -80,6 +80,21 @@ function pendingAskText(payload: Record<string, unknown>): string | null {
   return null;
 }
 
+export function answeredAskBody(event: ProductEvent): string | null {
+  if (event.type !== "thread.message.created") return null;
+  const message = asRecord(event.payload.message) ?? event.payload;
+  const blocks = message.blocks;
+  if (!Array.isArray(blocks)) return null;
+  for (const raw of blocks) {
+    const block = asRecord(raw);
+    if (!block || block.kind !== "ask") continue;
+    if (block.status !== "answered") continue;
+    const text = typeof block.text === "string" ? block.text : "";
+    return clip(text || "Choose an option");
+  }
+  return null;
+}
+
 export function attentionFromEvent(event: ProductEvent, botName: string): AttentionAlert | null {
   const botId = event.botId;
   const at = event.createdAt;
@@ -144,6 +159,10 @@ export function attentionFromBotChange(
 export function allowAlert(alert: AttentionAlert, notifyOnFinish: boolean): boolean {
   if (alert.kind === "replied" || alert.kind === "failed") return notifyOnFinish;
   return true;
+}
+
+export function attentionFingerprint(alert: Pick<AttentionAlert, "botId" | "kind" | "body">): string {
+  return `${alert.botId}:${alert.kind}:${alert.body}`;
 }
 
 export function shouldSendDesktopAlert(input: {

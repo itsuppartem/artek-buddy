@@ -32,6 +32,16 @@ _FILE_APPS = frozenset(
     }
 )
 
+_TERMINAL_APPS = frozenset(
+    {
+        "terminal",
+        "xterm",
+        "x-terminal-emulator",
+    }
+)
+
+_CAPS_KEYS = frozenset({"Caps_Lock", "CapsLock", "capslock", "caps_lock"})
+
 
 def _is_browser_app(name: str) -> bool:
     return name.strip().lower() in _BROWSER_APPS
@@ -39,6 +49,17 @@ def _is_browser_app(name: str) -> bool:
 
 def _is_files_app(name: str) -> bool:
     return name.strip().lower() in _FILE_APPS
+
+
+def _is_terminal_app(name: str) -> bool:
+    return name.strip().lower() in _TERMINAL_APPS
+
+
+def normalize_keysym(key: str) -> str:
+    value = (key or "").strip()
+    if value in _CAPS_KEYS or value.lower() == "capslock":
+        return "Caps_Lock"
+    return value
 
 
 def _close_app_command(raw_app: str) -> str:
@@ -144,15 +165,17 @@ def interactive_screen_command(interactive: bool, control_token: str | None = No
     )
 
 
-def observe_command() -> str:
-    return (
-        "export DISPLAY=:1; "
-        "echo GEOM $(xdpyinfo | awk '/dimensions/{print $2}' | tr 'x' ' '); "
-        "echo CURSOR $(xdotool getmouselocation --shell 2>/dev/null | tr '\\n' ' '); "
-        "echo WINDOW $(xdotool getactivewindow 2>/dev/null || true); "
-        "echo TITLE $(xdotool getactivewindow getwindowname 2>/dev/null || true); "
-        "import -window root /tmp/artek/observe.png && echo PNG /tmp/artek/observe.png"
-    )
+def observe_command(*, include_image: bool = False) -> str:
+    parts = [
+        "export DISPLAY=:1",
+        "echo GEOM $(xdpyinfo | awk '/dimensions/{print $2}' | tr 'x' ' ')",
+        "echo CURSOR $(xdotool getmouselocation --shell 2>/dev/null | tr '\\n' ' ')",
+        "echo WINDOW $(xdotool getactivewindow 2>/dev/null || true)",
+        "echo TITLE $(xdotool getactivewindow getwindowname 2>/dev/null || true)",
+    ]
+    if include_image:
+        parts.append("import -window root /tmp/artek/observe.png && echo PNG /tmp/artek/observe.png")
+    return "; ".join(parts)
 
 
 def action_command(actions: list[dict]) -> str:
@@ -177,7 +200,7 @@ def action_command(actions: list[dict]) -> str:
             text = str(item.get("text") or "")
             parts.append(f"xdotool type --delay 12 -- {shell_quote(text)}")
         elif kind == "key":
-            key = str(item.get("key") or "")
+            key = normalize_keysym(str(item.get("key") or item.get("text") or ""))
             if key:
                 parts.append(f"xdotool key {shell_quote(key)}")
         elif kind == "scroll":
@@ -201,6 +224,8 @@ def action_command(actions: list[dict]) -> str:
                 app = "artek-browser"
             elif _is_files_app(raw_app):
                 app = "pcmanfm"
+            elif _is_terminal_app(raw_app):
+                app = "xterm"
             else:
                 app = raw_app
             uri = str(item.get("uri") or item.get("url") or "").strip()
@@ -216,7 +241,8 @@ def action_command(actions: list[dict]) -> str:
 
 def input_command(kind: str, payload: dict) -> str:
     if kind == "key":
-        return action_command([{"kind": "key", "key": payload.get("key")}])
+        key = payload.get("key") or payload.get("text")
+        return action_command([{"kind": "key", "key": key}])
     if kind == "clipboard":
         return action_command([{"kind": "type", "text": payload.get("text")}])
     return action_command(

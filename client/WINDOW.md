@@ -23,7 +23,7 @@ flowchart LR
 └───────────────────────────────────────────────────────────────┴─────────────────────────────┴───────────────────┘
 ```
 
-The computer pane and Settings overlay sit on the right of the same shell. Gear on the pane opens Settings; closing Settings returns to the pane. Fullscreen screen is a separate overlay. Gear in the thread header opens Settings and does **not** boot. Offline • Click to start boots and takes control.
+The computer pane and Settings overlay sit on the right of the same shell. Gear on the pane opens Settings; closing Settings returns to the pane. Create opened while the pane is up returns to the pane after Create or Cancel. Release does not close the pane. Fullscreen screen is a separate overlay. Gear in the thread header opens Settings and does **not** boot. Offline • Click to start boots and takes control.
 
 ## Screens
 
@@ -39,7 +39,8 @@ Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
 - `+` opens Create.
 - Search filters inbox and archived by name / preview.
-- Bot row: name, pin mark, unread dot, status, preview. Accessible name is `Open chat {name}`. Click opens the chat. Right-click: Pin / Unpin, Mark read / unread, Edit Profile, Duplicate, Archive, Delete.
+- Bot row: name, pin mark, unread dot, status, preview. Accessible name is `Open chat {name}`. Click opens the chat. Right-click: Pin / Unpin, Mark read / unread, Edit Profile, Duplicate, Archive, Delete. Inbox order is pinned first, then created; a later message does not jump a row under the pointer.
+- The selected row, thread header, composer, and computer pane always name the same bot. The thread never blanks to an empty column on a switch.
 - Empty inbox (all archived): Restore one from Archived, or create a new bot.
 - No bots: Create your first bot.
 - Archived list: Back to Inbox, Restore on each row.
@@ -60,19 +61,21 @@ SSE. Blocks in a message:
 | ask | question + options or free text |
 | consent | Allow once / Always / Deny (browse, page, owner_*) |
 | file | name, media preview, Download |
-| computer | tool card (state + text) |
+| computer | reason + **Open computer** while `waiting_takeover`; after Release the same run resumes |
 | subagent | `#n name`, status, Stop while running, Restart after |
 | child_bot | click opens that chat (disabled if deleted/archived) |
 
-Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers, `thread-stop`). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner sits under the thread header (`attention-alert`): replied / ask / takeover / failed. It is in the layout, so it does not cover Send or Load earlier. Opening that chat dismisses it. It is not shown for the chat already on screen, or for events from before this window opened. A chat you already read that then finishes in the background still raises replied / failed. Finishing a turn does not switch the open chat. A newer banner replaces an older one of the same urgency; an older leftover cannot keep the pill. Title opens that chat; Dismiss (`attention-dismiss`) does not. `notifyOnFinish` mutes only replied / failed. Thread header is `thread-header`. Send stays enabled while a bot is selected so Enter can post the live textarea; an empty click is a no-op.
+Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers, `thread-stop`). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner sits under the thread header (`attention-alert`): replied / ask / takeover / failed. It is in the layout, so it does not cover Send or Load earlier. Opening that chat or Dismiss (`attention-dismiss`) is sticky for that ask or takeover: switching chats does not resurrect a dismissed or already-answered pill. It is not shown for the chat already on screen, or for events from before this window opened. A chat you already read that then finishes in the background still raises replied / failed. Finishing a turn does not switch the open chat. A newer banner replaces an older one of the same urgency; an older leftover cannot keep the pill. Title opens that chat; Dismiss (`attention-dismiss`) does not. `notifyOnFinish` mutes only replied / failed. Thread header is `thread-header`. Send stays enabled while a bot is selected so Enter can post the live textarea; an empty click is a no-op.
 
 The open chat uses `/v1/threads/{id}/events` for the thread. Inbox banners use one `/v1/events` stream for every bot, including the open chat, so a switch cannot drop `run.completed`. Duplicate event ids are ignored. Chrome HTTP/1.1 allows six connections per host; one SSE per leftover chat would starve Create and pair.
 
-Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
+Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `open-computer`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
 
 Errors: host Retry, auth re-pair, action Dismiss.
 
-Not in this window: `threads.followUp` (the host queues on send), `subagents.steer`, `me`, `deployment`. `notify-send` exists on the proxy and is unused by React.
+If the user is pinned to the bottom, new cards keep the latest in view. Switching chats lands on the latest messages. Stop cancels the lead and workers; a later completed token must not append. The host prompt includes a compact summary of this chat (byte-capped) plus owner lines that never reached the model (inbox kept across Stop). `waiting_takeover` is a pause: no typing dots and no Stop. A new send starts a turn. **Release** resumes the same parked run.
+
+Not in this window: `threads.followUp` (the host queues on send while a lead is running; a parked takeover starts work), `subagents.steer`, `me`, `deployment`. `notify-send` exists on the proxy and is unused by React.
 
 ## Create / Settings
 
@@ -82,7 +85,7 @@ Settings: the same fields plus instructions, mode change (rebinds the desktop; h
 
 ## Computer pane
 
-States: Offline, Booting, Running, Sleeping, Error (`computer-state` / `data-state`). Click Offline to boot and take control. Gear does not auto-boot. Stop in Settings is Sleeping (`suspended`), not Offline. View-only preview iframe when the screen URL is `/novnc/…`. Fake sandbox has no noVNC URL, so the pane shows `computer-running` instead of spinning Connecting. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows `{name} is using the computer` on the start tile (one line; the bot that booted or holds the shared desktop, not only a bot with an active run) and disables Take / Restart / Stop / Reset. The pane keeps the start tile in that case instead of the running preview. Dedicated vs Team is `computer-label` `data-mode`.
+States: Offline, Booting, Running, Sleeping, Error (`computer-state` / `data-state`). Click Offline to boot and take control. Click Sleeping to wake. Gear does not auto-boot. Stop in Settings is Sleeping (`suspended`), not Offline. Preview click / Open screen opens the screen view (`computer-overlay`) and does **not** grant control. Take control is the only control grant (`computer-overlay-holder` while held). Caps Lock is forwarded during Take control. View-only preview iframe when the screen URL is `/novnc/…`. Fake sandbox has no noVNC URL, so the pane shows `computer-running` instead of spinning Connecting. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows `{name} is using the computer` on the start tile (one line; the bot that booted or holds the shared desktop, not only a bot with an active run) and disables Take / Restart / Stop / Reset. The pane keeps the start tile in that case instead of the running preview. Dedicated vs Team is `computer-label` `data-mode`.
 
 Memory (same pane): owner / work / charter list, New (this bot \| shared, `memory-save`), Edit, Outdated = delete, Export `.md`.
 

@@ -103,6 +103,9 @@ export function reduceThreadSnapshot(
     if (event.runId && prev.run && prev.run.id !== event.runId) {
       return { ...prev, cursor: event.seq };
     }
+    if (event.type === "run.completed" && prev.run?.status === "cancelled") {
+      return { ...prev, cursor: event.seq };
+    }
     const status =
       event.type === "run.completed"
         ? "completed"
@@ -379,7 +382,10 @@ export function isHiddenLiveDraft(message: ThreadMessage): boolean {
 
 export function isToolNoise(message: ThreadMessage): boolean {
   if (message.id.startsWith("tool:") || message.id.startsWith("comp:")) return true;
-  return message.blocks.length > 0 && message.blocks.every((block) => block.kind === "computer");
+  if (message.blocks.length > 0 && message.blocks.every((block) => block.kind === "computer")) {
+    return message.blocks.every((block) => !("text" in block && String(block.text || "").trim()));
+  }
+  return false;
 }
 
 function isLive(id: string): boolean {

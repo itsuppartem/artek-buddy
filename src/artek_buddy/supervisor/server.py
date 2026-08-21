@@ -133,7 +133,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._screen_mode(cid, body)
                     return
                 if action == "observe":
-                    self._observe(cid)
+                    self._observe(cid, body)
                     return
                 if action == "actions":
                     code, text = STATE.engine.exec(cid, action_command(list(body.get("actions") or [])))
@@ -232,19 +232,20 @@ class Handler(BaseHTTPRequestHandler):
         payload["output"] = text
         self._json(200 if code == 0 else 500, payload)
 
-    def _observe(self, cid: str) -> None:
+    def _observe(self, cid: str, body: dict[str, Any] | None = None) -> None:
         import base64
 
-        code, text = STATE.engine.exec(cid, observe_command())
-        image = ""
-        if "PNG /tmp/artek/observe.png" in text:
+        include_image = bool((body or {}).get("include_image"))
+        code, text = STATE.engine.exec(cid, observe_command(include_image=include_image))
+        payload: dict[str, Any] = {"ok": code == 0, "output": text}
+        if include_image and "PNG /tmp/artek/observe.png" in text:
             try:
-                image = base64.b64encode(STATE.engine.get_file(cid, "/tmp/artek/observe.png")).decode(
-                    "ascii"
-                )
+                payload["image_png_base64"] = base64.b64encode(
+                    STATE.engine.get_file(cid, "/tmp/artek/observe.png")
+                ).decode("ascii")
             except Exception:
-                image = ""
-        self._json(200, {"ok": code == 0, "output": text, "image_png_base64": image})
+                pass
+        self._json(200, payload)
 
     def _files(self, cid: str, write: bool, body: dict[str, Any] | None = None) -> None:
         query = parse_qs(urlparse(self.path).query)

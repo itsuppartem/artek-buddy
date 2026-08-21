@@ -145,6 +145,84 @@ def format_subagent_context(rows: list[Any]) -> str | None:
     return "\n".join(lines)
 
 
+THREAD_CONTEXT_CAP = 8000
+
+
+def _block_text(block: Any) -> str:
+    if hasattr(block, "kind"):
+        kind = getattr(block, "kind", None)
+        text = getattr(block, "text", None)
+    elif isinstance(block, dict):
+        kind = block.get("kind")
+        text = block.get("text")
+    else:
+        return ""
+    if kind == "text" and text:
+        return str(text).strip()
+    return ""
+
+
+def _message_role(message: Any) -> str:
+    role = getattr(message, "role", None)
+    if role is None and isinstance(message, dict):
+        role = message.get("role")
+    if hasattr(role, "value"):
+        role = role.value
+    return str(role or "")
+
+
+def _message_blocks(message: Any) -> list[Any]:
+    blocks = getattr(message, "blocks", None)
+    if blocks is None and isinstance(message, dict):
+        blocks = message.get("blocks")
+    return list(blocks or [])
+
+
+def compact_thread_context(
+    messages: list[Any],
+    *,
+    cap: int = THREAD_CONTEXT_CAP,
+    exclude_ids: set[str] | None = None,
+) -> str:
+    """Recent user/bot lines from this chat. Oldest parts drop first. Cap is UTF-8 bytes."""
+    skip = exclude_ids or set()
+    lines: list[str] = []
+    for message in messages:
+        ident = getattr(message, "id", None) or (message.get("id") if isinstance(message, dict) else None)
+        if ident and ident in skip:
+            continue
+        role = _message_role(message)
+        if role not in {"user", "bot"}:
+            continue
+        text = " ".join(part for part in (_block_text(block) for block in _message_blocks(message)) if part)
+        if not text:
+            continue
+        lines.append(f"{role}: {text}")
+    packed: list[str] = []
+    used = 0
+    prefix = "This chat, recent messages:\n"
+    prefix_n = len(prefix.encode("utf-8"))
+    for line in reversed(lines):
+        room = cap - prefix_n - used
+        if room <= 1:
+            break
+        raw = line.encode("utf-8")
+        if len(raw) + 1 > room:
+            chunk = raw[: max(0, room - 4)].decode("utf-8", errors="ignore").rstrip() + "…"
+        else:
+            chunk = line
+        if not chunk or chunk == "…":
+            break
+        packed.append(chunk)
+        used += len(chunk.encode("utf-8")) + 1
+        if prefix_n + used >= cap:
+            break
+    packed.reverse()
+    if not packed:
+        return ""
+    return prefix + "\n".join(packed)
+
+
 def wrap_turn_prompt(
     user_text: str,
     memory_context: str | None,
@@ -156,6 +234,8 @@ def wrap_turn_prompt(
     subagent_context: str | None = None,
     clarifications: str | None = None,
     steer: bool = False,
+    thread_context: str | None = None,
+    inbox_context: str | None = None,
 ) -> str:
     parts: list[str] = []
     if memory_context:
@@ -185,7 +265,11 @@ def wrap_turn_prompt(
             "Read those paths. Do not ask the user to paste the file again.\n"
             "- Playwright may be used for read-only scraping only after the owner allowed that site (browse Always or once). Never fill, type, or click through Playwright.\n"
             "- For simple informational lookups (weather, quick facts, data fetching, text search): answer directly or use terminal commands (curl, python, etc.). Do NOT open the GUI browser for simple lookups unless the user specifically asked to open a browser/page on screen.\n"
-            "- computer_observe does not need permission. computer_act click/type on the remote desktop does.\n"
+            "- computer_observe does not need permission. Default is slim (window title, no screenshot JSON). "
+            "Set include_image only when pixels are required. Prefer DOM / curl after the owner allowed the site. "
+            "computer_act click/type on the remote desktop does. Pass several actions in one call; return_observe for a slim look after.\n"
+            "- If a page needs the human (login, captcha, challenge), call request_takeover with a short reason and stop. "
+            "Do not invent a password. Do not keep using tools after that.\n"
             "- If a tool result includes owner_follow_up, the owner messaged you during this turn. Apply it immediately. Do not finish the old plan first.\n"
             "- When checking progress or if the user asks status (e.g. 'ты завис?', 'еще делаешь?', 'как там?'): "
             "you can reply immediately with send_message (e.g. 'Да, сейчас сверю...'), inspect workers/processes "
@@ -224,6 +308,10 @@ def wrap_turn_prompt(
             "The lead just sent a correction. Continue the same task. Keep useful work "
             "you already did. Apply the new instructions now."
         )
+    if thread_context:
+        parts.append(thread_context)
+    if inbox_context:
+        parts.append(inbox_context)
     if reply_excerpt:
         who = reply_role or "message"
         parts.append(f"The user is replying to this {who}:\n\"\"\"\n{reply_excerpt}\n\"\"\"")
