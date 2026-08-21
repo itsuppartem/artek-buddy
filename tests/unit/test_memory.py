@@ -19,6 +19,12 @@ def test_normalize_memory_path_happy_and_fail() -> None:
         normalize_memory_path("/etc/passwd")
 
 
+def test_wrap_turn_prompt_lead_mentions_takeover_and_slim_observe() -> None:
+    wrapped = wrap_turn_prompt("hi", None, role="lead")
+    assert "request_takeover" in wrapped
+    assert "include_image" in wrapped
+
+
 def test_wrap_turn_prompt_keeps_user_tail() -> None:
     wrapped = wrap_turn_prompt("remember this city", "Belgrade is the capital")
     assert wrapped.endswith("remember this city")

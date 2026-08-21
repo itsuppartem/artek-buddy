@@ -2949,7 +2949,7 @@ class HistoryStore:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                UPDATE runs SET status = 'running' WHERE id = %s AND status = 'waiting_input'
+                UPDATE runs SET status = 'running' WHERE id = %s AND status IN ('waiting_input', 'waiting_takeover')
                 RETURNING *
                 """,
                 (run_id,),

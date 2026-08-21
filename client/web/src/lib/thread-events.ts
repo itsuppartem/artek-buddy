@@ -382,7 +382,10 @@ export function isHiddenLiveDraft(message: ThreadMessage): boolean {
 
 export function isToolNoise(message: ThreadMessage): boolean {
   if (message.id.startsWith("tool:") || message.id.startsWith("comp:")) return true;
-  return message.blocks.length > 0 && message.blocks.every((block) => block.kind === "computer");
+  if (message.blocks.length > 0 && message.blocks.every((block) => block.kind === "computer")) {
+    return message.blocks.every((block) => !("text" in block && String(block.text || "").trim()));
+  }
+  return false;
 }
 
 function isLive(id: string): boolean {

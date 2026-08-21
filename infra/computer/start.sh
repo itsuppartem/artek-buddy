@@ -61,7 +61,11 @@ done
 if [[ "$browser_up" -ne 1 ]]; then
   echo "browser failed to start" >&2
   cat /tmp/artek/browser.log >&2 || true
-  xterm -geometry 100x28+48+48 -bg "#111113" -fg "#E8E8EA" -cr "#E8E8EA" -title "Terminal" >/tmp/artek/xterm.log 2>&1 &
+  if [[ ! -f /tmp/artek/xterm.fallback ]]; then
+    mkdir -p /tmp/artek
+    touch /tmp/artek/xterm.fallback
+    xterm -geometry 100x28+48+48 -bg "#111113" -fg "#E8E8EA" -cr "#E8E8EA" -title "Terminal" >/tmp/artek/xterm.log 2>&1 &
+  fi
 fi
 
 x11vnc -display :1 -forever -shared -viewonly -nopw -listen 127.0.0.1 -rfbport 5900 -xkb -ncache 0 -noxdamage -noshm -noxinerama -threads -wait 100 -defer 100 >/tmp/artek/x11vnc.log 2>&1 &

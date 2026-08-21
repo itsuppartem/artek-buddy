@@ -74,8 +74,12 @@ class SupervisorClient:
             )
         )
 
-    def observe(self, provider_ref: str) -> dict[str, Any]:
-        return self._request("POST", f"/computers/{provider_ref}/observe", {})
+    def observe(self, provider_ref: str, include_image: bool = False) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/computers/{provider_ref}/observe",
+            {"include_image": include_image},
+        )
 
     def act(self, provider_ref: str, actions: list[dict[str, Any]]) -> dict[str, Any]:
         return self._request("POST", f"/computers/{provider_ref}/actions", {"actions": actions})
@@ -117,6 +121,10 @@ class FakeSupervisorClient:
             "interactive": False,
             "control_token": None,
             "files": {},
+            "title": "Inbox - Gmail",
+            "caps_lock": False,
+            "typed": [],
+            "xterm_spawns": 0,
         }
         self.calls.append(("provision", home_key))
         return SandboxBox(cid, None, None, None, True, True)
@@ -152,11 +160,31 @@ class FakeSupervisorClient:
         self.calls.append(("screen_mode", interactive, control_token))
         return self.inspect(provider_ref)
 
-    def observe(self, provider_ref: str) -> dict[str, Any]:
-        self.calls.append(("observe", provider_ref))
-        return {"ok": True, "output": "GEOM 1280 800\nCURSOR X=10 Y=10", "image_png_base64": ""}
+    def observe(self, provider_ref: str, include_image: bool = False) -> dict[str, Any]:
+        import base64
+
+        from artek_buddy.computer.observe import TINY_PNG
+
+        box = self.boxes.get(provider_ref) or {}
+        title = str(box.get("title") or "")
+        self.calls.append(("observe", provider_ref, include_image))
+        payload: dict[str, Any] = {
+            "ok": True,
+            "output": f"GEOM 1280 800\nCURSOR X=10 Y=10\nWINDOW 42\nTITLE {title}",
+        }
+        if include_image:
+            payload["image_png_base64"] = base64.b64encode(TINY_PNG).decode("ascii")
+        return payload
 
     def act(self, provider_ref: str, actions: list[dict[str, Any]]) -> dict[str, Any]:
+        box = self.boxes.setdefault(provider_ref, {"files": {}, "xterm_spawns": 0})
+        for item in actions:
+            if not isinstance(item, dict):
+                continue
+            kind = str(item.get("kind") or "")
+            name = str(item.get("name") or item.get("application") or "").strip().lower()
+            if kind == "launch" and name in {"terminal", "xterm"}:
+                box["xterm_spawns"] = int(box.get("xterm_spawns") or 0) + 1
         self.calls.append(("act", actions))
         return {"ok": True, "output": "ok"}
 
@@ -165,6 +193,21 @@ class FakeSupervisorClient:
         return {"ok": True, "exit_code": 0, "output": ""}
 
     def send_input(self, provider_ref: str, kind: str, payload: dict[str, Any]) -> dict[str, Any]:
+        from artek_buddy.supervisor.logic import normalize_keysym
+
+        box = self.boxes.setdefault(provider_ref, {"caps_lock": False, "typed": []})
+        key = normalize_keysym(str(payload.get("key") or payload.get("text") or ""))
+        text = str(payload.get("text") or "")
+        if kind == "key" and key == "Caps_Lock":
+            box["caps_lock"] = not bool(box.get("caps_lock"))
+            self.calls.append(("input", kind, payload))
+            return {"ok": True}
+        chunk = text if (kind != "key" or payload.get("text")) else key
+        if not chunk and key:
+            chunk = key
+        if box.get("caps_lock") and chunk:
+            chunk = "".join(ch.upper() if ch.isalpha() else ch for ch in chunk)
+        box.setdefault("typed", []).append(chunk)
         self.calls.append(("input", kind, payload))
         return {"ok": True}
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -16,8 +17,8 @@ from cursor_sdk import (
 )
 
 from artek_buddy.config import Settings
-from artek_buddy.db.shaping import product_run_status
 from artek_buddy.runtime.base import RuntimeBase
+from artek_buddy.runtime.cursor_wait import describe_cursor_wait, log_cursor_wait, note_auth_failures
 from artek_buddy.runtime.tools import ProductTools
 from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord
 from artek_buddy.stream import map_cursor_event
@@ -62,6 +63,8 @@ class CursorRuntime(RuntimeBase):
         self.client = client
         self.model = build_model(settings)
         self._locks: dict[str, asyncio.Lock] = {}
+        self._auth_fails = 0
+        self.bridge_recycles = 0
 
     def _custom_tools(self, bot_id: str | None = None, role: str = "lead") -> dict[str, CustomTool]:
         registry = ProductTools(self)
@@ -182,6 +185,25 @@ class CursorRuntime(RuntimeBase):
         lock = self._locks.setdefault(agent_id, asyncio.Lock())
         return agent_id, agent, lock
 
+    async def _recycle_dead_agent(self, burned_id: str, bot_id: str | None) -> str:
+        log.warning("recycling cursor agent %s after consecutive auth errors", burned_id)
+        self._agents.pop(burned_id, None)
+        self._locks.pop(burned_id, None)
+        self._auth_fails = 0
+        self.bridge_recycles += 1
+        live = await self.create_session(
+            name="artek-buddy",
+            persist_default=True,
+            bot_id=bot_id,
+            role="lead",
+        )
+        if bot_id and self.store is not None and hasattr(self.store, "attach_agent"):
+            try:
+                self.store.attach_agent(bot_id, live)
+            except Exception:
+                log.exception("failed to attach recycled agent")
+        return live
+
     async def stream(
         self,
         prompt: str,
@@ -202,24 +224,45 @@ class CursorRuntime(RuntimeBase):
                         yield ProductStreamEvent(type=typ, payload=payload)
                 text = ""
                 status = "unknown"
+                waited = time.monotonic()
+                result = None
                 try:
                     result = await run.wait()
                     text = getattr(result, "result", None) or ""
                     status = str(getattr(result, "status", "unknown"))
                 except Exception:
                     log.exception("wait after stream failed")
+                duration_s = time.monotonic() - waited
                 if not text:
                     try:
                         text = await run.text()
                     except Exception:
                         text = ""
-                mapped = product_run_status(status)
+                mapped, wait_text, wait_error = describe_cursor_wait(result, run)
+                if wait_text:
+                    text = wait_text
+                error_code = wait_error
+                log_cursor_wait(
+                    str(getattr(run, "id", "")),
+                    agent_id,
+                    status,
+                    duration_s,
+                    error_code,
+                )
+                self._auth_fails, recycle = note_auth_failures(
+                    self._auth_fails,
+                    status=mapped,
+                    error=error_code,
+                    duration_s=duration_s,
+                )
+                if recycle:
+                    await self._recycle_dead_agent(agent_id, bot_id)
                 yield RunRecord(
                     id=str(getattr(run, "id", "")),
                     agent_id=agent_id,
                     status=mapped,
                     result=text or None,
-                    error=None if mapped == "completed" else f"run failed: {getattr(run, 'id', '')}",
+                    error=None if mapped == "completed" else error_code,
                 )
             except CursorAgentError as err:
                 log.error(

@@ -373,26 +373,80 @@ def _emit_computer(events: EventHub, bot: Bot, status: ComputerStatus) -> None:
     _emit(events, bot, ProductEventType.COMPUTER_STATUS, payload)
 
 
-def _handle_takeover_request(bot_id: str, run_id: str | None) -> None:
+def _handle_takeover_request(bot_id: str, run_id: str | None, reason: str | None = None) -> None:
     history: HistoryStore = app.state.store
     events: EventHub = app.state.hub
     service: ComputerService = app.state.computers
     bot = history.get_bot(bot_id)
     if bot is None:
         return
+    text = (reason or "").strip() or "Take control of this computer, then Release when you are done."
     try:
+        msg = history.append_bot_message(
+            bot,
+            [{"kind": "computer", "state": "waiting", "text": text}],
+            run_id=run_id,
+        )
+        _emit(
+            events,
+            bot,
+            ProductEventType.THREAD_MESSAGE_CREATED,
+            {"message": msg.model_dump(mode="json")},
+            run_id=run_id,
+        )
+        history.set_bot_unread(bot_id, True)
         service.release(bot)
         _emit(
             events,
             bot,
             ProductEventType.COMPUTER_TAKEOVER_REQUESTED,
-            {"run_id": run_id},
+            {"run_id": run_id, "reason": text},
             run_id=run_id,
         )
         _emit_computer(events, bot, service.status(bot))
     except Exception:
         log.exception("takeover request failed")
     _cancel_turns(bot_id, run_id)
+
+
+def _resume_parked_takeover(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+    bot: Bot,
+) -> None:
+    parked = history.waiting_takeover_run(bot.id)
+    if parked is None:
+        return
+    live = history.mark_run_running(parked.id)
+    if live is None:
+        return
+    prompt = "The owner released the desktop. Continue the same task."
+    _emit(
+        events,
+        bot,
+        ProductEventType.RUN_STARTED,
+        {"run": live.model_dump(mode="json")},
+        run_id=live.id,
+    )
+
+    async def _go() -> None:
+        try:
+            bot2 = await _ensure_agent(history, rt, bot)
+            await _run_turn(
+                history,
+                rt,
+                events,
+                bot2,
+                prompt,
+                live,
+                session_id=bot2.cursor_agent_id,
+            )
+        except Exception:
+            log.exception("failed to resume parked takeover run")
+
+    task = asyncio.create_task(_go(), name=f"turn-{live.id}")
+    _register_turn(bot.id, live.id, task)
 
 
 async def _ensure_agent(history: HistoryStore, rt: AgentRuntime, bot: Bot) -> Bot:
@@ -697,6 +751,7 @@ async def _run_turn(
     reply: ThreadMessage | None = None,
     inbox_items: list[dict[str, str | None]] | None = None,
 ) -> None:
+    rt.clear_active_turn(run_id=run.id)
     agent_id = session_id or bot.cursor_agent_id
     rt.set_current_turn_context(bot.id, run.id, bot.thread_id, agent_id=agent_id, role="lead")
     draft = ""
@@ -1975,6 +2030,7 @@ async def computer_release(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
     boxes: ComputerService = Depends(computers),
+    rt: AgentRuntime = Depends(runtime),
 ) -> OkResponse:
     try:
         bot = _require_bot(history, bot_id)
@@ -1985,6 +2041,10 @@ async def computer_release(
         raise _db_error(err) from err
     _emit(events, bot, ProductEventType.COMPUTER_TAKEOVER_RELEASED, {})
     _emit_computer(events, bot, status)
+    try:
+        _resume_parked_takeover(history, rt, events, bot)
+    except Exception:
+        log.exception("failed to resume after release")
     return OkResponse(ok=True)
 
 

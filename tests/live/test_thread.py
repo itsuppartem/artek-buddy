@@ -344,12 +344,78 @@ def test_follow_up_after_takeover_starts_a_turn(page: Page, client_url: str, hos
     box.fill("please e2e-park-takeover")
     expect(box).to_have_value("please e2e-park-takeover")
     box.press("Enter")
-    expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("computer-card")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
+    expect(page.get_by_test_id("thread-stop")).to_have_count(0)
     send_message(page, "go on")
     expect(
         page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")
     ).to_be_visible(timeout=15_000)
     expect(page.get_by_test_id("thread-stop")).to_have_count(0)
+
+
+def test_takeover_card_shows_reason_and_open_computer(page: Page, client_url: str, host_url: str) -> None:
+    from artek_buddy.runtime.scripted import E2E_TAKEOVER_REASON
+
+    name = unique_bot("Card")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    box = composer(page)
+    box.fill("please e2e-park-takeover")
+    expect(box).to_have_value("please e2e-park-takeover")
+    box.press("Enter")
+    card = page.get_by_test_id("computer-card")
+    expect(card).to_contain_text(E2E_TAKEOVER_REASON, timeout=8_000)
+    expect(page.get_by_test_id("open-computer")).to_be_visible()
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
+    expect(page.get_by_test_id("thread-stop")).to_have_count(0)
+    page.get_by_test_id("open-computer").click()
+    expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
+    page.get_by_role("button", name="Take control").click()
+    expect(page.get_by_text("You have control")).to_be_visible(timeout=8_000)
+    page.get_by_label("Close computer").click()
+    page.get_by_role("button", name="Release").click()
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="bot"]').filter(
+            has_text="continuing after takeover"
+        )
+    ).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("open-computer")).to_have_count(0)
+
+
+def test_scripted_image_success_shows_one_card_and_one_generating(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "ImgOk")
+    send_message(page, "please e2e-generate-image", name)
+    thread = page.get_by_test_id("thread")
+    expect(thread.get_by_test_id("file-card").filter(has_text="fox.png")).to_be_visible(timeout=15_000)
+    expect(thread.get_by_text("Generating…")).to_have_count(1)
+    expect(thread.get_by_test_id("file-preview")).to_be_visible()
+
+
+def test_scripted_image_failure_shows_error_not_hung_or_stopped(page: Page, client_url: str, host_url: str) -> None:
+    from artek_buddy.runtime.scripted import E2E_GENERATE_ERROR
+
+    name = _named(page, client_url, host_url, "ImgFail")
+    send_message(page, "please e2e-generate-image-fail", name)
+    expect(page.get_by_test_id("run-error")).to_contain_text(E2E_GENERATE_ERROR, timeout=15_000)
+    expect(page.get_by_test_id("run-error")).not_to_contain_text("Stopped.")
+    expect(page.get_by_test_id("file-card")).to_have_count(0)
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
+
+
+def test_user_stop_during_generate_shows_stopped_and_no_later_card(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "ImgStop")
+    box = composer(page)
+    box.fill("please e2e-generate-image")
+    expect(box).to_have_value("please e2e-generate-image")
+    box.press("Enter")
+    expect(page.get_by_test_id("thread").get_by_text("Generating…")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("thread-stop").click()
+    expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
+    page.wait_for_timeout(3_000)
+    expect(page.get_by_test_id("file-card")).to_have_count(0)
 
 
 def test_subagent_stop_while_running(page: Page, client_url: str, host_url: str) -> None:
