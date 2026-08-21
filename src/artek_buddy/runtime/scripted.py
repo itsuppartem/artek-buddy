@@ -18,6 +18,7 @@ from artek_buddy.consent import (
 )
 from artek_buddy.db.shaping import new_id
 from artek_buddy.runtime.base import RuntimeBase
+from artek_buddy.runtime.cursor_wait import note_auth_failures
 from artek_buddy.runtime.tools import ProductTools
 from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord
 from artek_buddy.stream import _map_tool_to_events
@@ -45,6 +46,9 @@ E2E_OLDER_PREFIX = "e2e-old-"
 E2E_OLDER_COUNT = 51
 E2E_HANG_S = 12.0
 E2E_ASK_DETAIL = "I can open Wikipedia on the desktop after you pick one."
+E2E_TAKEOVER_REASON = "Pass the site check, then Release."
+E2E_GENERATE_ERROR = "could not generate that image"
+E2E_AUTH_ERROR = "Authentication error If you are logged in, try logging out and back in."
 E2E_PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
     b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
@@ -232,9 +236,11 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish("worker started"),
         ]
+    if "the owner released the desktop" in hay:
+        return [scripted_finish("continuing after takeover")]
     if "e2e-park-takeover" in hay:
         return [
-            scripted_tool("request_takeover"),
+            scripted_tool("request_takeover", reason=E2E_TAKEOVER_REASON),
             scripted_delay(E2E_HANG_S),
             scripted_finish("should not finish"),
         ]
@@ -420,6 +426,20 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ScriptedStep(owner_auto_path="notes.txt"),
             scripted_finish("got notes"),
         ]
+    if "e2e-generate-image-fail" in hay:
+        return [
+            scripted_tool("send_message", text="Generating…"),
+            scripted_delay(0.2),
+            scripted_finish(E2E_GENERATE_ERROR, status="failed", error=E2E_GENERATE_ERROR),
+        ]
+    if "e2e-generate-image" in hay:
+        return [
+            scripted_tool("send_message", text="Generating…"),
+            scripted_delay(2.5),
+            ScriptedStep(write_home=("fox.png", E2E_PNG)),
+            scripted_tool("send_file", path="fox.png", name="fox.png"),
+            scripted_finish(""),
+        ]
     if "e2e-send-image" in hay:
         return [
             ScriptedStep(write_home=("shot.png", E2E_PNG)),
@@ -463,6 +483,9 @@ class ScriptedRuntime(RuntimeBase):
         self._queue: list[list[ScriptedStep]] = []
         self._seq = 0
         self.last_tool_results: list[tuple[str, dict[str, Any]]] = []
+        self._auth_fails = 0
+        self.bridge_recycles = 0
+        self._pending_recover = False
 
     def queue_turn(self, *steps: ScriptedStep) -> None:
         self._queue.append(list(steps))
@@ -533,6 +556,49 @@ class ScriptedRuntime(RuntimeBase):
         agent_id = await self.ensure_session(session_id, bot_id=bot_id, role=role)
         self.bind_agent_bot(agent_id, bot_id)
         self.last_prompt = prompt
+        hay = _user_tail(prompt).lower()
+        if "e2e-auth-error" in hay:
+            run_id = new_id("run")
+            if self._pending_recover:
+                self._pending_recover = False
+                self._auth_fails = 0
+                yield RunRecord(
+                    id=run_id,
+                    agent_id=agent_id,
+                    status="completed",
+                    result="recovered",
+                    error=None,
+                )
+                return
+            self._auth_fails, recycle = note_auth_failures(
+                self._auth_fails,
+                status="failed",
+                error=E2E_AUTH_ERROR,
+                duration_s=0.01,
+            )
+            yield RunRecord(
+                id=run_id,
+                agent_id=agent_id,
+                status="failed",
+                result=None,
+                error=E2E_AUTH_ERROR,
+            )
+            if recycle:
+                self._agents.pop(agent_id, None)
+                live = await self.create_session(
+                    name="artek-buddy",
+                    persist_default=True,
+                    bot_id=bot_id,
+                )
+                if bot_id and self.store is not None:
+                    try:
+                        self.store.attach_agent(bot_id, live)
+                    except Exception:
+                        log.exception("failed to attach recycled scripted agent")
+                self.bridge_recycles += 1
+                self._pending_recover = True
+                self._auth_fails = 0
+            return
         steps = self._queue.pop(0) if self._queue else steps_for_prompt(prompt)
         tools = ProductTools(self)
         result = ""

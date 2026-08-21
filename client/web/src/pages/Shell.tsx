@@ -14,7 +14,7 @@ import {
   useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { abortableDelay, api, classifyError, isActive, type ShellErrorKind } from "../api";
+import { abortableDelay, api, classifyError, isLiveTurn, type ShellErrorKind } from "../api";
 import { completeOwnerConsent, fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/consent";
 import {
   addPendingFiles,
@@ -34,6 +34,7 @@ import { filterBots, inboxEmptyState, sortInboxBots, type SidebarView } from "..
 import {
   computerLabel,
   computerModeHint,
+  computerPaneState,
   embeddableScreenUrl,
   overlayPointerEvents,
   previewPointerEvents,
@@ -167,9 +168,10 @@ export function ShellPage() {
   activeIdRef.current = active?.id;
   botIdRef.current = botId;
   const thread = active && snapshot?.botId === active.id ? snapshot : null;
+  const isParked = thread?.run?.status === "waiting_takeover";
   const isBusy = Boolean(
-    (thread?.run && isActive(thread.run.status)) ||
-      (thread && (hasLive(thread) || hasActiveWorkers(thread))),
+    (thread?.run && isLiveTurn(thread.run.status)) ||
+      (thread && !isParked && (hasLive(thread) || hasActiveWorkers(thread))),
   );
 
   useEffect(() => {
@@ -1323,7 +1325,9 @@ export function ShellPage() {
               botId={active?.id ?? ""}
               canAnswer
               message={message}
+              runStatus={thread?.run?.status}
               onAnswer={(text) => send(text)}
+              onOpenComputer={() => void openOverlay("preview")}
               onOpenBot={(id) => {
                 void refreshBots().then(() => navigate(`/app/${id}`));
               }}
@@ -1344,7 +1348,7 @@ export function ShellPage() {
               {thread.run.error || (thread.run.status === "cancelled" ? "Stopped." : "The turn failed.")}
             </div>
           ) : null}
-          {thread?.run && isActive(thread.run.status) ? (
+          {thread?.run && isLiveTurn(thread.run.status) ? (
             <div className="flex justify-start">
               <div
                 data-testid="typing-indicator"
@@ -1618,7 +1622,16 @@ export function ShellPage() {
           </div>
         </div>
       ) : computerOpen && active ? (
-        <div className="absolute inset-0 z-30 flex flex-col bg-[#050506]">
+        <div
+          className="absolute inset-0 z-30 flex flex-col bg-[#050506]"
+          data-testid="computer-overlay"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key !== "CapsLock" || computer?.controlHolder !== "user" || !active) return;
+            event.preventDefault();
+            void api.computer.input(active.id, { kind: "key", payload: { key: "Caps_Lock" } });
+          }}
+        >
           <div className="flex items-center justify-between gap-4 border-b border-[#171719] px-[18px] py-3.5">
             <div className="flex min-w-0 items-center gap-3">
               <BotAvatar color={active.color} size={28} />
@@ -1626,7 +1639,10 @@ export function ShellPage() {
                 {computerLabel(computer?.mode || active.computerMode, active.name)}
               </span>
               {computer?.controlHolder === "user" ? (
-                <span className="rounded-full bg-[rgba(48,162,75,.14)] px-[11px] py-1 text-[13px] text-[#4ECB71]">
+                <span
+                  data-testid="computer-overlay-holder"
+                  className="rounded-full bg-[rgba(48,162,75,.14)] px-[11px] py-1 text-[13px] text-[#4ECB71]"
+                >
                   You have control
                 </span>
               ) : null}
@@ -1686,12 +1702,12 @@ export function ShellPage() {
                   {screenError
                     ? screenError
                     : computer?.state === "running"
-                      ? "Screen is not available yet"
+                      ? "Desktop is running"
                       : computer?.state === "suspended"
                         ? "Computer is asleep"
                         : computerLabel(computer?.mode, active.name)}
                 </div>
-                {screenError || computer?.state === "running" ? (
+                {screenError ? (
                   <Button type="button" variant="outline" size="sm" onClick={retryScreen}>
                     Retry
                   </Button>
@@ -1811,16 +1827,20 @@ function MessageView({
   botId,
   canAnswer,
   message,
+  runStatus,
   onAnswer,
   onOpenBot,
+  onOpenComputer,
   onSubagentChange,
   onContextMenu,
 }: {
   botId: string;
   canAnswer: boolean;
   message: ThreadMessage;
+  runStatus?: string;
   onAnswer: (text: string) => Promise<void>;
   onOpenBot: (botId: string) => void;
+  onOpenComputer?: () => void;
   onSubagentChange?: () => void;
   onContextMenu?: (event: MouseEvent, message: ThreadMessage) => void;
 }) {
@@ -2025,6 +2045,9 @@ function MessageView({
           );
         }
         if (block.kind === "computer") {
+          const waiting =
+            (block.state === "waiting" || block.state === "waiting_takeover") &&
+            runStatus === "waiting_takeover";
           return (
             <div
               key={index}
@@ -2032,14 +2055,25 @@ function MessageView({
               className="w-[340px] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[15px] font-medium text-[#ECECEE]">Tool</span>
+                <span className="text-[15px] font-medium text-[#ECECEE]">Computer</span>
                 <span className="rounded-full bg-[rgba(48,162,75,.14)] px-[11px] py-1 text-[13px] text-[#4ECB71]">
-                  {block.state}
+                  {waiting ? "waiting" : "done"}
                 </span>
               </div>
               <div className="my-2.5 text-[14.5px] leading-[1.5] text-[#A8A8AD]">
                 <ChatMarkdown>{block.text}</ChatMarkdown>
               </div>
+              {waiting ? (
+                <Button
+                  type="button"
+                  data-testid="open-computer"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onOpenComputer?.()}
+                >
+                  Open computer
+                </Button>
+              ) : null}
             </div>
           );
         }
@@ -2732,8 +2766,9 @@ function ComputerPane({
   const isRunning = computer?.state === "running";
   const isBooting = booting || computer?.state === "booting";
   const isError = computer?.state === "error";
+  const isSleeping = computer?.state === "suspended";
   const heldByOther = Boolean(computer?.busyBotName);
-  const paneState = isRunning ? "running" : isBooting ? "booting" : isError ? "error" : "offline";
+  const paneState = computerPaneState(computer?.state, isBooting);
 
   return (
     <div>
@@ -2765,6 +2800,15 @@ function ComputerPane({
             >
               <span className="h-1.5 w-1.5 rounded-full bg-[#E03131]" />
               Error
+            </span>
+          ) : isSleeping ? (
+            <span
+              data-testid="computer-state"
+              data-state={paneState}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(230,87,7,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FF8542]"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-[#E65707]" />
+              Sleeping
             </span>
           ) : (
             <span
@@ -2834,7 +2878,13 @@ function ComputerPane({
             )}
           </>
         ) : !heldByOther && isRunning ? (
-          <div className="grid h-full w-full place-items-center px-6 text-center">
+          <button
+            type="button"
+            data-testid="computer-preview"
+            aria-label="Open computer fullscreen"
+            onClick={onOpenFullscreen}
+            className="grid h-full w-full place-items-center px-6 text-center cursor-pointer"
+          >
             <div className="flex flex-col items-center gap-2 text-[#85858A]">
               {screenError ? (
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#3A3A40] border-t-[#30A24B]" />
@@ -2846,12 +2896,20 @@ function ComputerPane({
                 {screenError || "Desktop is running"}
               </span>
               {screenError ? (
-                <Button type="button" variant="outline" size="sm" onClick={onRetryScreen}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRetryScreen();
+                  }}
+                >
                   Retry
                 </Button>
               ) : null}
             </div>
-          </div>
+          </button>
         ) : (
           <button
             type="button"
@@ -2861,6 +2919,7 @@ function ComputerPane({
             onClick={() => {
               if (computer?.busyBotName) return;
               if (isRunning) onOpenFullscreen();
+              else if (isSleeping) onTakeControl();
               else onTakeControl();
             }}
           >
@@ -2879,6 +2938,18 @@ function ComputerPane({
               <div className="flex flex-col items-center gap-1 text-[#FA5252]">
                 <span className="text-[13.5px] font-medium">Failed to start</span>
                 <span className="text-[12px] text-[#85858A]">Click to retry</span>
+              </div>
+            ) : isSleeping ? (
+              <div className="flex flex-col items-center gap-2 text-[#85858A]">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#4E4E54]">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                  <line x1="8" y1="21" x2="16" y2="21"></line>
+                  <line x1="12" y1="17" x2="12" y2="21"></line>
+                </svg>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[13px] font-medium text-[#ECECEE]">{label}</span>
+                  <span className="text-[11.5px] text-[#6C6C70]">Sleeping • Click to start</span>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2 text-[#85858A]">

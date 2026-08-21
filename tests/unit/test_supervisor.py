@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from artek_buddy.supervisor.docker_engine import published_port
-from artek_buddy.supervisor.logic import _close_app_command, shell_quote, x11vnc_command
+from artek_buddy.supervisor.logic import (
+    _close_app_command,
+    action_command,
+    observe_command,
+    shell_quote,
+    x11vnc_command,
+)
 
 
 def test_shell_quote_wraps_single_quotes() -> None:
@@ -25,3 +31,22 @@ def test_published_port_reads_host_binding() -> None:
     inspect = {"NetworkSettings": {"Ports": {"6080/tcp": [{"HostPort": "33100"}]}}}
     assert published_port(inspect, "6080") == 33100
     assert published_port({}, "6080") is None
+
+
+def test_observe_command_skips_screenshot_by_default() -> None:
+    slim = observe_command()
+    assert "import -window root" not in slim
+    assert "TITLE" in slim
+    shot = observe_command(include_image=True)
+    assert "import -window root" in shot
+
+
+def test_launch_terminal_is_xterm_once() -> None:
+    cmd = action_command([{"kind": "launch", "application": "terminal"}])
+    assert "xterm" in cmd
+    assert cmd.count("xterm") == 1
+
+
+def test_caps_lock_key_uses_xdotool_caps_lock() -> None:
+    cmd = action_command([{"kind": "key", "key": "CapsLock"}])
+    assert "Caps_Lock" in cmd

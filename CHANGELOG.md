@@ -14,6 +14,10 @@
 - Each lead prompt includes a compact summary of this chat, not only the last line.
 - Dismissed attention pills stay gone after switching chats.
 - A thread pinned to the bottom stays on the latest cards; a switch lands on the latest messages.
+- Computer pane Sleeping matches Settings Stop; preview click does not take control.
+- Handing the desktop to the owner clears typing dots and Stop; Release resumes the same run.
+- Default `computer_observe` is slim (no screenshot JSON); Caps Lock reaches the control session.
+- Cursor `wait()` status and store `error_code` are logged and stored; a dead auth bridge is recycled.
 
 ### Changed
 - SSE sends a keepalive as soon as the client connects, so the stream is live before the next event.

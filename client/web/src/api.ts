@@ -392,6 +392,9 @@ export const api = {
     release(botId: string) {
       return request<{ ok: boolean }>("POST", `/v1/computer/${botId}/release`);
     },
+    input(botId: string, body: { kind: string; payload: Record<string, unknown> }) {
+      return request<{ ok: boolean }>("POST", `/v1/computer/${botId}/input`, body);
+    },
     heartbeat(botId: string) {
       return request<{ ok: boolean }>("POST", `/v1/computer/${botId}/heartbeat`);
     },
@@ -551,4 +554,12 @@ export function isActive(status: string | undefined): boolean {
     status === "waiting_input" ||
     status === "waiting_takeover"
   );
+}
+
+export function isParkedTakeover(status: string | undefined): boolean {
+  return status === "waiting_takeover";
+}
+
+export function isLiveTurn(status: string | undefined): boolean {
+  return isActive(status) && !isParkedTakeover(status);
 }

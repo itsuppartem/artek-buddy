@@ -37,6 +37,19 @@
       rfb.viewOnly = flag("view_only");
       rfb.scaleViewport = true;
       rfb.clipViewport = false;
+      const CAPS = 0xffe5;
+      if (!rfb.viewOnly) {
+        window.addEventListener("keydown", (event) => {
+          if (event.key !== "CapsLock") return;
+          event.preventDefault();
+          if (typeof rfb.sendKey === "function") rfb.sendKey(CAPS, "CapsLock", true);
+        });
+        window.addEventListener("keyup", (event) => {
+          if (event.key !== "CapsLock") return;
+          event.preventDefault();
+          if (typeof rfb.sendKey === "function") rfb.sendKey(CAPS, "CapsLock", false);
+        });
+      }
     </script>
   </head>
   <body>

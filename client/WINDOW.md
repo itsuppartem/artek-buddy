@@ -61,7 +61,7 @@ SSE. Blocks in a message:
 | ask | question + options or free text |
 | consent | Allow once / Always / Deny (browse, page, owner_*) |
 | file | name, media preview, Download |
-| computer | tool card (state + text) |
+| computer | reason + **Open computer** while `waiting_takeover`; after Release the same run resumes |
 | subagent | `#n name`, status, Stop while running, Restart after |
 | child_bot | click opens that chat (disabled if deleted/archived) |
 
@@ -69,11 +69,11 @@ Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load ea
 
 The open chat uses `/v1/threads/{id}/events` for the thread. Inbox banners use one `/v1/events` stream for every bot, including the open chat, so a switch cannot drop `run.completed`. Duplicate event ids are ignored. Chrome HTTP/1.1 allows six connections per host; one SSE per leftover chat would starve Create and pair.
 
-Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
+Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `open-computer`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
 
 Errors: host Retry, auth re-pair, action Dismiss.
 
-If the user is pinned to the bottom, new cards keep the latest in view. Switching chats lands on the latest messages. Stop cancels the lead and workers; a later completed token must not append. The host prompt includes a compact summary of this chat (byte-capped) plus owner lines that never reached the model (inbox kept across Stop). `waiting_takeover` plus a new send starts a turn instead of parking forever.
+If the user is pinned to the bottom, new cards keep the latest in view. Switching chats lands on the latest messages. Stop cancels the lead and workers; a later completed token must not append. The host prompt includes a compact summary of this chat (byte-capped) plus owner lines that never reached the model (inbox kept across Stop). `waiting_takeover` is a pause: no typing dots and no Stop. A new send starts a turn. **Release** resumes the same parked run.
 
 Not in this window: `threads.followUp` (the host queues on send while a lead is running; a parked takeover starts work), `subagents.steer`, `me`, `deployment`. `notify-send` exists on the proxy and is unused by React.
 
@@ -85,7 +85,7 @@ Settings: the same fields plus instructions, mode change (rebinds the desktop; h
 
 ## Computer pane
 
-States: Offline, Booting, Running, Sleeping, Error (`computer-state` / `data-state`). Click Offline to boot and take control. Gear does not auto-boot. Stop in Settings is Sleeping (`suspended`), not Offline. View-only preview iframe when the screen URL is `/novnc/…`. Fake sandbox has no noVNC URL, so the pane shows `computer-running` instead of spinning Connecting. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows `{name} is using the computer` on the start tile (one line; the bot that booted or holds the shared desktop, not only a bot with an active run) and disables Take / Restart / Stop / Reset. The pane keeps the start tile in that case instead of the running preview. Dedicated vs Team is `computer-label` `data-mode`.
+States: Offline, Booting, Running, Sleeping, Error (`computer-state` / `data-state`). Click Offline to boot and take control. Click Sleeping to wake. Gear does not auto-boot. Stop in Settings is Sleeping (`suspended`), not Offline. Preview click / Open screen opens the screen view (`computer-overlay`) and does **not** grant control. Take control is the only control grant (`computer-overlay-holder` while held). Caps Lock is forwarded during Take control. View-only preview iframe when the screen URL is `/novnc/…`. Fake sandbox has no noVNC URL, so the pane shows `computer-running` instead of spinning Connecting. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows `{name} is using the computer` on the start tile (one line; the bot that booted or holds the shared desktop, not only a bot with an active run) and disables Take / Restart / Stop / Reset. The pane keeps the start tile in that case instead of the running preview. Dedicated vs Team is `computer-label` `data-mode`.
 
 Memory (same pane): owner / work / charter list, New (this bot \| shared, `memory-save`), Edit, Outdated = delete, Export `.md`.
 

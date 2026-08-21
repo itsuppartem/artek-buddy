@@ -401,14 +401,28 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="computer_observe",
-        description="Look at this bot's Linux desktop: screenshot metadata, cursor, and the active window.",
-        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        description=(
+            "Look at this bot's Linux desktop: geometry, cursor, and the active window title. "
+            "Default is slim (no screenshot). Set include_image only when the title cannot answer "
+            "(captcha, canvas, unlabeled buttons). Prefer DOM / curl after the owner allowed the site."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "include_image": {
+                    "type": "boolean",
+                    "description": "Attach a typed screenshot only when pixels are required.",
+                },
+            },
+            "additionalProperties": False,
+        },
     ),
     ToolSpec(
         name="computer_act",
         description=(
             "Send mouse, keyboard, or launch actions to this bot's Linux desktop. "
-            "Opening a site, clicking, typing, or filling a form asks Allow once / Always / Deny first."
+            "Opening a site, clicking, typing, or filling a form asks Allow once / Always / Deny first. "
+            "Pass several actions in one call. Set return_observe to get a slim observe after the last action."
         ),
         input_schema={
             "type": "object",
@@ -417,7 +431,11 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                     "type": "array",
                     "description": "Ordered desktop actions (click, move, type, key, scroll, wait, open, launch, close).",
                     "items": {"type": "object"},
-                }
+                },
+                "return_observe": {
+                    "type": "boolean",
+                    "description": "After the actions, return a slim observe (title/geometry, image only if the title is generic).",
+                },
             },
             "required": ["actions"],
         },
@@ -450,8 +468,21 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="request_takeover",
-        description="Pause this turn and ask the human to take control of the desktop.",
-        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        description=(
+            "Pause this turn and ask the human to take control of this bot's desktop "
+            "(login, captcha, or any page you cannot complete). Pass a short reason. "
+            "Do not invent a password. Do not keep calling tools after this."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "description": "What the owner should do in the browser, then Release.",
+                },
+            },
+            "additionalProperties": False,
+        },
         lead_only=True,
     ),
     ToolSpec(
@@ -935,7 +966,7 @@ class ProductTools:
             return found
         bot, _bot_id = found
         try:
-            return self.runtime.computers.observe(bot)
+            return self.runtime.computers.observe(bot, include_image=bool(args.get("include_image")))
         except Exception as exc:
             log.exception("computer_observe failed")
             return {"ok": False, "error": str(exc)}
@@ -971,7 +1002,11 @@ class ProductTools:
             if denied:
                 return denied
         try:
-            return self.runtime.computers.act(bot, actions)
+            return self.runtime.computers.act(
+                bot,
+                actions,
+                return_observe=bool(args.get("return_observe")),
+            )
         except Exception as exc:
             log.exception("computer_act failed")
             return {"ok": False, "error": str(exc)}
@@ -1122,6 +1157,9 @@ class ProductTools:
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if self.runtime.store is None or not bot_id or not run_id:
             return {"ok": False, "error": "no active run"}
+        reason = str(args.get("reason") or args.get("text") or "").strip() or (
+            "Take control of this computer, then Release when you are done."
+        )
         try:
             self.runtime.store.mark_run_waiting_takeover(run_id)
         except Exception as exc:
@@ -1129,10 +1167,12 @@ class ProductTools:
             return {"ok": False, "error": str(exc)}
         if self.runtime.on_takeover_requested:
             try:
+                self.runtime.on_takeover_requested(bot_id, run_id, reason)
+            except TypeError:
                 self.runtime.on_takeover_requested(bot_id, run_id)
             except Exception:
                 log.exception("takeover callback failed")
-        return {"ok": True, "waiting": True}
+        return {"ok": True, "waiting": True, "reason": reason}
 
     def _require_subagents(
         self, bound_bot_id: str | None
