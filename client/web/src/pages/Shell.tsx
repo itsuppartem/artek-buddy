@@ -1694,7 +1694,7 @@ export function ShellPage() {
               </>
             ) : (
               <div className="grid h-full place-items-center gap-3 text-sm text-[#6C6C70]">
-                <div data-testid={computer?.state === "running" ? "computer-running" : undefined}>
+                <div>
                   {screenError
                     ? screenError
                     : computer?.state === "running"

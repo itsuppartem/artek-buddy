@@ -371,10 +371,12 @@ def test_takeover_card_shows_reason_and_open_computer(page: Page, client_url: st
     expect(page.get_by_test_id("thread-stop")).to_have_count(0)
     page.get_by_test_id("open-computer").click()
     expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
-    page.get_by_role("button", name="Take control").click()
+    overlay_bar = page.get_by_label("Close computer").locator("xpath=..")
+    overlay_bar.get_by_role("button", name="Take control").click()
     expect(page.get_by_text("You have control")).to_be_visible(timeout=8_000)
+    overlay_bar.get_by_role("button", name="Release").click()
     page.get_by_label("Close computer").click()
-    page.get_by_role("button", name="Release").click()
+    expect(page.get_by_label("Close computer")).to_have_count(0)
     expect(
         page.locator('[data-testid="thread-message"][data-role="bot"]').filter(
             has_text="continuing after takeover"
