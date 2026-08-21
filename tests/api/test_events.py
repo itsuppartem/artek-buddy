@@ -27,9 +27,10 @@ def sse_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_ok: None, 
 
 @asynccontextmanager
 async def _http(app):
-    transport = httpx.ASGITransport(app=app, lifespan="on")
-    async with httpx.AsyncClient(transport=transport, base_url="http://test", timeout=8.0) as ac:
-        yield ac
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", timeout=8.0) as ac:
+            yield ac
 
 
 async def _wait_run(ac: httpx.AsyncClient, headers: dict[str, str], bot_id: str, run_id: str) -> dict:
