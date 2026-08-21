@@ -94,6 +94,7 @@ class EventHub:
         self._bind_loop()
         self._subs[bot_id].add(queue)
         try:
+            yield HEARTBEAT
             if after and not self.has_event(bot_id, after):
                 yield REPLAY_GAP
             else:
@@ -116,6 +117,7 @@ class EventHub:
         self._bind_loop()
         self._subs[WORKSPACE_CHANNEL].add(queue)
         try:
+            yield HEARTBEAT
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=heartbeat_s)
