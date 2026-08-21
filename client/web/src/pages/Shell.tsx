@@ -1624,6 +1624,7 @@ export function ShellPage() {
       ) : computerOpen && active ? (
         <div
           className="absolute inset-0 z-30 flex flex-col bg-[#050506]"
+          data-testid="computer-overlay"
           tabIndex={0}
           onKeyDown={(event) => {
             if (event.key !== "CapsLock" || computer?.controlHolder !== "user" || !active) return;
@@ -1638,7 +1639,10 @@ export function ShellPage() {
                 {computerLabel(computer?.mode || active.computerMode, active.name)}
               </span>
               {computer?.controlHolder === "user" ? (
-                <span className="rounded-full bg-[rgba(48,162,75,.14)] px-[11px] py-1 text-[13px] text-[#4ECB71]">
+                <span
+                  data-testid="computer-overlay-holder"
+                  className="rounded-full bg-[rgba(48,162,75,.14)] px-[11px] py-1 text-[13px] text-[#4ECB71]"
+                >
                   You have control
                 </span>
               ) : null}
