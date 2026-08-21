@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+- Stop on a missing chat is 404.
+- Answering a missing consent is 404, not a generic "not pending".
+
+### Added
+- HTTP API tests on the `backend` job for pairing leftovers, session, bots duplicate/pin, thread stop/follow-up/read, consent deny, computer files/input, and exact memory/cron error codes.
+
 ## [0.10.24] - 2026-08-21
 
 ### Fixed

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.api.helpers import create_bot, wait_run
+
 
 def test_memory_create_update_export_delete(client, auth_header) -> None:
     bot = client.post("/v1/bots", headers=auth_header, json={"name": "Mem"})
@@ -36,7 +38,7 @@ def test_memory_create_update_export_delete(client, auth_header) -> None:
         headers=auth_header,
         json={"scope": "user", "path": "../secret", "content": "nope"},
     )
-    assert bad.status_code in {400, 422}
+    assert bad.status_code == 400
 
     removed = client.delete(f"/v1/memory/{doc_id}", headers=auth_header)
     assert removed.status_code == 200
@@ -71,7 +73,7 @@ def test_routines_valid_and_invalid_cron(client, auth_header) -> None:
             "timezone": "UTC",
         },
     )
-    assert bad.status_code in {400, 422}
+    assert bad.status_code == 400
 
     paused = client.patch(
         f"/v1/routines/{routine_id}",
@@ -86,3 +88,45 @@ def test_routines_valid_and_invalid_cron(client, auth_header) -> None:
 
     deleted = client.delete(f"/v1/routines/{routine_id}", headers=auth_header)
     assert deleted.status_code == 200
+
+
+def test_routine_test_run_completes(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "RoutineFire")["id"]
+    created = client.post(
+        "/v1/routines",
+        headers=auth_header,
+        json={
+            "bot_id": bot_id,
+            "name": "Ping",
+            "prompt": "hello",
+            "cron": "0 9 * * *",
+            "timezone": "UTC",
+            "active": True,
+        },
+    )
+    assert created.status_code == 200
+    fired = client.post(f"/v1/routines/{created.json()['id']}/test", headers=auth_header)
+    assert fired.status_code == 200
+    run_id = fired.json()["run_id"]
+    snap = wait_run(client, auth_header, bot_id, run_id)
+    assert snap["run"]["status"] == "completed"
+
+
+def test_artifacts_empty_and_missing(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "Arts")["id"]
+    listed = client.get("/v1/artifacts", headers=auth_header, params={"bot_id": bot_id})
+    assert listed.status_code == 200
+    assert listed.json()["artifacts"] == []
+    missing = client.get("/v1/artifacts/art_missing", headers=auth_header)
+    assert missing.status_code == 404
+    no_bot = client.get("/v1/artifacts", headers=auth_header)
+    assert no_bot.status_code == 422
+
+
+def test_subagents_empty_and_missing_stop(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "Subs")["id"]
+    listed = client.get(f"/v1/bots/{bot_id}/subagents", headers=auth_header)
+    assert listed.status_code == 200
+    assert listed.json()["subagents"] == []
+    stopped = client.post(f"/v1/bots/{bot_id}/subagents/sub_missing/stop", headers=auth_header)
+    assert stopped.status_code == 404

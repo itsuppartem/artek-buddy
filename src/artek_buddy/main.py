@@ -1355,6 +1355,8 @@ async def answer_consent(
 ) -> OkResponse:
     row = hub.answer(consent_id, body.decision, None if actor == "host" else actor)
     if row is None:
+        if hub.get_job(consent_id) is None:
+            raise HTTPException(status_code=404, detail="consent not found")
         raise HTTPException(status_code=400, detail="consent not pending")
     return OkResponse(ok=True)
 
@@ -1448,24 +1450,22 @@ async def stop_thread(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> OkResponse:
-    _cancel_turns(bot_id)
     try:
-        bot = history.get_bot(bot_id)
+        bot = _require_bot(history, bot_id)
+        _cancel_turns(bot_id)
         service = getattr(app.state, "subagents", None)
-        if bot is not None and service is not None:
+        if service is not None:
             service.stop_all(bot)
         history.clear_inbox(bot_id)
         cancelled_ids = history.cancel_active_runs(bot_id)
         for run_id in cancelled_ids:
-            bot = history.get_bot(bot_id)
-            if bot:
-                _emit(
-                    events,
-                    bot,
-                    ProductEventType.RUN_CANCELLED,
-                    {"run_id": run_id, "status": "cancelled"},
-                    run_id=run_id,
-                )
+            _emit(
+                events,
+                bot,
+                ProductEventType.RUN_CANCELLED,
+                {"run_id": run_id, "status": "cancelled"},
+                run_id=run_id,
+            )
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
     return OkResponse(ok=True)
