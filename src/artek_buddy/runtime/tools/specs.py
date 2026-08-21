@@ -1,0 +1,438 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass(frozen=True)
+class ToolSpec:
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+    lead_only: bool = False
+
+
+TOOL_SPECS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="send_message",
+        description=(
+            "Post a message to the user in this chat immediately. "
+            "Use this whenever you have an update, explanation, intermediate result, "
+            "or decision point as soon as it is ready. "
+            "Do not tell the user to press Allow — the consent card in the thread is that UI."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "Message text to send to the user (supports markdown).",
+                },
+                "options": {
+                    "type": "array",
+                    "description": "Optional multiple choice option buttons for the user to pick from.",
+                    "items": {"type": "string"},
+                },
+            },
+            "required": ["text"],
+        },
+    ),
+    ToolSpec(
+        name="send_file",
+        description=(
+            "Attach a file to this chat so the owner can download it. "
+            "Use a path under this computer's home (or workspace), or pass content "
+            "plus a name for a generated file. Do not only mention the path."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "File under this bot's home or workspace, e.g. notes.txt or Downloads/report.pdf",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Download filename if different from the path.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Optional text to write first, then attach (max 1 MB).",
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Optional caption shown above the file card.",
+                },
+            },
+        },
+    ),
+    ToolSpec(
+        name="ask_user",
+        description=(
+            "Ask the user a question with interactive multiple choice buttons. "
+            "The user will be able to click an option to reply immediately."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "The question to ask.",
+                },
+                "detail": {
+                    "type": "string",
+                    "description": "Optional description or context under the question.",
+                },
+                "options": {
+                    "type": "array",
+                    "description": "List of choice options (e.g. ['A — option 1', 'B — option 2']).",
+                    "items": {"type": "string"},
+                },
+            },
+            "required": ["question", "options"],
+        },
+    ),
+    ToolSpec(
+        name="remember",
+        description=(
+            "Save one short durable sentence about the owner or this chat. "
+            "Call this when the user states a preference, rule, person, project, place, "
+            "or correction. Default scope is shared (every bot sees it). "
+            "Use scope=bot only for a note that belongs to this chat. "
+            "Do not store one-off tasks such as opening a tab. "
+            "A new note on the same slot (name, city, tz, tone, format, language) replaces the old one. "
+            "To erase something, set forget=true with the text to drop."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "One short sentence to remember, or the text to forget.",
+                },
+                "kind": {
+                    "type": "string",
+                    "description": (
+                        "preference, choice, rule, person, project, place, "
+                        "desktop, correction, or workflow."
+                    ),
+                },
+                "scope": {
+                    "type": "string",
+                    "description": "user (shared, default) or bot (this chat only).",
+                },
+                "slot": {
+                    "type": "string",
+                    "description": "Optional singleton topic: name, city, tz, tone, format, language.",
+                },
+                "forget": {
+                    "type": "boolean",
+                    "description": "If true, delete matching saved notes instead of adding one.",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Optional document path. Leave empty to append a unique entry.",
+                },
+            },
+            "required": ["content"],
+        },
+    ),
+    ToolSpec(
+        name="read_owner_file",
+        description=(
+            "Read a file from the owner's paired computer through the desktop client. "
+            "Does not ask permission. Without a paired window this fails."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute or ~ path on the owner's computer.",
+                }
+            },
+            "required": ["path"],
+        },
+    ),
+    ToolSpec(
+        name="write_owner_file",
+        description=(
+            "Create or overwrite a file on the owner's paired computer. "
+            "Asks Allow once / Always / Deny once for writes on that PC. Path stays under the owner's home."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute or ~ path on the owner's computer.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "File text to write.",
+                },
+            },
+            "required": ["path", "content"],
+        },
+    ),
+    ToolSpec(
+        name="list_owner_dir",
+        description=(
+            "List a directory on the owner's paired computer. "
+            "Does not ask permission. Without a paired window this fails. "
+            "On a Russian desktop ~/Downloads is often ~/Загрузки. This Pi's files are under cwd."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute or ~ directory on the owner's computer. Default is the home.",
+                }
+            },
+        },
+    ),
+    ToolSpec(
+        name="run_owner_command",
+        description=(
+            "Run a shell command on the owner's paired computer, like an SSH session. "
+            "Read-only commands (ls, cat, echo, pwd, uname, …) run without a card. "
+            "Commands that can change the PC ask Allow once / Always / Deny once for that bot. "
+            "cwd stays under the owner's home. Without a paired window this fails."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "Shell command to run as the owner.",
+                },
+                "cwd": {
+                    "type": "string",
+                    "description": "Working directory. Default is the owner's home.",
+                },
+            },
+            "required": ["command"],
+        },
+    ),
+    ToolSpec(
+        name="open_path",
+        description=(
+            "Open a URL or workspace file on this bot's Pi desktop. "
+            "Opening a website asks the owner Allow once / Always / Deny first."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "URL (http/https) or file path to open on screen.",
+                }
+            },
+            "required": ["path"],
+        },
+    ),
+    ToolSpec(
+        name="launch_app",
+        description=(
+            "Launch an installed graphical application on this bot's desktop "
+            "(e.g. 'chromium', 'files', 'terminal'), optionally with a URI/URL. "
+            "'files' opens the home folder in the file manager."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "application": {
+                    "type": "string",
+                    "description": "Application name or binary to launch (chromium, files, terminal).",
+                },
+                "uri": {
+                    "type": "string",
+                    "description": "Optional URI or URL to open with the application.",
+                },
+            },
+            "required": ["application"],
+        },
+    ),
+    ToolSpec(
+        name="close_app",
+        description=(
+            "Close a graphical application on this bot's desktop immediately "
+            "(e.g. 'chromium' / 'browser' to close the on-screen Chromium). "
+            "Use this instead of clicking the window close button."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "application": {
+                    "type": "string",
+                    "description": "Application name to close (chromium, browser, or a binary name).",
+                },
+            },
+            "required": ["application"],
+        },
+    ),
+    ToolSpec(
+        name="computer_observe",
+        description=(
+            "Look at this bot's Linux desktop: geometry, cursor, and the active window title. "
+            "Default is slim (no screenshot). Set include_image only when the title cannot answer "
+            "(captcha, canvas, unlabeled buttons). Prefer DOM / curl after the owner allowed the site."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "include_image": {
+                    "type": "boolean",
+                    "description": "Attach a typed screenshot only when pixels are required.",
+                },
+            },
+            "additionalProperties": False,
+        },
+    ),
+    ToolSpec(
+        name="computer_act",
+        description=(
+            "Send mouse, keyboard, or launch actions to this bot's Linux desktop. "
+            "Opening a site, clicking, typing, or filling a form asks Allow once / Always / Deny first. "
+            "Pass several actions in one call. Set return_observe to get a slim observe after the last action."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "description": "Ordered desktop actions (click, move, type, key, scroll, wait, open, launch, close).",
+                    "items": {"type": "object"},
+                },
+                "return_observe": {
+                    "type": "boolean",
+                    "description": "After the actions, return a slim observe (title/geometry, image only if the title is generic).",
+                },
+            },
+            "required": ["actions"],
+        },
+    ),
+    ToolSpec(
+        name="browser_act",
+        description=(
+            "Drive the remote Chromium: open a URL, fill a field, click, type, or submit. "
+            "Use this for forms and page actions. The owner must Allow once / Always / Deny first. "
+            "Do not use Playwright or CDP to skip this card."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "origin": {
+                    "type": "string",
+                    "description": "Site origin if already known, e.g. https://example.com",
+                },
+                "actions": {
+                    "type": "array",
+                    "description": (
+                        "Ordered page actions: goto (url), fill (selector, text), "
+                        "click (selector), type (text), press (key), submit (selector?)."
+                    ),
+                    "items": {"type": "object"},
+                },
+            },
+            "required": ["actions"],
+        },
+    ),
+    ToolSpec(
+        name="request_takeover",
+        description=(
+            "Pause this turn and ask the human to take control of this bot's desktop "
+            "(login, captcha, or any page you cannot complete). Pass a short reason. "
+            "Do not invent a password. Do not keep calling tools after this."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "description": "What the owner should do in the browser, then Release.",
+                },
+            },
+            "additionalProperties": False,
+        },
+        lead_only=True,
+    ),
+    ToolSpec(
+        name="spawn_subagent",
+        description="Start a worker on this chat's desktop for one task. Returns immediately with an index.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Short worker name."},
+                "task": {"type": "string", "description": "What the worker should do."},
+            },
+            "required": ["task"],
+        },
+        lead_only=True,
+    ),
+    ToolSpec(
+        name="list_subagents",
+        description="List this chat's workers and their status.",
+        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        lead_only=True,
+    ),
+    ToolSpec(
+        name="inspect_subagent",
+        description="Read a worker's reasoning, stage, and result. ref is the index, name, or id.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "ref": {
+                    "type": "string",
+                    "description": "Subagent index (2), name, or id.",
+                }
+            },
+            "required": ["ref"],
+        },
+        lead_only=True,
+    ),
+    ToolSpec(
+        name="stop_subagent",
+        description="Stop a running worker.",
+        input_schema={
+            "type": "object",
+            "properties": {"ref": {"type": "string"}},
+            "required": ["ref"],
+        },
+        lead_only=True,
+    ),
+    ToolSpec(
+        name="restart_subagent",
+        description="Stop a worker if needed and run the same task again.",
+        input_schema={
+            "type": "object",
+            "properties": {"ref": {"type": "string"}},
+            "required": ["ref"],
+        },
+        lead_only=True,
+    ),
+    ToolSpec(
+        name="steer_subagent",
+        description=(
+            "Give a worker extra instructions while it works. "
+            "ref is the index, name, or id. The worker continues the same task."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "ref": {
+                    "type": "string",
+                    "description": "Subagent index (2), name, or id.",
+                },
+                "text": {
+                    "type": "string",
+                    "description": "The correction or extra instruction.",
+                },
+            },
+            "required": ["ref", "text"],
+        },
+        lead_only=True,
+    ),
+)
+

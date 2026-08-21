@@ -24,12 +24,36 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
+
+_CLIENT_DIR = Path(__file__).resolve().parent
+if str(_CLIENT_DIR) not in sys.path:
+    sys.path.insert(0, str(_CLIENT_DIR))
+
+from owner_paths import (
+    inspect_owner_path,
+    owner_downloads_dir,
+    resolve_owner_path,
+    unique_download_dest,
+    _owner_path_status,
+)
+from window_chrome import (
+    apply_window_icon,
+    bundled_icon_path,
+    notify_icon_args,
+    _apply_urgency,
+    _gtk_choose_save_path,
+    _has_gtk_window,
+    _notify_text,
+    _on_focus_in,
+    _on_gtk_active,
+    _register_window,
+    _unregister_window,
+)
+
 WEB_ROOTS = (
     Path("/usr/lib/artek-buddy-client/web"),
     Path(__file__).with_name("web") / "dist",
 )
-_WINDOW_LOCK = threading.Lock()
-_GTK_WINDOWS: list[object] = []
 
 
 _NOVNC_LOG = re.compile(r"/novnc/\S+")
@@ -42,181 +66,10 @@ ATTACH_TOTAL_MAX = 50 * 1024 * 1024
 ATTACH_MAX_FILES = 10
 
 
-_FOLDER_ALIASES = {
-    "downloads": ("Downloads", "Загрузки"),
-    "загрузки": ("Downloads", "Загрузки"),
-    "desktop": ("Desktop", "Рабочий стол"),
-    "документы": ("Documents", "Документы"),
-    "documents": ("Documents", "Документы"),
-    "pictures": ("Pictures", "Изображения", "Картинки"),
-    "изображения": ("Pictures", "Изображения", "Картинки"),
-    "music": ("Music", "Музыка"),
-    "музыка": ("Music", "Музыка"),
-    "videos": ("Videos", "Видео"),
-    "видео": ("Videos", "Видео"),
-}
-
-
-def _owner_home(home: Path | None) -> Path:
-    return (home or Path.home()).expanduser().resolve()
-
-
-def _logical_under(path: Path, root: Path) -> bool:
-    try:
-        Path(os.path.normpath(str(path))).relative_to(root)
-        return True
-    except ValueError:
-        return False
-
-
-def _expand_owner_text(raw: str, root: Path) -> Path:
-    text = raw.strip()
-    if text.startswith("~"):
-        rest = text[1:].lstrip("/\\")
-        return (root / rest) if rest else root
-    path = Path(text).expanduser()
-    if not path.is_absolute():
-        path = root / path
-    return Path(os.path.normpath(str(path)))
-
-
-def _xdg_user_dirs(home: Path) -> dict[str, Path]:
-    cfg = home / ".config" / "user-dirs.dirs"
-    if not cfg.is_file():
-        return {}
-    try:
-        text = cfg.read_text(encoding="utf-8")
-    except OSError:
-        return {}
-    out: dict[str, Path] = {}
-    for line in text.splitlines():
-        line = line.strip()
-        if not line.startswith("XDG_") or "=" not in line:
-            continue
-        key, raw = line.split("=", 1)
-        raw = raw.strip().strip('"').replace("$HOME", str(home))
-        label = key.removeprefix("XDG_").removesuffix("_DIR").lower()
-        path = Path(os.path.normpath(raw))
-        out[label] = path
-        out[f"{label}s"] = path
-    return out
-
-
-def _owner_candidates(wanted: Path, root: Path) -> list[Path]:
-    found = [wanted]
-    try:
-        rel = wanted.relative_to(root)
-    except ValueError:
-        return found
-    if len(rel.parts) != 1:
-        return found
-    key = rel.parts[0].lower()
-    xdg = _xdg_user_dirs(root)
-    if key in xdg:
-        found.append(xdg[key])
-    for alias in _FOLDER_ALIASES.get(key, ()):
-        found.append(root / alias)
-    unique: list[Path] = []
-    for item in found:
-        if item not in unique:
-            unique.append(item)
-    return unique
-
-
-def inspect_owner_path(
-    raw: str,
-    home: Path | None = None,
-    *,
-    must_exist: bool = True,
-    as_dir: bool = False,
-) -> tuple[Path | None, str]:
-    """Resolve a path under the owner home. Jail is the logical path, not the symlink target."""
-    text = (raw or "").strip() or ("." if as_dir else "")
-    if not text:
-        return None, "path required"
-    root = _owner_home(home)
-    wanted = _expand_owner_text(text, root)
-    last = "path is outside the home"
-    for candidate in _owner_candidates(wanted, root):
-        if not _logical_under(candidate, root):
-            last = "path is outside the home"
-            continue
-        try:
-            resolved = candidate.resolve()
-        except OSError:
-            last = "folder not found" if as_dir else "file not found"
-            continue
-        if must_exist:
-            if as_dir:
-                if resolved.is_dir():
-                    return resolved, ""
-                last = "not a folder" if resolved.exists() else "folder not found"
-            else:
-                if resolved.is_file():
-                    return resolved, ""
-                last = "not a file" if resolved.exists() else "file not found"
-        else:
-            if as_dir and resolved.exists() and not resolved.is_dir():
-                last = "not a folder"
-                continue
-            return resolved if resolved.exists() else candidate, ""
-    return None, last
-
-
-def resolve_owner_path(
-    raw: str,
-    home: Path | None = None,
-    *,
-    must_exist: bool = True,
-    as_dir: bool = False,
-) -> Path | None:
-    """Only paths under the owner's home. Used by /local/owner-*."""
-    path, _err = inspect_owner_path(raw, home, must_exist=must_exist, as_dir=as_dir)
-    return path
-
-
-def _owner_path_status(error: str) -> int:
-    if "outside" in error:
-        return 403
-    if "not found" in error:
-        return 404
-    return 400
-
-
-def owner_downloads_dir(home: Path | None = None) -> Path:
-    root = _owner_home(home)
-    found, _err = inspect_owner_path("~/Downloads", root, must_exist=True, as_dir=True)
-    if found is not None:
-        return found
-    dest = root / "Downloads"
-    dest.mkdir(parents=True, exist_ok=True)
-    return dest
-
-
-def unique_download_dest(folder: Path, name: str) -> Path:
-    safe = Path(str(name or "file").replace("\x00", "")).name.strip() or "file"
-    dest = folder / safe
-    if not dest.exists():
-        return dest
-    stem, suffix = dest.stem, dest.suffix
-    for index in range(2, 1000):
-        cand = folder / f"{stem}-{index}{suffix}"
-        if not cand.exists():
-            return cand
-    return folder / f"{stem}-{os.getpid()}{suffix}"
-
 
 save_path_chooser = None
 
 
-def _has_gtk_window() -> bool:
-    with _WINDOW_LOCK:
-        return bool(_GTK_WINDOWS)
-
-
-def _gtk_parent() -> object | None:
-    with _WINDOW_LOCK:
-        return _GTK_WINDOWS[0] if _GTK_WINDOWS else None
 
 
 def choose_save_path(name: str) -> Path | None:
@@ -231,48 +84,6 @@ def choose_save_path(name: str) -> Path | None:
     return unique_download_dest(owner_downloads_dir(), name)
 
 
-def _gtk_choose_save_path(name: str) -> Path | None:
-    from gi.repository import GLib, Gtk
-
-    done = threading.Event()
-    chosen: list[Path | None] = [None]
-    safe = Path(str(name or "file").replace("\x00", "")).name.strip() or "file"
-
-    def show() -> bool:
-        dialog = None
-        try:
-            dialog = Gtk.FileChooserNative.new(
-                "Save file",
-                _gtk_parent(),
-                Gtk.FileChooserAction.SAVE,
-                "Save",
-                "Cancel",
-            )
-            dialog.set_current_name(safe)
-            try:
-                dialog.set_current_folder(str(owner_downloads_dir()))
-            except Exception:
-                pass
-            setter = getattr(dialog, "set_do_overwrite_confirmation", None)
-            if callable(setter):
-                setter(True)
-            response = dialog.run()
-            if response == Gtk.ResponseType.ACCEPT:
-                filename = dialog.get_filename()
-                if filename:
-                    chosen[0] = Path(filename)
-        except Exception:
-            chosen[0] = None
-        finally:
-            if dialog is not None:
-                dialog.destroy()
-            done.set()
-        return False
-
-    GLib.idle_add(show)
-    if not done.wait(timeout=600):
-        return None
-    return chosen[0]
 
 
 def _redact_client_log(message: str) -> str:
@@ -411,45 +222,6 @@ def web_root() -> Path:
     raise FileNotFoundError("web UI is missing; rebuild the package")
 
 
-def _icon_candidates() -> list[Path]:
-    here = Path(__file__).resolve().parent
-    return [
-        Path("/usr/share/icons/hicolor/256x256/apps/artek-buddy.png"),
-        Path("/usr/lib/artek-buddy-client/app-icon.png"),
-        here / "assets" / "app-icon.png",
-        here / "assets" / "hicolor" / "256x256" / "apps" / "artek-buddy.png",
-    ]
-
-
-def bundled_icon_path() -> Path | None:
-    for path in _icon_candidates():
-        if path.is_file():
-            return path
-    return None
-
-
-def notify_icon_args() -> list[str]:
-    icon = bundled_icon_path()
-    if icon is not None:
-        return [f"--icon={icon}"]
-    return ["--icon=artek-buddy"]
-
-
-def apply_window_icon(window: object) -> None:
-    icon = bundled_icon_path()
-    setter = getattr(window, "set_icon_from_file", None)
-    if icon is not None and callable(setter):
-        try:
-            setter(str(icon))
-            return
-        except Exception:
-            pass
-    name_setter = getattr(window, "set_icon_name", None)
-    if callable(name_setter):
-        try:
-            name_setter("artek-buddy")
-        except Exception:
-            pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1137,55 +909,6 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def _notify_text(value: object, limit: int) -> str:
-    return " ".join(str(value or "").split())[:limit]
-
-
-def _register_window(window: object) -> None:
-    with _WINDOW_LOCK:
-        if window not in _GTK_WINDOWS:
-            _GTK_WINDOWS.append(window)
-
-
-def _unregister_window(window: object) -> None:
-    with _WINDOW_LOCK:
-        try:
-            _GTK_WINDOWS.remove(window)
-        except ValueError:
-            pass
-
-
-def _apply_urgency(urgent: bool) -> None:
-    def go() -> bool:
-        with _WINDOW_LOCK:
-            windows = list(_GTK_WINDOWS)
-        for window in windows:
-            setter = getattr(window, "set_urgency_hint", None)
-            if setter is None:
-                continue
-            try:
-                setter(bool(urgent))
-            except Exception:
-                pass
-        return False
-
-    try:
-        from gi.repository import GLib
-
-        GLib.idle_add(go)
-    except Exception:
-        go()
-
-
-def _on_focus_in(*_args: object) -> bool:
-    _apply_urgency(False)
-    return False
-
-
-def _on_gtk_active(window: object, *_args: object) -> None:
-    is_active = getattr(window, "is_active", None)
-    if callable(is_active) and is_active():
-        _apply_urgency(False)
 
 
 def _desktop_notify(title: str, body: str, urgency: str) -> None:

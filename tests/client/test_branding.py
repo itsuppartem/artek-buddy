@@ -27,6 +27,8 @@ def test_deb_script_installs_artek_icon() -> None:
     assert "utilities-terminal" not in text
     assert "icons/hicolor" in text
     assert "client/assets/app-icon.png" in text
+    assert "owner_paths.py" in text
+    assert "window_chrome.py" in text
 
 
 def test_bundled_icon_path_finds_source_tree(client_mod) -> None:
