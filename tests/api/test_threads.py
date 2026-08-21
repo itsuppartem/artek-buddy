@@ -57,3 +57,40 @@ def test_scripted_turn_fail(client, auth_header) -> None:
 def test_send_without_auth(client) -> None:
     response = client.post("/v1/threads/bot_missing/messages", json={"text": "hi"})
     assert response.status_code in {401, 404}
+
+
+def test_auto_owner_read_exposes_pending_consent(client, auth_header) -> None:
+    """The paired client must see the auto job on the thread, not only on a live SSE frame."""
+    bot_id = _create_bot(client, auth_header, "AutoRead")
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "e2e-consent-auto-read"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    deadline = time.time() + 5
+    snap = {}
+    while time.time() < deadline:
+        snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header).json()
+        run = snap.get("run") or {}
+        if run.get("id") == run_id and run.get("status") == "waiting_input":
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"auto owner read did not wait: {snap.get('run')}")
+    pending = snap.get("pending_auto_consent_id")
+    assert pending
+    job = client.get(f"/v1/consents/{pending}", headers=auth_header)
+    assert job.status_code == 200
+    body = job.json()
+    assert body["action_class"] == "owner_read"
+    assert body["path"] == "notes.txt"
+    uploaded = client.post(
+        f"/v1/consents/{pending}/file",
+        headers=auth_header,
+        json={"name": "notes.txt", "text": "notes from owner"},
+    )
+    assert uploaded.status_code == 200
+    finished = _wait_run(client, auth_header, bot_id, run_id)
+    assert finished["run"]["status"] == "completed"

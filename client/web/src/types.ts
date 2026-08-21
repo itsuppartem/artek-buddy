@@ -156,6 +156,7 @@ export type ThreadSnapshot = {
   run: Run | null;
   computer: ComputerStatus;
   subagents?: Subagent[];
+  pendingAutoConsentId?: string | null;
 };
 
 export type ThreadMessagePage = {

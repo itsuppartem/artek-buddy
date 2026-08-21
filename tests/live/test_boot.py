@@ -3,12 +3,20 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.live.helpers import fulfill_json, pair_fresh
+from tests.live.helpers import (
+    arm_page,
+    create_named_bot,
+    fulfill_json,
+    open_bot_menu,
+    pair_fresh,
+    unique_bot,
+)
 
 pytestmark = pytest.mark.live
 
 
 def test_proxy_error_retry_reloads_to_pairing(page: Page, client_url: str) -> None:
+    arm_page(page)
     page.route("**/local/status", lambda route: route.abort())
     page.goto(client_url)
     card = page.get_by_test_id("proxy-error")
@@ -19,6 +27,7 @@ def test_proxy_error_retry_reloads_to_pairing(page: Page, client_url: str) -> No
 
 
 def test_pairing_form_fields_and_rejected_url(page: Page, client_url: str) -> None:
+    arm_page(page)
     page.goto(client_url)
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
@@ -35,9 +44,47 @@ def test_pairing_form_fields_and_rejected_url(page: Page, client_url: str) -> No
     expect(page.get_by_test_id("pairing-error")).to_be_visible()
 
 
-def test_pairing_with_device_name(page: Page, client_url: str, host_url: str) -> None:
+def test_pairing_with_device_name_shows_empty_bots(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url, device_name="CI laptop")
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("new-memory")).to_have_count(0)
+    expect(page.get_by_test_id("bot-row")).to_have_count(0)
+    empty = page.get_by_test_id("empty-bots")
+    expect(empty).to_be_visible()
+    expect(empty.get_by_text("Create your first bot")).to_be_visible()
+    expect(page.get_by_role("button", name="Create bot")).to_be_visible()
+
+
+def test_create_cancel_and_disabled_until_named(page: Page, client_url: str, host_url: str) -> None:
+    pair_fresh(page, client_url, host_url)
+    page.get_by_title("New bot").click()
+    expect(page.get_by_placeholder("Name this bot")).to_be_visible()
+    create = page.get_by_role("button", name="Create", exact=True)
+    expect(create).to_be_disabled()
+    expect(page.get_by_test_id("computer-mode-hint")).to_contain_text("Team bots share")
+    page.get_by_placeholder("Name this bot").fill("soon")
+    expect(create).to_be_enabled()
+    page.get_by_test_id("create-cancel").click()
+    expect(page.get_by_placeholder("Name this bot")).to_have_count(0)
+    expect(page.get_by_test_id("bot-row").filter(has_text="soon")).to_have_count(0)
+
+
+def test_archive_only_bot_shows_empty_inbox(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Solo")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    open_bot_menu(page, name)
+    page.get_by_role("menuitem", name="Archive").click()
+    expect(page.get_by_test_id("bot-row")).to_have_count(0)
+    inbox = page.get_by_test_id("empty-inbox")
+    expect(inbox).to_be_visible(timeout=8_000)
+    expect(inbox.get_by_text("Chats are archived")).to_be_visible()
+    expect(page.get_by_test_id("archived-count")).to_have_text("1")
+    inbox.get_by_role("button", name="Open archived").click()
+    expect(page.get_by_test_id("archived-list")).to_be_visible()
+    expect(page.locator('[data-testid="archived-bot-row"]').filter(has_text=name)).to_have_count(1)
+    page.get_by_test_id("back-inbox").click()
+    expect(inbox).to_be_visible()
 
 
 def test_auth_error_repair_returns_to_pairing(page: Page, client_url: str, host_url: str) -> None:
@@ -59,7 +106,6 @@ def test_host_error_retry_clears_banner(page: Page, client_url: str, host_url: s
     card = page.get_by_test_id("host-error")
     expect(card).to_be_visible(timeout=20_000)
     page.unroute("**/v1/**")
-    # The shell polls /health every 4s; once the route is off it may recover itself.
     if card.is_visible():
         card.get_by_role("button", name="Retry connection").click()
     expect(card).to_be_hidden(timeout=20_000)

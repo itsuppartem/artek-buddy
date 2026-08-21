@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import uuid
 import urllib.error
 import urllib.request
 
@@ -14,6 +15,7 @@ def mint_pairing_code() -> str:
         ["docker", "exec", "artek-buddy", "python", "-m", "artek_buddy", "pair"],
         text=True,
         stderr=subprocess.DEVNULL,
+        timeout=15,
     )
     code = raw.strip().splitlines()[0].strip()
     mask_secret(code)
@@ -33,6 +35,10 @@ def reset_pairing(client_url: str) -> None:
         return
 
 
+def unique_bot(prefix: str) -> str:
+    return f"{prefix} {uuid.uuid4().hex[:8]}"
+
+
 def bot_row(page: Page, name: str):
     return page.locator(f'[data-testid="bot-row"][data-bot-name="{name}"]')
 
@@ -41,15 +47,79 @@ def composer(page: Page):
     return page.get_by_role("textbox", name="Message")
 
 
-def send_message(page: Page, text: str) -> None:
+def thread_header(page: Page):
+    return page.get_by_test_id("thread-header")
+
+
+def close_computer_pane(page: Page) -> None:
+    closer = page.get_by_title("Close panel")
+    try:
+        if closer.count() and closer.first.is_visible(timeout=0):
+            closer.first.click(timeout=2_000)
+    except Exception:
+        pass
+    overlay = page.get_by_label("Close computer")
+    try:
+        if overlay.count() and overlay.first.is_visible(timeout=0):
+            overlay.first.click(timeout=2_000)
+    except Exception:
+        pass
+
+
+def arm_page(page: Page) -> None:
+    page.set_default_timeout(8_000)
+    page.set_default_navigation_timeout(20_000)
+
+
+def open_computer_pane(page: Page) -> None:
+    """Memory and routines live in the side pane. Gear does not boot the desktop."""
+    arm_page(page)
+    closer = page.get_by_title("Close panel")
+    memory = page.get_by_test_id("new-memory")
+    try:
+        if closer.count() and closer.first.is_visible(timeout=0):
+            expect(memory).to_be_visible(timeout=8_000)
+            return
+    except Exception:
+        pass
+    try:
+        if memory.count() and memory.first.is_visible(timeout=0):
+            return
+    except Exception:
+        pass
+    page.get_by_title("Agent computer").click(timeout=5_000)
+    expect(memory).to_be_visible(timeout=8_000)
+
+
+def open_chat(page: Page, name: str) -> None:
+    bot_row(page, name).click()
+    expect(thread_header(page)).to_contain_text(name, timeout=8_000)
+
+
+def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
+    """Open this chat if named, type, press Enter, wait for the user bubble."""
+    arm_page(page)
+    if bot_name:
+        open_chat(page, bot_name)
     box = composer(page)
-    box.wait_for()
+    expect(box).to_be_enabled(timeout=8_000)
     box.fill(text)
-    page.get_by_role("button", name="Send").click()
+    expect(box).to_have_value(text)
+    box.press("Enter")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=text)
+    ).to_be_visible(timeout=8_000)
+
+
+def open_settings(page: Page, name: str) -> None:
+    open_chat(page, name)
+    thread_header(page).click()
+    expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=8_000)
 
 
 def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | None = None) -> None:
-    page.goto(client_url)
+    arm_page(page)
+    page.goto(client_url, timeout=20_000, wait_until="domcontentloaded")
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
     page.get_by_placeholder("https://host.example").fill(host_url)
@@ -67,9 +137,15 @@ def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":
     )
 
 
-def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
-    """+ is always in the sidebar. After Create the product opens the computer pane
-    (memory / routines live there). Do not close that pane from this helper."""
+def create_named_bot(
+    page: Page,
+    name: str,
+    title: str | None = None,
+    description: str | None = None,
+    *,
+    private: bool | None = None,
+) -> None:
+    """+ is always in the sidebar. Product default is Team; pass private=True for a dedicated desktop."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.get_by_title("New bot").click()
     box = page.get_by_placeholder("Name this bot")
@@ -77,8 +153,16 @@ def create_named_bot(page: Page, name: str, title: str | None = None) -> None:
     box.fill(name)
     if title is not None:
         page.get_by_placeholder("Describe what this bot does").fill(title)
+    if description is not None:
+        page.get_by_placeholder("What this bot is for").fill(description)
+    if private is True:
+        page.get_by_test_id("computer-mode-private").click()
+    elif private is False:
+        page.get_by_test_id("computer-mode-team").click()
     page.get_by_role("button", name="Create", exact=True).click()
+    expect(page.get_by_placeholder("Name this bot")).to_have_count(0, timeout=20_000)
     expect(bot_row(page, name)).to_have_count(1, timeout=20_000)
+    open_chat(page, name)
     composer(page).wait_for(timeout=20_000)
 
 
@@ -87,13 +171,12 @@ def open_bot_menu(page: Page, name: str) -> None:
     expect(page.get_by_role("menu", name=f"Actions for {name}")).to_be_visible(timeout=10_000)
 
 
-def ensure_bot(page: Page, name: str) -> None:
+def ensure_bot(page: Page, name: str, *, private: bool | None = None) -> None:
+    """Open this named chat, or create it."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
-    empty = page.get_by_test_id("empty-bots")
-    inbox = page.get_by_test_id("empty-inbox")
-    rows = page.get_by_test_id("bot-row")
-    expect(empty.or_(inbox).or_(rows.first)).to_be_visible(timeout=20_000)
-    if rows.count() and rows.first.is_visible():
+    row = bot_row(page, name)
+    if row.count() and row.first.is_visible(timeout=0):
+        open_chat(page, name)
         composer(page).wait_for(timeout=20_000)
         return
-    create_named_bot(page, name)
+    create_named_bot(page, name, private=private)

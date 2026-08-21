@@ -9,6 +9,7 @@ export type AttentionAlert = {
   title: string;
   body: string;
   urgency: "low" | "normal" | "critical";
+  at: string;
 };
 
 export type BotAlertSnapshot = {
@@ -35,7 +36,13 @@ function clip(text: string, max = 180): string {
   return `${clean.slice(0, max - 1).trimEnd()}…`;
 }
 
-function makeAlert(kind: AttentionKind, botId: string, botName: string, body: string): AttentionAlert {
+function makeAlert(
+  kind: AttentionKind,
+  botId: string,
+  botName: string,
+  body: string,
+  at: string,
+): AttentionAlert {
   const name = botName.trim() || "Bot";
   const titles: Record<AttentionKind, string> = {
     replied: `${name} replied`,
@@ -49,6 +56,7 @@ function makeAlert(kind: AttentionKind, botId: string, botName: string, body: st
     title: titles[kind],
     body: clip(body),
     urgency: urgencyByKind[kind],
+    at,
   };
 }
 
@@ -74,12 +82,13 @@ function pendingAskText(payload: Record<string, unknown>): string | null {
 
 export function attentionFromEvent(event: ProductEvent, botName: string): AttentionAlert | null {
   const botId = event.botId;
+  const at = event.createdAt;
   if (event.type === "run.completed") {
-    return makeAlert("replied", botId, botName, "");
+    return makeAlert("replied", botId, botName, "", at);
   }
   if (event.type === "run.failed") {
     const error = typeof event.payload.error === "string" ? event.payload.error : "";
-    return makeAlert("failed", botId, botName, error);
+    return makeAlert("failed", botId, botName, error, at);
   }
   if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
     if (event.type === "run.waiting_input" && (event.payload.auto === true || event.payload.consentId)) {
@@ -89,18 +98,18 @@ export function attentionFromEvent(event: ProductEvent, botName: string): Attent
       event.type === "run.waiting_input"
         ? "The bot is waiting for you."
         : "Take control of the computer.";
-    return makeAlert("takeover", botId, botName, body);
+    return makeAlert("takeover", botId, botName, body, at);
   }
   if (event.type === "thread.ask") {
     const text =
       (typeof event.payload.text === "string" && event.payload.text) ||
       (typeof event.payload.question === "string" && event.payload.question) ||
       "";
-    return makeAlert("ask", botId, botName, text);
+    return makeAlert("ask", botId, botName, text, at);
   }
   if (event.type === "thread.message.created") {
     const ask = pendingAskText(event.payload);
-    if (ask) return makeAlert("ask", botId, botName, ask);
+    if (ask) return makeAlert("ask", botId, botName, ask, at);
   }
   return null;
 }
@@ -111,18 +120,25 @@ export function attentionFromBotChange(
 ): AttentionAlert | null {
   if (prev.id !== next.id) return null;
   const name = next.name;
+  const at = next.updatedAt;
   if (next.status === "waiting_takeover" && prev.status !== "waiting_takeover") {
-    return makeAlert("takeover", next.id, name, "Take control of the computer.");
+    return makeAlert("takeover", next.id, name, "Take control of the computer.", at);
   }
   if (next.status === "waiting_input" && prev.status !== "waiting_input") {
-    return makeAlert("ask", next.id, name, next.preview);
+    return makeAlert("ask", next.id, name, next.preview, at);
   }
   const leftBusy = busyStatus.has(prev.status) && !busyStatus.has(next.status);
-  if (!leftBusy || !next.unread) return null;
-  if (next.status === "error") {
-    return makeAlert("failed", next.id, name, next.preview);
+  const becameUnread = next.unread && !prev.unread;
+  if (next.status === "error" && (leftBusy || becameUnread)) {
+    return makeAlert("failed", next.id, name, next.preview, at);
   }
-  return makeAlert("replied", next.id, name, next.preview);
+  if (leftBusy && next.unread) {
+    return makeAlert("replied", next.id, name, next.preview, at);
+  }
+  if (becameUnread && !busyStatus.has(next.status)) {
+    return makeAlert("replied", next.id, name, next.preview, at);
+  }
+  return null;
 }
 
 export function allowAlert(alert: AttentionAlert, notifyOnFinish: boolean): boolean {
@@ -139,12 +155,30 @@ export function shouldSendDesktopAlert(input: {
   return input.viewingBotId !== input.alertBotId;
 }
 
+const urgencyRank: Record<AttentionAlert["urgency"], number> = {
+  low: 0,
+  normal: 1,
+  critical: 2,
+};
+
+export function shouldReplaceAttention(
+  current: AttentionAlert | null,
+  next: AttentionAlert,
+): boolean {
+  if (!current) return true;
+  const delta = urgencyRank[next.urgency] - urgencyRank[current.urgency];
+  if (delta !== 0) return delta > 0;
+  const nextAt = Date.parse(next.at);
+  const currentAt = Date.parse(current.at);
+  if (!Number.isFinite(nextAt) || !Number.isFinite(currentAt)) return true;
+  return nextAt >= currentAt;
+}
+
 export function isHistoricalEvent(
   event: Pick<ProductEvent, "createdAt">,
-  subscribedAtMs: number,
-  skewMs = 2_000,
+  openedAtMs: number,
 ): boolean {
   const created = Date.parse(event.createdAt);
   if (!Number.isFinite(created)) return false;
-  return created < subscribedAtMs - skewMs;
+  return created < openedAtMs;
 }

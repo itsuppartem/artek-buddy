@@ -1262,6 +1262,22 @@ class HistoryStore:
             message_id=row["message_id"],
         )
 
+    def pending_auto_consent_id(self, bot_id: str, run_id: str | None) -> str | None:
+        if not run_id:
+            return None
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT id FROM consent_requests
+                WHERE bot_id = %s AND run_id = %s AND status = 'pending' AND message_id IS NULL
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (bot_id, run_id),
+            ).fetchone()
+            conn.commit()
+        return str(row["id"]) if row else None
+
     def answer_consent_request(
         self,
         request_id: str,
@@ -2807,10 +2823,23 @@ class HistoryStore:
         return row is not None
 
     def busy_bot_name(self, computer: ComputerRecord, except_bot_id: str) -> str | None:
-        if computer.execution_bot_id and computer.execution_bot_id != except_bot_id:
+        holder_id = None
+        held = computer.state in {"running", "booting"}
+        if computer.scope == "team" and held:
+            if computer.execution_bot_id and computer.execution_bot_id != except_bot_id:
+                holder_id = computer.execution_bot_id
+            elif (
+                computer.control_bot_id
+                and computer.control_bot_id != except_bot_id
+                and computer.control_holder == "user"
+            ):
+                holder_id = computer.control_bot_id
+        if holder_id is None and computer.execution_bot_id and computer.execution_bot_id != except_bot_id:
             if self.has_active_run(computer.execution_bot_id):
-                other = self.get_bot(computer.execution_bot_id)
-                return other.name if other else computer.execution_bot_id
+                holder_id = computer.execution_bot_id
+        if holder_id:
+            other = self.get_bot(holder_id)
+            return other.name if other else holder_id
         with self._conn() as conn:
             row = conn.execute(
                 """

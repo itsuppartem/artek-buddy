@@ -386,6 +386,7 @@ class ThreadSnapshot(BaseModel):
     run: Run | None
     computer: ComputerStatus
     subagents: list[Subagent] = Field(default_factory=list)
+    pending_auto_consent_id: str | None = None
 
 
 class ModelCredential(BaseModel):

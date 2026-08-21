@@ -31,6 +31,13 @@ if str(SRC) not in sys.path:
 import pytest
 
 
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    if report.failed and report.when == "call" and report.longrepr:
+        print("\n----- immediate failure -----", flush=True)
+        print(report.longrepr, flush=True)
+        print("----- end immediate failure -----\n", flush=True)
+
+
 @pytest.fixture
 def host_token() -> str:
     return os.environ["AGENT_HTTP_TOKEN"]

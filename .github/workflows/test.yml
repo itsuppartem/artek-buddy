@@ -199,10 +199,11 @@ jobs:
         timeout-minutes: 15
         env:
           ARTEK_UI: "1"
+          PYTHONUNBUFFERED: "1"
         run: |
           set +x
           export HOME="$ARTEK_CLIENT_HOME"
-          python -m pytest tests/live -m "live and not model" --browser chromium -q
+          python -u -m pytest tests/live -m "live and not model" --browser chromium -vv --tb=short --timeout-method=thread
 
       - name: Redacted logs on failure
         if: failure()

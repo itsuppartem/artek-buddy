@@ -19,11 +19,11 @@ flowchart LR
 │ bot rows  (unread · pin · preview)                            │ composer  +  textarea  ⏹ ➤  │ preview iframe    │
 │ Archived (n)                                                  │                             │ Open / Take / Rel │
 │ Plugins  (toast: later)                                       │ overlays: create / settings │ Memory            │
-│ You                                                           │                             │ Routines          │
+│ You                                                           │ attention (top, Dismiss)    │ Routines          │
 └───────────────────────────────────────────────────────────────┴─────────────────────────────┴───────────────────┘
 ```
 
-The computer pane and Settings overlay sit on the right of the same shell. Fullscreen screen is a separate overlay.
+The computer pane and Settings overlay sit on the right of the same shell. Gear on the pane opens Settings; closing Settings returns to the pane. Fullscreen screen is a separate overlay. Gear in the thread header opens Settings and does **not** boot. Offline • Click to start boots and takes control.
 
 ## Screens
 
@@ -31,7 +31,7 @@ The computer pane and Settings overlay sit on the right of the same shell. Fulls
 | --- | --- | --- |
 | Proxy error | loopback `status` failed | Retry (reload) |
 | Pairing | not paired | Mascot mark, Host URL, code `XXXX-XXXX`, device name, Pair. Fail text under the form. |
-| Shell | paired | sidebar + thread; optional Settings / Create / computer pane / fullscreen |
+| Shell | paired | sidebar + thread; optional Settings / Create / computer pane / fullscreen. Pairing does not open the pane. Create focuses the new chat. Gear opens the pane without booting. Offline boots. |
 
 Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
@@ -39,7 +39,7 @@ Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
 - `+` opens Create.
 - Search filters inbox and archived by name / preview.
-- Bot row: name, pin mark, unread dot, status, preview. Click opens the chat. Right-click: Pin / Unpin, Mark read / unread, Edit Profile, Duplicate, Archive, Delete.
+- Bot row: name, pin mark, unread dot, status, preview. Accessible name is `Open chat {name}`. Click opens the chat. Right-click: Pin / Unpin, Mark read / unread, Edit Profile, Duplicate, Archive, Delete.
 - Empty inbox (all archived): Restore one from Archived, or create a new bot.
 - No bots: Create your first bot.
 - Archived list: Back to Inbox, Restore on each row.
@@ -64,7 +64,11 @@ SSE. Blocks in a message:
 | subagent | `#n name`, status, Stop while running, Restart after |
 | child_bot | click opens that chat (disabled if deleted/archived) |
 
-Also: Reply on right-click (quote in the next user bubble), Load earlier, typing indicator, `run-error` for failed / cancelled, Stop (lead + workers). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner: replied / ask / takeover / failed. `notifyOnFinish` mutes only replied / failed.
+Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers, `thread-stop`). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner sits under the thread header (`attention-alert`): replied / ask / takeover / failed. It is in the layout, so it does not cover Send or Load earlier. Opening that chat dismisses it. It is not shown for the chat already on screen, or for events from before this window opened. A chat you already read that then finishes in the background still raises replied / failed. Finishing a turn does not switch the open chat. A newer banner replaces an older one of the same urgency; an older leftover cannot keep the pill. Title opens that chat; Dismiss (`attention-dismiss`) does not. `notifyOnFinish` mutes only replied / failed. Thread header is `thread-header`. Send stays enabled while a bot is selected so Enter can post the live textarea; an empty click is a no-op.
+
+The open chat uses `/v1/threads/{id}/events` for the thread. Inbox banners use one `/v1/events` stream for every bot, including the open chat, so a switch cannot drop `run.completed`. Duplicate event ids are ignored. Chrome HTTP/1.1 allows six connections per host; one SSE per leftover chat would starve Create and pair.
+
+Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
 
 Errors: host Retry, auth re-pair, action Dismiss.
 
@@ -72,21 +76,21 @@ Not in this window: `threads.followUp` (the host queues on send), `subagents.ste
 
 ## Create / Settings
 
-Create: name, title, description, Team | Private.
+Create: name, title, description, Team | Private (`computer-mode-team` / `computer-mode-private`).
 
 Settings: the same fields plus instructions, mode change (rebinds the desktop; home is not copied), Restart / Stop / Reset (Reset wipes that home; Team reset wipes the shared desktop), busy-bot name, notifyOnFinish, Delete with optional purge memories.
 
 ## Computer pane
 
-States: Offline, Booting, Running, Sleeping, Error. Click Offline to boot and take control. View-only preview iframe. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows the other bot’s name.
+States: Offline, Booting, Running, Sleeping, Error (`computer-state` / `data-state`). Click Offline to boot and take control. Gear does not auto-boot. Stop in Settings is Sleeping (`suspended`), not Offline. View-only preview iframe when the screen URL is `/novnc/…`. Fake sandbox has no noVNC URL, so the pane shows `computer-running` instead of spinning Connecting. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows `{name} is using the computer` on the start tile (one line; the bot that booted or holds the shared desktop, not only a bot with an active run) and disables Take / Restart / Stop / Reset. The pane keeps the start tile in that case instead of the running preview. Dedicated vs Team is `computer-label` `data-mode`.
 
-Memory (same pane): owner / work / charter list, New (this bot \| shared), Edit, Outdated = delete, Export `.md`.
+Memory (same pane): owner / work / charter list, New (this bot \| shared, `memory-save`), Edit, Outdated = delete, Export `.md`.
 
 Routines (same pane): New (name, cron, prompt; invalid cron disables Save), on/off, Run (`POST .../test`), Delete.
 
 ## Consent and this PC
 
-Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job marked `auto` runs without a card (`/local/owner-*`). After Allow the client reads, writes, lists, or execs under `$HOME` and posts the result. Paths outside `$HOME` are 403.
+Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job marked `auto` runs without a card (`/local/owner-*`). After Allow the client reads, writes, lists, or execs under `$HOME` and posts the result. Paths outside `$HOME` are 403 and stay on the consent card. Composer Stop is `thread-stop` (`aria-label="Stop"`); the thread title is `Open settings for {name}`.
 
 ## Loopback proxy (`/local/*`)
 

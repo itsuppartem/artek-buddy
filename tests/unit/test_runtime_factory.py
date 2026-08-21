@@ -4,7 +4,17 @@ import pytest
 
 from artek_buddy.config import Settings
 from artek_buddy.runtime.factory import open_runtime, runtime_kind
-from artek_buddy.runtime.scripted import E2E_FAIL_ERROR, steps_for_prompt
+from artek_buddy.runtime.scripted import (
+    E2E_ASK_FREE_QUESTION,
+    E2E_CARD_VALUE,
+    E2E_CHILD_ARCHIVED,
+    E2E_FAIL_ERROR,
+    E2E_HANG_S,
+    E2E_META_TEXT,
+    E2E_OLDER_COUNT,
+    E2E_SUBAGENT_NAME,
+    steps_for_prompt,
+)
 from artek_buddy.runtime.types import AgentRuntimeError
 
 
@@ -38,3 +48,43 @@ def test_scripted_fail_and_default_steps() -> None:
     assert fail[-1].error == E2E_FAIL_ERROR
     ok = steps_for_prompt("plain hello")
     assert ok[-1].status == "completed" or ok[-1].result == "ok"
+
+
+def test_scripted_thread_prompts_force_window_blocks() -> None:
+    blocks = steps_for_prompt("please e2e-thread-blocks")
+    assert blocks[0].blocks is not None
+    assert [item["kind"] for item in blocks[0].blocks] == [
+        "meta",
+        "progress",
+        "card",
+        "text",
+        "computer",
+        "child_bot",
+        "child_bot",
+    ]
+    assert any(item.get("text") == E2E_META_TEXT for item in blocks[0].blocks)
+    assert any(item.get("bot_id") == "$new" for item in blocks[0].blocks)
+    assert any(item.get("name") == E2E_CHILD_ARCHIVED for item in blocks[0].blocks)
+    assert any(
+        item.get("kind") == "card" and item["lines"][0]["v"] == E2E_CARD_VALUE
+        for item in blocks[0].blocks
+    )
+
+    free = steps_for_prompt("please e2e-ask-free")
+    assert free[0].blocks is not None
+    assert free[0].blocks[0]["text"] == E2E_ASK_FREE_QUESTION
+    assert not free[0].blocks[0].get("actions")
+
+    hang = steps_for_prompt("please e2e-hang now")
+    assert hang[0].delay_s == E2E_HANG_S
+
+    worker = steps_for_prompt("please e2e-subagent")
+    assert worker[0].tool == "spawn_subagent"
+    assert worker[0].args["name"] == E2E_SUBAGENT_NAME
+
+    older = steps_for_prompt("please e2e-load-earlier")
+    assert len([step for step in older if step.blocks]) == E2E_OLDER_COUNT
+
+    takeover = steps_for_prompt("please e2e-takeover")
+    assert takeover[0].event is not None
+    assert takeover[0].event[0] == "computer.takeover.requested"

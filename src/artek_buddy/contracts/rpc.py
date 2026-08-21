@@ -69,6 +69,7 @@ PROCEDURES: list[Procedure] = [
     _p("threads.messages", "GET", "/v1/threads/{bot_id}/messages", "ThreadMessagesInput", "ThreadMessagePage", True),
     _p("messages.list", "GET", "/v1/messages", "ThreadMessagesInput", "ThreadMessagePage", True),
     _p("threads.subscribe", "GET", "/v1/threads/{bot_id}/events", "ThreadSubscribeInput", "ProductEventStream", True),
+    _p("workspace.subscribe", "GET", "/v1/events", None, "ProductEventStream", True),
     _p("threads.send", "POST", "/v1/threads/{bot_id}/messages", "ThreadSendInput", "ThreadSendResult", True),
     _p("threads.attachments", "POST", "/v1/threads/{bot_id}/attachments", "AttachmentUploadInput", "AttachmentList", True),
     _p("threads.stop", "POST", "/v1/threads/{bot_id}/stop", "BotIdInput", "OkResponse", True),
