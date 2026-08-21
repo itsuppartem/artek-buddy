@@ -45,10 +45,12 @@ Build on a machine with Node 22. Install on Debian/Ubuntu. Do not commit `*.deb`
 
 Daily work is a pull request **into `develop`**. `main` is release-only:
 open `develop` → `main` when shipping. Never push `main` directly.
-A merge into `main` that changes `VERSION` starts `.github/workflows/release.yml`
-(clean `.deb`, `install-host.sh`, host GHCR image). The computer image is not
-built in Actions. Only the five newest Releases stay; `infra/prune-releases.sh`
-deletes the rest and matching GHCR tags.
+PRs into `main` cannot merge while `backend` or `ui` is red.
+A merge into `main` that changes `VERSION` publishes a GitHub Release only after
+the **push** `test` run on that commit is green (`release.yml` is `workflow_run`
+on `test`, not a parallel `push`). The computer image is not built in Actions.
+Only the five newest Releases stay; `infra/prune-releases.sh` deletes the rest
+and matching GHCR tags.
 
 - One product version for host and client (`VERSION`,
   `src/artek_buddy/__init__.py`, `client/VERSION`).

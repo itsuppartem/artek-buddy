@@ -11,7 +11,7 @@ Marks (desktop icon, pairing, bot avatars): [assets/README.md](assets/README.md)
 
 ## Build and install
 
-GitHub Releases attach `artek-buddy-client_<version>_all.deb` when `VERSION` is bumped on `main`. Those packages do not bake a host URL. You can still build a local owner `.deb` (do not commit it).
+GitHub Releases attach `artek-buddy-client_<version>_all.deb` when `VERSION` is bumped on `main` and `test` on that commit is green. Those packages do not bake a host URL. You can still build a local owner `.deb` (do not commit it).
 
 | | Where | Needs |
 | --- | --- | --- |
