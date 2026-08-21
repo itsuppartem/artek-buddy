@@ -671,6 +671,21 @@ class HistoryStore:
                     """,
                     (bot.id,),
                 ).fetchone()
+                if active is not None and active["status"] == "waiting_takeover":
+                    conn.execute(
+                        """
+                        UPDATE runs
+                        SET status = %s, error = %s, completed_at = %s
+                        WHERE id = %s
+                        """,
+                        (
+                            RunStatus.cancelled.value,
+                            "Stopped.",
+                            isoformat_utc(),
+                            active["id"],
+                        ),
+                    )
+                    active = None
                 now = isoformat_utc()
                 seq = self._lock_next_seq(conn, bot.thread_id)
                 msg_id = new_id("msg")
@@ -855,65 +870,74 @@ class HistoryStore:
         msg_id: str | None = None
         with self._conn() as conn:
             with conn.transaction():
-                now = isoformat_utc()
-                body = (text or "").strip() if text else ""
-                if not body and error and status != RunStatus.cancelled.value:
-                    body = error
-                if body:
-                    seq = self._lock_next_seq(conn, bot.thread_id)
-                    msg_id = new_id("msg")
-                    blocks = text_blocks(body)
-                    conn.execute(
-                        """
-                        INSERT INTO messages (id, thread_id, seq, role, blocks, run_id, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (msg_id, bot.thread_id, seq, MessageRole.bot.value, Json(blocks), run.id, now),
-                    )
-                conn.execute(
-                    """
-                    UPDATE runs
-                    SET status = %s, error = %s, result = %s, completed_at = %s
-                    WHERE id = %s
-                    """,
-                    (status, error, text or None, now, run.id),
-                )
-                still = conn.execute(
-                    """
-                    SELECT 1 FROM runs
-                    WHERE bot_id = %s
-                      AND id <> %s
-                      AND status IN (
-                        'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
-                      )
-                    LIMIT 1
-                    """,
-                    (bot.id, run.id),
+                already = conn.execute(
+                    "SELECT status FROM runs WHERE id = %s FOR UPDATE",
+                    (run.id,),
                 ).fetchone()
-                if still:
-                    bot_status = "running"
-                elif status in {RunStatus.completed.value, RunStatus.cancelled.value}:
-                    bot_status = "idle"
-                else:
-                    bot_status = "error"
-                if body:
+                if not (
+                    already
+                    and already["status"] == RunStatus.cancelled.value
+                    and status != RunStatus.cancelled.value
+                ):
+                    now = isoformat_utc()
+                    body = (text or "").strip() if text else ""
+                    if not body and error and status != RunStatus.cancelled.value:
+                        body = error
+                    if body:
+                        seq = self._lock_next_seq(conn, bot.thread_id)
+                        msg_id = new_id("msg")
+                        blocks = text_blocks(body)
+                        conn.execute(
+                            """
+                            INSERT INTO messages (id, thread_id, seq, role, blocks, run_id, created_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """,
+                            (msg_id, bot.thread_id, seq, MessageRole.bot.value, Json(blocks), run.id, now),
+                        )
                     conn.execute(
                         """
-                        UPDATE bots
-                        SET preview = %s, status = %s, unread = TRUE, updated_at = %s
+                        UPDATE runs
+                        SET status = %s, error = %s, result = %s, completed_at = %s
                         WHERE id = %s
                         """,
-                        (preview_snippet(body), bot_status, now, bot.id),
+                        (status, error, text or None, now, run.id),
                     )
-                else:
-                    conn.execute(
+                    still = conn.execute(
                         """
-                        UPDATE bots
-                        SET status = %s, updated_at = %s
-                        WHERE id = %s
+                        SELECT 1 FROM runs
+                        WHERE bot_id = %s
+                          AND id <> %s
+                          AND status IN (
+                            'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
+                          )
+                        LIMIT 1
                         """,
-                        (bot_status, now, bot.id),
-                    )
+                        (bot.id, run.id),
+                    ).fetchone()
+                    if still:
+                        bot_status = "running"
+                    elif status in {RunStatus.completed.value, RunStatus.cancelled.value}:
+                        bot_status = "idle"
+                    else:
+                        bot_status = "error"
+                    if body:
+                        conn.execute(
+                            """
+                            UPDATE bots
+                            SET preview = %s, status = %s, unread = TRUE, updated_at = %s
+                            WHERE id = %s
+                            """,
+                            (preview_snippet(body), bot_status, now, bot.id),
+                        )
+                    else:
+                        conn.execute(
+                            """
+                            UPDATE bots
+                            SET status = %s, updated_at = %s
+                            WHERE id = %s
+                            """,
+                            (bot_status, now, bot.id),
+                        )
         message = self._get_message(msg_id) if msg_id else None
         finished = self._get_run(run.id)
         if finished is None:

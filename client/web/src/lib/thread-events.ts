@@ -103,6 +103,9 @@ export function reduceThreadSnapshot(
     if (event.runId && prev.run && prev.run.id !== event.runId) {
       return { ...prev, cursor: event.seq };
     }
+    if (event.type === "run.completed" && prev.run?.status === "cancelled") {
+      return { ...prev, cursor: event.seq };
+    }
     const status =
       event.type === "run.completed"
         ? "completed"

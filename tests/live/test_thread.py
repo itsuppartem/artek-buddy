@@ -260,6 +260,98 @@ def test_typing_indicator_and_lead_stop(page: Page, client_url: str, host_url: s
     expect(page.get_by_test_id("run-error")).to_be_visible(timeout=15_000)
 
 
+def test_stop_does_not_append_completed_essay(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Essay")
+    box = composer(page)
+    box.fill("please e2e-slow")
+    expect(box).to_have_value("please e2e-slow")
+    box.press("Enter")
+    expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("thread-stop").click()
+    expect(page.get_by_test_id("run-error")).to_be_visible(timeout=15_000)
+    page.wait_for_timeout(3_000)
+    expect(page.get_by_test_id("thread").get_by_text("slow done")).to_have_count(0)
+    expect(bot_row(page, name)).not_to_contain_text("slow done")
+
+
+def test_streaming_turn_keeps_last_card_in_view(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Pin")
+    send_message(page, "please e2e-load-earlier", name)
+    last = page.get_by_test_id("thread").locator(
+        '[data-testid="thread-message"][data-role="bot"]'
+    ).filter(has_text=f"{E2E_OLDER_PREFIX}50")
+    expect(last).to_be_visible(timeout=15_000)
+    expect(last).to_be_in_viewport()
+
+
+def test_switch_back_lands_on_latest_messages(page: Page, client_url: str, host_url: str) -> None:
+    first = unique_bot("HistA")
+    second = unique_bot("HistB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    send_message(page, "please e2e-load-earlier", first)
+    create_named_bot(page, second)
+    open_chat(page, first)
+    last = page.get_by_test_id("thread").locator(
+        '[data-testid="thread-message"][data-role="bot"]'
+    ).filter(has_text=f"{E2E_OLDER_PREFIX}50")
+    expect(last).to_be_visible(timeout=15_000)
+    expect(last).to_be_in_viewport()
+
+
+def test_dismissed_attention_stays_gone_after_switch(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("AskA")
+    watcher = unique_bot("AskB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-takeover")
+    expect(box).to_have_value("please e2e-takeover")
+    box.press("Enter")
+    open_chat(page, watcher)
+    banner = page.get_by_test_id("attention-alert")
+    expect(banner).to_contain_text(f"{speaker} needs you", timeout=15_000)
+    page.get_by_test_id("attention-dismiss").click()
+    expect(banner).to_have_count(0)
+    open_chat(page, speaker)
+    open_chat(page, watcher)
+    expect(page.get_by_test_id("attention-alert").filter(has_text="needs you")).to_have_count(0)
+
+
+def test_answered_consent_pill_does_not_return(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("AllowA")
+    watcher = unique_bot("AllowB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    send_message(page, "e2e-consent-browse", speaker)
+    card = page.get_by_test_id("consent-card")
+    expect(card).to_be_visible(timeout=20_000)
+    page.get_by_test_id("ask-option").filter(has_text="Allow once").click()
+    expect(card).to_have_attribute("data-status", "answered", timeout=20_000)
+    open_chat(page, watcher)
+    open_chat(page, speaker)
+    expect(page.get_by_test_id("attention-alert").filter(has_text="is asking")).to_have_count(0)
+    open_chat(page, watcher)
+    expect(page.get_by_test_id("attention-alert").filter(has_text="is asking")).to_have_count(0)
+
+
+def test_follow_up_after_takeover_starts_a_turn(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Park")
+    box = composer(page)
+    box.fill("please e2e-park-takeover")
+    expect(box).to_have_value("please e2e-park-takeover")
+    box.press("Enter")
+    expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
+    send_message(page, "go on")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")
+    ).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("thread-stop")).to_have_count(0)
+
+
 def test_subagent_stop_while_running(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Worker")
     send_message(page, "please e2e-subagent-hang", name)

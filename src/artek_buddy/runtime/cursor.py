@@ -191,6 +191,7 @@ class CursorRuntime(RuntimeBase):
     ) -> AsyncIterator[ProductStreamEvent | RunRecord]:
         agent_id, agent, lock = await self._agent(session_id, bot_id=bot_id, role=role)
         cwd = self.home_cwd(bot_id or self.resolve_turn_context()[0])
+        self.last_prompt = prompt
         async with lock:
             run = None
             try:
