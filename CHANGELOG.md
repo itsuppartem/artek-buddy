@@ -21,6 +21,7 @@
 
 ### Changed
 - SSE sends a keepalive as soon as the client connects, so the stream is live before the next event.
+- History, `/v1` routes, agent tools, and the window shell are split along existing seams. HTTP paths and public imports are unchanged.
 
 ### Added
 - HTTP tests for thread attachments, message pagination, `GET /v1/messages`, bounded SSE, and computer `files/raw` download.

@@ -1,0 +1,717 @@
+from __future__ import annotations
+
+import asyncio
+import base64
+import logging
+import re
+import shutil
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket
+from fastapi.responses import FileResponse, Response, StreamingResponse
+
+from artek_buddy.auth import host_token_match, pairing_attempts
+from artek_buddy.bus import HEARTBEAT, REPLAY_GAP, EventHub
+from artek_buddy.config import Settings, get_settings
+from artek_buddy.contracts import (
+    ArtifactList,
+    AttachmentList,
+    AttachmentUploadInput,
+    HostedAttachment,
+    Bot,
+    BotIdInput,
+    BotList,
+    ComputerFileContent,
+    ComputerFileList,
+    ComputerInput,
+    ComputerStatus,
+    CreateBotInput,
+    CreateDeviceInput,
+    CreateMemoryInput,
+    CreateRoutineInput,
+    DeleteBotInput,
+    DeploymentSettings,
+    Device,
+    DeviceCreated,
+    DeviceList,
+    HealthResponse,
+    MarkdownExport,
+    Me,
+    MemoryDocument,
+    MemoryDocumentList,
+    MemoryScope,
+    MemoryUpdateInput,
+    OkResponse,
+    PairingCode,
+    ProductEvent,
+    ProductEventType,
+    Routine,
+    RoutineList,
+    Run,
+    ScreenUrlResult,
+    RunRequest,
+    SessionRequest,
+    SessionResponse,
+    SetComputerInput,
+    SteerSubagentInput,
+    Subagent,
+    SubagentList,
+    TakeoverResult,
+    TestRunResult,
+    ThreadFollowUpInput,
+    ThreadMessage,
+    ThreadMessagePage,
+    ConsentAnswerInput,
+    ConsentFileInput,
+    ConsentJob,
+    ConsentResultInput,
+    ThreadSendInput,
+    ThreadSendResult,
+    ThreadSnapshot,
+    UpdateBotInput,
+    UpdateDeploymentInput,
+    UpdateRoutineInput,
+)
+from artek_buddy.cron import CronError
+from artek_buddy.computer.proxy import proxy_novnc_http, proxy_novnc_ws
+from artek_buddy.computer.service import ComputerBusy, ComputerError, ComputerService, ComputerUnavailable
+from artek_buddy.db import DatabaseUnavailable, product_run_status
+from artek_buddy.db.history import HistoryStore, InboxFullError
+from artek_buddy.db.shaping import (
+    DEFAULT_BOT_NAME,
+    DEFAULT_PAGE_SIZE,
+    blocks_text,
+    isoformat_utc,
+    new_id,
+    preview_snippet,
+)
+from artek_buddy.consent import ConsentHub
+from artek_buddy.memory import (
+    MemoryConflict,
+    MemoryPathError,
+    compact_thread_context,
+    export_markdown,
+    format_memory_context,
+    format_subagent_context,
+    wrap_turn_prompt,
+)
+from artek_buddy.uploads import (
+    UploadError,
+    format_user_turn,
+    ingest_uploads,
+    preview_for_upload,
+    user_file_blocks,
+)
+from artek_buddy.memory_gateway import GatewayClient
+from artek_buddy.memory_hub import MemoryHub, should_persist_ask
+from artek_buddy.subagents import SubagentError, SubagentService
+from artek_buddy.runtime import (
+    AgentRuntime,
+    AgentRuntimeError,
+    ProductStreamEvent,
+    RunRecord,
+    open_runtime,
+    runtime_kind,
+)
+from artek_buddy.stream import accumulate
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("artek_buddy")
+
+from artek_buddy.http.deps import (
+    MAX_INBOX,
+    _db_error,
+    _require_bot,
+    current_app,
+)
+
+def _emit(
+    events: EventHub,
+    bot: Bot,
+    event_type: ProductEventType,
+    payload: dict[str, Any],
+    run_id: str | None = None,
+) -> ProductEvent:
+    event = ProductEvent(
+        id=new_id("evt"),
+        workspace_id=bot.workspace_id,
+        thread_id=bot.thread_id,
+        bot_id=bot.id,
+        seq=events.next_seq(bot.id),
+        type=event_type,
+        created_at=isoformat_utc(),
+        payload=payload,
+        run_id=run_id,
+    )
+    events.publish(event)
+    return event
+
+
+def _emit_remembered(
+    events: EventHub,
+    bot: Bot,
+    text: str,
+    run_id: str | None,
+) -> None:
+    label = f"Remembered: {text}".strip() if text else "Remembered a note"
+    _emit(events, bot, ProductEventType.THREAD_META, {"text": label[:160]}, run_id=run_id)
+
+
+def _emit_computer(events: EventHub, bot: Bot, status: ComputerStatus) -> None:
+    payload = status.model_dump(mode="json")
+    payload["status"] = status.state
+    _emit(events, bot, ProductEventType.COMPUTER_STATUS, payload)
+
+
+def _memory_hub(rt: AgentRuntime | None = None) -> MemoryHub | None:
+    if rt is not None:
+        found = getattr(rt, "memory", None)
+        if found is not None:
+            return found
+    return getattr(current_app().state, "memory", None)
+
+
+def _ask_question(message: ThreadMessage) -> str | None:
+    for block in message.blocks or []:
+        data = block.model_dump() if hasattr(block, "model_dump") else block
+        if isinstance(data, dict) and data.get("kind") == "ask":
+            question = str(data.get("text") or "").strip()
+            return question or None
+    return None
+
+
+def _memory_context(history: HistoryStore, rt: AgentRuntime, bot: Bot, text: str) -> str | None:
+    hub = _memory_hub(rt)
+    if hub is not None:
+        return hub.context_for_turn(bot.id, text)
+    return format_memory_context(history.memory_for_agent(bot.id))
+
+
+def _emit_answered_asks(
+    history: HistoryStore,
+    events: EventHub,
+    bot: Bot,
+    text: str,
+    run_id: str | None,
+) -> None:
+    hub = _memory_hub()
+    for message in history.answer_pending_asks(bot.thread_id, text):
+        _emit(
+            events,
+            bot,
+            ProductEventType.THREAD_MESSAGE_CREATED,
+            {"message": message.model_dump(mode="json")},
+            run_id=run_id,
+        )
+        if hub is None:
+            continue
+        question = _ask_question(message)
+        if not should_persist_ask(question, text):
+            continue
+        try:
+            entry = hub.capture(
+                text,
+                kind="choice",
+                bot_id=bot.id,
+                source="ask",
+                run_id=run_id,
+                thread_id=bot.thread_id,
+                question=question,
+            )
+            if entry is not None:
+                _emit_remembered(events, bot, entry.text, run_id)
+        except Exception:
+            log.exception("failed to capture ask answer in memory")
+
+
+def _turn_bucket(bot_id: str) -> dict[str, asyncio.Task[Any]]:
+    turns = getattr(current_app().state, "active_turns", None)
+    if turns is None:
+        return {}
+    bucket = turns.get(bot_id)
+    if bucket is None:
+        bucket = {}
+        turns[bot_id] = bucket
+    return bucket
+
+
+def _register_turn(bot_id: str, run_id: str, task: asyncio.Task[Any]) -> None:
+    _turn_bucket(bot_id)[run_id] = task
+
+
+def _drop_turn(bot_id: str, run_id: str) -> None:
+    turns = getattr(current_app().state, "active_turns", None)
+    if not turns:
+        return
+    bucket = turns.get(bot_id)
+    if not bucket:
+        return
+    bucket.pop(run_id, None)
+    if not bucket:
+        turns.pop(bot_id, None)
+
+
+def _cancel_turns(bot_id: str, run_id: str | None = None) -> None:
+    turns = getattr(current_app().state, "active_turns", None)
+    if not turns:
+        return
+    bucket = turns.get(bot_id) or {}
+    if run_id:
+        tasks = [bucket[run_id]] if run_id in bucket else []
+    else:
+        tasks = list(bucket.values())
+        turns.pop(bot_id, None)
+    for task in tasks:
+        if task and not task.done():
+            task.cancel()
+
+
+async def _shutdown_work() -> None:
+    pending: list[asyncio.Task[Any]] = []
+    turns = getattr(current_app().state, "active_turns", None)
+    if turns:
+        for bucket in list(turns.values()):
+            for task in list(bucket.values()):
+                if task and not task.done():
+                    task.cancel()
+                    pending.append(task)
+    service = getattr(current_app().state, "subagents", None)
+    history = getattr(current_app().state, "store", None)
+    if service is not None and history is not None:
+        try:
+            for bot in history.list_bots():
+                service.stop_all(bot)
+        except Exception:
+            log.exception("failed to stop subagents during shutdown")
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
+def _message_excerpt(message: ThreadMessage, limit: int = 400) -> str:
+    raw: list[dict[str, Any]] = []
+    for block in message.blocks or []:
+        if hasattr(block, "model_dump"):
+            raw.append(block.model_dump())
+        elif isinstance(block, dict):
+            raw.append(block)
+    return preview_snippet(blocks_text(raw), limit)
+
+
+def _ingest_thread_files(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    bot: Bot,
+    files: list[Any] | None,
+    existing_ids: list[str] | None,
+    *,
+    copy_to_inbox: bool,
+) -> list[dict[str, Any]]:
+    try:
+        return ingest_uploads(
+            store=history,
+            home=Path(rt.home_cwd(bot.id)),
+            data_dir=Path(rt.settings.agent_data_dir),
+            bot_id=bot.id,
+            files=files or [],
+            existing_ids=existing_ids or [],
+            copy_to_inbox=copy_to_inbox,
+        )
+    except UploadError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+
+
+async def _ensure_agent(history: HistoryStore, rt: AgentRuntime, bot: Bot) -> Bot:
+    live_id = await rt.ensure_session(
+        bot.cursor_agent_id,
+        name=bot.name or DEFAULT_BOT_NAME,
+        bot_id=bot.id,
+    )
+    rt.bind_agent_bot(live_id, bot.id)
+    if bot.cursor_agent_id != live_id:
+        return history.attach_agent(bot.id, live_id)
+    return bot
+
+
+def _handle_takeover_request(bot_id: str, run_id: str | None, reason: str | None = None) -> None:
+    history: HistoryStore = current_app().state.store
+    events: EventHub = current_app().state.hub
+    service: ComputerService = current_app().state.computers
+    bot = history.get_bot(bot_id)
+    if bot is None:
+        return
+    text = (reason or "").strip() or "Take control of this computer, then Release when you are done."
+    try:
+        msg = history.append_bot_message(
+            bot,
+            [{"kind": "computer", "state": "waiting", "text": text}],
+            run_id=run_id,
+        )
+        _emit(
+            events,
+            bot,
+            ProductEventType.THREAD_MESSAGE_CREATED,
+            {"message": msg.model_dump(mode="json")},
+            run_id=run_id,
+        )
+        history.set_bot_unread(bot_id, True)
+        service.release(bot)
+        _emit(
+            events,
+            bot,
+            ProductEventType.COMPUTER_TAKEOVER_REQUESTED,
+            {"run_id": run_id, "reason": text},
+            run_id=run_id,
+        )
+        _emit_computer(events, bot, service.status(bot))
+    except Exception:
+        log.exception("takeover request failed")
+    _cancel_turns(bot_id, run_id)
+
+
+def _resume_parked_takeover(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+    bot: Bot,
+) -> None:
+    parked = history.waiting_takeover_run(bot.id)
+    if parked is None:
+        return
+    live = history.mark_run_running(parked.id)
+    if live is None:
+        return
+    prompt = "The owner released the desktop. Continue the same task."
+    _emit(
+        events,
+        bot,
+        ProductEventType.RUN_STARTED,
+        {"run": live.model_dump(mode="json")},
+        run_id=live.id,
+    )
+
+    async def _go() -> None:
+        try:
+            bot2 = await _ensure_agent(history, rt, bot)
+            await _run_turn(
+                history,
+                rt,
+                events,
+                bot2,
+                prompt,
+                live,
+                session_id=bot2.cursor_agent_id,
+            )
+        except Exception:
+            log.exception("failed to resume parked takeover run")
+
+    task = asyncio.create_task(_go(), name=f"turn-{live.id}")
+    _register_turn(bot.id, live.id, task)
+
+
+def _format_inbox(
+    history: HistoryStore,
+    bot: Bot,
+    items: list[dict[str, str | None]],
+    ) -> str:
+    lines = [
+        "The user sent these messages while you were working. They were not injected mid-turn. Apply them now.",
+        "- If a message asks about progress, status, or a worker (e.g. 'еще делаешь?', 'сверил?', 'как там?'): check the actual state immediately (using inspect_subagent, list_subagents, or shell), give a quick direct update, and if a worker is stuck or failing, stop it (stop_subagent) and finish or fix the task directly.",
+        "- If a message refines or corrects a worker's task: steer it immediately with steer_subagent.",
+        "- If a message gives new substantive parallel tasks: spawn a subagent if appropriate, or execute directly.",
+    ]
+    for index, item in enumerate(items, start=1):
+        text = item.get("text") or ""
+        reply_id = item.get("reply_to_id")
+        if reply_id:
+            reply = history.get_message_in_thread(bot.thread_id, reply_id)
+            if reply is not None:
+                lines.append(f"{index}. (reply to {_message_excerpt(reply)!r}) {text}")
+                continue
+        lines.append(f"{index}. {text}")
+    return "\n".join(lines)
+
+
+async def _accept_turn(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+    bot: Bot,
+    text: str,
+    trigger: str = "user",
+    reply_to_id: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+) -> ThreadSendResult:
+    bot = await _ensure_agent(history, rt, bot)
+    hosted = attachments or []
+    display = (text or "").strip()
+    prompt = format_user_turn(display, hosted) if hosted else display
+    try:
+        parked = history.waiting_takeover_run(bot.id)
+        if parked is not None:
+            _msg, finished = history.finish_turn(bot, parked, "", "cancelled", error="Stopped.")
+            _emit(
+                events,
+                bot,
+                ProductEventType.RUN_CANCELLED,
+                {"run": finished.model_dump(mode="json"), "error": "Stopped."},
+                run_id=finished.id,
+            )
+        reply_msg = None
+        if reply_to_id:
+            reply_msg = history.get_message_in_thread(bot.thread_id, reply_to_id)
+            if reply_msg is None:
+                raise HTTPException(status_code=400, detail="reply target not found")
+        user_msg, run, queued = history.begin_or_enqueue_turn(
+            bot,
+            prompt,
+            model_provider=runtime_kind(rt.settings),
+            model_id=rt.settings.cursor_model,
+            trigger=trigger,
+            reply_to_id=reply_msg.id if reply_msg else None,
+            max_inbox=MAX_INBOX,
+            blocks=user_file_blocks(display, hosted) if hosted else None,
+            preview=preview_for_upload(display, hosted) if hosted else None,
+        )
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    except InboxFullError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+
+    _emit_answered_asks(history, events, bot, display or prompt, run.id)
+    _emit(
+        events,
+        bot,
+        ProductEventType.THREAD_MESSAGE_CREATED,
+        {"message": user_msg.model_dump(mode="json")},
+        run_id=run.id,
+    )
+    if queued:
+        return ThreadSendResult(
+            task_id=run.task_id,
+            run_id=run.id,
+            seq=user_msg.seq,
+            run=run,
+            queued=True,
+        )
+    _emit(
+        events,
+        bot,
+        ProductEventType.RUN_STARTED,
+        {"run": run.model_dump(mode="json")},
+        run_id=run.id,
+    )
+    inbox_items = history.drain_inbox(bot.id)
+    task = asyncio.create_task(
+        _run_turn(
+            history,
+            rt,
+            events,
+            bot,
+            prompt,
+            run,
+            session_id=bot.cursor_agent_id,
+            attach_agent=True,
+            reply=reply_msg,
+            inbox_items=inbox_items,
+        ),
+        name=f"turn-{run.id}",
+    )
+    _register_turn(bot.id, run.id, task)
+    return ThreadSendResult(task_id=run.task_id, run_id=run.id, seq=user_msg.seq, run=run)
+
+
+async def _run_turn(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+    bot: Bot,
+    text: str,
+    run: Run,
+    session_id: str | None = None,
+    attach_agent: bool = True,
+    reply: ThreadMessage | None = None,
+    inbox_items: list[dict[str, str | None]] | None = None,
+) -> None:
+    rt.clear_active_turn(run_id=run.id)
+    agent_id = session_id or bot.cursor_agent_id
+    rt.set_current_turn_context(bot.id, run.id, bot.thread_id, agent_id=agent_id, role="lead")
+    draft = ""
+    thinking = ""
+    reply_text = ""
+    error: str | None = None
+    status = "failed"
+    try:
+        page = history.page_messages(bot.thread_id, limit=40)
+        thread_context = compact_thread_context(page.messages)
+        inbox_context = _format_inbox(history, bot, inbox_items) if inbox_items else None
+        memory_prompt = wrap_turn_prompt(
+            text,
+            _memory_context(history, rt, bot, text),
+            reply_excerpt=_message_excerpt(reply) if reply else None,
+            reply_role=(
+                (reply.role.value if hasattr(reply.role, "value") else str(reply.role))
+                if reply is not None
+                else None
+            ),
+            role="lead",
+            subagent_context=format_subagent_context(history.list_subagents(bot.id)),
+            thread_context=thread_context,
+            inbox_context=inbox_context,
+        )
+        async for item in rt.stream(memory_prompt, session_id=agent_id, bot_id=bot.id):
+            if isinstance(item, RunRecord):
+                if attach_agent and item.agent_id and item.agent_id != bot.cursor_agent_id:
+                    bot = history.attach_agent(bot.id, item.agent_id)
+                    rt.bind_agent_bot(item.agent_id, bot.id)
+                elif item.agent_id:
+                    rt.bind_agent_bot(item.agent_id, bot.id)
+                status = product_run_status(item.status)
+                reply_text = item.result or draft or ""
+                if status != "completed":
+                    error = item.error or f"run failed: {item.id}"
+                    if not reply_text:
+                        reply_text = error
+                continue
+            if not isinstance(item, ProductStreamEvent):
+                continue
+            typ = item.type
+            payload = item.payload
+            if typ == "thread.message.updated":
+                if rt.has_sent_message_in_turn(run.id):
+                    continue
+                draft = accumulate(draft, payload)
+                continue
+            if typ == "thread.progress":
+                thinking = accumulate(thinking, payload)
+                continue
+            event_type = ProductEventType(typ)
+            _emit(events, bot, event_type, payload, run_id=run.id)
+    except asyncio.CancelledError:
+        waiting = None
+        try:
+            waiting = history.waiting_takeover_run(bot.id)
+        except Exception:
+            waiting = None
+        if waiting is not None and waiting.id == run.id:
+            log.info("turn %s waiting for takeover", run.id)
+            return
+        status = "cancelled"
+        error = "Stopped."
+        reply_text = ""
+        log.info("turn %s cancelled", run.id)
+    except AgentRuntimeError as err:
+        status = "failed"
+        error = err.message
+        reply_text = err.message
+        log.error(
+            "run did not start: %s retryable=%s request_id=%s",
+            err.message,
+            err.retryable,
+            err.request_id,
+        )
+    except Exception as err:
+        status = "failed"
+        error = str(err)
+        reply_text = str(err)
+        log.exception("run failed")
+    finally:
+        _drop_turn(bot.id, run.id)
+
+    has_sent = rt.has_sent_message_in_turn(run.id)
+    rt.clear_active_turn(run_id=run.id)
+
+    if status == "cancelled":
+        reply_text = ""
+    elif has_sent:
+        reply_text = error if status != "completed" else ""
+    elif not reply_text:
+        reply_text = draft or error or ""
+
+    try:
+        bot_msg, finished = history.finish_turn(bot, run, reply_text, status, error=error)
+    except DatabaseUnavailable:
+        log.exception("failed to persist turn finish")
+        _emit(
+            events,
+            bot,
+            ProductEventType.RUN_FAILED,
+            {"error": "history unavailable", "retryable": True},
+            run_id=run.id,
+        )
+        return
+
+    if bot_msg is not None:
+        _emit(
+            events,
+            bot,
+            ProductEventType.THREAD_MESSAGE_CREATED,
+            {"message": bot_msg.model_dump(mode="json")},
+            run_id=finished.id,
+        )
+    final_type = (
+        ProductEventType.RUN_COMPLETED if status == "completed" else ProductEventType.RUN_FAILED
+    )
+    if status == "cancelled":
+        final_type = ProductEventType.RUN_CANCELLED
+    _emit(
+        events,
+        bot,
+        final_type,
+        {"run": finished.model_dump(mode="json"), "error": error},
+        run_id=finished.id,
+    )
+    if status == "completed":
+        hub = _memory_hub(rt)
+        if hub is not None:
+            try:
+                for entry in hub.extract_after_turn(text, run.id, bot.id):
+                    _emit_remembered(events, bot, entry.text, run.id)
+            except Exception:
+                log.exception("failed to extract memory after turn")
+    if status != "cancelled":
+        await _kick_inbox(history, rt, events, bot)
+
+
+async def _kick_inbox(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+    bot: Bot,
+) -> None:
+    try:
+        live = history.get_bot(bot.id) or bot
+        claimed = history.claim_inbox_follow_up(
+            live,
+            model_provider=runtime_kind(rt.settings),
+            model_id=rt.settings.cursor_model,
+        )
+    except Exception:
+        log.exception("failed to claim inbox")
+        return
+    if claimed is None:
+        return
+    run, items = claimed
+    _emit(
+        events,
+        live,
+        ProductEventType.RUN_STARTED,
+        {"run": run.model_dump(mode="json")},
+        run_id=run.id,
+    )
+    task = asyncio.create_task(
+        _run_turn(
+            history,
+            rt,
+            events,
+            live,
+            _format_inbox(history, live, items),
+            run,
+            session_id=live.cursor_agent_id,
+            attach_agent=True,
+        ),
+        name=f"turn-{run.id}",
+    )
+    _register_turn(live.id, run.id, task)
+
