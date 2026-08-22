@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { closeUnterminatedFence, sanitizeMarkdownUrl } from "./markdown";
+import { closeUnterminatedFence, sanitizeMarkdownUrl, stripMarkdown } from "./markdown";
+describe("stripMarkdown", () => {
+  it("strips nested leftover html markers", () => {
+    expect(stripMarkdown("<<b>hi")).toBe("hi");
+    expect(stripMarkdown("hello **there**")).toBe("hello there");
+  });
+});
 
 describe("sanitizeMarkdownUrl", () => {
   it("keeps http(s) and drops javascript", () => {

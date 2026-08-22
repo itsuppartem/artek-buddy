@@ -4,6 +4,9 @@
 
 ## [0.10.27] - 2026-08-22
 
+### Fixed
+- Deleting a bot only removes `data/artifacts/<that bot id>`. The window proxy keeps static files inside the packaged web root, drops CR/LF from `Content-Type`, and requires TLS 1.2+ to the host.
+
 ### Changed
 - README and CONTRIBUTING match GitHub Releases: the client `.deb` is attached after `test` on `main` is green. Local `client/build-deb.sh` is optional.
 - `client/artek_buddy.py` is the entrypoint. Pairing, loopback proxy, notifications, and the GTK window live in sibling modules; `build-deb.sh` ships them next to the entry.

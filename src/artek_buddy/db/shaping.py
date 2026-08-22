@@ -71,8 +71,13 @@ def strip_markdown(text: str) -> str:
     s = re.sub(r"(?m)^>\s*", "", s)
     # Remove list bullets (*, -, +, 1.) at line starts
     s = re.sub(r"(?m)^(?:\s*[-*+]|\s*\d+\.)\s+", "", s)
-    # Remove HTML tags
-    s = re.sub(r"<[^>]+>", "", s)
+    # Remove HTML tags; repeat so nested leftovers cannot survive one pass.
+    for _ in range(8):
+        nxt = re.sub(r"<[^>]*>", "", s)
+        if nxt == s:
+            break
+        s = nxt
+    s = re.sub(r"[<>]", "", s)
     return s
 
 

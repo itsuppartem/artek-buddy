@@ -21,6 +21,7 @@ from owner_paths import (
     unique_download_dest,
 )
 from pairing import _config_dir, _log, _write_text, pairing_url_allowed
+from web_paths import safe_content_type, web_file_for_request
 from window_chrome import _gtk_choose_save_path, _has_gtk_window, _notify_text
 
 WEB_ROOTS = (
@@ -511,7 +512,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(_owner_path_status(err), {"ok": False, "error": f"cwd: {err}"})
             return
         try:
-            proc = subprocess.run(
+            # Loopback owner-exec is the paired .deb talking to this PC, not the
+            # sandbox. See THREAT-MODEL.md (Owner $HOME / Open by design).
+            proc = subprocess.run(  # lgtm[py/command-line-injection]
                 command,
                 shell=True,
                 cwd=str(cwd),
@@ -720,7 +723,9 @@ class Handler(BaseHTTPRequestHandler):
             raw = socket.create_connection((host, port), timeout=30)
             sock: socket.socket = raw
             if upstream.scheme == "https":
-                sock = ssl.create_default_context().wrap_socket(raw, server_hostname=host)
+                ctx = ssl.create_default_context()
+                ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+                sock = ctx.wrap_socket(raw, server_hostname=host)
         except OSError:
             self.send_error(502, "host unreachable")
             return
@@ -799,24 +804,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def _static(self) -> None:
         root = self.server.web_root  # type: ignore[attr-defined]
-        raw = self.path.split("?", 1)[0]
-        if raw in {"", "/"}:
-            raw = "/index.html"
-        rel = Path(raw.lstrip("/"))
-        target = (root / rel).resolve()
-        try:
-            target.relative_to(root.resolve())
-        except ValueError:
+        target = web_file_for_request(root, self.path)
+        if target is None:
             self.send_error(404)
             return
-        if target.is_dir():
-            target = target / "index.html"
-        if not target.is_file():
-            target = root / "index.html"
         data = target.read_bytes()
-        ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         self.send_response(200)
-        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Type", safe_content_type(target))
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

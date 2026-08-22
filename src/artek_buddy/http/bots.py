@@ -24,6 +24,7 @@ from artek_buddy.contracts import (
 )
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
+from artek_buddy.fs_jail import contained_under
 from artek_buddy.runtime import (
     AgentRuntime,
 )
@@ -283,7 +284,7 @@ async def remove_bot(
         raise _db_error(err) from err
     if not deleted:
         raise HTTPException(status_code=404, detail="bot not found")
-    shutil.rmtree(
-        Path(current_app().state.settings.agent_data_dir) / "artifacts" / bot_id, ignore_errors=True
-    )
+    dest = contained_under(Path(current_app().state.settings.agent_data_dir) / "artifacts", bot.id)
+    if dest is not None:
+        shutil.rmtree(dest, ignore_errors=True)
     return OkResponse(ok=True)

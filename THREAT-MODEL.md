@@ -112,3 +112,4 @@ that file is not served.
 2. Funnel = public API. Do not treat it as a pairing-only portal.
 3. Desktop boxes drop all capabilities and have Pi 5-sized memory/CPU/pids limits. They stay **root**: uid 1000 did not start Chromium in the live canary. They are not a kernel jail: Chromium is `--no-sandbox`, the rootfs is writable, and there is no gVisor.
 4. `docker.sock` on the supervisor is required for this product shape; the threat is “supervisor bug = Pi root”, not “we forgot the socket”.
+5. The paired `.deb` can run a shell on the owner PC (`/local/owner/exec`, loopback only, `$HOME` jail). That is the owner, not the sandbox. CodeQL `py/command-line-injection` on that line is accepted residual risk, not a forgotten `shell=True`.

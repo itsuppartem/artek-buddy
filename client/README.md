@@ -1,7 +1,7 @@
 # artek-buddy client
 
 Desktop GUI for the Artek Buddy host. Command: `artek-buddy`.
-Source: `artek_buddy.py` (entrypoint) plus `pairing.py`, `proxy.py`, `notifications.py`, `window.py`, `owner_paths.py`, `window_chrome.py`, and `web/`. Version: same as the product (`../VERSION`).
+Source: `artek_buddy.py` (entrypoint) plus `pairing.py`, `proxy.py`, `web_paths.py`, `notifications.py`, `window.py`, `owner_paths.py`, `window_chrome.py`, and `web/`. Version: same as the product (`../VERSION`).
 
 The window is the product shell: pairing, bot list, thread, computer pane. It talks to
 the host through a loopback proxy so the token never sits in the page.
