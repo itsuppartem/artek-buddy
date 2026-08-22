@@ -12,7 +12,6 @@ from urllib.parse import parse_qs, unquote, urlparse
 from artek_buddy.auth import supervisor_token
 from artek_buddy.supervisor.desktop_spec import (
     desktop_create_spec,
-    ensure_desktop_home,
     inspect_is_hardened,
 )
 from artek_buddy.supervisor.docker_engine import DockerEngine, published_port
@@ -187,7 +186,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         name = container_name(home_key)
         home = home_dir(home_key)
-        ensure_desktop_home(home)
         existing = STATE.engine.find_by_name(name)
         same_image = (
             (existing.get("Config") or {}).get("Image") == STATE.image if existing else False

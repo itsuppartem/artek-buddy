@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
-from artek_buddy.supervisor.desktop_spec import (
-    desktop_create_spec,
-    ensure_desktop_home,
-    inspect_is_hardened,
-)
+from artek_buddy.supervisor.desktop_spec import desktop_create_spec, inspect_is_hardened
 from artek_buddy.supervisor.docker_engine import published_port
 from artek_buddy.supervisor.logic import (
     _close_app_command,
@@ -60,7 +53,7 @@ def test_caps_lock_key_uses_xdotool_caps_lock() -> None:
     assert "Caps_Lock" in cmd
 
 
-def test_desktop_create_spec_is_uid1000_capdrop_all_and_pi5_limits() -> None:
+def test_desktop_create_spec_capdrop_all_and_pi5_limits() -> None:
     spec = desktop_create_spec(
         name="artek-bot-team-ws",
         image="artek-buddy-computer:local",
@@ -70,7 +63,7 @@ def test_desktop_create_spec_is_uid1000_capdrop_all_and_pi5_limits() -> None:
         network="artek-computers",
     )
     hc = spec["HostConfig"]
-    assert spec["User"] == "1000:1000"
+    assert "User" not in spec
     assert hc["CapDrop"] == ["ALL"]
     assert hc["SecurityOpt"] == ["no-new-privileges:true"]
     assert hc["Memory"] == 1536 * 1024 * 1024
@@ -87,9 +80,8 @@ def test_desktop_create_spec_is_uid1000_capdrop_all_and_pi5_limits() -> None:
     assert hc["NetworkMode"] == "artek-computers"
 
 
-def test_inspect_is_hardened_rejects_root_unlimited_box() -> None:
+def test_inspect_is_hardened_rejects_unlimited_box() -> None:
     assert inspect_is_hardened({}) is False
-    assert inspect_is_hardened({"Config": {"User": ""}, "HostConfig": {}}) is False
     spec = desktop_create_spec(
         name="n",
         image="img",
@@ -98,22 +90,8 @@ def test_inspect_is_hardened_rejects_root_unlimited_box() -> None:
         home_key="k",
         network="artek-computers",
     )
-    inspect = {"Config": {"User": spec["User"]}, "HostConfig": spec["HostConfig"]}
+    inspect = {"Config": {}, "HostConfig": spec["HostConfig"]}
     assert inspect_is_hardened(inspect) is True
-    inspect["Config"]["User"] = "0:0"
-    assert inspect_is_hardened(inspect) is False
-
-
-def test_ensure_desktop_home_chowns_uid_1000(tmp_path: Path, monkeypatch) -> None:
-    calls: list[tuple[Path, int, int]] = []
-
-    def fake_chown(path: str | os.PathLike[str], uid: int, gid: int) -> None:
-        calls.append((Path(path), uid, gid))
-
-    monkeypatch.setattr(os, "chown", fake_chown)
-    home = tmp_path / "homes" / "team-ws"
-    (home / "nested").mkdir(parents=True)
-    ensure_desktop_home(home)
-    owned = {(path, uid, gid) for path, uid, gid in calls}
-    assert (home, 1000, 1000) in owned
-    assert (home / "nested", 1000, 1000) in owned
+    unlimited = dict(spec["HostConfig"])
+    unlimited["CapDrop"] = []
+    assert inspect_is_hardened({"Config": {}, "HostConfig": unlimited}) is False

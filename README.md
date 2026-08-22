@@ -178,7 +178,7 @@ MEMORY_DB_PASSWORD=$(openssl rand -hex 16)
 
 `AGENT_HTTP_TOKEN` stays on the Pi. The desktop window never gets it. Devices pair and receive their own token.
 
-If you already run an older compose stack, add `MEMORY_DB_PASSWORD` to `.env` (use the password Postgres was created with) before the next `docker compose up`. Rebuild `artek-buddy-computer:local`, then stop and boot each desktop so boxes pick up uid 1000 / CapDrop / resource limits and the isolated `artek-computers` network.
+If you already run an older compose stack, add `MEMORY_DB_PASSWORD` to `.env` (use the password Postgres was created with) before the next `docker compose up`. Rebuild `artek-buddy-computer:local`, then stop and boot each desktop so boxes pick up CapDrop / resource limits and the isolated `artek-computers` network.
 
 Build the desktop box image once, then start the stack:
 
