@@ -47,7 +47,7 @@ flowchart TD
 
 Daily access is a Tailscale tailnet (free Personal plan is enough). Compose uses `network_mode: host` and the API default is `HTTP_HOST=0.0.0.0`, so `:8080` is reachable on every host interface the kernel has. Do not port-forward it. Funnel is optional and **publishes the whole API** — read step 6 before turning it on.
 
-Trust boundary, pairing, `docker.sock`, and residual risk: [THREAT-MODEL.md](THREAT-MODEL.md). How to report a vuln: [SECURITY.md](SECURITY.md).
+Trust boundary, pairing, `docker.sock`, and residual risk: [THREAT-MODEL.md](THREAT-MODEL.md). Processes, state, turn flow, and the test pyramid: [ARCHITECTURE.md](ARCHITECTURE.md). Decisions: [adr/](adr/). How to report a vuln: [SECURITY.md](SECURITY.md).
 
 ## Why this exists
 
