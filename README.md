@@ -47,6 +47,8 @@ flowchart TD
 
 Daily access is a Tailscale tailnet (free Personal plan is enough). Compose uses `network_mode: host` and the API default is `HTTP_HOST=0.0.0.0`, so `:8080` is reachable on every host interface the kernel has. Do not port-forward it. Funnel is optional and **publishes the whole API** — read step 6 before turning it on.
 
+Trust boundary, pairing, `docker.sock`, and residual risk: [THREAT-MODEL.md](THREAT-MODEL.md). How to report a vuln: [SECURITY.md](SECURITY.md).
+
 ## Why this exists
 
 Most chat assistants are good at answering one request, but poor at being a long-lived personal worker: they lose context, cannot keep a task-specific desktop, and usually require you to adopt another account, quota, or hosted environment.
