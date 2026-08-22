@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { closeUnterminatedFence, sanitizeMarkdownUrl, stripMarkdown } from "./markdown";
+
 describe("stripMarkdown", () => {
   it("strips nested leftover html markers", () => {
     expect(stripMarkdown("<<b>hi")).toBe("hi");

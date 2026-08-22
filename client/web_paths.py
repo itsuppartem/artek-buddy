@@ -3,7 +3,36 @@
 from __future__ import annotations
 
 import mimetypes
+import os
 from pathlib import Path
+
+_KNOWN_TYPES = frozenset(
+    {
+        "application/javascript",
+        "application/json",
+        "application/octet-stream",
+        "font/woff",
+        "font/woff2",
+        "image/gif",
+        "image/jpeg",
+        "image/png",
+        "image/svg+xml",
+        "image/webp",
+        "text/css",
+        "text/html",
+        "text/javascript",
+    }
+)
+
+
+def _inside(base: str, target: str) -> bool:
+    base_r = os.path.realpath(base)
+    target_r = os.path.realpath(target)
+    try:
+        common = os.path.commonpath([base_r, target_r])
+    except ValueError:
+        return False
+    return common == base_r
 
 
 def web_file_for_request(root: Path, url_path: str) -> Path | None:
@@ -12,30 +41,29 @@ def web_file_for_request(root: Path, url_path: str) -> Path | None:
         return None
     if raw in {"", "/"}:
         raw = "/index.html"
-    base = Path(root).resolve()
-    target = (base / raw.lstrip("/")).resolve()
-    try:
-        target.relative_to(base)
-    except ValueError:
+    rel = raw.lstrip("/")
+    parts = [p for p in rel.split("/") if p not in {"", "."}]
+    if any(p == ".." for p in parts):
         return None
-    if target.is_dir():
-        target = (target / "index.html").resolve()
-        try:
-            target.relative_to(base)
-        except ValueError:
+    base = os.path.realpath(root)
+    target = os.path.realpath(os.path.join(base, *parts))
+    if not _inside(base, target):
+        return None
+    if os.path.isdir(target):
+        target = os.path.realpath(os.path.join(target, "index.html"))
+        if not _inside(base, target):
             return None
-    if target.is_file():
-        return target
-    fallback = (base / "index.html").resolve()
-    try:
-        fallback.relative_to(base)
-    except ValueError:
-        return None
-    return fallback if fallback.is_file() else None
+    if os.path.isfile(target):
+        return Path(target)
+    fallback = os.path.realpath(os.path.join(base, "index.html"))
+    if _inside(base, fallback) and os.path.isfile(fallback):
+        return Path(fallback)
+    return None
 
 
 def safe_content_type(path: Path) -> str:
-    ctype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
-    if any(ch in ctype for ch in "\r\n"):
+    guessed = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    cleaned = guessed.replace("\r", "").replace("\n", "")
+    if cleaned not in _KNOWN_TYPES:
         return "application/octet-stream"
-    return ctype
+    return cleaned
