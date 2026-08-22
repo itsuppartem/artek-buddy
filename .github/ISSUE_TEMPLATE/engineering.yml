@@ -1,0 +1,67 @@
+name: Engineering
+description: Quality, security, CI, or architecture evidence — not a product feature.
+title: "[engineering] "
+labels: ["engineering"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What evidence or gate is missing. Do not add a tool unless this Pi product needs it.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior
+      description: What the tree and CI actually do today. Grep before claiming a gap.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: One issue per PR into develop. Residual risk stays named. OpenAPI stays off at runtime. docs/ stays gitignored.
+      value: |
+        Branch from develop. Do not push main. Do not bump VERSION unless this is a release.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: Which jobs in test.yml prove this, or "none" if config/docs only.
+    validations:
+      required: true
+  - type: dropdown
+    id: jobs
+    attributes:
+      label: Test jobs
+      description: Which `.github/workflows/test.yml` jobs must move.
+      multiple: true
+      options:
+        - backend
+        - ui
+        - live
+        - none
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: false
+      options:
+        - area:host
+        - area:client
+        - area:ci
+        - area:docs
+        - area:security
+    validations:
+      required: false
