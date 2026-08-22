@@ -18,6 +18,7 @@
 - Hypothesis properties cover owner-command classification (write verbs, `find -exec`, redirects) and the owner-path jail (`..`, absolute escapes, NUL).
 - Host logs are JSON in Docker (`LOG_FORMAT=json`) with a greppable `request_id` from HTTP middleware through `threads.send` and tool lines. Tokens, pairing codes, `/novnc` query strings, and `/home/<user>` are redacted.
 - GitHub issue forms, a pull-request template, and CODEOWNERS (`@itsuppartem`).
+- The migration runner splits on statement boundaries (quotes, comments, dollar-quotes), not raw `;`. Replay on an empty database applies every historical file.
 
 ## [0.10.26] - 2026-08-21
 

@@ -13,6 +13,7 @@ from artek_buddy.db.connection import MIGRATIONS_DIR, DatabaseUnavailable
 from artek_buddy.db.shaping import (
     DEFAULT_WORKSPACE_ID,
 )
+from artek_buddy.db.sql_split import split_sql_statements
 
 log = logging.getLogger("artek_buddy")
 
@@ -98,10 +99,8 @@ class HistoryStoreCore:
                 if path.name in applied:
                     continue
                 sql = path.read_text(encoding="utf-8")
-                for statement in sql.split(";"):
-                    statement = statement.strip()
-                    if statement:
-                        conn.execute(statement)
+                for statement in split_sql_statements(sql):
+                    conn.execute(statement)
                 conn.execute(
                     "INSERT INTO schema_migrations (id) VALUES (%s)",
                     (path.name,),
