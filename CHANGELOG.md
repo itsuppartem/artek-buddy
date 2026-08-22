@@ -15,6 +15,7 @@
 - `ARCHITECTURE.md` and `adr/0001`–`0007` record the running Compose trade-offs (supervisor socket, Team/Private, scripted vs Cursor, Compose, SQL migrations, consent cards, bind/Funnel).
 - CI dumps the FastAPI schema (`python -m artek_buddy.openapi_export`) and generates `client/web/src/generated/openapi.d.ts`. `/docs` stays off. Dirty schema/types fail `backend`.
 - GitHub Releases attach CycloneDX SBOMs, `SHA256SUMS`, and GitHub Artifact Attestations. Notes come from the `CHANGELOG.md` section for that `VERSION`.
+- Hypothesis properties cover owner-command classification (write verbs, `find -exec`, redirects) and the owner-path jail (`..`, absolute escapes, NUL).
 
 ## [0.10.26] - 2026-08-21
 
