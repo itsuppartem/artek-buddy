@@ -153,7 +153,9 @@ def test_send_while_waiting_takeover_starts_turn(client, auth_header) -> None:
             break
         time.sleep(0.1)
     else:
-        raise AssertionError(f"queued follow-up did not finish after takeover send: {last.get('run')}")
+        raise AssertionError(
+            f"queued follow-up did not finish after takeover send: {last.get('run')}"
+        )
     assert last["run"]["id"] != run_id
     assert last["run"]["status"] != "waiting_takeover"
     assert "while the new run is live" in message_texts(last)
@@ -336,7 +338,9 @@ def test_request_takeover_with_reason_release_resumes_same_run(client, auth_head
     assert "continuing after takeover" in message_texts(done)
 
 
-def test_stop_from_waiting_takeover_cancels_and_release_does_not_resume(client, auth_header) -> None:
+def test_stop_from_waiting_takeover_cancels_and_release_does_not_resume(
+    client, auth_header
+) -> None:
     bot_id = create_bot(client, auth_header, "StopPark")["id"]
     parked = client.post(
         f"/v1/threads/{bot_id}/messages",

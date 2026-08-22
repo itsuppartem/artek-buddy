@@ -1,40 +1,20 @@
 from __future__ import annotations
 
 import logging
-from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
-from typing import Any, Iterator
+from typing import Any
 
-from psycopg import InterfaceError, OperationalError
 from psycopg.errors import UniqueViolation
-from psycopg.rows import dict_row
-from psycopg.types.json import Json
-from psycopg_pool import ConnectionPool, PoolTimeout
 
-from artek_buddy.auth import (
-    PAIRING_TTL_SECONDS,
-    hash_secret,
-    new_device_token,
-    new_pairing_code,
-    normalize_pairing_code,
-)
 from artek_buddy.contracts.domain import (
-    Artifact,
-    Bot,
-    Device,
-    DeviceCreated,
     MemoryDocument,
-    PairingCode,
-    Routine,
-    Run,
-    Subagent,
-    ThreadMessage,
-    ThreadMessagePage,
 )
-from artek_buddy.contracts.ids import DEFAULT_BOT_COLOR, MemoryScope, RunStatus
-from artek_buddy.cron import CronError, next_run_at, parse_cron, validate_timezone
-from artek_buddy.contracts.events import MessageReplyRef, MessageRole
-from artek_buddy.db.connection import MIGRATIONS_DIR, DatabaseUnavailable
+from artek_buddy.contracts.ids import MemoryScope
+from artek_buddy.db.shaping import (
+    DEFAULT_WORKSPACE_ID,
+    isoformat_utc,
+    new_id,
+    parse_iso,
+)
 from artek_buddy.memory import (
     MAX_MEMORY_CONTENT_CHARS,
     MemoryConflict,
@@ -42,21 +22,6 @@ from artek_buddy.memory import (
     normalize_memory_path,
 )
 from artek_buddy.memory_hub import MemoryEntry, entry_path, normalize_kind, shelf_from_path
-from artek_buddy.computer.models import ComputerRecord
-from artek_buddy.db.shaping import (
-    DEFAULT_PAGE_SIZE,
-    DEFAULT_WORKSPACE_ID,
-    answer_ask_blocks,
-    isoformat_utc,
-    new_id,
-    next_seq,
-    older_cursor,
-    parse_iso,
-    pick_color,
-    preview_snippet,
-    text_blocks,
-    blocks_text,
-)
 
 log = logging.getLogger("artek_buddy")
 
@@ -117,7 +82,14 @@ class MemoryMixin:
                             source_thread_id, created_at
                         ) VALUES (%s, %s, 1, %s, %s, %s, %s)
                         """,
-                        (new_id("mrev"), document_id, content, source_run_id, source_thread_id, now),
+                        (
+                            new_id("mrev"),
+                            document_id,
+                            content,
+                            source_run_id,
+                            source_thread_id,
+                            now,
+                        ),
                     )
             except UniqueViolation as err:
                 raise MemoryConflict("memory document already exists") from err
@@ -154,7 +126,7 @@ class MemoryMixin:
                 f"""
                 SELECT id, scope, bot_id, path, content, revision, updated_at
                 FROM memory_documents
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 ORDER BY updated_at DESC, path ASC
                 """,
                 args,
@@ -393,7 +365,9 @@ class MemoryMixin:
         if existing is not None:
             return self.update_entry_text(existing.id, document.content) or existing
         kind_value = normalize_kind(kind)
-        scope_value = document.scope.value if hasattr(document.scope, "value") else str(document.scope)
+        scope_value = (
+            document.scope.value if hasattr(document.scope, "value") else str(document.scope)
+        )
         layer = shelf or shelf_from_path(getattr(document, "path", "") or "", scope_value)
         entry_id = new_id("ment")
         now = isoformat_utc()
@@ -455,7 +429,7 @@ class MemoryMixin:
                 f"""
                 SELECT id, scope, kind, slot, text, source, bot_id, document_id, shelf, until
                 FROM memory_entries
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 ORDER BY created_at DESC
                 """,
                 args,
@@ -489,7 +463,7 @@ class MemoryMixin:
                 f"""
                 SELECT id, scope, kind, slot, text, source, bot_id, document_id, shelf, until
                 FROM memory_entries
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
@@ -525,7 +499,7 @@ class MemoryMixin:
                 f"""
                 SELECT id, scope, kind, slot, text, source, bot_id, document_id, shelf, until
                 FROM memory_entries
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 LIMIT 1
                 """,
                 args,

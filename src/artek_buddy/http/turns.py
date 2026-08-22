@@ -1,102 +1,49 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import logging
-import re
-import shutil
-from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi import HTTPException
 
-from artek_buddy.auth import host_token_match, pairing_attempts
-from artek_buddy.bus import HEARTBEAT, REPLAY_GAP, EventHub
-from artek_buddy.config import Settings, get_settings
+from artek_buddy.bus import EventHub
+from artek_buddy.computer.service import (
+    ComputerService,
+)
 from artek_buddy.contracts import (
-    ArtifactList,
-    AttachmentList,
-    AttachmentUploadInput,
-    HostedAttachment,
     Bot,
-    BotIdInput,
-    BotList,
-    ComputerFileContent,
-    ComputerFileList,
-    ComputerInput,
     ComputerStatus,
-    CreateBotInput,
-    CreateDeviceInput,
-    CreateMemoryInput,
-    CreateRoutineInput,
-    DeleteBotInput,
-    DeploymentSettings,
-    Device,
-    DeviceCreated,
-    DeviceList,
-    HealthResponse,
-    MarkdownExport,
-    Me,
-    MemoryDocument,
-    MemoryDocumentList,
-    MemoryScope,
-    MemoryUpdateInput,
-    OkResponse,
-    PairingCode,
     ProductEvent,
     ProductEventType,
-    Routine,
-    RoutineList,
     Run,
-    ScreenUrlResult,
-    RunRequest,
-    SessionRequest,
-    SessionResponse,
-    SetComputerInput,
-    SteerSubagentInput,
-    Subagent,
-    SubagentList,
-    TakeoverResult,
-    TestRunResult,
-    ThreadFollowUpInput,
     ThreadMessage,
-    ThreadMessagePage,
-    ConsentAnswerInput,
-    ConsentFileInput,
-    ConsentJob,
-    ConsentResultInput,
-    ThreadSendInput,
     ThreadSendResult,
-    ThreadSnapshot,
-    UpdateBotInput,
-    UpdateDeploymentInput,
-    UpdateRoutineInput,
 )
-from artek_buddy.cron import CronError
-from artek_buddy.computer.proxy import proxy_novnc_http, proxy_novnc_ws
-from artek_buddy.computer.service import ComputerBusy, ComputerError, ComputerService, ComputerUnavailable
 from artek_buddy.db import DatabaseUnavailable, product_run_status
 from artek_buddy.db.history import HistoryStore, InboxFullError
 from artek_buddy.db.shaping import (
     DEFAULT_BOT_NAME,
-    DEFAULT_PAGE_SIZE,
     blocks_text,
     isoformat_utc,
     new_id,
     preview_snippet,
 )
-from artek_buddy.consent import ConsentHub
 from artek_buddy.memory import (
-    MemoryConflict,
-    MemoryPathError,
     compact_thread_context,
-    export_markdown,
     format_memory_context,
     format_subagent_context,
     wrap_turn_prompt,
 )
+from artek_buddy.memory_hub import MemoryHub, should_persist_ask
+from artek_buddy.runtime import (
+    AgentRuntime,
+    AgentRuntimeError,
+    ProductStreamEvent,
+    RunRecord,
+    runtime_kind,
+)
+from artek_buddy.stream import accumulate
 from artek_buddy.uploads import (
     UploadError,
     format_user_turn,
@@ -104,18 +51,6 @@ from artek_buddy.uploads import (
     preview_for_upload,
     user_file_blocks,
 )
-from artek_buddy.memory_gateway import GatewayClient
-from artek_buddy.memory_hub import MemoryHub, should_persist_ask
-from artek_buddy.subagents import SubagentError, SubagentService
-from artek_buddy.runtime import (
-    AgentRuntime,
-    AgentRuntimeError,
-    ProductStreamEvent,
-    RunRecord,
-    open_runtime,
-    runtime_kind,
-)
-from artek_buddy.stream import accumulate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
@@ -123,9 +58,9 @@ log = logging.getLogger("artek_buddy")
 from artek_buddy.http.deps import (
     MAX_INBOX,
     _db_error,
-    _require_bot,
     current_app,
 )
+
 
 def _emit(
     events: EventHub,
@@ -341,7 +276,9 @@ def _handle_takeover_request(bot_id: str, run_id: str | None, reason: str | None
     bot = history.get_bot(bot_id)
     if bot is None:
         return
-    text = (reason or "").strip() or "Take control of this computer, then Release when you are done."
+    text = (
+        reason or ""
+    ).strip() or "Take control of this computer, then Release when you are done."
     try:
         msg = history.append_bot_message(
             bot,
@@ -414,7 +351,7 @@ def _format_inbox(
     history: HistoryStore,
     bot: Bot,
     items: list[dict[str, str | None]],
-    ) -> str:
+) -> str:
     lines = [
         "The user sent these messages while you were working. They were not injected mid-turn. Apply them now.",
         "- If a message asks about progress, status, or a worker (e.g. 'еще делаешь?', 'сверил?', 'как там?'): check the actual state immediately (using inspect_subagent, list_subagents, or shell), give a quick direct update, and if a worker is stuck or failing, stop it (stop_subagent) and finish or fix the task directly.",
@@ -714,4 +651,3 @@ async def _kick_inbox(
         name=f"turn-{run.id}",
     )
     _register_turn(live.id, run.id, task)
-

@@ -1,61 +1,17 @@
 from __future__ import annotations
 
 import logging
-from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
-from typing import Any, Iterator
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from psycopg import InterfaceError, OperationalError
-from psycopg.errors import UniqueViolation
-from psycopg.rows import dict_row
-from psycopg.types.json import Json
-from psycopg_pool import ConnectionPool, PoolTimeout
-
-from artek_buddy.auth import (
-    PAIRING_TTL_SECONDS,
-    hash_secret,
-    new_device_token,
-    new_pairing_code,
-    normalize_pairing_code,
-)
 from artek_buddy.contracts.domain import (
-    Artifact,
-    Bot,
-    Device,
-    DeviceCreated,
-    MemoryDocument,
-    PairingCode,
     Routine,
-    Run,
-    Subagent,
-    ThreadMessage,
-    ThreadMessagePage,
 )
-from artek_buddy.contracts.ids import DEFAULT_BOT_COLOR, MemoryScope, RunStatus
 from artek_buddy.cron import CronError, next_run_at, parse_cron, validate_timezone
-from artek_buddy.contracts.events import MessageReplyRef, MessageRole
-from artek_buddy.db.connection import MIGRATIONS_DIR, DatabaseUnavailable
-from artek_buddy.memory import (
-    MAX_MEMORY_CONTENT_CHARS,
-    MemoryConflict,
-    MemoryPathError,
-    normalize_memory_path,
-)
-from artek_buddy.memory_hub import MemoryEntry, entry_path, normalize_kind, shelf_from_path
-from artek_buddy.computer.models import ComputerRecord
 from artek_buddy.db.shaping import (
-    DEFAULT_PAGE_SIZE,
-    DEFAULT_WORKSPACE_ID,
-    answer_ask_blocks,
     isoformat_utc,
     new_id,
-    next_seq,
-    older_cursor,
     parse_iso,
-    pick_color,
-    preview_snippet,
-    text_blocks,
-    blocks_text,
 )
 
 log = logging.getLogger("artek_buddy")
@@ -74,7 +30,7 @@ class RoutinesMixin:
     ) -> Routine:
         parse_cron(cron)
         zone = validate_timezone(timezone_name)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         nxt = isoformat_utc(next_run_at(cron, now, zone)) if active else None
         routine_id = new_id("rtn")
         created = isoformat_utc(now)
@@ -86,7 +42,18 @@ class RoutinesMixin:
                     last_run_at, next_run_at, created_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL, %s, %s)
                 """,
-                (routine_id, bot_id, name.strip(), prompt, cron.strip(), zone, active, notify, nxt, created),
+                (
+                    routine_id,
+                    bot_id,
+                    name.strip(),
+                    prompt,
+                    cron.strip(),
+                    zone,
+                    active,
+                    notify,
+                    nxt,
+                    created,
+                ),
             )
             conn.commit()
         return Routine(
@@ -147,11 +114,17 @@ class RoutinesMixin:
         next_name = name.strip() if name is not None else current.name
         next_prompt = prompt if prompt is not None else current.prompt
         next_cron = cron.strip() if cron is not None else current.cron
-        next_zone = validate_timezone(timezone_name) if timezone_name is not None else current.timezone
+        next_zone = (
+            validate_timezone(timezone_name) if timezone_name is not None else current.timezone
+        )
         next_notify = current.notify if notify is None else notify
         next_active = current.active if active is None else active
         parse_cron(next_cron)
-        nxt = isoformat_utc(next_run_at(next_cron, datetime.now(timezone.utc), next_zone)) if next_active else None
+        nxt = (
+            isoformat_utc(next_run_at(next_cron, datetime.now(UTC), next_zone))
+            if next_active
+            else None
+        )
         with self._conn() as conn:
             row = conn.execute(
                 """
@@ -186,7 +159,7 @@ class RoutinesMixin:
         return row is not None
 
     def claim_due_routines(self, limit: int = 20) -> list[Routine]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         lease_until = now + timedelta(minutes=5)
         claimed: list[Routine] = []
         with self._conn() as conn:
@@ -223,14 +196,12 @@ class RoutinesMixin:
                     """,
                     (seen, isoformat_utc(lease_until), row["id"]),
                 )
-                claimed.append(
-                    self._routine_from_row(row).model_copy(update={"last_run_at": seen})
-                )
+                claimed.append(self._routine_from_row(row).model_copy(update={"last_run_at": seen}))
             conn.commit()
         return claimed
 
     def ack_routine(self, routine_id: str) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         with self._conn() as conn:
             row = conn.execute(
                 "SELECT cron, timezone FROM routines WHERE id = %s AND active",

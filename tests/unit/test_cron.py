@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -27,7 +27,7 @@ def test_timezone_and_next_run() -> None:
     assert validate_timezone("UTC") == "UTC"
     with pytest.raises(CronError):
         validate_timezone("Not/AZone")
-    after = datetime(2026, 8, 19, 8, 0, tzinfo=timezone.utc)
+    after = datetime(2026, 8, 19, 8, 0, tzinfo=UTC)
     nxt = next_run_at("0 9 * * *", after=after, timezone_name="UTC")
     assert nxt.hour == 9
     assert nxt.minute == 0

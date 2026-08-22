@@ -1,0 +1,96 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "artek-buddy"
+version = "0.10.26"
+description = "Self-hosted AI agent host for a Raspberry Pi"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "Apache-2.0" }
+authors = [{ name = "itsuppartem" }]
+dependencies = [
+    "cursor-sdk==1.0.28",
+    "fastapi==0.116.1",
+    "uvicorn[standard]==0.35.0",
+    "pydantic-settings==2.10.1",
+    "psycopg[binary,pool]==3.3.4",
+    "playwright>=1.40.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.4.1",
+    "pytest-asyncio==1.1.0",
+    "httpx==0.28.1",
+    "playwright==1.55.0",
+    "pytest-playwright==0.7.0",
+    "pytest-timeout==2.4.0",
+    "pytest-cov==7.1.0",
+    "ruff==0.16.4",
+    "mypy==2.3.1",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests", "client"]
+extend-exclude = [".venv", "data", "workspace", "client/web"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "UP",
+]
+ignore = [
+    "E501",
+    "E402",
+    "UP031",
+    "UP042",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["F841"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["artek_buddy"]
+
+[tool.mypy]
+python_version = "3.13"
+mypy_path = "src"
+packages = ["artek_buddy"]
+ignore_missing_imports = true
+# Baseline 2026-08-22: 205 errors, almost all mixin/Protocol attr-defined.
+# Tighten these codes in a later PR; do not silently re-enable a failing tree.
+disable_error_code = [
+    "attr-defined",
+    "arg-type",
+    "union-attr",
+    "assignment",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "live: installed .deb against an ephemeral compose stack",
+    "model: Cursor/Grok turn (needs CURSOR_API_KEY; skipped on the ui job)",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+addopts = "-q --tb=short"
+timeout = 60
+timeout_method = "thread"
+
+[tool.coverage.run]
+branch = true
+source = ["artek_buddy"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = false
+# fail_under is set after CI measures the first baseline (see issue #84).

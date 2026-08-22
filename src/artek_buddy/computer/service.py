@@ -4,7 +4,7 @@ import logging
 import mimetypes
 import re
 import shutil
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -93,8 +93,12 @@ class ComputerService:
                 raise ComputerBusy(busy)
             record.execution_bot_id = bot.id
             record.execution_run_id = new_id("boot")
-            record.execution_lease_expires_at = isoformat_utc(datetime.now(timezone.utc) + EXEC_TTL)
-        if record.state == "running" and record.provider_ref and self._box_alive(record.provider_ref):
+            record.execution_lease_expires_at = isoformat_utc(datetime.now(UTC) + EXEC_TTL)
+        if (
+            record.state == "running"
+            and record.provider_ref
+            and self._box_alive(record.provider_ref)
+        ):
             record = self._touch(record)
             self.store.save_computer(record)
             return self.status(bot)
@@ -245,11 +249,15 @@ class ComputerService:
             if self.store.has_active_run(record.execution_bot_id):
                 name = self.store.busy_bot_name(record, bot.id) or "another bot"
                 raise ComputerBusy(name)
-        if record.control_holder == "user" and record.control_lease_id and record.control_lease_expires_at:
+        if (
+            record.control_holder == "user"
+            and record.control_lease_id
+            and record.control_lease_expires_at
+        ):
             expires = record.control_lease_expires_at
             return TakeoverResult(lease_id=record.control_lease_id, expires_at=expires)
         lease_id = new_id("lease")
-        expires_at = isoformat_utc(datetime.now(timezone.utc) + self._takeover_ttl())
+        expires_at = isoformat_utc(datetime.now(UTC) + self._takeover_ttl())
         record.control_holder = "user"
         record.control_lease_id = lease_id
         record.control_lease_expires_at = expires_at
@@ -346,7 +354,9 @@ class ComputerService:
         data = target.read_bytes()
         if len(data) > MAX_HOME_READ_BYTES:
             raise ComputerError("file too large")
-        return ComputerFileContent(path=self._display_path(path), content=data.decode("utf-8", errors="replace"))
+        return ComputerFileContent(
+            path=self._display_path(path), content=data.decode("utf-8", errors="replace")
+        )
 
     def file_for_download(self, bot: Bot, path: str) -> tuple[Path, str, str]:
         target = self._home_target(bot, path)[1]
@@ -405,7 +415,11 @@ class ComputerService:
     def ensure_running(self, bot: Bot) -> ComputerRecord:
         record = self.store.get_computer_for_bot(bot)
         record = self._expire_lease(record)
-        if record.state != "running" or not record.provider_ref or not self._box_alive(record.provider_ref):
+        if (
+            record.state != "running"
+            or not record.provider_ref
+            or not self._box_alive(record.provider_ref)
+        ):
             self.boot(bot)
             record = self.store.get_computer_for_bot(bot)
         record = self._touch(record)
@@ -431,14 +445,20 @@ class ComputerService:
         image = str(shot.get("image_png_base64") or "") or None
         return shape_observe(shot, image_b64=image, reason=reason)
 
-    def act(self, bot: Bot, actions: list[dict[str, Any]], return_observe: bool = False) -> dict[str, Any]:
+    def act(
+        self, bot: Bot, actions: list[dict[str, Any]], return_observe: bool = False
+    ) -> dict[str, Any]:
         from artek_buddy.computer.observe import log_tool_result
 
         record = self.ensure_running(bot)
         result = self.client.act(record.provider_ref, actions)
         if return_observe:
             result = {**result, "observe": self.observe(bot, include_image=False)}
-        log_tool_result("computer_act", result, image=str((result.get("observe") or {}).get("image_reason") or "none"))
+        log_tool_result(
+            "computer_act",
+            result,
+            image=str((result.get("observe") or {}).get("image_reason") or "none"),
+        )
         return result
 
     def exec_command(self, bot: Bot, command: str) -> dict[str, Any]:
@@ -486,7 +506,7 @@ class ComputerService:
         return bool(box.view_port or box.control_port)
 
     def _touch(self, record: ComputerRecord) -> ComputerRecord:
-        record.sleep_at = isoformat_utc(datetime.now(timezone.utc) + self._idle_ttl())
+        record.sleep_at = isoformat_utc(datetime.now(UTC) + self._idle_ttl())
         return record
 
     def _takeover_ttl(self) -> timedelta:
@@ -496,16 +516,20 @@ class ComputerService:
         return timedelta(seconds=max(60, int(self.settings.computer_idle_seconds)))
 
     def _user_has_control(self, record: ComputerRecord) -> bool:
-        if record.control_holder != "user" or not record.control_lease_id or not record.control_lease_expires_at:
+        if (
+            record.control_holder != "user"
+            or not record.control_lease_id
+            or not record.control_lease_expires_at
+        ):
             return False
         expires = datetime.fromisoformat(record.control_lease_expires_at.replace("Z", "+00:00"))
-        return expires > datetime.now(timezone.utc)
+        return expires > datetime.now(UTC)
 
     def _expire_lease(self, record: ComputerRecord) -> ComputerRecord:
         if record.control_holder != "user" or not record.control_lease_expires_at:
             return record
         expires = datetime.fromisoformat(record.control_lease_expires_at.replace("Z", "+00:00"))
-        if expires > datetime.now(timezone.utc):
+        if expires > datetime.now(UTC):
             return record
         if record.provider_ref and record.control_lease_id:
             try:

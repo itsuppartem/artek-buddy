@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-
 from tests.live.helpers import (
     bot_row,
     composer,
@@ -56,7 +55,9 @@ def test_thread_blocks_render_and_child_opens_other_chat(
     expect(page.get_by_test_id("computer-card")).to_contain_text(E2E_COMPUTER_TEXT)
     child = page.get_by_test_id("child-bot-card").filter(has_text=E2E_CHILD_NAME)
     expect(child).to_be_enabled()
-    expect(page.get_by_test_id("child-bot-card").filter(has_text=E2E_CHILD_ARCHIVED)).to_be_disabled()
+    expect(
+        page.get_by_test_id("child-bot-card").filter(has_text=E2E_CHILD_ARCHIVED)
+    ).to_be_disabled()
     child.click()
     expect(thread_header(page)).to_contain_text(E2E_CHILD_NAME, timeout=8_000)
     expect(thread_header(page)).not_to_contain_text(name)
@@ -65,13 +66,15 @@ def test_thread_blocks_render_and_child_opens_other_chat(
 def test_open_chat_has_no_replied_banner(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Here")
     send_message(page, "hello", name)
-    expect(page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")).to_be_visible(
-        timeout=15_000
-    )
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")
+    ).to_be_visible(timeout=15_000)
     expect(page.get_by_test_id("attention-alert")).to_have_count(0)
 
 
-def test_other_chat_replied_banner_opens_that_bot(page: Page, client_url: str, host_url: str) -> None:
+def test_other_chat_replied_banner_opens_that_bot(
+    page: Page, client_url: str, host_url: str
+) -> None:
     speaker = unique_bot("Talk")
     watcher = unique_bot("Watch")
     pair_fresh(page, client_url, host_url)
@@ -84,7 +87,9 @@ def test_other_chat_replied_banner_opens_that_bot(page: Page, client_url: str, h
     expect(box).to_have_value("please e2e-slow")
     box.press("Enter")
     expect(
-        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="please e2e-slow")
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="please e2e-slow"
+        )
     ).to_be_visible()
     open_chat(page, watcher)
     expect(thread_header(page)).to_contain_text(watcher)
@@ -118,7 +123,9 @@ def test_thread_reply_quote_and_cancel(page: Page, client_url: str, host_url: st
     page.get_by_role("menuitem", name="Reply").click(timeout=5_000)
     expect(bar).to_be_visible()
     send_message(page, "quoted back", name)
-    quoted = page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="quoted back")
+    quoted = page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+        has_text="quoted back"
+    )
     expect(quoted).to_be_visible(timeout=15_000)
     expect(quoted).to_contain_text("ok")
 
@@ -181,9 +188,9 @@ def test_ask_options_custom_and_detail(page: Page, client_url: str, host_url: st
     page.get_by_text("Type custom reply…").click()
     page.get_by_label("Answer").fill("Lisbon")
     page.get_by_role("button", name="Send answer").click()
-    expect(page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="Lisbon")).to_be_visible(
-        timeout=8_000
-    )
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="Lisbon")
+    ).to_be_visible(timeout=8_000)
 
 
 def test_ask_free_edit_first(page: Page, client_url: str, host_url: str) -> None:
@@ -195,18 +202,18 @@ def test_ask_free_edit_first(page: Page, client_url: str, host_url: str) -> None
     page.get_by_role("button", name="Edit first").click()
     page.get_by_label("Answer").fill("Sam")
     page.get_by_role("button", name="Send answer").click()
-    expect(page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="Sam")).to_be_visible(
-        timeout=8_000
-    )
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="Sam")
+    ).to_be_visible(timeout=8_000)
 
 
 def test_ask_free_send_it(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "SendIt")
     send_message(page, "please e2e-ask-free", name)
     page.get_by_role("button", name="Send it").click()
-    expect(page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="approved")).to_be_visible(
-        timeout=8_000
-    )
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="approved")
+    ).to_be_visible(timeout=8_000)
 
 
 def test_hidden_live_draft_is_not_shown(page: Page, client_url: str, host_url: str) -> None:
@@ -232,7 +239,9 @@ def test_file_download_and_image_preview(page: Page, client_url: str, host_url: 
     expect(image.get_by_test_id("file-preview")).to_be_visible()
 
 
-def test_attachment_chip_does_not_return_on_later_send(page: Page, client_url: str, host_url: str) -> None:
+def test_attachment_chip_does_not_return_on_later_send(
+    page: Page, client_url: str, host_url: str
+) -> None:
     name = _named(page, client_url, host_url, "Chip")
     with page.expect_file_chooser() as chooser:
         page.get_by_role("button", name="Attach files").click()
@@ -240,10 +249,14 @@ def test_attachment_chip_does_not_return_on_later_send(page: Page, client_url: s
     expect(page.get_by_test_id("attach-chip")).to_contain_text("once.txt", timeout=5_000)
     send_message(page, "with file", name)
     expect(page.get_by_test_id("attach-chip")).to_have_count(0)
-    first = page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="with file")
+    first = page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+        has_text="with file"
+    )
     expect(first.get_by_test_id("file-card")).to_be_visible(timeout=8_000)
     send_message(page, "plain later", name)
-    later = page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="plain later")
+    later = page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+        has_text="plain later"
+    )
     expect(later).to_be_visible(timeout=8_000)
     expect(later.get_by_test_id("file-card")).to_have_count(0)
     expect(page.get_by_test_id("attach-chip")).to_have_count(0)
@@ -277,9 +290,11 @@ def test_stop_does_not_append_completed_essay(page: Page, client_url: str, host_
 def test_streaming_turn_keeps_last_card_in_view(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Pin")
     send_message(page, "please e2e-load-earlier", name)
-    last = page.get_by_test_id("thread").locator(
-        '[data-testid="thread-message"][data-role="bot"]'
-    ).filter(has_text=f"{E2E_OLDER_PREFIX}50")
+    last = (
+        page.get_by_test_id("thread")
+        .locator('[data-testid="thread-message"][data-role="bot"]')
+        .filter(has_text=f"{E2E_OLDER_PREFIX}50")
+    )
     expect(last).to_be_visible(timeout=15_000)
     expect(last).to_be_in_viewport()
 
@@ -292,14 +307,18 @@ def test_switch_back_lands_on_latest_messages(page: Page, client_url: str, host_
     send_message(page, "please e2e-load-earlier", first)
     create_named_bot(page, second)
     open_chat(page, first)
-    last = page.get_by_test_id("thread").locator(
-        '[data-testid="thread-message"][data-role="bot"]'
-    ).filter(has_text=f"{E2E_OLDER_PREFIX}50")
+    last = (
+        page.get_by_test_id("thread")
+        .locator('[data-testid="thread-message"][data-role="bot"]')
+        .filter(has_text=f"{E2E_OLDER_PREFIX}50")
+    )
     expect(last).to_be_visible(timeout=15_000)
     expect(last).to_be_in_viewport()
 
 
-def test_dismissed_attention_stays_gone_after_switch(page: Page, client_url: str, host_url: str) -> None:
+def test_dismissed_attention_stays_gone_after_switch(
+    page: Page, client_url: str, host_url: str
+) -> None:
     speaker = unique_bot("AskA")
     watcher = unique_bot("AskB")
     pair_fresh(page, client_url, host_url)
@@ -354,7 +373,9 @@ def test_follow_up_after_takeover_starts_a_turn(page: Page, client_url: str, hos
     expect(page.get_by_test_id("thread-stop")).to_have_count(0)
 
 
-def test_takeover_card_shows_reason_and_open_computer(page: Page, client_url: str, host_url: str) -> None:
+def test_takeover_card_shows_reason_and_open_computer(
+    page: Page, client_url: str, host_url: str
+) -> None:
     from artek_buddy.runtime.scripted import E2E_TAKEOVER_REASON
 
     name = unique_bot("Card")
@@ -385,16 +406,22 @@ def test_takeover_card_shows_reason_and_open_computer(page: Page, client_url: st
     expect(page.get_by_test_id("open-computer")).to_have_count(0)
 
 
-def test_scripted_image_success_shows_one_card_and_one_generating(page: Page, client_url: str, host_url: str) -> None:
+def test_scripted_image_success_shows_one_card_and_one_generating(
+    page: Page, client_url: str, host_url: str
+) -> None:
     name = _named(page, client_url, host_url, "ImgOk")
     send_message(page, "please e2e-generate-image", name)
     thread = page.get_by_test_id("thread")
-    expect(thread.get_by_test_id("file-card").filter(has_text="fox.png")).to_be_visible(timeout=15_000)
+    expect(thread.get_by_test_id("file-card").filter(has_text="fox.png")).to_be_visible(
+        timeout=15_000
+    )
     expect(thread.get_by_text("Generating…")).to_have_count(1)
     expect(thread.get_by_test_id("file-preview")).to_be_visible()
 
 
-def test_scripted_image_failure_shows_error_not_hung_or_stopped(page: Page, client_url: str, host_url: str) -> None:
+def test_scripted_image_failure_shows_error_not_hung_or_stopped(
+    page: Page, client_url: str, host_url: str
+) -> None:
     from artek_buddy.runtime.scripted import E2E_GENERATE_ERROR
 
     name = _named(page, client_url, host_url, "ImgFail")
@@ -474,7 +501,9 @@ def test_notify_off_mutes_replied_not_ask(page: Page, client_url: str, host_url:
     expect(box).to_have_value("research a city")
     box.press("Enter")
     open_chat(page, watcher)
-    expect(page.get_by_test_id("attention-alert")).to_contain_text(f"{speaker} is asking", timeout=15_000)
+    expect(page.get_by_test_id("attention-alert")).to_contain_text(
+        f"{speaker} is asking", timeout=15_000
+    )
 
 
 def test_failed_banner_on_other_chat(page: Page, client_url: str, host_url: str) -> None:

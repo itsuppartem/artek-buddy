@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from artek_buddy.contracts.events import ProductEvent
 
@@ -104,7 +104,7 @@ class EventHub:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=heartbeat_s)
                     yield event
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield HEARTBEAT
         finally:
             self._subs[bot_id].discard(queue)
@@ -122,7 +122,7 @@ class EventHub:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=heartbeat_s)
                     yield event
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield HEARTBEAT
         finally:
             self._subs[WORKSPACE_CHANNEL].discard(queue)

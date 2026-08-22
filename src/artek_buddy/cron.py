@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 FIELD_RANGES = (
@@ -39,13 +39,13 @@ def parse_cron(expr: str) -> tuple[set[int], set[int], set[int], set[int], set[i
 def next_run_at(expr: str, after: datetime | None = None, timezone_name: str = "UTC") -> datetime:
     minutes, hours, days, months, weekdays = parse_cron(expr)
     tz = ZoneInfo(validate_timezone(timezone_name))
-    moment = after or datetime.now(timezone.utc)
+    moment = after or datetime.now(UTC)
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
+        moment = moment.replace(tzinfo=UTC)
     local = moment.astimezone(tz).replace(second=0, microsecond=0) + timedelta(minutes=1)
     for _ in range(366 * 24 * 60 + 2):
         if _matches(local, minutes, hours, days, months, weekdays):
-            return local.astimezone(timezone.utc)
+            return local.astimezone(UTC)
         local += timedelta(minutes=1)
     raise CronError("no next run within a year")
 

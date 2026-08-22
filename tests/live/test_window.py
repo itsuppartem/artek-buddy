@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-
 from tests.live.helpers import arm_page, pair_fresh
 
 pytestmark = pytest.mark.live

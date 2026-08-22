@@ -165,4 +165,3 @@ def unique_download_dest(folder: Path, name: str) -> Path:
         if not cand.exists():
             return cand
     return folder / f"{stem}-{os.getpid()}{suffix}"
-

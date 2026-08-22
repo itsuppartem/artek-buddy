@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-
 from tests.live.helpers import (
     bot_row,
     close_computer_pane,
@@ -43,9 +42,9 @@ def test_create_memory_routine_and_settings(
     doc.get_by_role("button", name="Edit").click()
     doc.locator("textarea").fill("CI prefers terse answers")
     doc.get_by_role("button", name="Save").click()
-    expect(page.get_by_test_id("memory-doc").filter(has_text="CI prefers terse answers")).to_be_visible(
-        timeout=8_000
-    )
+    expect(
+        page.get_by_test_id("memory-doc").filter(has_text="CI prefers terse answers")
+    ).to_be_visible(timeout=8_000)
 
     page.get_by_test_id("new-memory").click()
     page.get_by_role("button", name="Shared").click()
@@ -118,7 +117,9 @@ def test_computer_pane_start_and_close(page: Page, client_url: str, host_url: st
     expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
     page.get_by_label("Close computer").click()
     expect(page.get_by_label("Close computer")).to_have_count(0)
-    expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "running", timeout=8_000)
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=8_000
+    )
     expect(page.get_by_test_id("computer-running")).to_be_visible()
     page.get_by_title("Settings").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
@@ -187,14 +188,20 @@ def test_computer_boot_error_shows_failed(page: Page, client_url: str, host_url:
     create_named_bot(page, name, private=True)
     page.route(
         "**/v1/computer/*/boot",
-        lambda route: route.fulfill(status=500, content_type="application/json", body='{"detail":"boom"}'),
+        lambda route: route.fulfill(
+            status=500, content_type="application/json", body='{"detail":"boom"}'
+        ),
     )
     open_computer_pane(page)
     page.get_by_test_id("computer-start").click()
-    expect(page.get_by_text("boom").or_(page.get_by_text("Failed to start"))).to_be_visible(timeout=8_000)
+    expect(page.get_by_text("boom").or_(page.get_by_text("Failed to start"))).to_be_visible(
+        timeout=8_000
+    )
 
 
-def test_preview_click_opens_screen_without_control(page: Page, client_url: str, host_url: str) -> None:
+def test_preview_click_opens_screen_without_control(
+    page: Page, client_url: str, host_url: str
+) -> None:
     name = unique_bot("Prev")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name, private=True)
@@ -231,13 +238,17 @@ def test_settings_stop_shows_sleeping_on_pane(page: Page, client_url: str, host_
     page.get_by_test_id("computer-start").click()
     expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
     page.get_by_label("Close computer").click()
-    expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "running", timeout=8_000)
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=8_000
+    )
     expect(page.get_by_test_id("computer-running")).to_be_visible()
     page.get_by_title("Settings").click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
     page.get_by_test_id("computer-stop").click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Sleeping", timeout=8_000)
     page.get_by_label("Close settings").click()
-    expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "sleeping", timeout=8_000)
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "sleeping", timeout=8_000
+    )
     expect(page.get_by_text("Sleeping • Click to start")).to_be_visible()
     expect(page.get_by_text("Offline • Click to start")).to_have_count(0)

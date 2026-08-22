@@ -26,7 +26,9 @@ class ComputerRecord:
     sleep_at: str | None
     updated_at: str
 
-    def status_for(self, bot_id: str, mode: str, busy_bot_name: str | None = None) -> ComputerStatus:
+    def status_for(
+        self, bot_id: str, mode: str, busy_bot_name: str | None = None
+    ) -> ComputerStatus:
         holder = self.control_holder
         if holder == "user" and not self.control_lease_id:
             holder = "none"
@@ -36,7 +38,9 @@ class ComputerRecord:
             bot_id=bot_id,
             mode="dedicated" if mode == "dedicated" else "team",
             kind=self.kind if self.kind in {"docker", "desktop", "fake"} else "docker",
-            state=self.state if self.state in {"stopped", "booting", "running", "suspended", "error"} else "stopped",
+            state=self.state
+            if self.state in {"stopped", "booting", "running", "suspended", "error"}
+            else "stopped",
             control_holder=holder if holder in {"bot", "user", "none"} else "none",
             screen_available=self.state in {"running", "booting"},
             home_revision=self.home_revision,

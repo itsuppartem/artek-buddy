@@ -16,11 +16,20 @@ the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 4. Do not add a second model provider. Cursor Cloud is the live runtime.
 5. Do not add a vendor cloud desktop or a laptop sandbox.
 
-CI is `.github/workflows/test.yml`: `backend` (no Docker desktop), `ui`
-(scripted `.deb` window), and optional `live` (Grok, needs the Actions
-secret). Do not point a runner at the live `:8080` stack or the owner
+CI is `.github/workflows/test.yml`: `quality` (Ruff + mypy), `backend`
+(pytest + coverage, no Docker desktop), `ui` (scripted `.deb` window),
+and optional `live` (Grok, needs the Actions secret). Do not point a runner at the live `:8080` stack or the owner
 Postgres. Do not print `CURSOR_API_KEY`, host tokens, or
 `docker compose config` in Actions — the repo is public.
+
+Python tool config lives in `pyproject.toml`. Same checks as the `quality` job:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m ruff format --check src tests client
+python -m ruff check src tests client
+python -m mypy
+```
 
 ## Linux client package
 

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import subprocess
-import uuid
 import urllib.error
 import urllib.request
+import uuid
 
 from playwright.sync_api import Page, expect
-
 from tests.support import mask_secret
 
 
