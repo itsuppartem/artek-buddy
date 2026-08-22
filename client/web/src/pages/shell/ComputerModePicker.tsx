@@ -1,44 +1,5 @@
-import {
-  type MouseEvent,
-  type RefObject,
-  type SyntheticEvent,
-  useEffect,
-  useState,
-} from "react";
-import { api } from "../../api";
-import { completeOwnerConsent, fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../../lib/consent";
-import { previewKind } from "../../lib/uploads";
-import { isCronShape } from "../../lib/cron";
-import {
-  computerLabel,
-  computerModeHint,
-  computerPaneState,
-  embeddableScreenUrl,
-  overlayPointerEvents,
-  previewPointerEvents,
-  screenIframeSandbox,
-  screenTargetKey,
-} from "../../lib/screen";
-import { ChatMarkdown } from "../../lib/chat-markdown";
-import { artifactUrl, DownloadCancelled, downloadArtifact, formatBytes } from "../../lib/files";
-import { stripMarkdown } from "../../lib/markdown";
-import {
-  isComputerStatusEvent,
-  reduceComputerStatus,
-  reduceThreadSnapshot,
-} from "../../lib/thread-events";
-import type {
-  Bot,
-  ComputerMode,
-  ComputerStatus,
-  ProductEvent,
-  MemoryDocument,
-  Routine,
-  ThreadMessage,
-  ThreadSnapshot,
-} from "../../types";
-import { BotAvatar } from "../../ui/bot-avatar";
-import { Button } from "../../ui/button";
+import { computerModeHint } from "../../lib/screen";
+import type { ComputerMode } from "../../types";
 
 export function ComputerModePicker({
   value,

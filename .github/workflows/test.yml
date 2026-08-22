@@ -94,7 +94,7 @@ jobs:
             --cov-report=term --cov-report=xml \
             --cov-fail-under=56
           python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
-          (cd client/web && npm ci && npm run check)
+          (cd client/web && npm ci && npm run lint && npm test && npm run check)
 
   ui:
     runs-on: ubuntu-latest

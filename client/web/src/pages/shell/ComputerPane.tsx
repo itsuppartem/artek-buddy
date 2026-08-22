@@ -1,43 +1,13 @@
-import {
-  type MouseEvent,
-  type RefObject,
-  type SyntheticEvent,
-  useEffect,
-  useState,
-} from "react";
-import { api } from "../../api";
-import { completeOwnerConsent, fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../../lib/consent";
-import { previewKind } from "../../lib/uploads";
-import { isCronShape } from "../../lib/cron";
+import type { RefObject, SyntheticEvent } from "react";
 import {
   computerLabel,
-  computerModeHint,
   computerPaneState,
   embeddableScreenUrl,
-  overlayPointerEvents,
   previewPointerEvents,
   screenIframeSandbox,
   screenTargetKey,
 } from "../../lib/screen";
-import { ChatMarkdown } from "../../lib/chat-markdown";
-import { artifactUrl, DownloadCancelled, downloadArtifact, formatBytes } from "../../lib/files";
-import { stripMarkdown } from "../../lib/markdown";
-import {
-  isComputerStatusEvent,
-  reduceComputerStatus,
-  reduceThreadSnapshot,
-} from "../../lib/thread-events";
-import type {
-  Bot,
-  ComputerMode,
-  ComputerStatus,
-  ProductEvent,
-  MemoryDocument,
-  Routine,
-  ThreadMessage,
-  ThreadSnapshot,
-} from "../../types";
-import { BotAvatar } from "../../ui/bot-avatar";
+import type { Bot, ComputerStatus } from "../../types";
 import { Button } from "../../ui/button";
 import { MemoryPanel } from "./MemoryPanel";
 import { RoutinesPanel } from "./RoutinesPanel";
@@ -256,7 +226,17 @@ export function ComputerPane({
               </div>
             ) : isSleeping ? (
               <div className="flex flex-col items-center gap-2 text-[#85858A]">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#4E4E54]">
+                <svg
+                  width="26"
+                  height="26"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-[#4E4E54]"
+                >
                   <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
                   <line x1="8" y1="21" x2="16" y2="21"></line>
                   <line x1="12" y1="17" x2="12" y2="21"></line>
@@ -268,7 +248,17 @@ export function ComputerPane({
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2 text-[#85858A]">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#4E4E54]">
+                <svg
+                  width="26"
+                  height="26"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-[#4E4E54]"
+                >
                   <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
                   <line x1="8" y1="21" x2="16" y2="21"></line>
                   <line x1="12" y1="17" x2="12" y2="21"></line>
@@ -293,7 +283,13 @@ export function ComputerPane({
         </span>
         <div className="flex items-center gap-2">
           {isRunning && !heldByOther ? (
-            <Button type="button" variant="ghost" size="sm" onClick={onOpenFullscreen} className="text-[13px] text-[#ECECEE]">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onOpenFullscreen}
+              className="text-[13px] text-[#ECECEE]"
+            >
               Open screen
             </Button>
           ) : null}

@@ -1,5 +1,5 @@
-import { stripMarkdown } from "./markdown";
 import type { ProductEvent } from "../types";
+import { stripMarkdown } from "./markdown";
 
 export type AttentionKind = "replied" | "ask" | "takeover" | "failed";
 
@@ -72,7 +72,7 @@ function pendingAskText(payload: Record<string, unknown>): string | null {
   if (!Array.isArray(blocks)) return null;
   for (const raw of blocks) {
     const block = asRecord(raw);
-    if (!block || block.kind !== "ask") continue;
+    if (block?.kind !== "ask") continue;
     if (block.status === "answered") continue;
     const text = typeof block.text === "string" ? block.text : "";
     return text || "Choose an option";
@@ -87,7 +87,7 @@ export function answeredAskBody(event: ProductEvent): string | null {
   if (!Array.isArray(blocks)) return null;
   for (const raw of blocks) {
     const block = asRecord(raw);
-    if (!block || block.kind !== "ask") continue;
+    if (block?.kind !== "ask") continue;
     if (block.status !== "answered") continue;
     const text = typeof block.text === "string" ? block.text : "";
     return clip(text || "Choose an option");
@@ -106,7 +106,10 @@ export function attentionFromEvent(event: ProductEvent, botName: string): Attent
     return makeAlert("failed", botId, botName, error, at);
   }
   if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
-    if (event.type === "run.waiting_input" && (event.payload.auto === true || event.payload.consentId)) {
+    if (
+      event.type === "run.waiting_input" &&
+      (event.payload.auto === true || event.payload.consentId)
+    ) {
       return null;
     }
     const body =
@@ -161,7 +164,9 @@ export function allowAlert(alert: AttentionAlert, notifyOnFinish: boolean): bool
   return true;
 }
 
-export function attentionFingerprint(alert: Pick<AttentionAlert, "botId" | "kind" | "body">): string {
+export function attentionFingerprint(
+  alert: Pick<AttentionAlert, "botId" | "kind" | "body">,
+): string {
   return `${alert.botId}:${alert.kind}:${alert.body}`;
 }
 

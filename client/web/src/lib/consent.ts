@@ -47,7 +47,11 @@ export async function reportOwnerJobError(consentId: string, error: unknown): Pr
 }
 
 export async function completeOwnerConsent(consentId: string, decision: string): Promise<void> {
-  const allow = decision === "once" || decision === "always" || decision === "Allow once" || decision === "Always";
+  const allow =
+    decision === "once" ||
+    decision === "always" ||
+    decision === "Allow once" ||
+    decision === "Always";
   if (allow) {
     try {
       await fulfillOwnerJob(consentId);
@@ -64,14 +68,26 @@ export async function fulfillOwnerJob(consentId: string): Promise<void> {
   const job = await api.consents.get(consentId);
   const action = job.actionClass;
   const kind = job.kind || "";
-  const listHint = ownerJobHint({ text: job.summary || "", detail: job.path ? `owner_list: ${job.path}` : "" });
-  if (action === "owner_read" && (kind === "list" || listHint?.kind === "owner_list" || /^List /i.test(job.summary || ""))) {
+  const listHint = ownerJobHint({
+    text: job.summary || "",
+    detail: job.path ? `owner_list: ${job.path}` : "",
+  });
+  if (
+    action === "owner_read" &&
+    (kind === "list" || listHint?.kind === "owner_list" || /^List /i.test(job.summary || ""))
+  ) {
     const listed = await api.local.ownerList(job.path || listHint?.value || "~");
-    await api.consents.uploadResult(consentId, { ok: true, path: listed.path, entries: listed.entries });
+    await api.consents.uploadResult(consentId, {
+      ok: true,
+      path: listed.path,
+      entries: listed.entries,
+    });
     return;
   }
   if (action === "owner_read") {
-    const path = job.path || ownerReadPath({ text: job.summary || "", detail: `owner_read: ${job.path || ""}` });
+    const path =
+      job.path ||
+      ownerReadPath({ text: job.summary || "", detail: `owner_read: ${job.path || ""}` });
     if (!path) throw new Error("missing path");
     const file = await api.local.ownerRead(path);
     await api.consents.uploadFile(consentId, {
@@ -88,7 +104,11 @@ export async function fulfillOwnerJob(consentId: string): Promise<void> {
       text: job.text ?? undefined,
       contentBase64: job.contentBase64 ?? undefined,
     });
-    await api.consents.uploadResult(consentId, { ok: true, path: written.path, bytes: written.bytes });
+    await api.consents.uploadResult(consentId, {
+      ok: true,
+      path: written.path,
+      bytes: written.bytes,
+    });
     return;
   }
   if (action === "owner_exec") {

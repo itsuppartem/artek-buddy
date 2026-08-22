@@ -16,9 +16,11 @@ export function isMediaClipboardType(type: string): boolean {
 
 export function previewKind(file: File): PreviewKind {
   const type = (file.type || "").toLowerCase();
-  if (type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name || "")) return "image";
+  if (type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name || ""))
+    return "image";
   if (type.startsWith("video/") || /\.(mp4|webm|mov|mkv)$/i.test(file.name || "")) return "video";
-  if (type.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|flac)$/i.test(file.name || "")) return "audio";
+  if (type.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|flac)$/i.test(file.name || ""))
+    return "audio";
   return "file";
 }
 
@@ -77,7 +79,10 @@ function clipboardText(data: DataTransfer, type: string): string {
 
 export function normalizeClipboardPath(raw: string): string | null {
   let text = (raw || "").trim();
-  if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+  if (
+    (text.startsWith('"') && text.endsWith('"')) ||
+    (text.startsWith("'") && text.endsWith("'"))
+  ) {
     text = text.slice(1, -1).trim();
   }
   if (!text || text.startsWith("#")) return null;
@@ -94,7 +99,8 @@ export function normalizeClipboardPath(raw: string): string | null {
       return null;
     }
   }
-  if (text === "~" || text.startsWith("~/") || (text.startsWith("/") && text.length > 1)) return text;
+  if (text === "~" || text.startsWith("~/") || (text.startsWith("/") && text.length > 1))
+    return text;
   return null;
 }
 
@@ -138,7 +144,9 @@ export function clipboardHasAttachable(event: { clipboardData?: DataTransfer | n
   const data = event.clipboardData;
   if (!data) return false;
   if ((data.files || []).length) return true;
-  if (clipboardItems(data).some((item) => item.kind === "file" || isMediaClipboardType(item.type))) {
+  if (
+    clipboardItems(data).some((item) => item.kind === "file" || isMediaClipboardType(item.type))
+  ) {
     return true;
   }
   return transferFilePaths(data).length > 0;
@@ -181,7 +189,11 @@ export async function readClipboardFiles(event?: {
   const sync = event ? pastedFiles(event) : [];
   if (sync.length) return sync;
   const clipboard = globalThis.navigator?.clipboard as unknown as
-    | { read?: () => Promise<Array<{ types: readonly string[]; getType: (type: string) => Promise<Blob> }>> }
+    | {
+        read?: () => Promise<
+          Array<{ types: readonly string[]; getType: (type: string) => Promise<Blob> }>
+        >;
+      }
     | undefined;
   if (!clipboard || typeof clipboard.read !== "function") return [];
   try {
@@ -191,7 +203,9 @@ export async function readClipboardFiles(event?: {
       for (const type of item.types || []) {
         if (!isMediaClipboardType(type)) continue;
         const blob = await item.getType(type);
-        files.push(nameClipboardFile(new File([blob], "", { type: blob.type || type }), files.length));
+        files.push(
+          nameClipboardFile(new File([blob], "", { type: blob.type || type }), files.length),
+        );
       }
     }
     return files;

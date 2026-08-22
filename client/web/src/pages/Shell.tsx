@@ -1,11 +1,7 @@
 import {
   type ClipboardEvent,
-  type Dispatch,
   type DragEvent,
   type KeyboardEvent,
-  type MouseEvent,
-  type RefObject,
-  type SetStateAction,
   type SyntheticEvent,
   useEffect,
   useLayoutEffect,
@@ -15,37 +11,8 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { abortableDelay, api, classifyError, isLiveTurn, type ShellErrorKind } from "../api";
-import { completeOwnerConsent, fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/consent";
 import {
-  addPendingFiles,
-  clipboardFilePaths,
-  clipboardHasAttachable,
-  droppedFiles,
-  filesFromAttachedPayload,
-  pastedFiles,
-  previewKind,
-  readClipboardFiles,
-  readFileBase64,
-  transferFilePaths,
-  type PendingFile,
-} from "../lib/uploads";
-import { isCronShape } from "../lib/cron";
-import { filterBots, inboxEmptyState, sortInboxBots, type SidebarView } from "../lib/sidebar";
-import {
-  computerLabel,
-  computerModeHint,
-  computerPaneState,
-  embeddableScreenUrl,
-  overlayPointerEvents,
-  previewPointerEvents,
-  screenFrameLooksFailed,
-  screenIframeSandbox,
-  shouldRefreshScreenUrl,
-  shouldReplaceScreenUrl,
-  shouldTakeControl,
-  screenTargetKey,
-} from "../lib/screen";
-import {
+  type AttentionAlert,
   allowAlert,
   answeredAskBody,
   attentionFingerprint,
@@ -54,9 +21,7 @@ import {
   isHistoricalEvent,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
-  type AttentionAlert,
 } from "../lib/alerts";
-import { ChatMarkdown } from "../lib/chat-markdown";
 import {
   composerRedo,
   composerUndo,
@@ -65,24 +30,40 @@ import {
   pushComposerChange,
   resetComposerHistory,
 } from "../lib/composer-undo";
-import { artifactUrl, DownloadCancelled, downloadArtifact, formatBytes } from "../lib/files";
+import { fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/consent";
 import { stripMarkdown } from "../lib/markdown";
 import {
-  isComputerStatusEvent,
+  embeddableScreenUrl,
+  screenFrameLooksFailed,
+  shouldRefreshScreenUrl,
+  shouldReplaceScreenUrl,
+  shouldTakeControl,
+} from "../lib/screen";
+import { filterBots, inboxEmptyState, type SidebarView, sortInboxBots } from "../lib/sidebar";
+import {
   isHiddenLiveDraft,
   isToolNoise,
   mergeThreadSnapshot,
   prependThreadMessagePage,
-  reduceComputerStatus,
-  reduceThreadSnapshot,
 } from "../lib/thread-events";
+import {
+  addPendingFiles,
+  clipboardFilePaths,
+  clipboardHasAttachable,
+  droppedFiles,
+  filesFromAttachedPayload,
+  type PendingFile,
+  pastedFiles,
+  previewKind,
+  readClipboardFiles,
+  readFileBase64,
+  transferFilePaths,
+} from "../lib/uploads";
 import type {
   Bot,
   ComputerMode,
   ComputerStatus,
   ProductEvent,
-  MemoryDocument,
-  Routine,
   ThreadMessage,
   ThreadSnapshot,
 } from "../types";
@@ -531,7 +512,7 @@ export function ShellPage() {
     expandedHistoryThread.current = null;
     const abort = new AbortController();
     void (async () => {
-      const snap = await refreshThread(active.id).catch((err: unknown) => {
+      const _snap = await refreshThread(active.id).catch((err: unknown) => {
         showError(err, "Could not load thread");
         return null;
       });
@@ -637,7 +618,10 @@ export function ShellPage() {
 
   useEffect(() => {
     if ((panel !== "settings" && panel !== "computer") || !active) return;
-    void api.computer.status(active.id).then(setComputer).catch(() => undefined);
+    void api.computer
+      .status(active.id)
+      .then(setComputer)
+      .catch(() => undefined);
   }, [panel, active?.id]);
 
   useEffect(() => {
@@ -688,7 +672,12 @@ export function ShellPage() {
       draftChangeAt.current = 0;
     } else {
       const now = Date.now();
-      draftHistory.current = pushComposerChange(draftHistory.current, value, now, draftChangeAt.current);
+      draftHistory.current = pushComposerChange(
+        draftHistory.current,
+        value,
+        now,
+        draftChangeAt.current,
+      );
       draftChangeAt.current = now;
     }
     setDraft(value);
@@ -1036,7 +1025,9 @@ export function ShellPage() {
                   >
                     <BotAvatar color={bot.color} size={38} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[15px] font-medium text-[#ECECEE]">{bot.name}</div>
+                      <div className="truncate text-[15px] font-medium text-[#ECECEE]">
+                        {bot.name}
+                      </div>
                       <div className="mt-0.5 truncate text-[13.5px] text-[#85858A]">
                         {stripMarkdown(bot.preview || bot.title)}
                       </div>
@@ -1091,13 +1082,13 @@ export function ShellPage() {
                       </span>
                       <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-[#6C6C70]">
                         {bot.status === "idle" ? "" : bot.status}
-                    {bot.unread ? (
-                      <span
-                        data-testid="unread-dot"
-                        aria-hidden="true"
-                        className="inline-block h-2 w-2 rounded-full bg-[#8B5CF6]"
-                      />
-                    ) : null}
+                        {bot.unread ? (
+                          <span
+                            data-testid="unread-dot"
+                            aria-hidden="true"
+                            className="inline-block h-2 w-2 rounded-full bg-[#8B5CF6]"
+                          />
+                        ) : null}
                       </span>
                     </div>
                     <div
@@ -1187,7 +1178,14 @@ export function ShellPage() {
             className="grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-[#1B1B1E] disabled:opacity-40"
             style={{ background: panel ? "#1B1B1E" : "transparent" }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A8A8AD" strokeWidth="1.6">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#A8A8AD"
+              strokeWidth="1.6"
+            >
               <rect x="2" y="4" width="20" height="13" rx="2" />
               <path d="M8 21h8M12 17v4" />
             </svg>
@@ -1211,7 +1209,9 @@ export function ShellPage() {
                 >
                   <span className="font-medium text-[#ECECEE]">{attention.title}</span>
                   {attention.body ? (
-                    <span className="mt-0.5 block truncate text-[12.5px] text-[#85858A]">{attention.body}</span>
+                    <span className="mt-0.5 block truncate text-[12.5px] text-[#85858A]">
+                      {attention.body}
+                    </span>
                   ) : null}
                 </button>
                 <button
@@ -1245,7 +1245,13 @@ export function ShellPage() {
         >
           {error ? (
             <div
-              data-testid={errorKind === "host" ? "host-error" : errorKind === "auth" ? "auth-error" : "action-error"}
+              data-testid={
+                errorKind === "host"
+                  ? "host-error"
+                  : errorKind === "auth"
+                    ? "auth-error"
+                    : "action-error"
+              }
               className="self-center rounded-xl border border-[#4A2522] bg-[#1A1110] px-4 py-3 text-center text-[13.5px] text-[#F0AAA0]"
             >
               <div>{error}</div>
@@ -1326,32 +1332,36 @@ export function ShellPage() {
           {(thread?.messages ?? [])
             .filter((message) => !isToolNoise(message) && !isHiddenLiveDraft(message))
             .map((message) => (
-            <MessageView
-              key={message.id}
-              botId={active?.id ?? ""}
-              canAnswer
-              message={message}
-              runStatus={thread?.run?.status}
-              onAnswer={(text) => send(text)}
-              onOpenComputer={() => void openOverlay("preview")}
-              onOpenBot={(id) => {
-                void refreshBots().then(() => navigate(`/app/${id}`));
-              }}
-              onSubagentChange={() => {
-                if (active) void refreshThread(active.id);
-              }}
-              onContextMenu={(event, item) => {
-                event.preventDefault();
-                setMessageMenu({ message: item, position: { x: event.clientX, y: event.clientY } });
-              }}
-            />
-          ))}
+              <MessageView
+                key={message.id}
+                botId={active?.id ?? ""}
+                canAnswer
+                message={message}
+                runStatus={thread?.run?.status}
+                onAnswer={(text) => send(text)}
+                onOpenComputer={() => void openOverlay("preview")}
+                onOpenBot={(id) => {
+                  void refreshBots().then(() => navigate(`/app/${id}`));
+                }}
+                onSubagentChange={() => {
+                  if (active) void refreshThread(active.id);
+                }}
+                onContextMenu={(event, item) => {
+                  event.preventDefault();
+                  setMessageMenu({
+                    message: item,
+                    position: { x: event.clientX, y: event.clientY },
+                  });
+                }}
+              />
+            ))}
           {thread?.run && (thread.run.status === "failed" || thread.run.status === "cancelled") ? (
             <div
               data-testid="run-error"
               className="self-start rounded-xl border border-[#4A2522] bg-[#1A1110] px-4 py-2 text-[13.5px] text-[#F0AAA0]"
             >
-              {thread.run.error || (thread.run.status === "cancelled" ? "Stopped." : "The turn failed.")}
+              {thread.run.error ||
+                (thread.run.status === "cancelled" ? "Stopped." : "The turn failed.")}
             </div>
           ) : null}
           {thread?.run && isLiveTurn(thread.run.status) ? (
@@ -1445,7 +1455,11 @@ export function ShellPage() {
               onPaste={onChatPaste}
               onKeyDown={(event) => onComposerKeyDown(event)}
               placeholder={
-                replyTo ? "Write a reply…" : active ? `Message ${active.name}` : "Create a bot to start"
+                replyTo
+                  ? "Write a reply…"
+                  : active
+                    ? `Message ${active.name}`
+                    : "Create a bot to start"
               }
               className="max-h-40 min-h-[22px] flex-1 resize-none bg-transparent py-1.5 text-[15.5px] leading-[22px] text-[#E9E9EA] outline-none disabled:cursor-not-allowed disabled:opacity-40"
             />
@@ -1696,7 +1710,9 @@ function hasLive(snapshot: ThreadSnapshot): boolean {
 }
 
 function hasActiveWorkers(snapshot: ThreadSnapshot): boolean {
-  if ((snapshot.subagents ?? []).some((item) => item.status === "queued" || item.status === "running")) {
+  if (
+    (snapshot.subagents ?? []).some((item) => item.status === "queued" || item.status === "running")
+  ) {
     return true;
   }
   return snapshot.messages.some((message) =>

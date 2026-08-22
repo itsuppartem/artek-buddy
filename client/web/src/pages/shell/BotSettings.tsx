@@ -1,42 +1,8 @@
-import {
-  type MouseEvent,
-  type RefObject,
-  type SyntheticEvent,
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api";
-import { completeOwnerConsent, fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../../lib/consent";
-import { previewKind } from "../../lib/uploads";
-import { isCronShape } from "../../lib/cron";
-import {
-  computerLabel,
-  computerModeHint,
-  computerPaneState,
-  embeddableScreenUrl,
-  overlayPointerEvents,
-  previewPointerEvents,
-  screenIframeSandbox,
-  screenTargetKey,
-} from "../../lib/screen";
-import { ChatMarkdown } from "../../lib/chat-markdown";
-import { artifactUrl, DownloadCancelled, downloadArtifact, formatBytes } from "../../lib/files";
 import { stripMarkdown } from "../../lib/markdown";
-import {
-  isComputerStatusEvent,
-  reduceComputerStatus,
-  reduceThreadSnapshot,
-} from "../../lib/thread-events";
-import type {
-  Bot,
-  ComputerMode,
-  ComputerStatus,
-  ProductEvent,
-  MemoryDocument,
-  Routine,
-  ThreadMessage,
-  ThreadSnapshot,
-} from "../../types";
+import { computerModeHint } from "../../lib/screen";
+import type { Bot, ComputerMode, ComputerStatus } from "../../types";
 import { BotAvatar } from "../../ui/bot-avatar";
 import { Button } from "../../ui/button";
 import { ComputerModePicker } from "./ComputerModePicker";
@@ -169,7 +135,12 @@ export function BotSettings({
           </label>
           <ComputerModePicker value={computerMode} onChange={setComputerMode} />
           <div className="mt-2 flex gap-2">
-            <Button type="button" size="sm" disabled={saving || !name.trim()} onClick={() => void save()}>
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving || !name.trim()}
+              onClick={() => void save()}
+            >
               {saving ? "Saving…" : "Save"}
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
@@ -186,7 +157,9 @@ export function BotSettings({
           <div className="mt-4 text-[14px] text-[#A8A8AD]">
             Computer: {bot.computerMode === "dedicated" ? "Private" : "Team"}
           </div>
-          <p className="mt-1 text-[12.5px] leading-5 text-[#6C6C70]">{computerModeHint(bot.computerMode)}</p>
+          <p className="mt-1 text-[12.5px] leading-5 text-[#6C6C70]">
+            {computerModeHint(bot.computerMode)}
+          </p>
           <div className="mt-3">
             <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
               Edit Profile

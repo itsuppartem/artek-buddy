@@ -44,7 +44,12 @@ export function classifyError(err: unknown): { message: string; kind: ShellError
   return { message: "Something went wrong", kind: "action" };
 }
 
-export async function request<T>(method: string, path: string, body?: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
+export async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
@@ -56,11 +61,19 @@ export async function request<T>(method: string, path: string, body?: unknown, t
   let response: Response;
   try {
     response = await fetch(path, init);
-  } catch (error) {
+  } catch {
     if (controller.signal.aborted) {
-      throw new ApiError("The host did not respond in time. Check the connection and try again.", undefined, true);
+      throw new ApiError(
+        "The host did not respond in time. Check the connection and try again.",
+        undefined,
+        true,
+      );
     }
-    throw new ApiError("Could not reach the host. Check Tailscale or the host address, then try again.", undefined, true);
+    throw new ApiError(
+      "Could not reach the host. Check Tailscale or the host address, then try again.",
+      undefined,
+      true,
+    );
   } finally {
     globalThis.clearTimeout(timeout);
   }
@@ -87,7 +100,10 @@ export async function request<T>(method: string, path: string, body?: unknown, t
           ? String((detail as { message: unknown }).message)
           : `${response.status} ${path}`;
     if ((response.status === 401 || response.status === 403) && path.startsWith("/v1/")) {
-      throw new ApiError("This computer is no longer authorized. Pair it again to continue.", response.status);
+      throw new ApiError(
+        "This computer is no longer authorized. Pair it again to continue.",
+        response.status,
+      );
     }
     throw new ApiError(message, response.status, response.status >= 500);
   }
@@ -100,7 +116,11 @@ export const api = {
       return request<LocalStatus>("GET", "/local/status");
     },
     pair(input: { url?: string; pairingCode: string; name: string; platform?: string }) {
-      return request<{ ok: boolean; device: PairedDevice; error?: string }>("POST", "/local/pair", input);
+      return request<{ ok: boolean; device: PairedDevice; error?: string }>(
+        "POST",
+        "/local/pair",
+        input,
+      );
     },
     unpair() {
       return request<{ ok: boolean; paired?: boolean }>("POST", "/local/unpair");
@@ -109,28 +129,36 @@ export const api = {
       return request<{ ok: boolean }>("POST", "/local/notify", input).catch(() => ({ ok: false }));
     },
     ownerRead(path: string) {
-      return request<{ ok: boolean; name: string; bytes: number; text?: string; contentBase64: string }>(
-        "POST",
-        "/local/owner-read",
-        { path },
-      );
+      return request<{
+        ok: boolean;
+        name: string;
+        bytes: number;
+        text?: string;
+        contentBase64: string;
+      }>("POST", "/local/owner-read", { path });
     },
     ownerWrite(input: { path: string; text?: string; contentBase64?: string }) {
-      return request<{ ok: boolean; path: string; name: string; bytes: number }>("POST", "/local/owner-write", input);
-    },
-    ownerList(path: string) {
-      return request<{ ok: boolean; path: string; entries: { name: string; kind: string; size?: number | null }[] }>(
+      return request<{ ok: boolean; path: string; name: string; bytes: number }>(
         "POST",
-        "/local/owner-list",
-        { path },
-      );
-    },
-    ownerExec(input: { command: string; cwd?: string }) {
-      return request<{ ok: boolean; stdout: string; stderr: string; exitCode: number; error?: string }>(
-        "POST",
-        "/local/owner-exec",
+        "/local/owner-write",
         input,
       );
+    },
+    ownerList(path: string) {
+      return request<{
+        ok: boolean;
+        path: string;
+        entries: { name: string; kind: string; size?: number | null }[];
+      }>("POST", "/local/owner-list", { path });
+    },
+    ownerExec(input: { command: string; cwd?: string }) {
+      return request<{
+        ok: boolean;
+        stdout: string;
+        stderr: string;
+        exitCode: number;
+        error?: string;
+      }>("POST", "/local/owner-exec", input);
     },
     saveArtifact(input: { artifactId: string; name: string }) {
       return request<{ ok: boolean; path: string; name: string; bytes: number }>(
@@ -171,10 +199,16 @@ export const api = {
       }>("GET", `/v1/consents/${encodeURIComponent(consentId)}`);
     },
     answer(consentId: string, decision: string) {
-      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}`, { decision });
+      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}`, {
+        decision,
+      });
     },
     uploadFile(consentId: string, input: { name: string; text?: string; contentBase64?: string }) {
-      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}/file`, input);
+      return request<{ ok: boolean }>(
+        "POST",
+        `/v1/consents/${encodeURIComponent(consentId)}/file`,
+        input,
+      );
     },
     uploadResult(
       consentId: string,
@@ -192,7 +226,11 @@ export const api = {
         error?: string;
       },
     ) {
-      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}/result`, input);
+      return request<{ ok: boolean }>(
+        "POST",
+        `/v1/consents/${encodeURIComponent(consentId)}/result`,
+        input,
+      );
     },
   },
   health() {
@@ -223,9 +261,10 @@ export const api = {
   },
   routines: {
     list(botId: string) {
-      return request<{ routines: Routine[] }>("GET", `/v1/routines?bot_id=${encodeURIComponent(botId)}`).then(
-        (data) => data.routines ?? [],
-      );
+      return request<{ routines: Routine[] }>(
+        "GET",
+        `/v1/routines?bot_id=${encodeURIComponent(botId)}`,
+      ).then((data) => data.routines ?? []);
     },
     create(input: {
       botId: string;
@@ -358,10 +397,9 @@ export const api = {
   },
   subagents: {
     list(botId: string) {
-      return request<{ subagents: Subagent[] }>(
-        "GET",
-        `/v1/bots/${botId}/subagents`,
-      ).then((data) => data.subagents ?? []);
+      return request<{ subagents: Subagent[] }>("GET", `/v1/bots/${botId}/subagents`).then(
+        (data) => data.subagents ?? [],
+      );
     },
     stop(botId: string, subagentId: string) {
       return request<Subagent>("POST", `/v1/bots/${botId}/subagents/${subagentId}/stop`);
@@ -387,7 +425,10 @@ export const api = {
       return request<ComputerStatus>("POST", `/v1/computer/${botId}/reset`);
     },
     takeover(botId: string) {
-      return request<{ leaseId: string; expiresAt: string }>("POST", `/v1/computer/${botId}/takeover`);
+      return request<{ leaseId: string; expiresAt: string }>(
+        "POST",
+        `/v1/computer/${botId}/takeover`,
+      );
     },
     release(botId: string) {
       return request<{ ok: boolean }>("POST", `/v1/computer/${botId}/release`);
@@ -484,7 +525,10 @@ async function* readSse(path: string, signal: AbortSignal): AsyncGenerator<Produ
   });
   if (!response.ok || !response.body) {
     if (response.status === 401 || response.status === 403) {
-      throw new ApiError("This computer is no longer authorized. Pair it again to continue.", response.status);
+      throw new ApiError(
+        "This computer is no longer authorized. Pair it again to continue.",
+        response.status,
+      );
     }
     throw new ApiError(
       "Live updates stopped. Check the host connection and try again.",
