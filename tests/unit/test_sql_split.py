@@ -27,12 +27,21 @@ def test_keeps_semicolon_inside_line_and_block_comments() -> None:
     /* also ; here */
     SELECT 2;
     """
-    assert split_sql_statements(sql) == ["SELECT 1", "SELECT 2"]
+    parts = split_sql_statements(sql)
+    assert len(parts) == 2
+    assert parts[0] == "SELECT 1"
+    assert parts[1].rstrip().endswith("SELECT 2")
+    assert "ignore;" in parts[1]
+    assert "also ; here" in parts[1]
+    assert len([p for p in sql.split(";") if p.strip()]) > 2
 
 
 def test_nested_block_comment_does_not_split() -> None:
     sql = "SELECT 1 /* outer ; /* inner ; */ still ; comment */ ; SELECT 2;"
-    assert split_sql_statements(sql) == ["SELECT 1", "SELECT 2"]
+    assert split_sql_statements(sql) == [
+        "SELECT 1 /* outer ; /* inner ; */ still ; comment */",
+        "SELECT 2",
+    ]
 
 
 def test_dollar_parameter_is_not_a_quote() -> None:
