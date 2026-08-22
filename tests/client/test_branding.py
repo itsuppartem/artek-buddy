@@ -34,6 +34,7 @@ def test_deb_script_installs_artek_icon() -> None:
     assert "proxy.py" in text
     assert "notifications.py" in text
     assert "window.py" in text
+    assert "web_paths.py" in text
 
 
 def test_bundled_icon_path_finds_source_tree(client_mod) -> None:

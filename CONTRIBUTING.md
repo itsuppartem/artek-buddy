@@ -20,7 +20,9 @@ CI is `.github/workflows/test.yml`: `quality` (Ruff + mypy + pip-audit), `backen
 (pytest + coverage + `npm audit --audit-level=high`, no Docker desktop), `scan`
 (Trivy filesystem), `ui` (scripted `.deb` window),
 and optional `live` (Grok, needs the Actions secret). CodeQL is
-`.github/workflows/codeql.yml` (Python + JavaScript). Do not point a runner at the live `:8080` stack or the owner
+`.github/workflows/codeql.yml` (Python + JavaScript). Alerts on a PR are
+work: fix the bug, or name the residual in [THREAT-MODEL.md](THREAT-MODEL.md).
+Do not ignore them as scanner noise. Do not point a runner at the live `:8080` stack or the owner
 Postgres. Do not print `CURSOR_API_KEY`, host tokens, or
 `docker compose config` in Actions — the repo is public.
 
