@@ -1,5 +1,5 @@
-import type { Bot } from "../types";
 import { type ReactNode, type Ref, useEffect, useRef } from "react";
+import type { Bot } from "../types";
 
 export type ContextMenuPosition = { x: number; y: number };
 

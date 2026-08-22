@@ -76,12 +76,21 @@ _READONLY_COMMANDS = frozenset(
 )
 _READONLY_WRAPPERS = frozenset({"timeout", "nice", "nohup", "command", "ionice", "stdbuf", "time"})
 _GIT_READONLY = frozenset(
-    {"status", "log", "diff", "show", "branch", "rev-parse", "ls-files", "blame", "describe", "rev-list"}
+    {
+        "status",
+        "log",
+        "diff",
+        "show",
+        "branch",
+        "rev-parse",
+        "ls-files",
+        "blame",
+        "describe",
+        "rev-list",
+    }
 )
 _FIND_WRITE_FLAGS = frozenset({"-delete", "-exec", "-execdir", "-ok", "-okdir"})
-_SAFE_SUBST = re.compile(
-    r"(?:\$\(|`)(pwd|whoami|id|hostname|date|uname)(?:\s+[^)`]*)?(?:\)|`)"
-)
+_SAFE_SUBST = re.compile(r"(?:\$\(|`)(pwd|whoami|id|hostname|date|uname)(?:\s+[^)`]*)?(?:\)|`)")
 
 
 def decision_from_label(value: str) -> str | None:
@@ -127,7 +136,9 @@ def owner_command_is_readonly(command: str) -> bool:
     if re.search(r"`|\$\(|\btee\b", scanned) or ">" in scanned or "<" in scanned:
         return False
     try:
-        parts = [part.strip() for part in re.split(r"\s*(?:&&|\|\||[;\n|])\s*", text) if part.strip()]
+        parts = [
+            part.strip() for part in re.split(r"\s*(?:&&|\|\||[;\n|])\s*", text) if part.strip()
+        ]
     except re.error:
         return False
     if not parts:
@@ -195,7 +206,13 @@ class ConsentRequest:
 class ConsentHub:
     """Ask before changing the owner PC or leaving the Pi box. Reads do not prompt."""
 
-    def __init__(self, store: Any, events: Any | None = None, settings: Any | None = None, auto: str | None = None) -> None:
+    def __init__(
+        self,
+        store: Any,
+        events: Any | None = None,
+        settings: Any | None = None,
+        auto: str | None = None,
+    ) -> None:
         self.store = store
         self.events = events
         self.settings = settings
@@ -222,7 +239,9 @@ class ConsentHub:
             return "allow"
         return None
 
-    def has_grant(self, bot_id: str, action_class: str, scope_key: str, device_id: str | None) -> bool:
+    def has_grant(
+        self, bot_id: str, action_class: str, scope_key: str, device_id: str | None
+    ) -> bool:
         return self.store.find_consent_grant(bot_id, action_class, scope_key, device_id) is not None
 
     def offer(
@@ -358,7 +377,9 @@ class ConsentHub:
                 log.exception("failed to resume run after consent")
         return decision in {"once", "always"}
 
-    def answer(self, request_id: str, decision: str, device_id: str | None) -> ConsentRequest | None:
+    def answer(
+        self, request_id: str, decision: str, device_id: str | None
+    ) -> ConsentRequest | None:
         picked = decision_from_label(decision)
         if picked is None:
             return None
@@ -597,7 +618,9 @@ class ConsentHub:
             self._file_waiters.pop(request_id, None)
             return self._files.pop(request_id, None)
 
-    def _publish(self, bot: Any, event_type: ProductEventType, payload: dict[str, Any], run_id: str | None) -> None:
+    def _publish(
+        self, bot: Any, event_type: ProductEventType, payload: dict[str, Any], run_id: str | None
+    ) -> None:
         if self.events is None:
             return
         try:

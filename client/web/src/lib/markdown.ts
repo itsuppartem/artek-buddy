@@ -45,28 +45,20 @@ export function closeUnterminatedFence(markdown: string): string {
 
 export function stripMarkdown(text: string): string {
   if (!text) return "";
-  return text
-    // Remove fenced code blocks
+  let out = text
     .replace(/```[\s\S]*?```/g, "")
-    // Remove inline code
     .replace(/`([^`]+)`/g, "$1")
-    // Remove images ![alt](url) -> alt
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-    // Remove links [text](url) -> text
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    // Remove bold / italic / bold-italic (asterisks and underscores)
     .replace(/(\*{1,3}|_{1,3})([^*_]+?)\1/g, "$2")
-    // Remove strikethrough ~~text~~
     .replace(/~~([^~]+)~~/g, "$1")
-    // Remove header markers #
     .replace(/^#{1,6}\s+/gm, "")
-    // Remove blockquotes >
     .replace(/^>\s*/gm, "")
-    // Remove list markers (*, -, +, 1.)
-    .replace(/^(\s*[-*+]|\s*\d+\.)\s+/gm, "")
-    // Remove html tags
-    .replace(/<[^>]+>/g, "")
-    // Collapse whitespace
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/^(\s*[-*+]|\s*\d+\.)\s+/gm, "");
+  let prev = "";
+  for (let i = 0; i < 8 && out !== prev; i++) {
+    prev = out;
+    out = out.replace(/<[^>]*>/g, "");
+  }
+  return out.replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
 }

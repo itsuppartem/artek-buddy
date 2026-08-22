@@ -10,7 +10,9 @@ def create_bot(client, auth_header: dict[str, str], name: str, **extra: Any) -> 
     return response.json()
 
 
-def wait_run(client, auth_header: dict[str, str], bot_id: str, run_id: str, timeout: float = 15.0) -> dict[str, Any]:
+def wait_run(
+    client, auth_header: dict[str, str], bot_id: str, run_id: str, timeout: float = 15.0
+) -> dict[str, Any]:
     deadline = time.time() + timeout
     last: dict[str, Any] = {}
     while time.time() < deadline:

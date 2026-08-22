@@ -2,12 +2,22 @@ import { camelize, snakify } from "./camel";
 import type { LocalStatus, PairedDevice } from "./lib/pairing";
 import type {
   Bot,
+  ComputerFileContent,
   ComputerFileList,
   ComputerStatus,
+  ConsentJob,
+  DeploymentSettings,
+  HealthResponse,
+  MarkdownExport,
+  Me,
   MemoryDocument,
+  OkResponse,
   ProductEvent,
   Routine,
+  ScreenUrlResult,
   Subagent,
+  TakeoverResult,
+  TestRunResult,
   ThreadMessagePage,
   ThreadSendResult,
   ThreadSnapshot,
@@ -44,7 +54,12 @@ export function classifyError(err: unknown): { message: string; kind: ShellError
   return { message: "Something went wrong", kind: "action" };
 }
 
-export async function request<T>(method: string, path: string, body?: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
+export async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
@@ -56,11 +71,19 @@ export async function request<T>(method: string, path: string, body?: unknown, t
   let response: Response;
   try {
     response = await fetch(path, init);
-  } catch (error) {
+  } catch {
     if (controller.signal.aborted) {
-      throw new ApiError("The host did not respond in time. Check the connection and try again.", undefined, true);
+      throw new ApiError(
+        "The host did not respond in time. Check the connection and try again.",
+        undefined,
+        true,
+      );
     }
-    throw new ApiError("Could not reach the host. Check Tailscale or the host address, then try again.", undefined, true);
+    throw new ApiError(
+      "Could not reach the host. Check Tailscale or the host address, then try again.",
+      undefined,
+      true,
+    );
   } finally {
     globalThis.clearTimeout(timeout);
   }
@@ -87,7 +110,10 @@ export async function request<T>(method: string, path: string, body?: unknown, t
           ? String((detail as { message: unknown }).message)
           : `${response.status} ${path}`;
     if ((response.status === 401 || response.status === 403) && path.startsWith("/v1/")) {
-      throw new ApiError("This computer is no longer authorized. Pair it again to continue.", response.status);
+      throw new ApiError(
+        "This computer is no longer authorized. Pair it again to continue.",
+        response.status,
+      );
     }
     throw new ApiError(message, response.status, response.status >= 500);
   }
@@ -100,7 +126,11 @@ export const api = {
       return request<LocalStatus>("GET", "/local/status");
     },
     pair(input: { url?: string; pairingCode: string; name: string; platform?: string }) {
-      return request<{ ok: boolean; device: PairedDevice; error?: string }>("POST", "/local/pair", input);
+      return request<{ ok: boolean; device: PairedDevice; error?: string }>(
+        "POST",
+        "/local/pair",
+        input,
+      );
     },
     unpair() {
       return request<{ ok: boolean; paired?: boolean }>("POST", "/local/unpair");
@@ -109,28 +139,36 @@ export const api = {
       return request<{ ok: boolean }>("POST", "/local/notify", input).catch(() => ({ ok: false }));
     },
     ownerRead(path: string) {
-      return request<{ ok: boolean; name: string; bytes: number; text?: string; contentBase64: string }>(
-        "POST",
-        "/local/owner-read",
-        { path },
-      );
+      return request<{
+        ok: boolean;
+        name: string;
+        bytes: number;
+        text?: string;
+        contentBase64: string;
+      }>("POST", "/local/owner-read", { path });
     },
     ownerWrite(input: { path: string; text?: string; contentBase64?: string }) {
-      return request<{ ok: boolean; path: string; name: string; bytes: number }>("POST", "/local/owner-write", input);
-    },
-    ownerList(path: string) {
-      return request<{ ok: boolean; path: string; entries: { name: string; kind: string; size?: number | null }[] }>(
+      return request<{ ok: boolean; path: string; name: string; bytes: number }>(
         "POST",
-        "/local/owner-list",
-        { path },
-      );
-    },
-    ownerExec(input: { command: string; cwd?: string }) {
-      return request<{ ok: boolean; stdout: string; stderr: string; exitCode: number; error?: string }>(
-        "POST",
-        "/local/owner-exec",
+        "/local/owner-write",
         input,
       );
+    },
+    ownerList(path: string) {
+      return request<{
+        ok: boolean;
+        path: string;
+        entries: { name: string; kind: string; size?: number | null }[];
+      }>("POST", "/local/owner-list", { path });
+    },
+    ownerExec(input: { command: string; cwd?: string }) {
+      return request<{
+        ok: boolean;
+        stdout: string;
+        stderr: string;
+        exitCode: number;
+        error?: string;
+      }>("POST", "/local/owner-exec", input);
     },
     saveArtifact(input: { artifactId: string; name: string }) {
       return request<{ ok: boolean; path: string; name: string; bytes: number }>(
@@ -157,24 +195,19 @@ export const api = {
   },
   consents: {
     get(consentId: string) {
-      return request<{
-        id: string;
-        actionClass: string;
-        status: string;
-        path?: string | null;
-        command?: string | null;
-        cwd?: string | null;
-        kind?: string | null;
-        text?: string | null;
-        contentBase64?: string | null;
-        summary?: string | null;
-      }>("GET", `/v1/consents/${encodeURIComponent(consentId)}`);
+      return request<ConsentJob>("GET", `/v1/consents/${encodeURIComponent(consentId)}`);
     },
     answer(consentId: string, decision: string) {
-      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}`, { decision });
+      return request<OkResponse>("POST", `/v1/consents/${encodeURIComponent(consentId)}`, {
+        decision,
+      });
     },
     uploadFile(consentId: string, input: { name: string; text?: string; contentBase64?: string }) {
-      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}/file`, input);
+      return request<OkResponse>(
+        "POST",
+        `/v1/consents/${encodeURIComponent(consentId)}/file`,
+        input,
+      );
     },
     uploadResult(
       consentId: string,
@@ -192,11 +225,15 @@ export const api = {
         error?: string;
       },
     ) {
-      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}/result`, input);
+      return request<OkResponse>(
+        "POST",
+        `/v1/consents/${encodeURIComponent(consentId)}/result`,
+        input,
+      );
     },
   },
   health() {
-    return request<{ ok: boolean; agentId?: string; db?: boolean }>("GET", "/health");
+    return request<HealthResponse>("GET", "/health");
   },
   memory: {
     list(botId: string) {
@@ -212,10 +249,10 @@ export const api = {
       return request<MemoryDocument>("PATCH", `/v1/memory/${documentId}`, { content });
     },
     remove(documentId: string) {
-      return request<{ ok: boolean }>("DELETE", `/v1/memory/${documentId}`);
+      return request<OkResponse>("DELETE", `/v1/memory/${documentId}`);
     },
     exportMarkdown(botId: string) {
-      return request<{ markdown: string }>(
+      return request<MarkdownExport>(
         "GET",
         `/v1/memory/export?bot_id=${encodeURIComponent(botId)}`,
       ).then((data) => data.markdown ?? "");
@@ -223,9 +260,10 @@ export const api = {
   },
   routines: {
     list(botId: string) {
-      return request<{ routines: Routine[] }>("GET", `/v1/routines?bot_id=${encodeURIComponent(botId)}`).then(
-        (data) => data.routines ?? [],
-      );
+      return request<{ routines: Routine[] }>(
+        "GET",
+        `/v1/routines?bot_id=${encodeURIComponent(botId)}`,
+      ).then((data) => data.routines ?? []);
     },
     create(input: {
       botId: string;
@@ -252,59 +290,27 @@ export const api = {
       return request<Routine>("PATCH", `/v1/routines/${routineId}`, input);
     },
     remove(routineId: string) {
-      return request<{ ok: boolean }>("DELETE", `/v1/routines/${routineId}`);
+      return request<OkResponse>("DELETE", `/v1/routines/${routineId}`);
     },
     testRun(routineId: string) {
-      return request<{ routineId: string; taskId: string; runId: string; seq: number }>(
-        "POST",
-        `/v1/routines/${routineId}/test`,
-      );
+      return request<TestRunResult>("POST", `/v1/routines/${routineId}/test`);
     },
   },
   me: {
     get() {
-      return request<{
-        userId: string;
-        email: string;
-        name: string;
-        workspaceId: string;
-        isDeploymentOwner: boolean;
-        needsModel: boolean;
-        defaultProvider?: string | null;
-        defaultModel?: string | null;
-        computerHost?: "docker" | "host" | null;
-        canChooseHostComputer: boolean;
-      }>("GET", "/v1/me");
+      return request<Me>("GET", "/v1/me");
     },
   },
   deployment: {
     get() {
-      return request<{
-        ownerUserId?: string | null;
-        signupsEnabled: boolean;
-        signupAllowlist: string[];
-        hasDeploymentModelCredential: boolean;
-        defaultProvider?: string | null;
-        defaultModel?: string | null;
-        computerHost?: "docker" | "host" | null;
-        canChooseHostComputer: boolean;
-      }>("GET", "/v1/deployment");
+      return request<DeploymentSettings>("GET", "/v1/deployment");
     },
     update(patch: {
       signupsEnabled?: boolean;
       signupAllowlist?: string[];
       computerHost?: "docker" | "host" | null;
     }) {
-      return request<{
-        ownerUserId?: string | null;
-        signupsEnabled: boolean;
-        signupAllowlist: string[];
-        hasDeploymentModelCredential: boolean;
-        defaultProvider?: string | null;
-        defaultModel?: string | null;
-        computerHost?: "docker" | "host" | null;
-        canChooseHostComputer: boolean;
-      }>("PATCH", "/v1/deployment", patch);
+      return request<DeploymentSettings>("PATCH", "/v1/deployment", patch);
     },
   },
   bots: {
@@ -346,22 +352,21 @@ export const api = {
       return request<Bot>("PATCH", `/v1/bots/${botId}`, patch);
     },
     archive(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/bots/${botId}/archive`);
+      return request<OkResponse>("POST", `/v1/bots/${botId}/archive`);
     },
     restore(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/bots/${botId}/restore`);
+      return request<OkResponse>("POST", `/v1/bots/${botId}/restore`);
     },
     remove(botId: string, deleteMemories: boolean = false) {
       const query = deleteMemories ? "?delete_memories=true" : "";
-      return request<{ ok: boolean }>("DELETE", `/v1/bots/${botId}${query}`);
+      return request<OkResponse>("DELETE", `/v1/bots/${botId}${query}`);
     },
   },
   subagents: {
     list(botId: string) {
-      return request<{ subagents: Subagent[] }>(
-        "GET",
-        `/v1/bots/${botId}/subagents`,
-      ).then((data) => data.subagents ?? []);
+      return request<{ subagents: Subagent[] }>("GET", `/v1/bots/${botId}/subagents`).then(
+        (data) => data.subagents ?? [],
+      );
     },
     stop(botId: string, subagentId: string) {
       return request<Subagent>("POST", `/v1/bots/${botId}/subagents/${subagentId}/stop`);
@@ -387,19 +392,19 @@ export const api = {
       return request<ComputerStatus>("POST", `/v1/computer/${botId}/reset`);
     },
     takeover(botId: string) {
-      return request<{ leaseId: string; expiresAt: string }>("POST", `/v1/computer/${botId}/takeover`);
+      return request<TakeoverResult>("POST", `/v1/computer/${botId}/takeover`);
     },
     release(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/computer/${botId}/release`);
+      return request<OkResponse>("POST", `/v1/computer/${botId}/release`);
     },
     input(botId: string, body: { kind: string; payload: Record<string, unknown> }) {
-      return request<{ ok: boolean }>("POST", `/v1/computer/${botId}/input`, body);
+      return request<OkResponse>("POST", `/v1/computer/${botId}/input`, body);
     },
     heartbeat(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/computer/${botId}/heartbeat`);
+      return request<OkResponse>("POST", `/v1/computer/${botId}/heartbeat`);
     },
     screenUrl(botId: string) {
-      return request<{ url: string | null }>("GET", `/v1/computer/${botId}/screen`);
+      return request<ScreenUrlResult>("GET", `/v1/computer/${botId}/screen`);
     },
     files(botId: string, path = "", hidden = false) {
       const query = new URLSearchParams();
@@ -409,7 +414,7 @@ export const api = {
       return request<ComputerFileList>("GET", `/v1/computer/${botId}/files${suffix}`);
     },
     readFile(botId: string, path: string) {
-      return request<{ path: string; content: string }>(
+      return request<ComputerFileContent>(
         "GET",
         `/v1/computer/${botId}/files/read?path=${encodeURIComponent(path)}`,
       );
@@ -450,16 +455,16 @@ export const api = {
       );
     },
     stop(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/threads/${botId}/stop`);
+      return request<OkResponse>("POST", `/v1/threads/${botId}/stop`);
     },
     followUp(botId: string, text: string) {
-      return request<{ ok: boolean }>("POST", `/v1/threads/${botId}/follow-up`, { text });
+      return request<OkResponse>("POST", `/v1/threads/${botId}/follow-up`, { text });
     },
     markRead(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/threads/${botId}/read`);
+      return request<OkResponse>("POST", `/v1/threads/${botId}/read`);
     },
     markUnread(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/threads/${botId}/unread`);
+      return request<OkResponse>("POST", `/v1/threads/${botId}/unread`);
     },
     async *subscribe(
       botId: string,
@@ -484,7 +489,10 @@ async function* readSse(path: string, signal: AbortSignal): AsyncGenerator<Produ
   });
   if (!response.ok || !response.body) {
     if (response.status === 401 || response.status === 403) {
-      throw new ApiError("This computer is no longer authorized. Pair it again to continue.", response.status);
+      throw new ApiError(
+        "This computer is no longer authorized. Pair it again to continue.",
+        response.status,
+      );
     }
     throw new ApiError(
       "Live updates stopped. Check the host connection and try again.",

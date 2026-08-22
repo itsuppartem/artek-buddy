@@ -4,7 +4,6 @@ import uuid
 
 import pytest
 from playwright.sync_api import Page, expect
-
 from tests.live.helpers import (
     bot_row,
     composer,
@@ -115,20 +114,28 @@ def test_switch_bots_keeps_header_and_thread(page: Page, client_url: str, host_u
     open_chat(page, first)
     expect(thread_header(page)).to_contain_text(first)
     expect(
-        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="alpha line")
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="alpha line"
+        )
     ).to_be_visible()
     open_chat(page, second)
     expect(thread_header(page)).to_contain_text(second)
     expect(
-        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="bravo line")
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="bravo line"
+        )
     ).to_be_visible()
     expect(
-        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="alpha line")
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="alpha line"
+        )
     ).to_have_count(0)
     open_chat(page, first)
     expect(thread_header(page)).to_contain_text(first)
     expect(
-        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="alpha line")
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="alpha line"
+        )
     ).to_be_visible()
     first_box = bot_row(page, first).bounding_box()
     second_box = bot_row(page, second).bounding_box()
@@ -153,7 +160,9 @@ def test_switch_during_stream_keeps_chat(page: Page, client_url: str, host_url: 
     open_chat(page, first)
     expect(thread_header(page)).to_contain_text(first)
     expect(
-        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="please e2e-slow")
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="please e2e-slow"
+        )
     ).to_be_visible()
 
 

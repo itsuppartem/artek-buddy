@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-
 from tests.live.helpers import create_named_bot, open_settings, pair_fresh, unique_bot
 
 pytestmark = pytest.mark.live
@@ -22,14 +21,18 @@ def test_create_team_default_and_private(page: Page, client_url: str, host_url: 
     create_named_bot(page, private, private=True)
     open_settings(page, team)
     expect(page.get_by_text("Computer: Team")).to_be_visible()
-    expect(page.get_by_text("Reset wipes the shared Team desktop for every Team bot.")).to_be_visible()
+    expect(
+        page.get_by_text("Reset wipes the shared Team desktop for every Team bot.")
+    ).to_be_visible()
     page.get_by_label("Close settings").click()
     open_settings(page, private)
     expect(page.get_by_text("Computer: Private")).to_be_visible()
     expect(page.get_by_text("Reset wipes the shared Team desktop")).to_have_count(0)
 
 
-def test_settings_edit_notify_reset_cancel_delete(page: Page, client_url: str, host_url: str) -> None:
+def test_settings_edit_notify_reset_cancel_delete(
+    page: Page, client_url: str, host_url: str
+) -> None:
     name = unique_bot("Set")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name, title="old title", description="old desc", private=True)

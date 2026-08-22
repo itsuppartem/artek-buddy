@@ -1,5 +1,9 @@
 import type { Dispatch, SetStateAction } from "react";
-import { isComputerStatusEvent, reduceComputerStatus, reduceThreadSnapshot } from "../../lib/thread-events";
+import {
+  isComputerStatusEvent,
+  reduceComputerStatus,
+  reduceThreadSnapshot,
+} from "../../lib/thread-events";
 import type { ComputerStatus, ProductEvent, ThreadSnapshot } from "../../types";
 
 export function applyThreadEvent(

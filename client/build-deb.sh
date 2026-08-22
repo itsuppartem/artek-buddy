@@ -32,7 +32,9 @@ DEBIAN="$ROOT/DEBIAN"
 
 mkdir -p "$LIB/web" "$BIN" "$APP" "$DOC" "$PIXMAPS" "$DEBIAN"
 
-cp client/artek_buddy.py client/owner_paths.py client/window_chrome.py "$LIB/"
+cp client/artek_buddy.py client/owner_paths.py client/window_chrome.py \
+  client/pairing.py client/proxy.py client/notifications.py client/window.py \
+  client/web_paths.py "$LIB/"
 cp client/VERSION "$LIB/VERSION"
 cp client/assets/app-icon.png "$LIB/app-icon.png"
 cp -R client/web/dist/. "$LIB/web/"
@@ -47,7 +49,9 @@ if [ "${ARTEK_BAKE_URL:-}" = "1" ] && [ -f client/url ]; then
   chmod 644 "$LIB/url"
 fi
 chmod 755 "$LIB/artek_buddy.py"
-chmod 644 "$LIB/owner_paths.py" "$LIB/window_chrome.py"
+chmod 644 "$LIB/owner_paths.py" "$LIB/window_chrome.py" \
+  "$LIB/pairing.py" "$LIB/proxy.py" "$LIB/notifications.py" "$LIB/window.py" \
+  "$LIB/web_paths.py"
 chmod 644 "$LIB/app-icon.png"
 chmod -R a+rX "$LIB/web"
 

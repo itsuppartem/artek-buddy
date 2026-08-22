@@ -94,7 +94,9 @@ def scripted_consent(
 
 
 def scripted_text(text: str) -> ScriptedStep:
-    return ScriptedStep(event=("thread.message.updated", {"text": text, "kind": "text", "replace": True}))
+    return ScriptedStep(
+        event=("thread.message.updated", {"text": text, "kind": "text", "replace": True})
+    )
 
 
 def scripted_progress(text: str, kind: str = "thinking") -> ScriptedStep:
@@ -109,7 +111,9 @@ def scripted_delay(seconds: float) -> ScriptedStep:
     return ScriptedStep(delay_s=seconds)
 
 
-def scripted_finish(result: str = "ok", status: str = "completed", error: str | None = None) -> ScriptedStep:
+def scripted_finish(
+    result: str = "ok", status: str = "completed", error: str | None = None
+) -> ScriptedStep:
     return ScriptedStep(result=result, status=status, error=error)
 
 
@@ -127,7 +131,9 @@ def _bind_block_values(value: Any, bot_id: str | None) -> Any:
     return value
 
 
-def _materialize_blocks(store: Any, blocks: list[dict[str, Any]], parent_bot_id: str | None) -> list[dict[str, Any]]:
+def _materialize_blocks(
+    store: Any, blocks: list[dict[str, Any]], parent_bot_id: str | None
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for raw in blocks:
         block = dict(raw)
@@ -300,7 +306,9 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 "send_message",
                 text="Wikipedia is on this computer. Open the screen to watch or take control.",
             ),
-            scripted_finish("Wikipedia is on this computer. Open the screen to watch or take control."),
+            scripted_finish(
+                "Wikipedia is on this computer. Open the screen to watch or take control."
+            ),
         ]
     if "attractions, weather" in hay or "in parallel" in hay or "three workers" in hay:
         return [
@@ -350,9 +358,9 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     if "e2e-consent-exec-long" in hay:
         command = (
             'ls -la "/home/artek/Изображения/Снимки экрана/'
-            "edbc3632c9584b229513834046b1ab84.jpeg\" && "
+            'edbc3632c9584b229513834046b1ab84.jpeg" && '
             'file "/home/artek/Изображения/Снимки экрана/'
-            "edbc3632c9584b229513834046b1ab84.jpeg\""
+            'edbc3632c9584b229513834046b1ab84.jpeg"'
         )
         return [
             scripted_consent(
@@ -466,7 +474,10 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     if "e2e-markdown-preview" in hay:
         return [scripted_finish(E2E_MARKDOWN_ANSWER)]
     if "e2e-fail-slow" in hay:
-        return [scripted_delay(2.5), scripted_finish(E2E_FAIL_ERROR, status="failed", error=E2E_FAIL_ERROR)]
+        return [
+            scripted_delay(2.5),
+            scripted_finish(E2E_FAIL_ERROR, status="failed", error=E2E_FAIL_ERROR),
+        ]
     if "e2e-fail" in hay:
         return [scripted_finish(E2E_FAIL_ERROR, status="failed", error=E2E_FAIL_ERROR)]
     return [scripted_text("ok"), scripted_finish("ok")]
@@ -675,7 +686,9 @@ class ScriptedRuntime(RuntimeBase):
             if step.tool:
                 tool_result = tools.execute(step.tool, step.args, bound_bot_id=bot_id)
                 self.last_tool_results.append((step.tool, tool_result))
-                for typ, payload in _map_tool_to_events(step.tool, step.tool, step.args, "completed"):
+                for typ, payload in _map_tool_to_events(
+                    step.tool, step.tool, step.args, "completed"
+                ):
                     yield ProductStreamEvent(type=typ, payload=payload)
                 continue
             if step.event:

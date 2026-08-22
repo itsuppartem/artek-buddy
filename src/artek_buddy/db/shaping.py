@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 import secrets
-from datetime import datetime, timezone
-from typing import Any, Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from typing import Any
 
 from artek_buddy.contracts.domain import ComputerStatus
 from artek_buddy.contracts.ids import BOT_COLORS
@@ -70,8 +71,13 @@ def strip_markdown(text: str) -> str:
     s = re.sub(r"(?m)^>\s*", "", s)
     # Remove list bullets (*, -, +, 1.) at line starts
     s = re.sub(r"(?m)^(?:\s*[-*+]|\s*\d+\.)\s+", "", s)
-    # Remove HTML tags
-    s = re.sub(r"<[^>]+>", "", s)
+    # Remove HTML tags; repeat so nested leftovers cannot survive one pass.
+    for _ in range(8):
+        nxt = re.sub(r"<[^>]*>", "", s)
+        if nxt == s:
+            break
+        s = nxt
+    s = re.sub(r"[<>]", "", s)
     return s
 
 
@@ -124,10 +130,10 @@ def product_run_status(sdk_status: str | None) -> str:
 
 
 def isoformat_utc(value: datetime | None = None) -> str:
-    moment = value or datetime.now(timezone.utc)
+    moment = value or datetime.now(UTC)
     if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def parse_iso(value: Any) -> str:

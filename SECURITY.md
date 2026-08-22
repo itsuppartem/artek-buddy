@@ -2,7 +2,8 @@
 
 Artek Buddy is a self-hosted personal agent. Treat the Raspberry Pi host
 as the trust boundary: anyone who can call `:8080` with a valid token can
-drive bots, memory, routines, and desktop sandboxes.
+drive bots, memory, routines, and desktop sandboxes. The written model is
+[THREAT-MODEL.md](THREAT-MODEL.md).
 
 ## Report a vulnerability
 
@@ -43,4 +44,14 @@ before posting a write-up.
    written to logs or artifacts. Rotate it if a workflow file is ever
    changed to print env or upload traces.
 5. Rebuild `artek-buddy-computer:local` after you pull a computer-image
-   change, then recreate running desktops so they join `artek-computers`.
+   change. The next desktop start recreates any box that is missing
+   CapDrop / memory / CPU / pids limits.
+
+## What CI scans
+
+Dependabot (pip, `client/web` npm, GitHub Actions, Docker bases), CodeQL
+(Python and JavaScript), `pip-audit` and `npm audit --audit-level=high` on
+`test.yml`, Trivy filesystem on `test.yml` (`scan` job), Trivy image on
+`release.yml` after the host image is pushed (CRITICAL, ignore unfixed).
+Known exceptions live in `.github/pip-audit-ignore.txt` and `.trivyignore`.
+Third-party Actions are pinned by commit SHA.

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from artek_buddy.auth import PAIRING_ATTEMPT_LIMIT
 from tests.support import mask_secret
+
+from artek_buddy.auth import PAIRING_ATTEMPT_LIMIT
 
 
 def test_health_is_open_and_names_no_agent(client) -> None:
@@ -25,7 +26,9 @@ def test_workspace_events_without_token_is_401(client) -> None:
 
 
 def test_v1_wrong_token_is_403(client) -> None:
-    response = client.get("/v1/bots", headers={"Authorization": "Bearer not-the-host-token-value-xx"})
+    response = client.get(
+        "/v1/bots", headers={"Authorization": "Bearer not-the-host-token-value-xx"}
+    )
     assert response.status_code == 403
 
 

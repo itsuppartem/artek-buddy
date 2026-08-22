@@ -1,0 +1,2 @@
+# Trivy suppressions. Unfixed base-image CVEs use ignore-unfixed in the workflow.
+# Add a CVE here only with a one-line reason (same bar as pip-audit-ignore).

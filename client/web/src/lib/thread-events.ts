@@ -2,6 +2,7 @@ import type {
   ComputerStatus,
   MessageBlock,
   ProductEvent,
+  Run,
   Subagent,
   ThreadMessage,
   ThreadMessagePage,
@@ -15,6 +16,8 @@ const computerStates = new Set<ComputerStatus["state"]>([
   "suspended",
   "error",
 ]);
+
+const runTriggers = new Set<Run["trigger"]>(["user", "routine", "resume", "follow_up", "spawn"]);
 
 export function mergeThreadSnapshot(
   prev: ThreadSnapshot | null,
@@ -70,7 +73,7 @@ export function reduceThreadSnapshot(
         threadId: prev.threadId,
         taskId: str(run?.taskId) || prev.run?.taskId || "",
         status: "running",
-        trigger: str(run?.trigger) || "user",
+        trigger: runTrigger(run?.trigger),
         modelProvider: str(run?.modelProvider) || prev.run?.modelProvider || null,
         modelId: str(run?.modelId) || prev.run?.modelId || null,
         error: null,
@@ -87,7 +90,7 @@ export function reduceThreadSnapshot(
     const autoId =
       event.payload.auto === true && typeof event.payload.consentId === "string"
         ? event.payload.consentId
-        : prev.pendingAutoConsentId ?? null;
+        : (prev.pendingAutoConsentId ?? null);
     return {
       ...prev,
       cursor: event.seq,
@@ -256,7 +259,10 @@ export function reduceComputerStatus(
     return { ...prev, controlHolder: "user" };
   }
   if (event.type === "computer.takeover.released" || event.type === "computer.takeover.requested") {
-    return { ...prev, controlHolder: event.type === "computer.takeover.requested" ? "none" : "bot" };
+    return {
+      ...prev,
+      controlHolder: event.type === "computer.takeover.requested" ? "none" : "bot",
+    };
   }
   const status = event.payload.status ?? event.payload.state;
   const holder = event.payload.controlHolder ?? event.payload.control_holder;
@@ -299,13 +305,9 @@ function isComputerState(value: unknown): value is ComputerStatus["state"] {
   return computerStates.has(value as ComputerStatus["state"]);
 }
 
-const subagentStatuses = new Set<NonNullable<Extract<MessageBlock, { kind: "subagent" }>["status"]>>([
-  "queued",
-  "running",
-  "completed",
-  "failed",
-  "cancelled",
-]);
+const subagentStatuses = new Set<
+  NonNullable<Extract<MessageBlock, { kind: "subagent" }>["status"]>
+>(["queued", "running", "completed", "failed", "cancelled"]);
 
 function subagentStatus(value: unknown): Extract<MessageBlock, { kind: "subagent" }>["status"] {
   const text = str(value);
@@ -328,7 +330,9 @@ export function mergeSubagentCards(
   const cards = items
     .slice()
     .sort((left, right) => left.index - right.index)
-    .map((item, offset) => subagentMessage(item, prevSeq.get(`subagent:${item.id}`) ?? snap.cursor + offset + 1));
+    .map((item, offset) =>
+      subagentMessage(item, prevSeq.get(`subagent:${item.id}`) ?? snap.cursor + offset + 1),
+    );
   const rest = snap.messages.filter((message) => !message.id.startsWith("subagent:"));
   return { ...snap, messages: [...rest, ...cards].sort((left, right) => left.seq - right.seq) };
 }
@@ -444,6 +448,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function runTrigger(value: unknown): Run["trigger"] {
+  const text = str(value);
+  return runTriggers.has(text as Run["trigger"]) ? (text as Run["trigger"]) : "user";
 }
 
 function num(value: unknown): number {

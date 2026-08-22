@@ -10,6 +10,11 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 from artek_buddy.auth import supervisor_token
+from artek_buddy.observe import configure_logging
+from artek_buddy.supervisor.desktop_spec import (
+    desktop_create_spec,
+    inspect_is_hardened,
+)
 from artek_buddy.supervisor.docker_engine import DockerEngine, published_port
 from artek_buddy.supervisor.logic import (
     action_command,
@@ -136,7 +141,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._observe(cid, body)
                     return
                 if action == "actions":
-                    code, text = STATE.engine.exec(cid, action_command(list(body.get("actions") or [])))
+                    code, text = STATE.engine.exec(
+                        cid, action_command(list(body.get("actions") or []))
+                    )
                     self._json(200, {"ok": code == 0, "output": text})
                     return
                 if action == "exec":
@@ -146,7 +153,9 @@ class Handler(BaseHTTPRequestHandler):
                 if action == "input":
                     code, text = STATE.engine.exec(
                         cid,
-                        input_command(str(body.get("kind") or "click"), dict(body.get("payload") or {})),
+                        input_command(
+                            str(body.get("kind") or "click"), dict(body.get("payload") or {})
+                        ),
                     )
                     self._json(200, {"ok": code == 0, "output": text})
                     return
@@ -179,7 +188,10 @@ class Handler(BaseHTTPRequestHandler):
         name = container_name(home_key)
         home = home_dir(home_key)
         existing = STATE.engine.find_by_name(name)
-        if existing and (existing.get("Config") or {}).get("Image") == STATE.image:
+        same_image = (
+            (existing.get("Config") or {}).get("Image") == STATE.image if existing else False
+        )
+        if existing and same_image and inspect_is_hardened(existing):
             if not (existing.get("State") or {}).get("Running"):
                 STATE.engine.start(existing["Id"])
                 existing = STATE.engine.inspect(existing["Id"]) or existing
@@ -188,29 +200,14 @@ class Handler(BaseHTTPRequestHandler):
         if existing:
             STATE.engine.remove(existing["Id"])
         network = STATE.engine.ensure_network("artek-computers")
-        spec = {
-            "name": name,
-            "Image": STATE.image,
-            "Hostname": name,
-            "Env": ["DISPLAY=:1", "HOME=/home/artek"],
-            "Labels": {
-                "artek.managed": "true",
-                "artek.bot_id": bot_id,
-                "artek.home_key": home_key,
-            },
-            "ExposedPorts": {"6080/tcp": {}, "6081/tcp": {}},
-            "HostConfig": {
-                "Binds": [f"{home}:/home/artek"],
-                "PortBindings": {
-                    "6080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "0"}],
-                    "6081/tcp": [{"HostIp": "127.0.0.1", "HostPort": "0"}],
-                },
-                "NetworkMode": network,
-                "SecurityOpt": ["no-new-privileges:true"],
-                "ShmSize": 268435456,
-                "RestartPolicy": {"Name": "no"},
-            },
-        }
+        spec = desktop_create_spec(
+            name=name,
+            image=STATE.image,
+            home=str(home),
+            bot_id=bot_id,
+            home_key=home_key,
+            network=network,
+        )
         cid = STATE.engine.create(spec)
         STATE.engine.start(cid)
         inspect = STATE.engine.inspect(cid)
@@ -277,7 +274,9 @@ class Handler(BaseHTTPRequestHandler):
         for line in text.splitlines():
             name = line.strip()
             if name and name != "missing":
-                entries.append({"path": name, "kind": "dir" if not name.isdigit() else "file", "size": 0})
+                entries.append(
+                    {"path": name, "kind": "dir" if not name.isdigit() else "file", "size": 0}
+                )
         self._json(200, {"path": rel, "entries": entries, "ok": code == 0})
 
 
@@ -286,7 +285,7 @@ def serve(host: str = "127.0.0.1", port: int = 7091) -> ThreadingHTTPServer:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    configure_logging()
     host = os.environ.get("SUPERVISOR_HOST", "127.0.0.1")
     port = int(os.environ.get("SUPERVISOR_PORT", "7091") or 7091)
     httpd = serve(host, port)

@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## [0.10.27] - 2026-08-22
+
+### Fixed
+- Deleting a bot only removes `data/artifacts/<that bot id>`. The window proxy keeps static files inside the packaged web root, drops CR/LF from `Content-Type`, and requires TLS 1.2+ to the host.
+
+### Changed
+- README and CONTRIBUTING match GitHub Releases: the client `.deb` is attached after `test` on `main` is green. Local `client/build-deb.sh` is optional.
+- `client/artek_buddy.py` is the entrypoint. Pairing, loopback proxy, notifications, and the GTK window live in sibling modules; `build-deb.sh` ships them next to the entry.
+
+### Added
+- `pyproject.toml` is the Python tool config (Ruff, mypy, pytest, coverage). CI `quality` and `backend` jobs run Ruff + mypy; `backend` records pytest-cov on the Actions summary and fails under 56% (measured on this change).
+- `client/web` has Biome lint and Vitest on pure helpers (`npm run lint` / `npm test`), wired next to `tsc` on the `backend` job.
+- Dependabot (pip, npm, Actions, Docker), CodeQL, pip-audit, `npm audit --audit-level=high`, and Trivy (filesystem on `test`, host image on `release`). Third-party Actions are pinned by commit SHA.
+- `THREAT-MODEL.md` names the host / supervisor / sandbox / pairing boundary, including `:8080` on `0.0.0.0` and Funnel residual risk.
+- Computer boxes keep image-default root (uid 1000 failed the live Chromium canary). They get `CapDrop: ALL`, 1536 MiB / 1 CPU / 512 pids, tmpfs `/tmp`. Playwright in the computer image is pinned to `1.55.0`. Chromium stays `--no-sandbox --disable-setuid-sandbox`; the rootfs stays writable.
+- `ARCHITECTURE.md` and `adr/0001`–`0007` record the running Compose trade-offs (supervisor socket, Team/Private, scripted vs Cursor, Compose, SQL migrations, consent cards, bind/Funnel).
+- CI dumps the FastAPI schema (`python -m artek_buddy.openapi_export`) and generates `client/web/src/generated/openapi.d.ts`. `/docs` stays off. Dirty schema/types fail `backend`.
+- GitHub Releases attach CycloneDX SBOMs, `SHA256SUMS`, and GitHub Artifact Attestations. Notes come from the `CHANGELOG.md` section for that `VERSION`.
+- Hypothesis properties cover owner-command classification (write verbs, `find -exec`, redirects) and the owner-path jail (`..`, absolute escapes, NUL).
+- Host logs are JSON in Docker (`LOG_FORMAT=json`) with a greppable `request_id` from HTTP middleware through `threads.send` and tool lines. Tokens, pairing codes, `/novnc` query strings, and `/home/<user>` are redacted.
+- GitHub issue forms, a pull-request template, and CODEOWNERS (`@itsuppartem`).
+- The migration runner splits on statement boundaries (quotes, comments, dollar-quotes), not raw `;`. Replay on an empty database applies every historical file.
+
 ## [0.10.26] - 2026-08-21
 
 ### Fixed

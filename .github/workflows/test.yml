@@ -16,6 +16,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
+
+      - name: Ruff, mypy, pip-audit
+        run: |
+          set +x
+          python -m pip install -r requirements-dev.txt
+          python -m ruff format --check src tests client
+          python -m ruff check src tests client
+          python -m mypy
+          ignores=()
+          while read -r id _; do
+            case "$id" in
+              ''|\#*) continue ;;
+            esac
+            ignores+=(--ignore-vuln "$id")
+          done < .github/pip-audit-ignore.txt
+          python -m pip_audit -r requirements.txt -r requirements-dev.txt "${ignores[@]}"
+
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -40,17 +72,19 @@ jobs:
       SANDBOX_PROVIDER: fake
       CURSOR_API_KEY: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
@@ -60,8 +94,38 @@ jobs:
         run: |
           set +x
           python -m pip install -r requirements-dev.txt
-          python -m pytest tests/unit tests/api tests/client
-          (cd client/web && npm ci && npm run check)
+          python -m ruff format --check src tests client
+          python -m ruff check src tests client
+          python -m mypy
+          python -m pytest tests/unit tests/api tests/client \
+            --cov=artek_buddy --cov-branch \
+            --cov-report=term --cov-report=xml \
+            --cov-fail-under=56
+          python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+          PYTHONPATH=src python -m artek_buddy.openapi_export
+          (cd client/web && npm ci && npm run generate:openapi)
+          git diff --exit-code -- client/web/openapi.json client/web/src/generated/openapi.d.ts
+          (cd client/web && npm audit --audit-level=high && npm run lint && npm test && npm run check)
+
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Trivy filesystem
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          trivyignores: .trivyignore
+          skip-dirs: workspace,data,.venv,client/web/node_modules,.mypy_cache,.ruff_cache
 
   ui:
     runs-on: ubuntu-latest
@@ -72,17 +136,19 @@ jobs:
       COMPOSE_FILE: docker-compose.ci.yml
       SANDBOX_PROVIDER: fake
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
@@ -116,7 +182,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/artek-data" "$RUNNER_TEMP/artek-workspace" "$RUNNER_TEMP/owner-home/Downloads"
           printf 'ci notes\n' > "$RUNNER_TEMP/owner-home/notes.txt"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('requirements-dev.txt') }}
@@ -254,17 +320,19 @@ jobs:
       COMPOSE_FILE: docker-compose.ci.yml
       SANDBOX_PROVIDER: docker
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
@@ -303,7 +371,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/artek-data" "$RUNNER_TEMP/artek-workspace" "$RUNNER_TEMP/owner-home/Downloads"
           printf 'ci notes\n' > "$RUNNER_TEMP/owner-home/notes.txt"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('requirements-dev.txt') }}

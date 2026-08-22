@@ -1,42 +1,22 @@
 from __future__ import annotations
 
-import base64
-import logging
-import mimetypes
-import shutil
+import time
 from typing import Any
 
-from pathlib import Path
-
 from artek_buddy.consent import (
-    CLASS_BROWSE,
-    CLASS_OWNER_EXEC,
     CLASS_OWNER_READ,
-    CLASS_OWNER_WRITE,
     CLASS_PAGE,
-    OWNER_HOME_SCOPE,
     browse_origin,
-    owner_command_is_readonly,
 )
-from artek_buddy.contracts.events import ProductEvent, ProductEventType
-from artek_buddy.db.shaping import isoformat_utc, new_id
+from artek_buddy.observe import log_tool
+from artek_buddy.runtime.tools.chat import ChatToolsMixin
 from artek_buddy.runtime.tools.common import (
-    CONSENT_DONE,
-    MAX_INLINE_FILE_BYTES,
-    MAX_SEND_FILE_BYTES,
-    PAGE_KINDS,
-    _is_under,
-    _playwright_browser_command,
-    _safe_filename,
-    _with_consent,
-    emit_computer_event,
     format_owner_steer,
     log,
 )
-from artek_buddy.runtime.tools.specs import TOOL_SPECS, ToolSpec
-from artek_buddy.runtime.tools.chat import ChatToolsMixin
 from artek_buddy.runtime.tools.computer import ComputerToolsMixin
 from artek_buddy.runtime.tools.owner import OwnerToolsMixin
+from artek_buddy.runtime.tools.specs import TOOL_SPECS, ToolSpec
 from artek_buddy.runtime.tools.subagents import SubagentToolsMixin
 
 
@@ -93,7 +73,13 @@ class ProductToolsCore:
             if not isinstance(item, dict):
                 continue
             origin = browse_origin(
-                str(item.get("url") or item.get("path") or item.get("uri") or item.get("origin") or "")
+                str(
+                    item.get("url")
+                    or item.get("path")
+                    or item.get("uri")
+                    or item.get("origin")
+                    or ""
+                )
             )
             if origin:
                 return origin
@@ -150,16 +136,32 @@ class ProductToolsCore:
         args: dict[str, Any] | None = None,
         bound_bot_id: str | None = None,
     ) -> dict[str, Any]:
-        handler = getattr(self, f"_exec_{name}", None)
-        if handler is None:
-            return {"ok": False, "error": f"unknown tool: {name}"}
-        result = handler(args or {}, bound_bot_id)
-        if not isinstance(result, dict):
+        started = time.monotonic()
+        result: dict[str, Any] | None = None
+        try:
+            handler = getattr(self, f"_exec_{name}", None)
+            if handler is None:
+                result = {"ok": False, "error": f"unknown tool: {name}"}
+                return result
+            result = handler(args or {}, bound_bot_id)
+            if not isinstance(result, dict):
+                return result
+            steer = self._take_owner_steer(bound_bot_id)
+            if steer:
+                result = {**result, **steer}
             return result
-        steer = self._take_owner_steer(bound_bot_id)
-        if steer:
-            result = {**result, **steer}
-        return result
+        finally:
+            bot_id, run_id, thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+            runtime = getattr(getattr(self.runtime, "settings", None), "agent_runtime", None)
+            log_tool(
+                name,
+                result if isinstance(result, dict) else None,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                runtime=runtime,
+                bot_id=bot_id,
+                turn_id=run_id,
+                thread_id=thread_id,
+            )
 
     def _take_owner_steer(self, bound_bot_id: str | None) -> dict[str, Any] | None:
         store = getattr(self.runtime, "store", None)

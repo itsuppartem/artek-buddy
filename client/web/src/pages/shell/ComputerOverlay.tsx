@@ -1,4 +1,4 @@
-import { type RefObject, type SyntheticEvent } from "react";
+import type { RefObject, SyntheticEvent } from "react";
 import { api } from "../../api";
 import {
   computerLabel,
@@ -46,7 +46,8 @@ export function ComputerOverlay({
     return (
       <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-[rgba(4,4,5,.96)]">
         <div className="text-[19px] font-medium text-[#F1F1F2]">
-          Booting up {bot ? computerLabel(computer?.mode || bot.computerMode, bot.name) : "computer"}
+          Booting up{" "}
+          {bot ? computerLabel(computer?.mode || bot.computerMode, bot.name) : "computer"}
         </div>
         <div className="h-[5px] w-[min(420px,70%)] overflow-hidden rounded-full bg-[#232327]">
           <div className="h-full w-2/3 rounded-full bg-[#F1F1EF]" />

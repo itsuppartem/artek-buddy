@@ -53,4 +53,6 @@ def pytest_runtest_makereport(item, call):
     except Exception as err:
         print(f"\npage dump failed: {err}", flush=True)
         return
-    print(f"\n----- page at failure url={url} -----\n{text}\n----- end page dump -----\n", flush=True)
+    print(
+        f"\n----- page at failure url={url} -----\n{text}\n----- end page dump -----\n", flush=True
+    )

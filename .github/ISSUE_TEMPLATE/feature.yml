@@ -1,0 +1,65 @@
+name: Feature
+description: A product change to the host, window, or desktop box.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What the owner cannot do today. Not a technology shopping list.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Keep Compose. Do not add a second model provider, a vendor cloud desktop, or Kubernetes.
+      value: |
+        Branch from develop. Do not bump VERSION unless this is a release.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+    validations:
+      required: true
+  - type: dropdown
+    id: jobs
+    attributes:
+      label: Test jobs
+      description: Which `.github/workflows/test.yml` jobs must move.
+      multiple: true
+      options:
+        - backend
+        - ui
+        - live
+        - none
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: false
+      options:
+        - area:host
+        - area:client
+        - area:ci
+        - area:docs
+        - area:security
+    validations:
+      required: false

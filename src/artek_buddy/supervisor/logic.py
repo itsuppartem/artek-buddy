@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 import re
 
 
@@ -67,11 +66,11 @@ def _close_app_command(raw_app: str) -> str:
     if _is_browser_app(raw_app):
         return (
             "for cls in chromium Chromium Google-chrome google-chrome Chrome; do "
-            "ids=$(xdotool search --onlyvisible --class \"$cls\" 2>/dev/null || true); "
-            "for id in $ids; do xdotool windowkill \"$id\" 2>/dev/null || true; done; "
+            'ids=$(xdotool search --onlyvisible --class "$cls" 2>/dev/null || true); '
+            'for id in $ids; do xdotool windowkill "$id" 2>/dev/null || true; done; '
             "done; "
             "for comm in chromium chrome chromium-browser; do "
-            "pkill -x \"$comm\" >/dev/null 2>&1 || true; "
+            'pkill -x "$comm" >/dev/null 2>&1 || true; '
             "done"
         )
     if _is_files_app(raw_app):
@@ -82,7 +81,7 @@ def _close_app_command(raw_app: str) -> str:
     quoted = shell_quote(safe)
     return (
         f"ids=$(xdotool search --onlyvisible --class {quoted} 2>/dev/null || true); "
-        f"for id in $ids; do xdotool windowkill \"$id\" 2>/dev/null || true; done; "
+        f'for id in $ids; do xdotool windowkill "$id" 2>/dev/null || true; done; '
         f"pkill -x {quoted} >/dev/null 2>&1 || true"
     )
 
@@ -102,11 +101,11 @@ def _kill_control_stack() -> str:
     return (
         "for pid in $(pgrep -x x11vnc || true); do "
         "tr '\\0' ' ' < /proc/$pid/cmdline 2>/dev/null | grep -q -- '-rfbport 5901' "
-        "&& kill \"$pid\" || true; "
+        '&& kill "$pid" || true; '
         "done; "
         "for pid in $(pgrep -x websockify || true); do "
         "tr '\\0' ' ' < /proc/$pid/cmdline 2>/dev/null | grep -q -- ':6081' "
-        "&& kill \"$pid\" || true; "
+        '&& kill "$pid" || true; '
         "done; "
         "rm -f /tmp/artek/control-token"
     )
@@ -118,7 +117,7 @@ def _control_vnc_up() -> str:
         "for pid in $(pgrep -x x11vnc || true); do "
         "tr '\\0' ' ' < /proc/$pid/cmdline 2>/dev/null | grep -q -- '-rfbport 5901' && up=1; "
         "done; "
-        "[ \"$up\" = 1 ]"
+        '[ "$up" = 1 ]'
     )
 
 
@@ -127,7 +126,7 @@ def interactive_screen_command(interactive: bool, control_token: str | None = No
     stop_processes = _kill_control_stack()
     if control_token:
         stop = (
-            f"[ -f {token_file} ] && [ \"$(cat {token_file})\" != {shell_quote(control_token)} ] "
+            f'[ -f {token_file} ] && [ "$(cat {token_file})" != {shell_quote(control_token)} ] '
             f"|| {{ {stop_processes}; }}"
         )
     else:
@@ -144,7 +143,7 @@ def interactive_screen_command(interactive: bool, control_token: str | None = No
     return "\n".join(
         [
             (
-                f"[ -f {token_file} ] && [ \"$(cat {token_file})\" = {quoted} ] "
+                f'[ -f {token_file} ] && [ "$(cat {token_file})" = {quoted} ] '
                 f"&& {{ {_control_vnc_up()}; }} "
                 f"&& {wait_port} >/dev/null 2>&1 && exit 0 || true"
             ),
@@ -158,7 +157,7 @@ def interactive_screen_command(interactive: bool, control_token: str | None = No
                 "for i in $(seq 1 80); do "
                 f"{wait_port} >/dev/null 2>&1 && ready=1 && break; "
                 "sleep 0.15; done\n"
-                "[ \"$ready\" = 1 ] && exit 0\n"
+                '[ "$ready" = 1 ] && exit 0\n'
                 "exit 1"
             ),
         ]
@@ -174,7 +173,9 @@ def observe_command(*, include_image: bool = False) -> str:
         "echo TITLE $(xdotool getactivewindow getwindowname 2>/dev/null || true)",
     ]
     if include_image:
-        parts.append("import -window root /tmp/artek/observe.png && echo PNG /tmp/artek/observe.png")
+        parts.append(
+            "import -window root /tmp/artek/observe.png && echo PNG /tmp/artek/observe.png"
+        )
     return "; ".join(parts)
 
 
@@ -215,7 +216,9 @@ def action_command(actions: list[dict]) -> str:
             if path:
                 if re.match(r"^(https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/.*)?$)", path):
                     target = path if path.startswith(("http://", "https://")) else f"https://{path}"
-                    parts.append(f"nohup artek-browser {shell_quote(target)} >/tmp/artek/open.log 2>&1 &")
+                    parts.append(
+                        f"nohup artek-browser {shell_quote(target)} >/tmp/artek/open.log 2>&1 &"
+                    )
                 else:
                     parts.append(f"nohup xdg-open {shell_quote(path)} >/tmp/artek/open.log 2>&1 &")
         elif kind == "launch":
@@ -230,7 +233,9 @@ def action_command(actions: list[dict]) -> str:
                 app = raw_app
             uri = str(item.get("uri") or item.get("url") or "").strip()
             if uri:
-                parts.append(f"nohup {shell_quote(app)} {shell_quote(uri)} >/tmp/artek/launch.log 2>&1 &")
+                parts.append(
+                    f"nohup {shell_quote(app)} {shell_quote(uri)} >/tmp/artek/launch.log 2>&1 &"
+                )
             else:
                 parts.append(f"nohup {shell_quote(app)} >/tmp/artek/launch.log 2>&1 &")
         elif kind == "close":

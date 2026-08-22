@@ -24,7 +24,9 @@ def postgres_ok() -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_ok: None, host_token: str) -> Iterator[TestClient]:
+def client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, postgres_ok: None, host_token: str
+) -> Iterator[TestClient]:
     data = tmp_path / "data"
     data.mkdir()
     monkeypatch.setenv("AGENT_DATA_DIR", str(data))

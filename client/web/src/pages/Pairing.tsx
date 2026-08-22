@@ -1,10 +1,16 @@
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { api } from "../api";
 import { formatPairingCode } from "../lib/pairing";
 import { Button } from "../ui/button";
 import { WindowChrome } from "../ui/window-chrome";
 
-export function PairingPage({ onPaired, initialUrl = "" }: { onPaired: () => void; initialUrl?: string }) {
+export function PairingPage({
+  onPaired,
+  initialUrl = "",
+}: {
+  onPaired: () => void;
+  initialUrl?: string;
+}) {
   const [url, setUrl] = useState(initialUrl);
   const [code, setCode] = useState("");
   const [name, setName] = useState("This computer");
@@ -56,8 +62,7 @@ export function PairingPage({ onPaired, initialUrl = "" }: { onPaired: () => voi
           />
           <div className="text-[21px] font-medium text-[#ECECEE]">Pair this computer</div>
           <p className="mt-2 text-[14px] leading-6 text-[#85858A]">
-            On the host, mint a pairing code. Enter it here. The page never sees the device
-            token.
+            On the host, mint a pairing code. Enter it here. The page never sees the device token.
           </p>
           <label className="mt-5 block text-[12.5px] text-[#6C6C70]">
             Host URL
@@ -97,7 +102,8 @@ export function PairingPage({ onPaired, initialUrl = "" }: { onPaired: () => voi
             {busy ? "Pairing…" : "Pair"}
           </Button>
           <p className="mt-4 text-[12.5px] leading-5 text-[#6C6C70]">
-            Host command: <span className="font-mono text-[#9A9AA0]">python -m artek_buddy pair</span>
+            Host command:{" "}
+            <span className="font-mono text-[#9A9AA0]">python -m artek_buddy pair</span>
           </p>
         </form>
       </div>

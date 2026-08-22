@@ -1,45 +1,22 @@
 from __future__ import annotations
 
-import base64
-import logging
-import mimetypes
-import shutil
 from typing import Any
-
-from pathlib import Path
 
 from artek_buddy.consent import (
     CLASS_BROWSE,
-    CLASS_OWNER_EXEC,
-    CLASS_OWNER_READ,
-    CLASS_OWNER_WRITE,
-    CLASS_PAGE,
-    OWNER_HOME_SCOPE,
     browse_origin,
-    owner_command_is_readonly,
 )
-from artek_buddy.contracts.events import ProductEvent, ProductEventType
-from artek_buddy.db.shaping import isoformat_utc, new_id
 from artek_buddy.runtime.tools.common import (
-    CONSENT_DONE,
-    MAX_INLINE_FILE_BYTES,
-    MAX_SEND_FILE_BYTES,
     PAGE_KINDS,
-    _is_under,
     _playwright_browser_command,
-    _safe_filename,
     _with_consent,
     emit_computer_event,
-    format_owner_steer,
     log,
 )
-from artek_buddy.runtime.tools.specs import TOOL_SPECS, ToolSpec
 
 
 class ComputerToolsMixin:
-    def _require_computer(
-        self, bound_bot_id: str | None
-    ) -> tuple[Any, Any] | dict[str, Any]:
+    def _require_computer(self, bound_bot_id: str | None) -> tuple[Any, Any] | dict[str, Any]:
         bot_id, _run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if self.runtime.computers is None or self.runtime.store is None or not bot_id:
             return {"ok": False, "error": "computer is not available"}
@@ -48,13 +25,17 @@ class ComputerToolsMixin:
             return {"ok": False, "error": "bot not found"}
         return bot, bot_id
 
-    def _exec_computer_observe(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
+    def _exec_computer_observe(
+        self, args: dict[str, Any], bound_bot_id: str | None
+    ) -> dict[str, Any]:
         found = self._require_computer(bound_bot_id)
         if isinstance(found, dict):
             return found
         bot, _bot_id = found
         try:
-            return self.runtime.computers.observe(bot, include_image=bool(args.get("include_image")))
+            return self.runtime.computers.observe(
+                bot, include_image=bool(args.get("include_image"))
+            )
         except Exception as exc:
             log.exception("computer_observe failed")
             return {"ok": False, "error": str(exc)}
@@ -187,7 +168,11 @@ class ComputerToolsMixin:
             res = self.runtime.computers.open_path(bot, path)
             if self.runtime.events is not None:
                 emit_computer_event(self.runtime.events, bot, self.runtime.computers.status(bot))
-            if isinstance(res, dict) and origin and getattr(self.runtime, "consent", None) is not None:
+            if (
+                isinstance(res, dict)
+                and origin
+                and getattr(self.runtime, "consent", None) is not None
+            ):
                 return _with_consent(res)
             return res
         except Exception as exc:
@@ -217,7 +202,11 @@ class ComputerToolsMixin:
             res = self.runtime.computers.launch_app(bot, app_name, uri=uri)
             if self.runtime.events is not None:
                 emit_computer_event(self.runtime.events, bot, self.runtime.computers.status(bot))
-            if isinstance(res, dict) and origin and getattr(self.runtime, "consent", None) is not None:
+            if (
+                isinstance(res, dict)
+                and origin
+                and getattr(self.runtime, "consent", None) is not None
+            ):
                 return _with_consent(res)
             return res
         except Exception as exc:
@@ -241,7 +230,9 @@ class ComputerToolsMixin:
             log.exception("close_app failed")
             return {"ok": False, "error": str(exc)}
 
-    def _exec_request_takeover(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
+    def _exec_request_takeover(
+        self, args: dict[str, Any], bound_bot_id: str | None
+    ) -> dict[str, Any]:
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if self.runtime.store is None or not bot_id or not run_id:
             return {"ok": False, "error": "no active run"}
@@ -261,4 +252,3 @@ class ComputerToolsMixin:
             except Exception:
                 log.exception("takeover callback failed")
         return {"ok": True, "waiting": True, "reason": reason}
-

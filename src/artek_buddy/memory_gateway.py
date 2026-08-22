@@ -63,7 +63,9 @@ class GatewayClient:
             },
         )
 
-    def recall(self, user_id: str, query: str, agent_id: str | None, limit: int) -> list[MemoryEntry]:
+    def recall(
+        self, user_id: str, query: str, agent_id: str | None, limit: int
+    ) -> list[MemoryEntry]:
         body = self._post(
             "/recall",
             {"user_id": user_id, "query": query, "agent_id": agent_id, "limit": limit},
@@ -227,7 +229,9 @@ class _Handler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False})
 
 
-def make_gateway_server(data_dir: str, host: str = "127.0.0.1", port: int = 8420) -> ThreadingHTTPServer:
+def make_gateway_server(
+    data_dir: str, host: str = "127.0.0.1", port: int = 8420
+) -> ThreadingHTTPServer:
     db = Path(data_dir) / "memory.sqlite"
     httpd = ThreadingHTTPServer((host, port), _Handler)
     httpd.conn = _connect(db)  # type: ignore[attr-defined]
@@ -236,7 +240,9 @@ def make_gateway_server(data_dir: str, host: str = "127.0.0.1", port: int = 8420
 
 def serve_gateway(data_dir: str, host: str = "127.0.0.1", port: int = 8420) -> None:
     httpd = make_gateway_server(data_dir, host, port)
-    log.info("memory gateway listening on %s:%s db=%s", host, port, Path(data_dir) / "memory.sqlite")
+    log.info(
+        "memory gateway listening on %s:%s db=%s", host, port, Path(data_dir) / "memory.sqlite"
+    )
     try:
         httpd.serve_forever()
     finally:

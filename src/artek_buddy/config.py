@@ -17,6 +17,7 @@ class Settings(BaseSettings):
         if not token or token.lower() in _PLACEHOLDER_TOKENS:
             raise ValueError("AGENT_HTTP_TOKEN is missing or still a placeholder")
         return token
+
     agent_runtime: str = "cursor"
     cursor_model: str = "grok-4.6"
     cursor_model_effort: str = "xhigh"
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
     computer_takeover_ttl_seconds: int = 900
     memory_gateway_url: str = "http://127.0.0.1:8420"
     consent_auto: str = ""
+    log_format: str = ""
 
 
 def get_settings() -> Settings:

@@ -6,11 +6,12 @@ import os
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
 from artek_buddy.db.shaping import isoformat_utc
+from artek_buddy.observe import configure_logging, mint_request_id
 
 log = logging.getLogger("artek_buddy.worker")
 
@@ -24,6 +25,7 @@ def host_base() -> str:
 
 
 def wake_routine(base: str, token: str, bot_id: str, prompt: str, timeout: float = 30) -> int:
+    request_id = mint_request_id()
     request = urllib.request.Request(
         f"{base.rstrip('/')}/v1/threads/{bot_id}/messages",
         data=json.dumps({"text": prompt, "trigger": "routine"}).encode("utf-8"),
@@ -32,8 +34,10 @@ def wake_routine(base: str, token: str, bot_id: str, prompt: str, timeout: float
             "Accept": "application/json",
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
+            "X-Request-Id": request_id,
         },
     )
+    log.info("routine wake bot=%s request_id=%s", bot_id, request_id)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as resp:
             return int(resp.status)
@@ -76,7 +80,7 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
             store.ack_routine(routine.id)
             log.info("routine skipped busy id=%s", routine.id)
         else:
-            retry = datetime.now(timezone.utc) + timedelta(seconds=RETRY_SECONDS)
+            retry = datetime.now(UTC) + timedelta(seconds=RETRY_SECONDS)
             store.reschedule_routine(routine.id, isoformat_utc(retry))
             log.warning("routine wake failed id=%s status=%s", routine.id, status)
     for bot_id in store.due_idle_computer_bots():
@@ -89,7 +93,7 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
 
 
 def worker() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    configure_logging()
     url = os.environ.get(
         "DATABASE_URL",
         "postgresql://artek:artek@127.0.0.1:5432/artek_buddy",

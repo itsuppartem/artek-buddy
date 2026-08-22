@@ -49,13 +49,17 @@ export function pushComposerChange(
   return { entries: base, index: base.length - 1 };
 }
 
-export function composerUndo(history: ComposerHistory): { history: ComposerHistory; value: string } | null {
+export function composerUndo(
+  history: ComposerHistory,
+): { history: ComposerHistory; value: string } | null {
   if (history.index <= 0) return null;
   const index = history.index - 1;
   return { history: { entries: history.entries, index }, value: history.entries[index] ?? "" };
 }
 
-export function composerRedo(history: ComposerHistory): { history: ComposerHistory; value: string } | null {
+export function composerRedo(
+  history: ComposerHistory,
+): { history: ComposerHistory; value: string } | null {
   if (history.index >= history.entries.length - 1) return null;
   const index = history.index + 1;
   return { history: { entries: history.entries, index }, value: history.entries[index] ?? "" };
@@ -65,7 +69,7 @@ export function composerUndoKind(event: ComposerKey): "undo" | "redo" | null {
   if (event.isComposing || event.altKey) return null;
   const key = event.key.toLowerCase();
   const mod = event.ctrlKey || event.metaKey;
-  if (!mod || key !== "z" && key !== "y") return null;
+  if (!mod || (key !== "z" && key !== "y")) return null;
   if (key === "y" && event.ctrlKey && !event.metaKey) return "redo";
   if (key === "z" && event.shiftKey) return "redo";
   if (key === "z") return "undo";

@@ -1,34 +1,10 @@
 from __future__ import annotations
 
-import base64
-
 import logging
-
-import mimetypes
-
-import re
-
-import shutil
-
-from dataclasses import dataclass
-
+from pathlib import Path
 from typing import Any
 
-from pathlib import Path
-
-from artek_buddy.consent import (
-    CLASS_BROWSE,
-    CLASS_OWNER_EXEC,
-    CLASS_OWNER_READ,
-    CLASS_OWNER_WRITE,
-    CLASS_PAGE,
-    OWNER_HOME_SCOPE,
-    browse_origin,
-    owner_command_is_readonly,
-)
-
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
-
 from artek_buddy.db.shaping import isoformat_utc, new_id
 
 log = logging.getLogger("artek_buddy")
@@ -46,6 +22,7 @@ OWNER_STEER = (
     "Do not finish the old plan first. Do not wait until this turn ends."
 )
 
+
 def format_owner_steer(items: list[dict[str, str | None]]) -> dict[str, Any] | None:
     texts = [str(item.get("text") or "").strip() for item in items]
     texts = [text for text in texts if text]
@@ -56,6 +33,7 @@ def format_owner_steer(items: list[dict[str, str | None]]) -> dict[str, Any] | N
         lines.append(f"{index}. {text}")
     return {"owner_follow_up": texts, "owner_instruction": "\n".join(lines)}
 
+
 def _with_consent(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("denied") or payload.get("ok") is False:
         return payload
@@ -64,9 +42,11 @@ def _with_consent(payload: dict[str, Any]) -> dict[str, Any]:
     out.setdefault("note", CONSENT_DONE)
     return out
 
+
 def _safe_filename(name: str) -> str:
     base = Path(str(name or "").strip()).name.replace("\x00", "").strip()
     return (base or "file")[:200]
+
 
 def _is_under(path: Path, root: Path) -> bool:
     try:
@@ -74,6 +54,7 @@ def _is_under(path: Path, root: Path) -> bool:
         return True
     except ValueError:
         return False
+
 
 def _playwright_browser_command(actions: list[Any]) -> str:
     import json
@@ -119,6 +100,7 @@ def _playwright_browser_command(actions: list[Any]) -> str:
         "PY"
     )
 
+
 def emit_computer_event(events: Any, bot: Any, status: Any) -> None:
     try:
         events.publish(
@@ -135,4 +117,3 @@ def emit_computer_event(events: Any, bot: Any, status: Any) -> None:
         )
     except Exception:
         log.exception("failed to emit computer event")
-

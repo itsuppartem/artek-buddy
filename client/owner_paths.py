@@ -95,6 +95,8 @@ def inspect_owner_path(
     text = (raw or "").strip() or ("." if as_dir else "")
     if not text:
         return None, "path required"
+    if "\x00" in (raw or "") or "\x00" in text:
+        return None, "path is outside the home"
     root = _owner_home(home)
     wanted = _expand_owner_text(text, root)
     last = "path is outside the home"
@@ -104,7 +106,7 @@ def inspect_owner_path(
             continue
         try:
             resolved = candidate.resolve()
-        except OSError:
+        except (OSError, ValueError):
             last = "folder not found" if as_dir else "file not found"
             continue
         if must_exist:
@@ -156,6 +158,8 @@ def owner_downloads_dir(home: Path | None = None) -> Path:
 
 def unique_download_dest(folder: Path, name: str) -> Path:
     safe = Path(str(name or "file").replace("\x00", "")).name.strip() or "file"
+    if safe in {".", ".."}:
+        safe = "file"
     dest = folder / safe
     if not dest.exists():
         return dest
@@ -165,4 +169,3 @@ def unique_download_dest(folder: Path, name: str) -> Path:
         if not cand.exists():
             return cand
     return folder / f"{stem}-{os.getpid()}{suffix}"
-

@@ -1,10 +1,21 @@
 # Artek Buddy
 
-**Self-hosted Grok bot alternative** and Cursor Cloud desktop agent you run on a Raspberry Pi. Open-source personal AI assistant with a real Linux computer-use sandbox, a Debian `.deb` client, FastAPI + Postgres on the host, and **your** Cursor quota (`cursor-sdk` → Grok / Composer). Not ChatGPT, not a hosted Grok bot, not a vendor cloud VM.
+[![test](https://github.com/itsuppartem/artek-buddy/actions/workflows/test.yml/badge.svg)](https://github.com/itsuppartem/artek-buddy/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/itsuppartem/artek-buddy)](https://github.com/itsuppartem/artek-buddy/releases/latest)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Python · FastAPI · Postgres 16 · Docker · Xvfb / Chromium / noVNC · Tailscale · Raspberry Pi 5 · Debian / Ubuntu client · Apache-2.0
+Self-hosted **AI agent host** for a Raspberry Pi: isolated Linux computer-use sandboxes, a Debian `.deb` client, FastAPI + Postgres, and **your** Cursor quota (`cursor-sdk` → Grok / Composer). Not a hosted Grok bot and not a vendor cloud VM.
 
-If you searched for a self-hosted Grok bot, a Cursor agent host, computer-use on a Raspberry Pi, an open-source personal assistant with a persistent Linux desktop, a Tailscale-paired desktop agent, or a local alternative to hosted ChatGPT / Claude computer sandboxes — this is that stack.
+Python 3.13 · FastAPI · PostgreSQL 16 · Docker · Xvfb / Chromium / noVNC · React / TypeScript · Playwright · GitHub Actions · Tailscale · Apache-2.0
+
+**What this repo actually builds**
+
+- Per-bot Linux desktops on the Pi (shared **Team** box or **Private** container), with persistent homes
+- Capability consent in the thread (Allow once / Always / Deny) before the agent browses, clicks, or writes on this PC
+- Tests against **Postgres** and a **scripted** model runtime; an opt-in job hits the real Cursor/Grok catalog
+- CI installs the same packaged `.deb` the owner installs — not a Vite dev server
+- Multi-arch host images on GHCR (`linux/amd64`, `linux/arm64`); GitHub Releases attach the client `.deb`, `SHA256SUMS`, CycloneDX SBOMs, and provenance after `test` on that `main` SHA is green
+- Pairing issues a **device token**; `AGENT_HTTP_TOKEN` and the Docker socket stay on the Pi
 
 Shipped versions: [CHANGELOG.md](CHANGELOG.md).
 
@@ -13,6 +24,30 @@ Shipped versions: [CHANGELOG.md](CHANGELOG.md).
 Pair the Linux window, ask a question, answer the bot’s card, reply in the thread, and watch Chromium open Wikipedia on the Pi desktop.
 
 ![Artek Buddy demo](media/demo.gif)
+
+## Architecture
+
+| Part | Responsibility |
+| --- | --- |
+| Raspberry Pi host | FastAPI `:8080`, Postgres history and memory, optional loopback memory index `:8420`, cron worker, and the Docker supervisor |
+| Agent runtime | Cursor Cloud through `cursor-sdk`; default model is `grok-4.6`, configurable in `.env` |
+| Bot desktop | A graphical Linux container with Xvfb, Chromium, view-only VNC, and temporary user takeover |
+| Linux client | Pairing, bot list, live thread, notifications, memory/routine controls, and computer preview |
+
+```mermaid
+flowchart TD
+  Deb["Debian .deb client"] -->|"REST / SSE + device token"| API["FastAPI :8080"]
+  API --> DB[(PostgreSQL 16)]
+  API -->|"cursor-sdk"| Cursor["Cursor Cloud"]
+  API -->|"loopback + token"| Super["Docker supervisor :7091"]
+  Super -->|"docker.sock"| Engine["Docker Engine"]
+  Engine --> Box["Desktop: Xvfb + Chromium + noVNC"]
+  Deb -->|"preview / takeover via the host"| Box
+```
+
+Daily access is a Tailscale tailnet (free Personal plan is enough). Compose uses `network_mode: host` and the API default is `HTTP_HOST=0.0.0.0`, so `:8080` is reachable on every host interface the kernel has. Do not port-forward it. Funnel is optional and **publishes the whole API** — read step 6 before turning it on.
+
+Trust boundary, pairing, `docker.sock`, and residual risk: [THREAT-MODEL.md](THREAT-MODEL.md). Processes, state, turn flow, and the test pyramid: [ARCHITECTURE.md](ARCHITECTURE.md). Decisions: [adr/](adr/). How to report a vuln: [SECURITY.md](SECURITY.md).
 
 ## Why this exists
 
@@ -23,6 +58,8 @@ Artek Buddy combines an always-on Pi with the Cursor models you already pay for.
 The result is **your Cursor key, your model quota, your Pi, and your client**. The HTTP API is the product; Cursor Cloud is the only live model runtime. There is no second model provider login.
 
 > Conversations, bot settings, memory, schedules, and desktops are hosted on the Pi. Prompts and relevant context still go to Cursor Cloud to run the selected model; this is not an offline model.
+
+If you searched for a self-hosted Grok bot, a Cursor agent host, or computer-use on a Raspberry Pi — this is that stack.
 
 ## What you can do today
 
@@ -60,27 +97,12 @@ The home stays on the Pi disk (`data/homes/{home_key}`). Rebooting the Pi, Stop,
 - Model output can be wrong and browser workflows can fail. Review important results and take control for sensitive or irreversible actions.
 - The shipped client is Linux-only today. The host API is independent of that client, so other clients can be built later.
 
-## Architecture at a glance
-
-| Part | Responsibility |
-| --- | --- |
-| Raspberry Pi host | FastAPI `:8080`, Postgres history and memory, optional loopback memory index `:8420`, cron worker, and the Docker supervisor |
-| Agent runtime | Cursor Cloud through `cursor-sdk`; default model is `grok-4.6`, configurable in `.env` |
-| Bot desktop | A graphical Linux container with Xvfb, Chromium, view-only VNC, and temporary user takeover |
-| Linux client | Pairing, bot list, live thread, notifications, memory/routine controls, and computer preview |
-
-```
-.deb  →  Tailscale tailnet (free plan)  →  FastAPI on the Pi  →  Cursor Cloud
-         Funnel only after you read the warning below
-                                        Linux desktop container on this Pi
-```
-
 ## Where things run
 
 | Piece | Machine | You install |
 | --- | --- | --- |
 | Host stack (API, Postgres, supervisor, worker, computer image) | Raspberry Pi (or any Linux box you leave on) | Docker + Compose, `.env`, Tailscale |
-| `.deb` **build** | Pi or laptop | Node 22, `dpkg-deb` |
+| `.deb` | GitHub Release, or a local build | Release: a browser. Local: Node 22, `dpkg-deb` |
 | `.deb` **install** + daily window | Debian / Ubuntu PC | The package + Tailscale. Pairing talks to the Pi |
 
 ## Bring it up
@@ -156,7 +178,7 @@ MEMORY_DB_PASSWORD=$(openssl rand -hex 16)
 
 `AGENT_HTTP_TOKEN` stays on the Pi. The desktop window never gets it. Devices pair and receive their own token.
 
-If you already run an older compose stack, add `MEMORY_DB_PASSWORD` to `.env` (use the password Postgres was created with) before the next `docker compose up`. Then stop and boot each desktop so new boxes join the isolated `artek-computers` network.
+If you already run an older compose stack, add `MEMORY_DB_PASSWORD` to `.env` (use the password Postgres was created with) before the next `docker compose up`. Rebuild `artek-buddy-computer:local`, then stop and boot each desktop so boxes pick up CapDrop / resource limits and the isolated `artek-computers` network.
 
 Build the desktop box image once, then start the stack:
 
@@ -193,29 +215,43 @@ The host URL from another PC is `http://<that-ip>:8080`. If MagicDNS is on, `htt
 
 Keep the tailnet IP and Funnel hostname out of git.
 
-### 5. Build and install the Linux `.deb`
+### 5. Install the Linux `.deb`
 
-There is **no ready `.deb` on GitHub**. CI does not attach one. Each owner builds a local package and copies that file to the desktop PC. Do not upload it to Releases or commit it.
+**Usual path:** a GitHub Release. A merge into `main` that bumps `VERSION` attaches `artek-buddy-client_<version>_all.deb` (no baked host URL), `SHA256SUMS`, CycloneDX SBOMs, and `install-host.sh` only after `test` on **that commit** is green (`release.yml` is `workflow_run` on `test`, not a parallel push). Only the five newest Releases are kept.
+
+Verify a downloaded Release:
+
+```bash
+sha256sum -c SHA256SUMS
+gh attestation verify artek-buddy-client_0.10.27_all.deb --repo itsuppartem/artek-buddy
+gh attestation verify oci://ghcr.io/itsuppartem/artek-buddy:0.10.27 --repo itsuppartem/artek-buddy
+```
+
+Attestations exist on Releases published after this landed. Older tags have checksums only. The computer image is **not** built in Actions (QEMU Chromium hangs); `install-host.sh` builds it on the Pi when GHCR has no tag.
+
+The `test` workflow **builds and installs** a `.deb` to run Playwright; it does **not** upload that artifact. Do not commit `*.deb`.
+
+Download the package from the [latest Release](https://github.com/itsuppartem/artek-buddy/releases/latest).
 
 | Step | Where | What you need |
 | --- | --- | --- |
 | Mint a pairing code | **Pi** (running stack) | `docker exec artek-buddy python -m artek_buddy pair` — 15 minutes, one use |
-| Build the package | **Pi or any Linux box with Node 22** | `git`, `npm`, `dpkg-deb` |
+| Get the package | GitHub Release, or a local build | Release: a browser. Local: Node 22, `git`, `npm`, `dpkg-deb` |
 | Install the package | **Debian / Ubuntu owner PC** | `python3`, GTK, WebKit (pulled by `apt`) |
 
-On the machine that has the repo and Node:
+Local build (unreleased tree, or a baked host URL):
 
 ```bash
 # Node 22+ on PATH (this Pi keeps a local install under ~/.local/node)
 client/build-deb.sh
 ```
 
-A merge into `main` that bumps `VERSION` attaches that `.deb` to the GitHub Release only after `test` on that commit is green (no baked host URL). Only the five newest Releases are kept. Local builds stay in the repo root (gitignored). Copy the file to the desktop PC.
+Local builds stay in the repo root (gitignored). Copy the file to the desktop PC.
 
 On the desktop PC:
 
 ```bash
-sudo dpkg -i artek-buddy-client_0.10.26_all.deb
+sudo dpkg -i artek-buddy-client_0.10.27_all.deb
 sudo apt-get install -f
 ```
 
@@ -264,17 +300,21 @@ The worker (`artek-buddy-worker`) wakes due routines through the same `threads.s
 
 ## Version
 
-`0.10.26` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
+`0.10.27` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
 
 Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel hostnames, local compose (`docker-compose.local.yml`), or local tooling.
 
 ## CI (GitHub only)
 
+**CI tests the same packaged `.deb` owners install**, not a development server. The `ui` job builds the Debian package, installs it, and drives `--serve` with Playwright.
+
 Tests run in Actions on every pull request and on pushes to `develop` and `main`. They do **not** run on this Pi and must not use the live `:8080` stack or owner Postgres.
 
 | Job | What |
 | --- | --- |
-| `backend` | pytest host modules + HTTP API (`AGENT_RUNTIME=scripted`) + `.deb` proxy unit tests + `tsc` |
+| `quality` | Ruff format + lint, mypy (baseline codes), pip-audit. No Postgres. |
+| `backend` | same Ruff/mypy, then pytest host + HTTP API (`AGENT_RUNTIME=scripted`) + `.deb` proxy unit tests + coverage + `npm audit` (high) + Biome + Vitest + `tsc` |
+| `scan` | Trivy filesystem (CRITICAL/HIGH, ignore unfixed). Image scan is on `release.yml` after the host image push (CRITICAL, ignore unfixed). |
 | `ui` | always. Built `.deb` + `--serve` against a scripted host (no Cursor key). Pairing, boot/thread errors, sidebar, bots, memory, routines, scripted chat / fail / consent |
 | `live` | only if `CURSOR_API_KEY` is set. Same `.deb`, real computer image, Grok turns (reply + Allow/Deny browse) |
 

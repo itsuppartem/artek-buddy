@@ -180,7 +180,9 @@ class RuntimeBase:
                     if not agents.exists():
                         template = Path(self.settings.agent_cwd) / "AGENTS.md"
                         if template.is_file():
-                            agents.write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
+                            agents.write_text(
+                                template.read_text(encoding="utf-8"), encoding="utf-8"
+                            )
                     return str(path)
             except Exception:
                 log.exception("failed to resolve computer home")

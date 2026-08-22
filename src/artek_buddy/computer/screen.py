@@ -34,7 +34,7 @@ def _b64url_decode(value: str) -> bytes:
 def _sign(secret: str, hostname: str, port: int, policy: str, expires_at: int) -> str:
     digest = hmac.new(
         secret.encode("utf-8"),
-        f"{hostname}:{port}:{policy}:{expires_at}".encode("utf-8"),
+        f"{hostname}:{port}:{policy}:{expires_at}".encode(),
         hashlib.sha256,
     ).digest()
     return _b64url(digest)[:43]
@@ -77,7 +77,9 @@ def mint_novnc_url(
 
 
 def screen_policy_path(requested_path: str, interactive: bool) -> str:
-    parsed = urlparse(requested_path if "://" in requested_path else f"http://screen.invalid{requested_path}")
+    parsed = urlparse(
+        requested_path if "://" in requested_path else f"http://screen.invalid{requested_path}"
+    )
     if parsed.path == "/embed.html" or parsed.path.endswith("/embed.html"):
         return f"{parsed.path}?view_only={'false' if interactive else 'true'}"
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))

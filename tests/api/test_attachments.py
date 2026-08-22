@@ -14,7 +14,11 @@ def test_upload_attachment_then_send_and_download(client, auth_header) -> None:
     uploaded = client.post(
         f"/v1/threads/{bot_id}/attachments",
         headers=auth_header,
-        json={"files": [{"name": "note.txt", "content_base64": _note_b64(), "mime_type": "text/plain"}]},
+        json={
+            "files": [
+                {"name": "note.txt", "content_base64": _note_b64(), "mime_type": "text/plain"}
+            ]
+        },
     )
     assert uploaded.status_code == 200
     attachments = uploaded.json()["attachments"]

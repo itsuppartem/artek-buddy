@@ -5,7 +5,6 @@ import time
 
 import pytest
 from playwright.sync_api import Page, expect
-
 from tests.live.helpers import ensure_bot, pair_fresh, send_message
 
 pytestmark = [pytest.mark.live, pytest.mark.model, pytest.mark.timeout(400)]
@@ -29,7 +28,14 @@ def _chromium_running() -> bool:
     for name in names:
         try:
             out = subprocess.check_output(
-                ["docker", "exec", name, "bash", "-lc", "pgrep -x chromium >/dev/null && echo yes || echo no"],
+                [
+                    "docker",
+                    "exec",
+                    name,
+                    "bash",
+                    "-lc",
+                    "pgrep -x chromium >/dev/null && echo yes || echo no",
+                ],
                 text=True,
                 stderr=subprocess.DEVNULL,
             )
@@ -43,13 +49,17 @@ def _chromium_running() -> bool:
 def test_real_model_replies(page: Page, client_url: str, host_url: str) -> None:
     _ensure_paired(page, client_url, host_url)
     send_message(page, "Reply with the single word pong and nothing else.", "Grok")
-    expect(page.locator('[data-testid=thread-message][data-role=bot]').last).to_be_visible(timeout=180_000)
+    expect(page.locator("[data-testid=thread-message][data-role=bot]").last).to_be_visible(
+        timeout=180_000
+    )
     expect(page.get_by_test_id("typing-indicator")).to_have_count(0, timeout=180_000)
 
 
 def test_browse_allow_starts_chromium(page: Page, client_url: str, host_url: str) -> None:
     _ensure_paired(page, client_url, host_url)
-    send_message(page, "Open https://example.com on the remote desktop. Do not skip the Allow card.", "Grok")
+    send_message(
+        page, "Open https://example.com on the remote desktop. Do not skip the Allow card.", "Grok"
+    )
     card = page.get_by_test_id("consent-card")
     try:
         card.wait_for(timeout=180_000)
@@ -67,7 +77,9 @@ def test_browse_allow_starts_chromium(page: Page, client_url: str, host_url: str
 def test_browse_deny_leaves_chromium_down(page: Page, client_url: str, host_url: str) -> None:
     _ensure_paired(page, client_url, host_url)
     before = _chromium_running()
-    send_message(page, "Open https://example.org on the remote desktop. Wait for the Allow card.", "Grok")
+    send_message(
+        page, "Open https://example.org on the remote desktop. Wait for the Allow card.", "Grok"
+    )
     card = page.get_by_test_id("consent-card")
     try:
         card.wait_for(timeout=180_000)

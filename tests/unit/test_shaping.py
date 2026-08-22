@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from artek_buddy.db.shaping import isoformat_utc
+from artek_buddy.db.shaping import isoformat_utc, strip_markdown
 
 
 def test_isoformat_utc_orders_runs_in_the_same_second() -> None:
-    first = datetime(2026, 8, 21, 9, 0, 5, 1, tzinfo=timezone.utc)
-    second = datetime(2026, 8, 21, 9, 0, 5, 2, tzinfo=timezone.utc)
+    first = datetime(2026, 8, 21, 9, 0, 5, 1, tzinfo=UTC)
+    second = datetime(2026, 8, 21, 9, 0, 5, 2, tzinfo=UTC)
     assert isoformat_utc(first) < isoformat_utc(second)
     assert isoformat_utc(first) != isoformat_utc(first.replace(microsecond=0))
+
+
+def test_strip_markdown_removes_nested_html_leftovers() -> None:
+    assert strip_markdown("<<b>hi") == "hi"

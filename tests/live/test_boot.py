@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-
 from tests.live.helpers import (
     arm_page,
     bot_row,
@@ -50,13 +49,17 @@ def test_pairing_rejects_glued_host_url(page: Page, client_url: str) -> None:
     page.goto(client_url)
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
-    page.get_by_placeholder("https://host.example").fill("http://127.0.0.1:8080http://127.0.0.1:8080")
+    page.get_by_placeholder("https://host.example").fill(
+        "http://127.0.0.1:8080http://127.0.0.1:8080"
+    )
     page.get_by_placeholder("XXXX-XXXX").fill("ABCD-EFGH")
     page.get_by_role("button", name="Pair").click()
     expect(page.get_by_test_id("pairing-error")).to_have_text("invalid url")
 
 
-def test_pairing_with_device_name_shows_empty_bots(page: Page, client_url: str, host_url: str) -> None:
+def test_pairing_with_device_name_shows_empty_bots(
+    page: Page, client_url: str, host_url: str
+) -> None:
     pair_fresh(page, client_url, host_url, device_name="CI laptop")
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     expect(page.get_by_test_id("new-memory")).to_have_count(0)

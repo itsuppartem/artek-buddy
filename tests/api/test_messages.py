@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from artek_buddy.runtime.scripted import E2E_OLDER_PREFIX
 from tests.api.helpers import create_bot, message_texts, wait_run
+
+from artek_buddy.runtime.scripted import E2E_OLDER_PREFIX
 
 
 def test_thread_messages_page_and_older_cursor(client, auth_header) -> None:
@@ -31,7 +32,9 @@ def test_thread_messages_page_and_older_cursor(client, auth_header) -> None:
     listed = client.get("/v1/messages", headers=auth_header, params={"bot_id": bot_id, "limit": 50})
     assert listed.status_code == 200
     assert listed.json()["older_cursor"] == cursor
-    assert [msg["id"] for msg in listed.json()["messages"]] == [msg["id"] for msg in body["messages"]]
+    assert [msg["id"] for msg in listed.json()["messages"]] == [
+        msg["id"] for msg in body["messages"]
+    ]
 
     older = client.get(
         f"/v1/threads/{bot_id}/messages",
