@@ -1,0 +1,68 @@
+name: Bug
+description: Something in the host, window, or desktop box is wrong.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What broke, and who hits it (host API, Linux .deb window, or computer box).
+      placeholder: After Allow on browse, Chromium does not start in the Team box.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior
+      description: What happens now. Name the HTTP path, window control, or log line if you have it.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Product limits that still apply (Compose, no second model, OpenAPI off at runtime, do not push main).
+      value: |
+        Branch from develop. Do not bump VERSION unless this is a release.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: How we know it is fixed. Honest tests, not a helper that papers over the bug.
+    validations:
+      required: true
+  - type: dropdown
+    id: jobs
+    attributes:
+      label: Test jobs
+      description: Which `.github/workflows/test.yml` jobs must move. Pick none if this is docs-only.
+      multiple: true
+      options:
+        - backend
+        - ui
+        - live
+        - none
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: false
+      options:
+        - area:host
+        - area:client
+        - area:ci
+        - area:docs
+        - area:security
+    validations:
+      required: false

@@ -75,6 +75,7 @@ Build on a machine with Node 22. Install on Debian/Ubuntu. Do not commit `*.deb`
 
 Daily work is a pull request **into `develop`**. `main` is release-only:
 open `develop` → `main` when shipping. Never push `main` directly.
+New issues can use the GitHub forms (bug, feature, engineering).
 PRs into `main` cannot merge while `backend` or `ui` is red.
 A merge into `main` that changes `VERSION` publishes a GitHub Release only after
 the **push** `test` run on that commit is green (`release.yml` is `workflow_run`
