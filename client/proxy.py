@@ -821,6 +821,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+
 def serve(url: str, token: str, port: int = 0) -> ThreadingHTTPServer:
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     httpd.upstream = url
