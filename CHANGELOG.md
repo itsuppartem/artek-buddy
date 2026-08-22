@@ -6,7 +6,7 @@
 - README and CONTRIBUTING match GitHub Releases: the client `.deb` is attached after `test` on `main` is green. Local `client/build-deb.sh` is optional.
 
 ### Added
-- `pyproject.toml` is the Python tool config (Ruff, mypy, pytest, coverage). CI `quality` and `backend` jobs run Ruff + mypy; `backend` records pytest-cov on the Actions summary.
+- `pyproject.toml` is the Python tool config (Ruff, mypy, pytest, coverage). CI `quality` and `backend` jobs run Ruff + mypy; `backend` records pytest-cov on the Actions summary and fails under 56% (measured on this change).
 
 ## [0.10.26] - 2026-08-21
 

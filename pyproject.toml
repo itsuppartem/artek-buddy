@@ -94,4 +94,5 @@ omit = ["*/tests/*"]
 [tool.coverage.report]
 skip_empty = true
 show_missing = false
-# fail_under is set after CI measures the first baseline (see issue #84).
+# Measured 2026-08-22 on backend (unit+api+client, --cov-branch): TOTAL 56%.
+fail_under = 56
