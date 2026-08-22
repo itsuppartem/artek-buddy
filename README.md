@@ -14,7 +14,7 @@ Python 3.13 · FastAPI · PostgreSQL 16 · Docker · Xvfb / Chromium / noVNC · 
 - Capability consent in the thread (Allow once / Always / Deny) before the agent browses, clicks, or writes on this PC
 - Tests against **Postgres** and a **scripted** model runtime; an opt-in job hits the real Cursor/Grok catalog
 - CI installs the same packaged `.deb` the owner installs — not a Vite dev server
-- Multi-arch host images on GHCR (`linux/amd64`, `linux/arm64`); GitHub Releases attach the client `.deb` after `test` on that `main` SHA is green
+- Multi-arch host images on GHCR (`linux/amd64`, `linux/arm64`); GitHub Releases attach the client `.deb`, `SHA256SUMS`, CycloneDX SBOMs, and provenance after `test` on that `main` SHA is green
 - Pairing issues a **device token**; `AGENT_HTTP_TOKEN` and the Docker socket stay on the Pi
 
 Shipped versions: [CHANGELOG.md](CHANGELOG.md).
@@ -217,7 +217,17 @@ Keep the tailnet IP and Funnel hostname out of git.
 
 ### 5. Install the Linux `.deb`
 
-**Usual path:** a GitHub Release. A merge into `main` that bumps `VERSION` attaches `artek-buddy-client_<version>_all.deb` (no baked host URL), `SHA256SUMS`, and `install-host.sh` only after `test` on **that commit** is green (`release.yml` is `workflow_run` on `test`, not a parallel push). Only the five newest Releases are kept.
+**Usual path:** a GitHub Release. A merge into `main` that bumps `VERSION` attaches `artek-buddy-client_<version>_all.deb` (no baked host URL), `SHA256SUMS`, CycloneDX SBOMs, and `install-host.sh` only after `test` on **that commit** is green (`release.yml` is `workflow_run` on `test`, not a parallel push). Only the five newest Releases are kept.
+
+Verify a downloaded Release:
+
+```bash
+sha256sum -c SHA256SUMS
+gh attestation verify artek-buddy-client_0.10.26_all.deb --repo itsuppartem/artek-buddy
+gh attestation verify oci://ghcr.io/itsuppartem/artek-buddy:0.10.26 --repo itsuppartem/artek-buddy
+```
+
+Attestations exist on Releases published after this landed. Older tags have checksums only. The computer image is **not** built in Actions (QEMU Chromium hangs); `install-host.sh` builds it on the Pi when GHCR has no tag.
 
 The `test` workflow **builds and installs** a `.deb` to run Playwright; it does **not** upload that artifact. Do not commit `*.deb`.
 
