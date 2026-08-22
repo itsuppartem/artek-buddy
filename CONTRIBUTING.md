@@ -48,10 +48,11 @@ Runtime `/docs` stays off. The dump writes `client/web/openapi.json`; `npm run g
 
 ## Linux client package
 
-GitHub Releases attach `artek-buddy-client_<version>_all.deb` (no baked host URL)
-after a `VERSION` bump on `main` when `test` on that commit is green
-(`release.yml` is `workflow_run` on `test`). The `test` workflow builds a
-`.deb` for Playwright; it does not upload that artifact.
+GitHub Releases attach `artek-buddy-client_<version>_all.deb` (no baked host URL),
+`SHA256SUMS`, CycloneDX SBOMs, and `install-host.sh` after a `VERSION` bump on
+`main` when `test` on that commit is green (`release.yml` is `workflow_run` on
+`test`). Notes are the changelog section for that version. The `test` workflow
+builds a `.deb` for Playwright; it does not upload that artifact.
 
 You can still build a local package (unreleased tree, or `ARTEK_BAKE_URL=1`):
 
