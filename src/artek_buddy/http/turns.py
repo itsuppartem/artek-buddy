@@ -36,6 +36,13 @@ from artek_buddy.memory import (
     wrap_turn_prompt,
 )
 from artek_buddy.memory_hub import MemoryHub, should_persist_ask
+from artek_buddy.observe import (
+    bind_turn,
+    current_request_id,
+    log_event,
+    mint_request_id,
+    unbind_turn,
+)
 from artek_buddy.runtime import (
     AgentRuntime,
     AgentRuntimeError,
@@ -416,6 +423,23 @@ async def _accept_turn(
     except InboxFullError as err:
         raise HTTPException(status_code=409, detail=str(err)) from err
 
+    request_id = current_request_id() or mint_request_id()
+    bind_turn(
+        run.id,
+        request_id,
+        bot_id=bot.id,
+        thread_id=bot.thread_id,
+        runtime=runtime_kind(rt.settings),
+    )
+    log_event(
+        "threads.send",
+        request_id=request_id,
+        bot_id=bot.id,
+        thread_id=bot.thread_id,
+        turn_id=run.id,
+        runtime=runtime_kind(rt.settings),
+        result="queued" if queued else "started",
+    )
     _emit_answered_asks(history, events, bot, display or prompt, run.id)
     _emit(
         events,
@@ -474,6 +498,14 @@ async def _run_turn(
     rt.clear_active_turn(run_id=run.id)
     agent_id = session_id or bot.cursor_agent_id
     rt.set_current_turn_context(bot.id, run.id, bot.thread_id, agent_id=agent_id, role="lead")
+    request_id = current_request_id() or mint_request_id()
+    bind_turn(
+        run.id,
+        request_id,
+        bot_id=bot.id,
+        thread_id=bot.thread_id,
+        runtime=runtime_kind(rt.settings),
+    )
     draft = ""
     thinking = ""
     reply_text = ""
@@ -555,6 +587,7 @@ async def _run_turn(
         log.exception("run failed")
     finally:
         _drop_turn(bot.id, run.id)
+        unbind_turn(run.id)
 
     has_sent = rt.has_sent_message_in_turn(run.id)
     rt.clear_active_turn(run_id=run.id)

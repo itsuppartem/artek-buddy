@@ -22,6 +22,7 @@ services:
       SANDBOX_PROVIDER: docker
       COMPUTER_IMAGE: artek-buddy-computer:local
       MEMORY_GATEWAY_URL: http://127.0.0.1:8420
+      LOG_FORMAT: json
     volumes:
       - ./workspace:/workspace
       - ./data:/data
@@ -52,6 +53,7 @@ services:
       SUPERVISOR_PORT: "7091"
       COMPUTER_IMAGE: artek-buddy-computer:local
       DOCKER_SOCKET: /var/run/docker.sock
+      LOG_FORMAT: json
     volumes:
       - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -74,6 +76,7 @@ services:
       HTTP_PORT: "8080"
       DATABASE_URL: postgresql://artek:${MEMORY_DB_PASSWORD:?set MEMORY_DB_PASSWORD in .env}@127.0.0.1:5432/artek_buddy
       WORKER_POLL_SECONDS: "15"
+      LOG_FORMAT: json
     command: ["python", "-m", "artek_buddy", "worker"]
 
   computer:

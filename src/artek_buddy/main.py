@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -20,13 +19,14 @@ from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
 from artek_buddy.memory_gateway import GatewayClient
 from artek_buddy.memory_hub import MemoryHub
+from artek_buddy.observe import RequestContextMiddleware, configure_logging
 from artek_buddy.runtime import (
     open_runtime,
     runtime_kind,
 )
 from artek_buddy.subagents import SubagentService
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+configure_logging()
 log = logging.getLogger("artek_buddy")
 
 
@@ -39,19 +39,6 @@ from artek_buddy.http.routines import router as routines_router
 from artek_buddy.http.session import router as session_router
 from artek_buddy.http.threads import router as threads_router
 from artek_buddy.http.turns import _handle_takeover_request, _kick_inbox, _shutdown_work
-
-
-class _RedactNovncFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        message = record.getMessage()
-        if "/novnc/" not in message:
-            return True
-        record.msg = re.sub(r"/novnc/\S+", "/novnc/[redacted]", message)
-        record.args = ()
-        return True
-
-
-logging.getLogger("uvicorn.access").addFilter(_RedactNovncFilter())
 
 
 @asynccontextmanager
@@ -125,6 +112,7 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+app.add_middleware(RequestContextMiddleware)
 
 app.include_router(devices_router)
 app.include_router(session_router)

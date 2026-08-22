@@ -16,6 +16,7 @@
 - CI dumps the FastAPI schema (`python -m artek_buddy.openapi_export`) and generates `client/web/src/generated/openapi.d.ts`. `/docs` stays off. Dirty schema/types fail `backend`.
 - GitHub Releases attach CycloneDX SBOMs, `SHA256SUMS`, and GitHub Artifact Attestations. Notes come from the `CHANGELOG.md` section for that `VERSION`.
 - Hypothesis properties cover owner-command classification (write verbs, `find -exec`, redirects) and the owner-path jail (`..`, absolute escapes, NUL).
+- Host logs are JSON in Docker (`LOG_FORMAT=json`) with a greppable `request_id` from HTTP middleware through `threads.send` and tool lines. Tokens, pairing codes, `/novnc` query strings, and `/home/<user>` are redacted.
 
 ## [0.10.26] - 2026-08-21
 
