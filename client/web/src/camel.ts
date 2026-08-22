@@ -33,3 +33,14 @@ export function snakify(value: unknown): unknown {
   }
   return value;
 }
+
+type CamelCase<S extends string> = S extends `${infer Head}_${infer Tail}`
+  ? `${Head}${Capitalize<CamelCase<Tail>>}`
+  : S;
+
+/** Object-key camelCase, matching `camelize()`. String unions (run status, etc.) stay as-is. */
+export type Camelize<T> = T extends readonly (infer Item)[]
+  ? Camelize<Item>[]
+  : T extends object
+    ? { [K in keyof T as K extends string ? CamelCase<K> : K]: Camelize<T[K]> }
+    : T;

@@ -36,11 +36,15 @@ python -m mypy
 Window TypeScript (from `client/web`):
 
 ```bash
+PYTHONPATH=src python -m artek_buddy.openapi_export
 npm ci
+npm run generate:openapi
 npm run lint
 npm test
 npm run check
 ```
+
+Runtime `/docs` stays off. The dump writes `client/web/openapi.json`; `npm run generate:openapi` writes `client/web/src/generated/openapi.d.ts`. Dirty schema/types fail the `backend` job.
 
 ## Linux client package
 

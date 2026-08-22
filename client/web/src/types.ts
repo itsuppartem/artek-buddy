@@ -1,204 +1,36 @@
-export type ComputerMode = "team" | "dedicated";
+import type { Camelize } from "./camel";
+import type { components } from "./generated/openapi";
 
-export type RunStatus =
-  | "queued"
-  | "leased"
-  | "running"
-  | "waiting_input"
-  | "waiting_takeover"
-  | "completed"
-  | "failed"
-  | "cancelled";
+type Schema = components["schemas"];
 
-export type Bot = {
-  id: string;
-  workspaceId: string;
-  name: string;
-  title: string;
-  description: string;
-  instructions: string;
-  color: string;
-  notifyOnFinish: boolean;
-  pinned: boolean;
-  archivedAt: string | null;
-  unread: boolean;
-  parentBotId: string | null;
-  threadId: string;
-  preview: string;
-  status: string;
-  computerMode: ComputerMode;
-  updatedAt: string;
-  createdAt: string;
-};
+export type ComputerMode = Schema["Bot"]["computer_mode"];
+export type RunStatus = Schema["RunStatus"];
+export type MemoryScope = Schema["MemoryScope"];
 
-export type ComputerStatus = {
-  botId: string;
-  mode: ComputerMode;
-  kind: "docker" | "desktop" | "fake";
-  state: "stopped" | "booting" | "running" | "suspended" | "error";
-  controlHolder: "bot" | "user" | "none";
-  screenAvailable: boolean;
-  homeRevision: string | null;
-  busyBotName: string | null;
-};
-
-export type ComputerFileEntry = {
-  path: string;
-  name: string;
-  kind: "dir" | "file" | string;
-  size: number;
-};
-
-export type ComputerFileList = {
-  path: string;
-  entries: ComputerFileEntry[];
-};
-
-export type Run = {
-  id: string;
-  botId: string;
-  threadId: string;
-  taskId: string;
-  status: RunStatus;
-  trigger: string;
-  modelProvider: string | null;
-  modelId: string | null;
-  error: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-};
-
-export type MessageBlock =
-  | { kind: "text"; text: string }
-  | { kind: "card"; lines: { k: string; v: string }[] }
-  | {
-      kind: "ask";
-      text: string;
-      detail?: string | null;
-      status?: "pending" | "answered" | null;
-      answer?: string | null;
-      actions?: { id: string; label: string }[] | null;
-      consentId?: string | null;
-    }
-  | { kind: "computer"; state: string; text: string }
-  | { kind: "meta"; text: string }
-  | { kind: "progress"; text: string }
-  | {
-      kind: "subagent";
-      agentId: string;
-      name: string;
-      task: string;
-      status: "queued" | "running" | "completed" | "failed" | "cancelled";
-      progress?: string | null;
-      thinking?: string | null;
-      result?: string | null;
-      index?: number | null;
-      clarifications?: string | null;
-    }
-  | {
-      kind: "child_bot";
-      botId: string;
-      name: string;
-      title?: string | null;
-      status: "created" | "archived" | "deleted";
-    }
-  | {
-      kind: "file";
-      artifactId: string;
-      name: string;
-      mimeType: string;
-      size: number;
-    };
-
-export type MessageReply = {
-  id: string;
-  role: "user" | "bot" | "system";
-  excerpt: string;
-};
-
-export type ThreadMessage = {
-  id: string;
-  threadId: string;
-  seq: number;
-  role: "user" | "bot" | "system";
-  blocks: MessageBlock[];
-  createdAt: string;
-  runId?: string | null;
-  replyToId?: string | null;
-  replyTo?: MessageReply | null;
-};
-
-export type Subagent = {
-  id: string;
-  botId: string;
-  threadId: string;
-  parentRunId?: string | null;
-  cursorAgentId?: string | null;
-  index: number;
-  name: string;
-  task: string;
-  status: "queued" | "running" | "completed" | "failed" | "cancelled";
-  progress?: string | null;
-  thinking?: string | null;
-  result?: string | null;
-  error?: string | null;
-  clarifications?: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ThreadSnapshot = {
-  botId: string;
-  threadId: string;
-  cursor: number;
-  messages: ThreadMessage[];
-  olderCursor: number | null;
-  run: Run | null;
-  computer: ComputerStatus;
-  subagents?: Subagent[];
-  pendingAutoConsentId?: string | null;
-};
-
-export type ThreadMessagePage = {
-  threadId: string;
-  messages: ThreadMessage[];
-  olderCursor: number | null;
-};
-
-export type MemoryScope = "bot" | "user";
-
-export type MemoryDocument = {
-  id: string;
-  scope: MemoryScope;
-  botId: string | null;
-  path: string;
-  content: string;
-  revision: number;
-  updatedAt: string;
-};
-
-export type Routine = {
-  id: string;
-  botId: string;
-  name: string;
-  prompt: string;
-  cron: string;
-  timezone: string;
-  active: boolean;
-  notify: boolean;
-  lastRunAt: string | null;
-  nextRunAt: string | null;
-  createdAt: string;
-};
-
-export type ThreadSendResult = {
-  taskId: string;
-  runId: string;
-  seq: number;
-  message?: ThreadMessage | null;
-  run?: Run | null;
-  queued?: boolean;
-};
+export type Bot = Camelize<Schema["Bot"]>;
+export type ComputerStatus = Camelize<Schema["ComputerStatus"]>;
+export type ComputerFileEntry = Camelize<Schema["ComputerFileEntry"]>;
+export type ComputerFileList = Camelize<Schema["ComputerFileList"]>;
+export type ComputerFileContent = Camelize<Schema["ComputerFileContent"]>;
+export type ScreenUrlResult = Camelize<Schema["ScreenUrlResult"]>;
+export type TakeoverResult = Camelize<Schema["TakeoverResult"]>;
+export type Run = Camelize<Schema["Run"]>;
+export type ThreadMessage = Camelize<Schema["ThreadMessage"]>;
+export type MessageBlock = ThreadMessage["blocks"][number];
+export type MessageReply = Camelize<Schema["MessageReplyRef"]>;
+export type Subagent = Camelize<Schema["Subagent"]>;
+export type ThreadSnapshot = Camelize<Schema["ThreadSnapshot"]>;
+export type ThreadMessagePage = Camelize<Schema["ThreadMessagePage"]>;
+export type MemoryDocument = Camelize<Schema["MemoryDocument"]>;
+export type Routine = Camelize<Schema["Routine"]>;
+export type ThreadSendResult = Camelize<Schema["ThreadSendResult"]>;
+export type HealthResponse = Camelize<Schema["HealthResponse"]>;
+export type Me = Camelize<Schema["Me"]>;
+export type DeploymentSettings = Camelize<Schema["DeploymentSettings"]>;
+export type ConsentJob = Camelize<Schema["ConsentJob"]>;
+export type OkResponse = Camelize<Schema["OkResponse"]>;
+export type TestRunResult = Camelize<Schema["TestRunResult"]>;
+export type MarkdownExport = Camelize<Schema["MarkdownExport"]>;
 
 export type ProductEvent = {
   id: string;

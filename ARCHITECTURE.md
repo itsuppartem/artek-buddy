@@ -93,7 +93,9 @@ sequenceDiagram
 
 Handlers live under `src/artek_buddy/` and call `HistoryStore` plus
 `ComputerService`. They do not grow a second persistence layer. The window
-talks HTTP through `client/web/src/api.ts`. Implemented RPC rows:
+talks HTTP through `client/web/src/api.ts`. Window types wrap the generated
+schema in `client/web/src/generated/openapi.d.ts` (dumped at build/CI from
+`app.openapi()`). Implemented RPC rows:
 `src/artek_buddy/contracts/rpc.py`. OpenAPI is off at runtime
 (`docs_url=None`, `openapi_url=None`).
 

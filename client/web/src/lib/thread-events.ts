@@ -2,6 +2,7 @@ import type {
   ComputerStatus,
   MessageBlock,
   ProductEvent,
+  Run,
   Subagent,
   ThreadMessage,
   ThreadMessagePage,
@@ -15,6 +16,8 @@ const computerStates = new Set<ComputerStatus["state"]>([
   "suspended",
   "error",
 ]);
+
+const runTriggers = new Set<Run["trigger"]>(["user", "routine", "resume", "follow_up", "spawn"]);
 
 export function mergeThreadSnapshot(
   prev: ThreadSnapshot | null,
@@ -70,7 +73,7 @@ export function reduceThreadSnapshot(
         threadId: prev.threadId,
         taskId: str(run?.taskId) || prev.run?.taskId || "",
         status: "running",
-        trigger: str(run?.trigger) || "user",
+        trigger: runTrigger(run?.trigger),
         modelProvider: str(run?.modelProvider) || prev.run?.modelProvider || null,
         modelId: str(run?.modelId) || prev.run?.modelId || null,
         error: null,
@@ -445,6 +448,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function runTrigger(value: unknown): Run["trigger"] {
+  const text = str(value);
+  return runTriggers.has(text as Run["trigger"]) ? (text as Run["trigger"]) : "user";
 }
 
 function num(value: unknown): number {

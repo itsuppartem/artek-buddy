@@ -279,7 +279,10 @@ async def computer_download_file(
 
 
 @router.api_route(
-    "/novnc/{rest:path}", methods=["GET", "HEAD"], dependencies=[Depends(require_auth)]
+    "/novnc/{rest:path}",
+    methods=["GET", "HEAD"],
+    dependencies=[Depends(require_auth)],
+    include_in_schema=False,
 )
 async def novnc_http(rest: str, request: Request) -> Response:
     return await proxy_novnc_http(request, request.app.state.settings.agent_http_token)
