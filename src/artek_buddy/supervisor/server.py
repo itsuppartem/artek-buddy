@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 from artek_buddy.auth import supervisor_token
+from artek_buddy.observe import configure_logging
 from artek_buddy.supervisor.desktop_spec import (
     desktop_create_spec,
     inspect_is_hardened,
@@ -284,9 +285,7 @@ def serve(host: str = "127.0.0.1", port: int = 7091) -> ThreadingHTTPServer:
 
 
 def main() -> int:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    configure_logging()
     host = os.environ.get("SUPERVISOR_HOST", "127.0.0.1")
     port = int(os.environ.get("SUPERVISOR_PORT", "7091") or 7091)
     httpd = serve(host, port)

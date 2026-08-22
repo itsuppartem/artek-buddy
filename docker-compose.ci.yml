@@ -21,6 +21,7 @@ services:
       SANDBOX_SUPERVISOR_URL: http://127.0.0.1:7091
       SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-docker}
       COMPUTER_IMAGE: artek-buddy-computer:ci
+      LOG_FORMAT: json
     volumes:
       - ${ARTEK_CI_WORKSPACE}:/workspace
       - ${ARTEK_CI_DATA}:/data
@@ -49,6 +50,7 @@ services:
       SUPERVISOR_PORT: "7091"
       COMPUTER_IMAGE: artek-buddy-computer:ci
       DOCKER_SOCKET: /var/run/docker.sock
+      LOG_FORMAT: json
     volumes:
       - ${ARTEK_CI_DATA}:/data
       - /var/run/docker.sock:/var/run/docker.sock

@@ -104,6 +104,7 @@ that file is not served.
 | Postgres | Remote SQL, weak password | Host network | Port published `127.0.0.1:5432` only; password from `.env` | `network_mode: host` on the API still talks to that port. Placeholder DB passwords are an operator miss. |
 | GHCR / Release `.deb` | Supply-chain swap | GitHub + Actions | Release only after green `test` on that `main` SHA; `SHA256SUMS`; CycloneDX SBOM; GitHub Artifact Attestations; Actions pinned by commit SHA; CodeQL / pip-audit / Trivy | Starlette/pytest audit exceptions are listed in `.github/pip-audit-ignore.txt`. Computer image is **not** built in Actions. Attestations apply to Releases after this landed. |
 | `CURSOR_API_KEY` | Leak in Actions logs or the window | Actions secret + host env | `ui` job does not get the key; workflows must not `echo` env / `docker compose config` | Live canary needs the secret. A workflow edit that prints env is a leak. |
+| Host logs | Token, pairing code, or home path in a log line | Host / worker / supervisor | JSON in Docker; `request_id` on HTTP, `threads.send`, and tool lines; redact bearer, env secrets, pairing, `/novnc`, `/home/<user>` | Do not log bodies or screenshots. Funnel still means a stolen token is remote. |
 
 ## Open by design
 
