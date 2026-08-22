@@ -44,7 +44,8 @@ before posting a write-up.
    written to logs or artifacts. Rotate it if a workflow file is ever
    changed to print env or upload traces.
 5. Rebuild `artek-buddy-computer:local` after you pull a computer-image
-   change, then recreate running desktops so they join `artek-computers`.
+   change. The next desktop start recreates any box that is still root or
+   missing CapDrop / memory / CPU / pids limits.
 
 ## What CI scans
 

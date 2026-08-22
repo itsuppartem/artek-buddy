@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-venv \
     curl \
   && rm -rf /var/lib/apt/lists/* \
-  && python3 -m pip install --break-system-packages --no-cache-dir playwright \
+  && python3 -m pip install --break-system-packages --no-cache-dir playwright==1.55.0 \
   && mkdir -p /etc/artek/fluxbox \
   && printf '%s\n' '#!/bin/sh' 'exec xsetroot -solid "#111113" "$@"' > /usr/bin/fbsetbg \
   && chmod +x /usr/bin/fbsetbg \
@@ -41,6 +41,9 @@ COPY embed.html /usr/share/novnc/embed.html
 RUN chmod +x /usr/local/bin/artek-computer /usr/local/bin/artek-browser \
   && update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/artek-browser 100 \
   && update-alternatives --set x-www-browser /usr/local/bin/artek-browser \
-  && if [ -f /usr/share/applications/chromium.desktop ]; then sed -i 's|Exec=/usr/bin/chromium|Exec=/usr/local/bin/artek-browser|g' /usr/share/applications/chromium.desktop; fi
+  && if [ -f /usr/share/applications/chromium.desktop ]; then sed -i 's|Exec=/usr/bin/chromium|Exec=/usr/local/bin/artek-browser|g' /usr/share/applications/chromium.desktop; fi \
+  && groupadd --gid 1000 artek \
+  && useradd --uid 1000 --gid 1000 --home-dir /home/artek --shell /bin/bash artek
+USER 1000:1000
 EXPOSE 6080 6081
 CMD ["/usr/local/bin/artek-computer"]
