@@ -1,5 +1,5 @@
 cursor-sdk==1.0.28
-fastapi==0.116.1
+fastapi==0.141.1
 uvicorn[standard]==0.35.0
 pydantic-settings==2.10.1
 psycopg[binary,pool]==3.3.4
