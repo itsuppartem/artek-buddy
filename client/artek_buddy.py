@@ -24,22 +24,20 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
-
 _CLIENT_DIR = Path(__file__).resolve().parent
 if str(_CLIENT_DIR) not in sys.path:
     sys.path.insert(0, str(_CLIENT_DIR))
 
 from owner_paths import (
+    _owner_path_status,
     inspect_owner_path,
     owner_downloads_dir,
-    resolve_owner_path,
     unique_download_dest,
-    _owner_path_status,
+)
+from owner_paths import (
+    resolve_owner_path as resolve_owner_path,
 )
 from window_chrome import (
-    apply_window_icon,
-    bundled_icon_path,
-    notify_icon_args,
     _apply_urgency,
     _gtk_choose_save_path,
     _has_gtk_window,
@@ -48,6 +46,11 @@ from window_chrome import (
     _on_gtk_active,
     _register_window,
     _unregister_window,
+    apply_window_icon,
+    notify_icon_args,
+)
+from window_chrome import (
+    bundled_icon_path as bundled_icon_path,
 )
 
 WEB_ROOTS = (
@@ -66,10 +69,7 @@ ATTACH_TOTAL_MAX = 50 * 1024 * 1024
 ATTACH_MAX_FILES = 10
 
 
-
 save_path_chooser = None
-
-
 
 
 def choose_save_path(name: str) -> Path | None:
@@ -82,8 +82,6 @@ def choose_save_path(name: str) -> Path | None:
     if _has_gtk_window():
         return _gtk_choose_save_path(name)
     return unique_download_dest(owner_downloads_dir(), name)
-
-
 
 
 def _redact_client_log(message: str) -> str:
@@ -192,7 +190,9 @@ def _write_text(path: Path, value: str, mode: int) -> None:
     path.chmod(mode)
 
 
-def _host_request(url: str, method: str, path: str, body: bytes, headers: dict[str, str]) -> tuple[int, bytes]:
+def _host_request(
+    url: str, method: str, path: str, body: bytes, headers: dict[str, str]
+) -> tuple[int, bytes]:
     upstream = urlsplit(url)
     if upstream.scheme == "https":
         conn: http.client.HTTPConnection = http.client.HTTPSConnection(
@@ -222,8 +222,6 @@ def web_root() -> Path:
     raise FileNotFoundError("web UI is missing; rebuild the package")
 
 
-
-
 class Handler(BaseHTTPRequestHandler):
     server_version = "artek-buddy"
 
@@ -232,7 +230,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _accept_browser(self) -> bool:
         port = int(self.server.server_address[1])
-        if proxy_origin_allowed(self.headers.get("Origin"), self.headers.get("Sec-Fetch-Site"), port):
+        if proxy_origin_allowed(
+            self.headers.get("Origin"), self.headers.get("Sec-Fetch-Site"), port
+        ):
             return True
         self.send_error(403, "cross-origin request blocked")
         return False
@@ -246,7 +246,10 @@ class Handler(BaseHTTPRequestHandler):
             self._local_status()
             return
         if path == "/health" or path.startswith("/v1/") or path.startswith("/novnc/"):
-            if path.startswith("/novnc/") and (self.headers.get("Upgrade") or "").lower() == "websocket":
+            if (
+                path.startswith("/novnc/")
+                and (self.headers.get("Upgrade") or "").lower() == "websocket"
+            ):
                 self._proxy_ws()
                 return
             self._proxy()
@@ -363,7 +366,11 @@ class Handler(BaseHTTPRequestHandler):
                 "POST",
                 "/v1/devices",
                 body,
-                {"Accept": "application/json", "Content-Type": "application/json", "Connection": "close"},
+                {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Connection": "close",
+                },
             )
         except ValueError:
             _log("pair failed: invalid url")
@@ -585,7 +592,9 @@ class Handler(BaseHTTPRequestHandler):
         payload = self._local_json_body()
         if payload is None:
             return
-        path, err = inspect_owner_path(str(payload.get("path") or "~"), must_exist=True, as_dir=True)
+        path, err = inspect_owner_path(
+            str(payload.get("path") or "~"), must_exist=True, as_dir=True
+        )
         if path is None:
             self._json(_owner_path_status(err), {"ok": False, "error": err})
             return
@@ -635,7 +644,16 @@ class Handler(BaseHTTPRequestHandler):
                 errors="replace",
             )
         except subprocess.TimeoutExpired:
-            self._json(200, {"ok": False, "error": "command timed out", "stdout": "", "stderr": "", "exit_code": 124})
+            self._json(
+                200,
+                {
+                    "ok": False,
+                    "error": "command timed out",
+                    "stdout": "",
+                    "stderr": "",
+                    "exit_code": 124,
+                },
+            )
             return
         except OSError as exc:
             self._json(500, {"ok": False, "error": str(exc)})
@@ -667,7 +685,13 @@ class Handler(BaseHTTPRequestHandler):
         token = self.server.token  # type: ignore[attr-defined]
         url = self.server.upstream  # type: ignore[attr-defined]
         if not token:
-            self._json(401, {"ok": False, "error": "This computer is no longer authorized. Pair it again to continue."})
+            self._json(
+                401,
+                {
+                    "ok": False,
+                    "error": "This computer is no longer authorized. Pair it again to continue.",
+                },
+            )
             return
         try:
             status, data = _host_request(
@@ -685,7 +709,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(502, {"ok": False, "error": "Could not reach the host"})
             return
         if status != 200 or not data:
-            self._json(404 if status == 404 else 502, {"ok": False, "error": "Could not download that file"})
+            self._json(
+                404 if status == 404 else 502,
+                {"ok": False, "error": "Could not download that file"},
+            )
             return
         self._write_chosen_file(data, name)
 
@@ -708,7 +735,13 @@ class Handler(BaseHTTPRequestHandler):
         token = self.server.token  # type: ignore[attr-defined]
         url = self.server.upstream  # type: ignore[attr-defined]
         if not token:
-            self._json(401, {"ok": False, "error": "This computer is no longer authorized. Pair it again to continue."})
+            self._json(
+                401,
+                {
+                    "ok": False,
+                    "error": "This computer is no longer authorized. Pair it again to continue.",
+                },
+            )
             return
         query = urlencode({"path": rel})
         try:
@@ -727,7 +760,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(502, {"ok": False, "error": "Could not reach the host"})
             return
         if status != 200 or not data:
-            self._json(404 if status == 404 else 502, {"ok": False, "error": "Could not download that file"})
+            self._json(
+                404 if status == 404 else 502,
+                {"ok": False, "error": "Could not download that file"},
+            )
             return
         self._write_chosen_file(data, name)
 
@@ -909,8 +945,6 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-
-
 def _desktop_notify(title: str, body: str, urgency: str) -> None:
     _apply_urgency(True)
     if os.environ.get("ARTEK_BUDDY_NOTIFY") == "0":
@@ -1026,10 +1060,7 @@ def main() -> None:
     args = parser.parse_args()
     url = _load_url()
     token = _load_token()
-    _log(
-        "start token_ok=%s url_scheme=%s"
-        % (bool(token), urlsplit(url).scheme or "none")
-    )
+    _log("start token_ok=%s url_scheme=%s" % (bool(token), urlsplit(url).scheme or "none"))
     try:
         httpd = serve(url, token, args.port)
     except Exception:

@@ -1,44 +1,26 @@
 from __future__ import annotations
 
 import base64
-import logging
-import mimetypes
 import re
-import shutil
+from pathlib import Path
 from typing import Any
 
-from pathlib import Path
-
 from artek_buddy.consent import (
-    CLASS_BROWSE,
     CLASS_OWNER_EXEC,
     CLASS_OWNER_READ,
     CLASS_OWNER_WRITE,
-    CLASS_PAGE,
     OWNER_HOME_SCOPE,
-    browse_origin,
     owner_command_is_readonly,
 )
-from artek_buddy.contracts.events import ProductEvent, ProductEventType
-from artek_buddy.db.shaping import isoformat_utc, new_id
 from artek_buddy.runtime.tools.common import (
-    CONSENT_DONE,
-    MAX_INLINE_FILE_BYTES,
-    MAX_SEND_FILE_BYTES,
-    PAGE_KINDS,
-    _is_under,
-    _playwright_browser_command,
-    _safe_filename,
     _with_consent,
-    emit_computer_event,
-    format_owner_steer,
-    log,
 )
-from artek_buddy.runtime.tools.specs import TOOL_SPECS, ToolSpec
 
 
 class OwnerToolsMixin:
-    def _exec_read_owner_file(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
+    def _exec_read_owner_file(
+        self, args: dict[str, Any], bound_bot_id: str | None
+    ) -> dict[str, Any]:
         path = str(args.get("path") or "").strip()
         if not path:
             return {"ok": False, "error": "path is required"}
@@ -55,7 +37,10 @@ class OwnerToolsMixin:
             except Exception as exc:
                 return {"ok": False, "error": str(exc)}
             if isinstance(raw, tuple) and len(raw) == 2:
-                name, data = str(raw[0]), raw[1] if isinstance(raw[1], bytes) else str(raw[1]).encode()
+                name, data = (
+                    str(raw[0]),
+                    raw[1] if isinstance(raw[1], bytes) else str(raw[1]).encode(),
+                )
             elif isinstance(raw, bytes):
                 data = raw
             elif raw is not None:
@@ -71,7 +56,11 @@ class OwnerToolsMixin:
             )
             if found and found.get("_data") is not None:
                 name = str(found.get("name") or name)
-                data = found["_data"] if isinstance(found["_data"], bytes) else str(found["_data"]).encode()
+                data = (
+                    found["_data"]
+                    if isinstance(found["_data"], bytes)
+                    else str(found["_data"]).encode()
+                )
             elif found and found.get("content_base64"):
                 name = str(found.get("name") or name)
                 data = base64.b64decode(found["content_base64"])
@@ -89,7 +78,9 @@ class OwnerToolsMixin:
         dest.write_bytes(data)
         return _with_consent({"ok": True, "path": str(dest), "name": safe, "bytes": len(data)})
 
-    def _exec_write_owner_file(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
+    def _exec_write_owner_file(
+        self, args: dict[str, Any], bound_bot_id: str | None
+    ) -> dict[str, Any]:
         path = str(args.get("path") or "").strip()
         content = args.get("content")
         if not path:
@@ -135,9 +126,17 @@ class OwnerToolsMixin:
             return {"ok": False, "error": "no paired client to write that file"}
         if found.get("ok") is False:
             return {"ok": False, "error": str(found.get("error") or "write failed")}
-        return _with_consent({"ok": True, "path": str(found.get("path") or path), "bytes": found.get("bytes", len(text.encode()))})
+        return _with_consent(
+            {
+                "ok": True,
+                "path": str(found.get("path") or path),
+                "bytes": found.get("bytes", len(text.encode())),
+            }
+        )
 
-    def _exec_list_owner_dir(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
+    def _exec_list_owner_dir(
+        self, args: dict[str, Any], bound_bot_id: str | None
+    ) -> dict[str, Any]:
         path = str(args.get("path") or "~").strip() or "~"
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if not bot_id:
@@ -162,9 +161,17 @@ class OwnerToolsMixin:
             return {"ok": False, "error": "no paired client to list that folder"}
         if found.get("ok") is False:
             return {"ok": False, "error": str(found.get("error") or "list failed")}
-        return _with_consent({"ok": True, "path": str(found.get("path") or path), "entries": found.get("entries") or []})
+        return _with_consent(
+            {
+                "ok": True,
+                "path": str(found.get("path") or path),
+                "entries": found.get("entries") or [],
+            }
+        )
 
-    def _exec_run_owner_command(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
+    def _exec_run_owner_command(
+        self, args: dict[str, Any], bound_bot_id: str | None
+    ) -> dict[str, Any]:
         command = str(args.get("command") or "").strip()
         cwd = str(args.get("cwd") or "~").strip() or "~"
         if not command:
@@ -207,10 +214,11 @@ class OwnerToolsMixin:
             return {"ok": False, "error": "no paired client to run that command"}
         if found.get("ok") is False and found.get("exit_code") is None:
             return {"ok": False, "error": str(found.get("error") or "command failed")}
-        return _with_consent({
-            "ok": True,
-            "stdout": str(found.get("stdout") or ""),
-            "stderr": str(found.get("stderr") or ""),
-            "exit_code": int(found.get("exit_code") or 0),
-        })
-
+        return _with_consent(
+            {
+                "ok": True,
+                "stdout": str(found.get("stdout") or ""),
+                "stderr": str(found.get("stderr") or ""),
+                "exit_code": int(found.get("exit_code") or 0),
+            }
+        )

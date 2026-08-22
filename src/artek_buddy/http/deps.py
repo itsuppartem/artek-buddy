@@ -1,126 +1,36 @@
 from __future__ import annotations
 
-import asyncio
-import base64
 import logging
-import re
-import shutil
-from contextlib import asynccontextmanager
-from pathlib import Path
-from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
 
-from artek_buddy.auth import host_token_match, pairing_attempts
-from artek_buddy.bus import HEARTBEAT, REPLAY_GAP, EventHub
-from artek_buddy.config import Settings, get_settings
-from artek_buddy.contracts import (
-    ArtifactList,
-    AttachmentList,
-    AttachmentUploadInput,
-    HostedAttachment,
-    Bot,
-    BotIdInput,
-    BotList,
-    ComputerFileContent,
-    ComputerFileList,
-    ComputerInput,
-    ComputerStatus,
-    CreateBotInput,
-    CreateDeviceInput,
-    CreateMemoryInput,
-    CreateRoutineInput,
-    DeleteBotInput,
-    DeploymentSettings,
-    Device,
-    DeviceCreated,
-    DeviceList,
-    HealthResponse,
-    MarkdownExport,
-    Me,
-    MemoryDocument,
-    MemoryDocumentList,
-    MemoryScope,
-    MemoryUpdateInput,
-    OkResponse,
-    PairingCode,
-    ProductEvent,
-    ProductEventType,
-    Routine,
-    RoutineList,
-    Run,
-    ScreenUrlResult,
-    RunRequest,
-    SessionRequest,
-    SessionResponse,
-    SetComputerInput,
-    SteerSubagentInput,
-    Subagent,
-    SubagentList,
-    TakeoverResult,
-    TestRunResult,
-    ThreadFollowUpInput,
-    ThreadMessage,
-    ThreadMessagePage,
-    ConsentAnswerInput,
-    ConsentFileInput,
-    ConsentJob,
-    ConsentResultInput,
-    ThreadSendInput,
-    ThreadSendResult,
-    ThreadSnapshot,
-    UpdateBotInput,
-    UpdateDeploymentInput,
-    UpdateRoutineInput,
+from artek_buddy.auth import host_token_match
+from artek_buddy.bus import EventHub
+from artek_buddy.computer.service import (
+    ComputerBusy,
+    ComputerError,
+    ComputerService,
+    ComputerUnavailable,
 )
-from artek_buddy.cron import CronError
-from artek_buddy.computer.proxy import proxy_novnc_http, proxy_novnc_ws
-from artek_buddy.computer.service import ComputerBusy, ComputerError, ComputerService, ComputerUnavailable
-from artek_buddy.db import DatabaseUnavailable, product_run_status
-from artek_buddy.db.history import HistoryStore, InboxFullError
-from artek_buddy.db.shaping import (
-    DEFAULT_BOT_NAME,
-    DEFAULT_PAGE_SIZE,
-    blocks_text,
-    isoformat_utc,
-    new_id,
-    preview_snippet,
-)
+from artek_buddy.config import Settings
 from artek_buddy.consent import ConsentHub
-from artek_buddy.memory import (
-    MemoryConflict,
-    MemoryPathError,
-    compact_thread_context,
-    export_markdown,
-    format_memory_context,
-    format_subagent_context,
-    wrap_turn_prompt,
+from artek_buddy.contracts import (
+    Bot,
+    ThreadMessagePage,
+    ThreadSnapshot,
 )
-from artek_buddy.uploads import (
-    UploadError,
-    format_user_turn,
-    ingest_uploads,
-    preview_for_upload,
-    user_file_blocks,
+from artek_buddy.db import DatabaseUnavailable
+from artek_buddy.db.history import HistoryStore
+from artek_buddy.db.shaping import (
+    DEFAULT_PAGE_SIZE,
 )
-from artek_buddy.memory_gateway import GatewayClient
-from artek_buddy.memory_hub import MemoryHub, should_persist_ask
-from artek_buddy.subagents import SubagentError, SubagentService
 from artek_buddy.runtime import (
     AgentRuntime,
-    AgentRuntimeError,
-    ProductStreamEvent,
-    RunRecord,
-    open_runtime,
-    runtime_kind,
 )
-from artek_buddy.stream import accumulate
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
-from fastapi import FastAPI
 
 MAX_INBOX = 20
 
@@ -129,6 +39,7 @@ def current_app() -> FastAPI:
     from artek_buddy.main import app
 
     return app
+
 
 def runtime() -> AgentRuntime:
     return current_app().state.runtime
@@ -262,7 +173,9 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
         status = record.status_for(bot.id, bot.computer_mode, history.busy_bot_name(record, bot.id))
     run = history.latest_run(bot.id)
     pending = None
-    run_status = getattr(getattr(run, "status", None), "value", None) or getattr(run, "status", None)
+    run_status = getattr(getattr(run, "status", None), "value", None) or getattr(
+        run, "status", None
+    )
     if run is not None and run_status == "waiting_input":
         pending = history.pending_auto_consent_id(bot.id, run.id)
     return ThreadSnapshot(
@@ -286,4 +199,3 @@ def _computer_http(err: Exception) -> HTTPException:
     if isinstance(err, ComputerError):
         return HTTPException(status_code=400, detail=str(err))
     return HTTPException(status_code=500, detail=str(err))
-

@@ -18,7 +18,11 @@ from cursor_sdk import (
 
 from artek_buddy.config import Settings
 from artek_buddy.runtime.base import RuntimeBase
-from artek_buddy.runtime.cursor_wait import describe_cursor_wait, log_cursor_wait, note_auth_failures
+from artek_buddy.runtime.cursor_wait import (
+    describe_cursor_wait,
+    log_cursor_wait,
+    note_auth_failures,
+)
 from artek_buddy.runtime.tools import ProductTools
 from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord
 from artek_buddy.stream import map_cursor_event
@@ -148,7 +152,9 @@ class CursorRuntime(RuntimeBase):
             return agent_id
         if agent_id:
             try:
-                agent = await self.client.agents.resume(agent_id, self._agent_options(bot_id, role=role))
+                agent = await self.client.agents.resume(
+                    agent_id, self._agent_options(bot_id, role=role)
+                )
                 live_id = agent.agent_id or agent_id
                 self._agents[live_id] = agent
                 self._locks.setdefault(live_id, asyncio.Lock())

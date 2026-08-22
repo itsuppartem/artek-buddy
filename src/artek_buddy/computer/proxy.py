@@ -66,7 +66,9 @@ def fetch_novnc(url: str, method: str) -> Response:
             # connections. Keep the original iframe request open for this small
             # startup window instead of serving a transient 502 JSON page.
             last_err = err
-            time.sleep(min(SCREEN_STARTUP_RETRY_INTERVAL_SECONDS, max(0.0, deadline - time.monotonic())))
+            time.sleep(
+                min(SCREEN_STARTUP_RETRY_INTERVAL_SECONDS, max(0.0, deadline - time.monotonic()))
+            )
     log.warning("screen unreachable: %s", last_err)
     return Response(
         content=SCREEN_UNREACHABLE_HTML,
@@ -101,7 +103,9 @@ async def proxy_novnc_ws(websocket: WebSocket, secret: str) -> None:
         await websocket.close(code=1011)
         raise HTTPException(status_code=500, detail="screen proxy unavailable") from err
     try:
-        async with websockets.connect(upstream_url, ping_interval=None, open_timeout=10) as upstream:
+        async with websockets.connect(
+            upstream_url, ping_interval=None, open_timeout=10
+        ) as upstream:
             await websocket.accept()
 
             async def down() -> None:

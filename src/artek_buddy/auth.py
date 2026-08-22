@@ -53,7 +53,7 @@ def derive_supervisor_token(host_token: str) -> str:
     The host token itself must not authenticate to :7091. A leaked supervisor
     token also cannot be reversed back into AGENT_HTTP_TOKEN.
     """
-    return hashlib.sha256(f"supervisor:{host_token}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"supervisor:{host_token}".encode()).hexdigest()
 
 
 def supervisor_token(host_token: str, explicit: str = "") -> str:

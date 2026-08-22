@@ -18,7 +18,9 @@ def test_unique_inbox_path_does_not_overwrite(tmp_path) -> None:
 
 
 def test_user_file_blocks_include_text_and_file() -> None:
-    blocks = user_file_blocks("hello", [{"id": "art_1", "name": "a.png", "mime_type": "image/png", "size": 3}])
+    blocks = user_file_blocks(
+        "hello", [{"id": "art_1", "name": "a.png", "mime_type": "image/png", "size": 3}]
+    )
     kinds = [block["kind"] for block in blocks]
     assert kinds == ["text", "file"]
     assert blocks[1]["artifact_id"] == "art_1"

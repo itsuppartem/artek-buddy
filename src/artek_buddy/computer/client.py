@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
 
@@ -65,7 +65,9 @@ class SupervisorClient:
     def destroy(self, provider_ref: str) -> None:
         self._request("DELETE", f"/computers/{provider_ref}")
 
-    def screen_mode(self, provider_ref: str, interactive: bool, control_token: str | None) -> SandboxBox:
+    def screen_mode(
+        self, provider_ref: str, interactive: bool, control_token: str | None
+    ) -> SandboxBox:
         return _box(
             self._request(
                 "POST",
@@ -151,7 +153,9 @@ class FakeSupervisorClient:
         self.boxes.pop(provider_ref, None)
         self.calls.append(("destroy", provider_ref))
 
-    def screen_mode(self, provider_ref: str, interactive: bool, control_token: str | None) -> SandboxBox:
+    def screen_mode(
+        self, provider_ref: str, interactive: bool, control_token: str | None
+    ) -> SandboxBox:
         if provider_ref not in self.boxes:
             raise RuntimeError("not found")
         box = self.boxes[provider_ref]
@@ -213,7 +217,13 @@ class FakeSupervisorClient:
 
     def list_files(self, provider_ref: str, path: str = "/") -> dict[str, Any]:
         files = (self.boxes.get(provider_ref) or {}).get("files") or {}
-        return {"path": path, "entries": [{"path": name, "kind": "file", "size": len(content)} for name, content in files.items()]}
+        return {
+            "path": path,
+            "entries": [
+                {"path": name, "kind": "file", "size": len(content)}
+                for name, content in files.items()
+            ],
+        }
 
     def write_file(self, provider_ref: str, path: str, content: str) -> dict[str, Any]:
         box = self.boxes.setdefault(provider_ref, {"files": {}})

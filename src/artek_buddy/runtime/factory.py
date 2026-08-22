@@ -32,6 +32,7 @@ async def open_runtime(
     if not (settings.cursor_api_key or "").strip():
         raise AgentRuntimeError("CURSOR_API_KEY is required for the cursor runtime")
     from cursor_sdk import AsyncClient
+
     from artek_buddy.runtime.cursor import CursorRuntime
 
     async with await AsyncClient.launch_bridge(workspace=settings.agent_cwd) as client:

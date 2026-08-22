@@ -129,9 +129,7 @@ def format_subagent_context(rows: list[Any]) -> str | None:
     if not rows:
         return None
     ordered = sorted(rows, key=lambda item: int(_row_field(item, "index") or 0))
-    lines = [
-        "Current subagents in this chat. The user may ask about them by number, name, or id."
-    ]
+    lines = ["Current subagents in this chat. The user may ask about them by number, name, or id."]
     for item in ordered:
         index = _row_field(item, "index")
         name = _row_field(item, "name")
@@ -188,13 +186,17 @@ def compact_thread_context(
     skip = exclude_ids or set()
     lines: list[str] = []
     for message in messages:
-        ident = getattr(message, "id", None) or (message.get("id") if isinstance(message, dict) else None)
+        ident = getattr(message, "id", None) or (
+            message.get("id") if isinstance(message, dict) else None
+        )
         if ident and ident in skip:
             continue
         role = _message_role(message)
         if role not in {"user", "bot"}:
             continue
-        text = " ".join(part for part in (_block_text(block) for block in _message_blocks(message)) if part)
+        text = " ".join(
+            part for part in (_block_text(block) for block in _message_blocks(message)) if part
+        )
         if not text:
             continue
         lines.append(f"{role}: {text}")
@@ -314,7 +316,7 @@ def wrap_turn_prompt(
         parts.append(inbox_context)
     if reply_excerpt:
         who = reply_role or "message"
-        parts.append(f"The user is replying to this {who}:\n\"\"\"\n{reply_excerpt}\n\"\"\"")
+        parts.append(f'The user is replying to this {who}:\n"""\n{reply_excerpt}\n"""')
     parts.append(user_text)
     return "\n\n".join(parts)
 

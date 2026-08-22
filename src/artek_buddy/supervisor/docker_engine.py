@@ -162,7 +162,7 @@ def shell_path(path: str) -> str:
 
 
 def published_port(inspect: dict[str, Any], container_port: str) -> int | None:
-    ports = ((inspect.get("NetworkSettings") or {}).get("Ports") or {})
+    ports = (inspect.get("NetworkSettings") or {}).get("Ports") or {}
     bindings = ports.get(f"{container_port}/tcp") or []
     if not bindings:
         return None

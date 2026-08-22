@@ -1,61 +1,16 @@
 from __future__ import annotations
 
 import logging
-from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
-from typing import Any, Iterator
+from typing import Any
 
-from psycopg import InterfaceError, OperationalError
-from psycopg.errors import UniqueViolation
-from psycopg.rows import dict_row
-from psycopg.types.json import Json
-from psycopg_pool import ConnectionPool, PoolTimeout
-
-from artek_buddy.auth import (
-    PAIRING_TTL_SECONDS,
-    hash_secret,
-    new_device_token,
-    new_pairing_code,
-    normalize_pairing_code,
-)
 from artek_buddy.contracts.domain import (
-    Artifact,
     Bot,
-    Device,
-    DeviceCreated,
-    MemoryDocument,
-    PairingCode,
-    Routine,
-    Run,
     Subagent,
-    ThreadMessage,
-    ThreadMessagePage,
 )
-from artek_buddy.contracts.ids import DEFAULT_BOT_COLOR, MemoryScope, RunStatus
-from artek_buddy.cron import CronError, next_run_at, parse_cron, validate_timezone
-from artek_buddy.contracts.events import MessageReplyRef, MessageRole
-from artek_buddy.db.connection import MIGRATIONS_DIR, DatabaseUnavailable
-from artek_buddy.memory import (
-    MAX_MEMORY_CONTENT_CHARS,
-    MemoryConflict,
-    MemoryPathError,
-    normalize_memory_path,
-)
-from artek_buddy.memory_hub import MemoryEntry, entry_path, normalize_kind, shelf_from_path
-from artek_buddy.computer.models import ComputerRecord
 from artek_buddy.db.shaping import (
-    DEFAULT_PAGE_SIZE,
-    DEFAULT_WORKSPACE_ID,
-    answer_ask_blocks,
     isoformat_utc,
     new_id,
-    next_seq,
-    older_cursor,
     parse_iso,
-    pick_color,
-    preview_snippet,
-    text_blocks,
-    blocks_text,
 )
 
 log = logging.getLogger("artek_buddy")

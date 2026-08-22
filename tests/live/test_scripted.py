@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-
 from tests.live.helpers import create_named_bot, pair_fresh, send_message, unique_bot
 
 pytestmark = pytest.mark.live

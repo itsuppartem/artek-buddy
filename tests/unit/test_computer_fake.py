@@ -137,8 +137,9 @@ def test_fetch_novnc_caps_urlopen_timeout_to_deadline(monkeypatch) -> None:
 
 
 def test_wipe_computer_home_rejects_escape(tmp_path) -> None:
-    from artek_buddy.computer.service import ComputerError
     import pytest
+
+    from artek_buddy.computer.service import ComputerError
 
     with pytest.raises(ComputerError):
         wipe_computer_home(tmp_path, "../escape")

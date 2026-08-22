@@ -40,7 +40,9 @@ class SubagentService:
             raise SubagentError("task cannot be empty")
         if self.store.running_subagent_count(bot.id) >= MAX_SUBAGENTS:
             raise SubagentError("too many subagents are already running")
-        record = self.store.create_subagent(bot, name=name, task=task_text, parent_run_id=parent_run_id)
+        record = self.store.create_subagent(
+            bot, name=name, task=task_text, parent_run_id=parent_run_id
+        )
         self._emit(bot, record)
         self._schedule(record.id, self._run(bot, record.id, mode="start"))
         return record
@@ -127,7 +129,9 @@ class SubagentService:
             return
         live = bot
         try:
-            session_id = record.cursor_agent_id if mode == "steer" and record.cursor_agent_id else None
+            session_id = (
+                record.cursor_agent_id if mode == "steer" and record.cursor_agent_id else None
+            )
             if not session_id:
                 session_id = await self.runtime.create_session(
                     name=record.name,
@@ -136,11 +140,14 @@ class SubagentService:
                     role="subagent",
                 )
             self.runtime.bind_agent_bot(session_id, live.id)
-            record = self.store.update_subagent(
-                sub_id,
-                status="running",
-                cursor_agent_id=session_id,
-            ) or record
+            record = (
+                self.store.update_subagent(
+                    sub_id,
+                    status="running",
+                    cursor_agent_id=session_id,
+                )
+                or record
+            )
             self._emit(live, record)
             self.runtime.set_current_turn_context(
                 live.id,

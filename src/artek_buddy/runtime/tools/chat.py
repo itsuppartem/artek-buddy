@@ -1,39 +1,19 @@
 from __future__ import annotations
 
-import base64
-import logging
 import mimetypes
 import shutil
+from pathlib import Path
 from typing import Any
 
-from pathlib import Path
-
-from artek_buddy.consent import (
-    CLASS_BROWSE,
-    CLASS_OWNER_EXEC,
-    CLASS_OWNER_READ,
-    CLASS_OWNER_WRITE,
-    CLASS_PAGE,
-    OWNER_HOME_SCOPE,
-    browse_origin,
-    owner_command_is_readonly,
-)
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.db.shaping import isoformat_utc, new_id
 from artek_buddy.runtime.tools.common import (
-    CONSENT_DONE,
     MAX_INLINE_FILE_BYTES,
     MAX_SEND_FILE_BYTES,
-    PAGE_KINDS,
     _is_under,
-    _playwright_browser_command,
     _safe_filename,
-    _with_consent,
-    emit_computer_event,
-    format_owner_steer,
     log,
 )
-from artek_buddy.runtime.tools.specs import TOOL_SPECS, ToolSpec
 
 
 class ChatToolsMixin:
@@ -148,7 +128,9 @@ class ChatToolsMixin:
             return {"ok": False, "error": "text is required"}
         raw_options = args.get("options")
         if isinstance(raw_options, list) and raw_options:
-            actions = [{"id": f"opt_{i+1}", "label": str(opt)} for i, opt in enumerate(raw_options)]
+            actions = [
+                {"id": f"opt_{i + 1}", "label": str(opt)} for i, opt in enumerate(raw_options)
+            ]
             blocks = [
                 {
                     "kind": "ask",
@@ -270,7 +252,7 @@ class ChatToolsMixin:
         raw_options = args.get("options") or []
         if not isinstance(raw_options, list) or not raw_options:
             return {"ok": False, "error": "options list is required"}
-        actions = [{"id": f"opt_{i+1}", "label": str(opt)} for i, opt in enumerate(raw_options)]
+        actions = [{"id": f"opt_{i + 1}", "label": str(opt)} for i, opt in enumerate(raw_options)]
         detail = str(args.get("detail") or "").strip() or None
         blocks = [
             {
@@ -282,4 +264,3 @@ class ChatToolsMixin:
             }
         ]
         return self._append_bot_blocks(args, bound_bot_id, blocks)
-

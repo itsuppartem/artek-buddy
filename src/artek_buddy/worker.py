@@ -6,7 +6,7 @@ import os
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
@@ -76,7 +76,7 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
             store.ack_routine(routine.id)
             log.info("routine skipped busy id=%s", routine.id)
         else:
-            retry = datetime.now(timezone.utc) + timedelta(seconds=RETRY_SECONDS)
+            retry = datetime.now(UTC) + timedelta(seconds=RETRY_SECONDS)
             store.reschedule_routine(routine.id, isoformat_utc(retry))
             log.warning("routine wake failed id=%s status=%s", routine.id, status)
     for bot_id in store.due_idle_computer_bots():
@@ -89,7 +89,9 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
 
 
 def worker() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     url = os.environ.get(
         "DATABASE_URL",
         "postgresql://artek:artek@127.0.0.1:5432/artek_buddy",

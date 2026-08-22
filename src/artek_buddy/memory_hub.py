@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from artek_buddy.memory import MAX_AGENT_MEMORY_BYTES, _byte_length, _truncate_utf8
@@ -30,9 +30,7 @@ MAX_RECALL = 8
 _TOKEN = re.compile(r"[a-zа-яё0-9]{2,}", re.IGNORECASE)
 _INBOX = "The user sent these messages"
 _FORGET = re.compile(r"(?i)\b(forget|забудь|не помни|stop remembering)\b")
-_ONE_OFF = re.compile(
-    r"(?i)\b(open|открой|вкладк|tab|gmail|url|http|сейчас|this time|once)\b"
-)
+_ONE_OFF = re.compile(r"(?i)\b(open|открой|вкладк|tab|gmail|url|http|сейчас|this time|once)\b")
 _DURABLE_ASK = re.compile(
     r"(?i)\b(city|город|name|зовут|timezone|часовой|prefer|язык|language|где жив)\b"
 )
@@ -143,7 +141,9 @@ class Extracted:
 
 class MemoryGateway(Protocol):
     def capture(self, entry: MemoryEntry, user_id: str, agent_id: str | None) -> None: ...
-    def recall(self, user_id: str, query: str, agent_id: str | None, limit: int) -> list[MemoryEntry]: ...
+    def recall(
+        self, user_id: str, query: str, agent_id: str | None, limit: int
+    ) -> list[MemoryEntry]: ...
     def delete(self, entry_id: str) -> None: ...
 
 
@@ -151,7 +151,9 @@ class NullGateway:
     def capture(self, entry: MemoryEntry, user_id: str, agent_id: str | None) -> None:
         return None
 
-    def recall(self, user_id: str, query: str, agent_id: str | None, limit: int) -> list[MemoryEntry]:
+    def recall(
+        self, user_id: str, query: str, agent_id: str | None, limit: int
+    ) -> list[MemoryEntry]:
         return []
 
     def delete(self, entry_id: str) -> None:
@@ -168,7 +170,9 @@ class InMemoryGateway:
         self.entries = [item for item in self.entries if item.id != entry.id]
         self.entries.append(entry)
 
-    def recall(self, user_id: str, query: str, agent_id: str | None, limit: int) -> list[MemoryEntry]:
+    def recall(
+        self, user_id: str, query: str, agent_id: str | None, limit: int
+    ) -> list[MemoryEntry]:
         wanted = query_tokens(query)
         hits = [
             entry
@@ -209,8 +213,8 @@ def is_expired(entry: MemoryEntry, now: datetime | None = None) -> bool:
     except ValueError:
         return False
     if stamp.tzinfo is None:
-        stamp = stamp.replace(tzinfo=timezone.utc)
-    return stamp <= (now or datetime.now(timezone.utc))
+        stamp = stamp.replace(tzinfo=UTC)
+    return stamp <= (now or datetime.now(UTC))
 
 
 def tokens(text: str) -> set[str]:
@@ -262,7 +266,7 @@ def infer_until(text: str, shelf: str, slot: str | None) -> str | None:
     if shelf == "owner" and slot in PROFILE_SLOTS:
         return None
     blob = text or ""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if re.search(r"(?i)\b(this week|на этой неделе)\b", blob):
         return (now + timedelta(days=7)).isoformat()
     if re.search(r"(?i)\b(today|сегодня)\b", blob):
@@ -334,17 +338,17 @@ def profile_entries(live: list[MemoryEntry]) -> list[MemoryEntry]:
             continue
         if entry.slot in PROFILE_SLOTS and entry.slot not in by_slot:
             by_slot[entry.slot] = entry
-        elif entry.kind == "rule" and entry.slot not in PROFILE_SLOTS and len(rules) < MAX_PROFILE_RULES:
+        elif (
+            entry.kind == "rule"
+            and entry.slot not in PROFILE_SLOTS
+            and len(rules) < MAX_PROFILE_RULES
+        ):
             rules.append(entry)
     return [by_slot[name] for name in PROFILE_SLOTS if name in by_slot] + rules
 
 
 def charter_entries(live: list[MemoryEntry], bot_id: str) -> list[MemoryEntry]:
-    rows = [
-        entry
-        for entry in live
-        if entry.shelf == "charter" and entry.bot_id in {None, bot_id}
-    ]
+    rows = [entry for entry in live if entry.shelf == "charter" and entry.bot_id in {None, bot_id}]
     return rows[:MAX_CHARTER]
 
 
@@ -432,7 +436,9 @@ def extract_unwritten_memories(
 class MemoryHub:
     """Postgres is the panel source of truth. The gateway is a search index."""
 
-    def __init__(self, store: Any, gateway: MemoryGateway | None = None, user_id: str = "owner") -> None:
+    def __init__(
+        self, store: Any, gateway: MemoryGateway | None = None, user_id: str = "owner"
+    ) -> None:
         self.store = store
         self.gateway = gateway or NullGateway()
         self.user_id = user_id
@@ -576,7 +582,11 @@ class MemoryHub:
         return deleted
 
     def context_for_turn(self, bot_id: str, query: str) -> str | None:
-        live = [entry for entry in self.store.list_live_memory_entries(bot_id=bot_id) if not is_expired(entry)]
+        live = [
+            entry
+            for entry in self.store.list_live_memory_entries(bot_id=bot_id)
+            if not is_expired(entry)
+        ]
         leftover = self._orphan_documents(bot_id, live)
         owner = profile_entries(live)
         charter = charter_entries(live, bot_id)
@@ -584,7 +594,11 @@ class MemoryHub:
         wanted = query_tokens(query)
         work: list[MemoryEntry] = []
         if wanted:
-            pool = [entry for entry in live + leftover if entry.shelf == "work" or entry.kind in {"project", "workflow"}]
+            pool = [
+                entry
+                for entry in live + leftover
+                if entry.shelf == "work" or entry.kind in {"project", "workflow"}
+            ]
             work = rank_entries(pool or leftover, query)[:MAX_WORK]
             try:
                 extra = self.gateway.recall(self.user_id, query, bot_id, MAX_RECALL)
@@ -644,7 +658,9 @@ class MemoryHub:
             leftover.append(
                 MemoryEntry(
                     id=document.id,
-                    scope=document.scope.value if hasattr(document.scope, "value") else str(document.scope),
+                    scope=document.scope.value
+                    if hasattr(document.scope, "value")
+                    else str(document.scope),
                     kind="preference",
                     text=str(document.content or "")[:120],
                     source="document",
@@ -654,7 +670,9 @@ class MemoryHub:
             )
         return leftover
 
-    def extract_after_turn(self, user_text: str, run_id: str | None, bot_id: str | None) -> list[MemoryEntry]:
+    def extract_after_turn(
+        self, user_text: str, run_id: str | None, bot_id: str | None
+    ) -> list[MemoryEntry]:
         saved: list[MemoryEntry] = []
         for item in extract_unwritten_memories(user_text, self.slots_during(run_id)):
             entry = self.capture(

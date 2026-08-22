@@ -136,7 +136,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._observe(cid, body)
                     return
                 if action == "actions":
-                    code, text = STATE.engine.exec(cid, action_command(list(body.get("actions") or [])))
+                    code, text = STATE.engine.exec(
+                        cid, action_command(list(body.get("actions") or []))
+                    )
                     self._json(200, {"ok": code == 0, "output": text})
                     return
                 if action == "exec":
@@ -146,7 +148,9 @@ class Handler(BaseHTTPRequestHandler):
                 if action == "input":
                     code, text = STATE.engine.exec(
                         cid,
-                        input_command(str(body.get("kind") or "click"), dict(body.get("payload") or {})),
+                        input_command(
+                            str(body.get("kind") or "click"), dict(body.get("payload") or {})
+                        ),
                     )
                     self._json(200, {"ok": code == 0, "output": text})
                     return
@@ -277,7 +281,9 @@ class Handler(BaseHTTPRequestHandler):
         for line in text.splitlines():
             name = line.strip()
             if name and name != "missing":
-                entries.append({"path": name, "kind": "dir" if not name.isdigit() else "file", "size": 0})
+                entries.append(
+                    {"path": name, "kind": "dir" if not name.isdigit() else "file", "size": 0}
+                )
         self._json(200, {"path": rel, "entries": entries, "ok": code == 0})
 
 
@@ -286,7 +292,9 @@ def serve(host: str = "127.0.0.1", port: int = 7091) -> ThreadingHTTPServer:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     host = os.environ.get("SUPERVISOR_HOST", "127.0.0.1")
     port = int(os.environ.get("SUPERVISOR_PORT", "7091") or 7091)
     httpd = serve(host, port)

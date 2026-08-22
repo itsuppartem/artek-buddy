@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import threading
 from pathlib import Path
 
@@ -18,6 +17,7 @@ def _has_gtk_window() -> bool:
 def _gtk_parent() -> object | None:
     with _WINDOW_LOCK:
         return _GTK_WINDOWS[0] if _GTK_WINDOWS else None
+
 
 def _gtk_choose_save_path(name: str) -> Path | None:
     from gi.repository import GLib, Gtk
@@ -62,6 +62,7 @@ def _gtk_choose_save_path(name: str) -> Path | None:
         return None
     return chosen[0]
 
+
 def _icon_candidates() -> list[Path]:
     here = Path(__file__).resolve().parent
     return [
@@ -101,6 +102,7 @@ def apply_window_icon(window: object) -> None:
             name_setter("artek-buddy")
         except Exception:
             pass
+
 
 def _notify_text(value: object, limit: int) -> str:
     return " ".join(str(value or "").split())[:limit]
@@ -151,4 +153,3 @@ def _on_gtk_active(window: object, *_args: object) -> None:
     is_active = getattr(window, "is_active", None)
     if callable(is_active) and is_active():
         _apply_urgency(False)
-

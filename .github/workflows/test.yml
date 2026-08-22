@@ -16,6 +16,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
+
+      - name: Ruff and mypy
+        run: |
+          set +x
+          python -m pip install -r requirements-dev.txt
+          python -m ruff format --check src tests client
+          python -m ruff check src tests client
+          python -m mypy
+
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -40,17 +64,19 @@ jobs:
       SANDBOX_PROVIDER: fake
       CURSOR_API_KEY: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -60,7 +86,14 @@ jobs:
         run: |
           set +x
           python -m pip install -r requirements-dev.txt
-          python -m pytest tests/unit tests/api tests/client
+          python -m ruff format --check src tests client
+          python -m ruff check src tests client
+          python -m mypy
+          python -m pytest tests/unit tests/api tests/client \
+            --cov=artek_buddy --cov-branch \
+            --cov-report=term --cov-report=xml \
+            --cov-fail-under=56
+          python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
           (cd client/web && npm ci && npm run check)
 
   ui:
@@ -72,17 +105,19 @@ jobs:
       COMPOSE_FILE: docker-compose.ci.yml
       SANDBOX_PROVIDER: fake
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -116,7 +151,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/artek-data" "$RUNNER_TEMP/artek-workspace" "$RUNNER_TEMP/owner-home/Downloads"
           printf 'ci notes\n' > "$RUNNER_TEMP/owner-home/notes.txt"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('requirements-dev.txt') }}
@@ -254,17 +289,19 @@ jobs:
       COMPOSE_FILE: docker-compose.ci.yml
       SANDBOX_PROVIDER: docker
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -303,7 +340,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/artek-data" "$RUNNER_TEMP/artek-workspace" "$RUNNER_TEMP/owner-home/Downloads"
           printf 'ci notes\n' > "$RUNNER_TEMP/owner-home/notes.txt"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('requirements-dev.txt') }}

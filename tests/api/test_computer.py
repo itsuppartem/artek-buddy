@@ -78,7 +78,9 @@ def test_computer_files_and_path_jail(client, auth_header) -> None:
     listed = client.get(f"/v1/computer/{bot_id}/files", headers=auth_header)
     assert listed.status_code == 200
     assert "entries" in listed.json()
-    escaped = client.get(f"/v1/computer/{bot_id}/files", headers=auth_header, params={"path": "../secret"})
+    escaped = client.get(
+        f"/v1/computer/{bot_id}/files", headers=auth_header, params={"path": "../secret"}
+    )
     assert escaped.status_code == 400
     missing = client.get(
         f"/v1/computer/{bot_id}/files/read",

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from artek_buddy.bus import HEARTBEAT, REPLAY_GAP, EventHub
 from tests.api.helpers import create_bot, wait_run
+
+from artek_buddy.bus import HEARTBEAT, REPLAY_GAP, EventHub
 
 
 async def _workspace_one_frame(self, heartbeat_s: float = 15.0):
     yield HEARTBEAT
 
 
-async def _thread_replay_then_stop(self, bot_id: str, after: str | None = None, heartbeat_s: float = 15.0):
+async def _thread_replay_then_stop(
+    self, bot_id: str, after: str | None = None, heartbeat_s: float = 15.0
+):
     yield HEARTBEAT
     if after and not self.has_event(bot_id, after):
         yield REPLAY_GAP
