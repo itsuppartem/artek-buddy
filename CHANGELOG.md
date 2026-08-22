@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.10.27] - 2026-08-22
+
 ### Changed
 - README and CONTRIBUTING match GitHub Releases: the client `.deb` is attached after `test` on `main` is green. Local `client/build-deb.sh` is optional.
 - `client/artek_buddy.py` is the entrypoint. Pairing, loopback proxy, notifications, and the GTK window live in sibling modules; `build-deb.sh` ships them next to the entry.

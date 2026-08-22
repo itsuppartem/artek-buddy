@@ -223,8 +223,8 @@ Verify a downloaded Release:
 
 ```bash
 sha256sum -c SHA256SUMS
-gh attestation verify artek-buddy-client_0.10.26_all.deb --repo itsuppartem/artek-buddy
-gh attestation verify oci://ghcr.io/itsuppartem/artek-buddy:0.10.26 --repo itsuppartem/artek-buddy
+gh attestation verify artek-buddy-client_0.10.27_all.deb --repo itsuppartem/artek-buddy
+gh attestation verify oci://ghcr.io/itsuppartem/artek-buddy:0.10.27 --repo itsuppartem/artek-buddy
 ```
 
 Attestations exist on Releases published after this landed. Older tags have checksums only. The computer image is **not** built in Actions (QEMU Chromium hangs); `install-host.sh` builds it on the Pi when GHCR has no tag.
@@ -251,7 +251,7 @@ Local builds stay in the repo root (gitignored). Copy the file to the desktop PC
 On the desktop PC:
 
 ```bash
-sudo dpkg -i artek-buddy-client_0.10.26_all.deb
+sudo dpkg -i artek-buddy-client_0.10.27_all.deb
 sudo apt-get install -f
 ```
 
@@ -300,7 +300,7 @@ The worker (`artek-buddy-worker`) wakes due routines through the same `threads.s
 
 ## Version
 
-`0.10.26` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
+`0.10.27` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
 
 Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel hostnames, local compose (`docker-compose.local.yml`), or local tooling.
 
