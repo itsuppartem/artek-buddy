@@ -301,7 +301,7 @@ Tests run in Actions on every pull request and on pushes to `develop` and `main`
 | Job | What |
 | --- | --- |
 | `quality` | Ruff format + lint, mypy (baseline codes). No Postgres. |
-| `backend` | same Ruff/mypy, then pytest host + HTTP API (`AGENT_RUNTIME=scripted`) + `.deb` proxy unit tests + coverage + `tsc` |
+| `backend` | same Ruff/mypy, then pytest host + HTTP API (`AGENT_RUNTIME=scripted`) + `.deb` proxy unit tests + coverage + Biome + Vitest + `tsc` |
 | `ui` | always. Built `.deb` + `--serve` against a scripted host (no Cursor key). Pairing, boot/thread errors, sidebar, bots, memory, routines, scripted chat / fail / consent |
 | `live` | only if `CURSOR_API_KEY` is set. Same `.deb`, real computer image, Grok turns (reply + Allow/Deny browse) |
 

@@ -31,6 +31,15 @@ python -m ruff check src tests client
 python -m mypy
 ```
 
+Window TypeScript (from `client/web`):
+
+```bash
+npm ci
+npm run lint
+npm test
+npm run check
+```
+
 ## Linux client package
 
 GitHub Releases attach `artek-buddy-client_<version>_all.deb` (no baked host URL)

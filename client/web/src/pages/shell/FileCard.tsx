@@ -1,44 +1,7 @@
-import {
-  type MouseEvent,
-  type RefObject,
-  type SyntheticEvent,
-  useEffect,
-  useState,
-} from "react";
-import { api } from "../../api";
-import { completeOwnerConsent, fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../../lib/consent";
-import { previewKind } from "../../lib/uploads";
-import { isCronShape } from "../../lib/cron";
-import {
-  computerLabel,
-  computerModeHint,
-  computerPaneState,
-  embeddableScreenUrl,
-  overlayPointerEvents,
-  previewPointerEvents,
-  screenIframeSandbox,
-  screenTargetKey,
-} from "../../lib/screen";
-import { ChatMarkdown } from "../../lib/chat-markdown";
+import { useState } from "react";
 import { artifactUrl, DownloadCancelled, downloadArtifact, formatBytes } from "../../lib/files";
-import { stripMarkdown } from "../../lib/markdown";
-import {
-  isComputerStatusEvent,
-  reduceComputerStatus,
-  reduceThreadSnapshot,
-} from "../../lib/thread-events";
-import type {
-  Bot,
-  ComputerMode,
-  ComputerStatus,
-  ProductEvent,
-  MemoryDocument,
-  Routine,
-  ThreadMessage,
-  ThreadSnapshot,
-} from "../../types";
-import { BotAvatar } from "../../ui/bot-avatar";
-import { Button } from "../../ui/button";
+import { previewKind } from "../../lib/uploads";
+import type { ThreadMessage } from "../../types";
 
 export type FileBlock = Extract<ThreadMessage["blocks"][number], { kind: "file" }>;
 
@@ -70,7 +33,9 @@ export function FileCard({ block }: { block: FileBlock }) {
       data-testid="file-card"
       className="min-w-0 max-w-[74%] rounded-[20px] border border-[#242428] bg-[#141417] px-5 py-[17px]"
     >
-      <div className="break-words [overflow-wrap:anywhere] text-[15.5px] font-medium leading-[1.4] text-[#ECECEE]">{block.name}</div>
+      <div className="break-words [overflow-wrap:anywhere] text-[15.5px] font-medium leading-[1.4] text-[#ECECEE]">
+        {block.name}
+      </div>
       <div className="mt-1 text-[13px] text-[#85858A]">{formatBytes(block.size)}</div>
       {kind === "image" && preview ? (
         <img
@@ -101,7 +66,10 @@ export function FileCard({ block }: { block: FileBlock }) {
         {busy ? "Choose where…" : "Download"}
       </button>
       {saved ? (
-        <div data-testid="file-saved" className="mt-2 break-words [overflow-wrap:anywhere] text-[13px] text-[#4ECB71]">
+        <div
+          data-testid="file-saved"
+          className="mt-2 break-words [overflow-wrap:anywhere] text-[13px] text-[#4ECB71]"
+        >
           Saved to {saved}
         </div>
       ) : null}

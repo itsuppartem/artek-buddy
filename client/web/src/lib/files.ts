@@ -31,7 +31,10 @@ function rethrowSaveError(err: unknown): never {
   throw err;
 }
 
-export async function downloadArtifact(artifactId: string, name: string): Promise<{ path: string }> {
+export async function downloadArtifact(
+  artifactId: string,
+  name: string,
+): Promise<{ path: string }> {
   if (!artifactId) {
     throw new Error("Could not download that file");
   }

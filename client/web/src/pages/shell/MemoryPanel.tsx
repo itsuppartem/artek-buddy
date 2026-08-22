@@ -1,44 +1,6 @@
-import {
-  type MouseEvent,
-  type RefObject,
-  type SyntheticEvent,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
-import { completeOwnerConsent, fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../../lib/consent";
-import { previewKind } from "../../lib/uploads";
-import { isCronShape } from "../../lib/cron";
-import {
-  computerLabel,
-  computerModeHint,
-  computerPaneState,
-  embeddableScreenUrl,
-  overlayPointerEvents,
-  previewPointerEvents,
-  screenIframeSandbox,
-  screenTargetKey,
-} from "../../lib/screen";
-import { ChatMarkdown } from "../../lib/chat-markdown";
-import { artifactUrl, DownloadCancelled, downloadArtifact, formatBytes } from "../../lib/files";
-import { stripMarkdown } from "../../lib/markdown";
-import {
-  isComputerStatusEvent,
-  reduceComputerStatus,
-  reduceThreadSnapshot,
-} from "../../lib/thread-events";
-import type {
-  Bot,
-  ComputerMode,
-  ComputerStatus,
-  ProductEvent,
-  MemoryDocument,
-  Routine,
-  ThreadMessage,
-  ThreadSnapshot,
-} from "../../types";
-import { BotAvatar } from "../../ui/bot-avatar";
+import type { MemoryDocument } from "../../types";
 import { Button } from "../../ui/button";
 
 export function memoryShelf(path: string): string {
@@ -54,7 +16,13 @@ export function memoryTitle(document: MemoryDocument): string {
   return line || memoryKind(document.path) || document.path;
 }
 
-export function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text: string) => void }) {
+export function MemoryPanel({
+  botId,
+  onLater,
+}: {
+  botId: string;
+  onLater: (text: string) => void;
+}) {
   const [documents, setDocuments] = useState<MemoryDocument[]>([]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -155,9 +123,15 @@ export function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text:
       <div className="mt-[30px] mb-3 flex items-center justify-between">
         <div>
           <span className="text-[14px] text-[#85858A]">Memory</span>
-          <div className="mt-0.5 text-[12px] text-[#6C6C70]">Owner, work, and this bot — written from chat</div>
+          <div className="mt-0.5 text-[12px] text-[#6C6C70]">
+            Owner, work, and this bot — written from chat
+          </div>
         </div>
-        <button type="button" onClick={() => void exportMarkdown()} className="text-[12.5px] text-[#85858A]">
+        <button
+          type="button"
+          onClick={() => void exportMarkdown()}
+          className="text-[12.5px] text-[#85858A]"
+        >
           Export
         </button>
       </div>
@@ -170,7 +144,9 @@ export function MemoryPanel({ botId, onLater }: { botId: string; onLater: (text:
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="line-clamp-2 text-[14.5px] text-[#ECECEE]">{memoryTitle(document)}</div>
+                <div className="line-clamp-2 text-[14.5px] text-[#ECECEE]">
+                  {memoryTitle(document)}
+                </div>
                 <div className="mt-0.5 text-[12px] text-[#6C6C70]">
                   {memoryShelf(document.path)}
                   {` · ${document.scope === "user" ? "shared" : "this bot"}`}

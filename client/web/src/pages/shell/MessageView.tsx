@@ -1,39 +1,9 @@
-import {
-  type MouseEvent,
-  type RefObject,
-  type SyntheticEvent,
-  useEffect,
-  useState,
-} from "react";
+import type { MouseEvent } from "react";
 import { api } from "../../api";
-import { completeOwnerConsent, fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../../lib/consent";
-import { previewKind } from "../../lib/uploads";
-import { isCronShape } from "../../lib/cron";
-import {
-  computerLabel,
-  computerModeHint,
-  computerPaneState,
-  embeddableScreenUrl,
-  overlayPointerEvents,
-  previewPointerEvents,
-  screenIframeSandbox,
-  screenTargetKey,
-} from "../../lib/screen";
 import { ChatMarkdown } from "../../lib/chat-markdown";
-import { artifactUrl, DownloadCancelled, downloadArtifact, formatBytes } from "../../lib/files";
 import { stripMarkdown } from "../../lib/markdown";
 import { isHiddenLiveDraft } from "../../lib/thread-events";
-import type {
-  Bot,
-  ComputerMode,
-  ComputerStatus,
-  ProductEvent,
-  MemoryDocument,
-  Routine,
-  ThreadMessage,
-  ThreadSnapshot,
-} from "../../types";
-import { BotAvatar } from "../../ui/bot-avatar";
+import type { ThreadMessage } from "../../types";
 import { Button } from "../../ui/button";
 import { AskCard } from "./AskCard";
 import { FileCard } from "./FileCard";
@@ -204,9 +174,7 @@ export function MessageView({
                 </span>
               </div>
               {block.title ? (
-                <div className="mt-2 text-[14.5px] leading-[1.5] text-[#A8A8AD]">
-                  {block.title}
-                </div>
+                <div className="mt-2 text-[14.5px] leading-[1.5] text-[#A8A8AD]">{block.title}</div>
               ) : null}
             </button>
           );
@@ -256,14 +224,7 @@ export function MessageView({
           );
         }
         if (block.kind === "ask") {
-          return (
-            <AskCard
-              key={index}
-              block={block}
-              canAnswer={canAnswer}
-              onAnswer={onAnswer}
-            />
-          );
+          return <AskCard key={index} block={block} canAnswer={canAnswer} onAnswer={onAnswer} />;
         }
         if (block.kind === "computer") {
           const waiting =

@@ -87,7 +87,7 @@ export function reduceThreadSnapshot(
     const autoId =
       event.payload.auto === true && typeof event.payload.consentId === "string"
         ? event.payload.consentId
-        : prev.pendingAutoConsentId ?? null;
+        : (prev.pendingAutoConsentId ?? null);
     return {
       ...prev,
       cursor: event.seq,
@@ -256,7 +256,10 @@ export function reduceComputerStatus(
     return { ...prev, controlHolder: "user" };
   }
   if (event.type === "computer.takeover.released" || event.type === "computer.takeover.requested") {
-    return { ...prev, controlHolder: event.type === "computer.takeover.requested" ? "none" : "bot" };
+    return {
+      ...prev,
+      controlHolder: event.type === "computer.takeover.requested" ? "none" : "bot",
+    };
   }
   const status = event.payload.status ?? event.payload.state;
   const holder = event.payload.controlHolder ?? event.payload.control_holder;
@@ -299,13 +302,9 @@ function isComputerState(value: unknown): value is ComputerStatus["state"] {
   return computerStates.has(value as ComputerStatus["state"]);
 }
 
-const subagentStatuses = new Set<NonNullable<Extract<MessageBlock, { kind: "subagent" }>["status"]>>([
-  "queued",
-  "running",
-  "completed",
-  "failed",
-  "cancelled",
-]);
+const subagentStatuses = new Set<
+  NonNullable<Extract<MessageBlock, { kind: "subagent" }>["status"]>
+>(["queued", "running", "completed", "failed", "cancelled"]);
 
 function subagentStatus(value: unknown): Extract<MessageBlock, { kind: "subagent" }>["status"] {
   const text = str(value);
@@ -328,7 +327,9 @@ export function mergeSubagentCards(
   const cards = items
     .slice()
     .sort((left, right) => left.index - right.index)
-    .map((item, offset) => subagentMessage(item, prevSeq.get(`subagent:${item.id}`) ?? snap.cursor + offset + 1));
+    .map((item, offset) =>
+      subagentMessage(item, prevSeq.get(`subagent:${item.id}`) ?? snap.cursor + offset + 1),
+    );
   const rest = snap.messages.filter((message) => !message.id.startsWith("subagent:"));
   return { ...snap, messages: [...rest, ...cards].sort((left, right) => left.seq - right.seq) };
 }
