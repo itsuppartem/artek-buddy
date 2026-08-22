@@ -2,7 +2,8 @@
 
 Artek Buddy is a self-hosted personal agent. Treat the Raspberry Pi host
 as the trust boundary: anyone who can call `:8080` with a valid token can
-drive bots, memory, routines, and desktop sandboxes.
+drive bots, memory, routines, and desktop sandboxes. The written model is
+[THREAT-MODEL.md](THREAT-MODEL.md).
 
 ## Report a vulnerability
 
