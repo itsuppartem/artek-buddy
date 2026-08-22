@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-venv \
     curl \
   && rm -rf /var/lib/apt/lists/* \
-  && python3 -m pip install --break-system-packages --no-cache-dir playwright \
+  && python3 -m pip install --break-system-packages --no-cache-dir playwright==1.55.0 \
   && mkdir -p /etc/artek/fluxbox \
   && printf '%s\n' '#!/bin/sh' 'exec xsetroot -solid "#111113" "$@"' > /usr/bin/fbsetbg \
   && chmod +x /usr/bin/fbsetbg \

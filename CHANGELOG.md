@@ -10,6 +10,7 @@
 - `client/web` has Biome lint and Vitest on pure helpers (`npm run lint` / `npm test`), wired next to `tsc` on the `backend` job.
 - Dependabot (pip, npm, Actions, Docker), CodeQL, pip-audit, `npm audit --audit-level=high`, and Trivy (filesystem on `test`, host image on `release`). Third-party Actions are pinned by commit SHA.
 - `THREAT-MODEL.md` names the host / supervisor / sandbox / pairing boundary, including `:8080` on `0.0.0.0` and Funnel residual risk.
+- Computer boxes keep image-default root (uid 1000 failed the live Chromium canary). They get `CapDrop: ALL`, 1536 MiB / 1 CPU / 512 pids, tmpfs `/tmp`. Playwright in the computer image is pinned to `1.55.0`. Chromium stays `--no-sandbox --disable-setuid-sandbox`; the rootfs stays writable.
 
 ## [0.10.26] - 2026-08-21
 
