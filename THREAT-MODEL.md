@@ -84,6 +84,8 @@ tailnet, or Tailscale **Serve** instead of Funnel. Funnel still publishes the
 route on that hostname does too, including pairing and tokens.
 
 OpenAPI is off at runtime (`docs_url=None`, `openapi_url=None` in `main.py`).
+CI dumps `app.openapi()` into `client/web/openapi.json` for TypeScript types;
+that file is not served.
 
 ## Table
 

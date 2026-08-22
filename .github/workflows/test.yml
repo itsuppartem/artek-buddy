@@ -102,7 +102,10 @@ jobs:
             --cov-report=term --cov-report=xml \
             --cov-fail-under=56
           python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
-          (cd client/web && npm ci && npm audit --audit-level=high && npm run lint && npm test && npm run check)
+          PYTHONPATH=src python -m artek_buddy.openapi_export
+          (cd client/web && npm ci && npm run generate:openapi)
+          git diff --exit-code -- client/web/openapi.json client/web/src/generated/openapi.d.ts
+          (cd client/web && npm audit --audit-level=high && npm run lint && npm test && npm run check)
 
   scan:
     runs-on: ubuntu-latest

@@ -2,12 +2,22 @@ import { camelize, snakify } from "./camel";
 import type { LocalStatus, PairedDevice } from "./lib/pairing";
 import type {
   Bot,
+  ComputerFileContent,
   ComputerFileList,
   ComputerStatus,
+  ConsentJob,
+  DeploymentSettings,
+  HealthResponse,
+  MarkdownExport,
+  Me,
   MemoryDocument,
+  OkResponse,
   ProductEvent,
   Routine,
+  ScreenUrlResult,
   Subagent,
+  TakeoverResult,
+  TestRunResult,
   ThreadMessagePage,
   ThreadSendResult,
   ThreadSnapshot,
@@ -185,26 +195,15 @@ export const api = {
   },
   consents: {
     get(consentId: string) {
-      return request<{
-        id: string;
-        actionClass: string;
-        status: string;
-        path?: string | null;
-        command?: string | null;
-        cwd?: string | null;
-        kind?: string | null;
-        text?: string | null;
-        contentBase64?: string | null;
-        summary?: string | null;
-      }>("GET", `/v1/consents/${encodeURIComponent(consentId)}`);
+      return request<ConsentJob>("GET", `/v1/consents/${encodeURIComponent(consentId)}`);
     },
     answer(consentId: string, decision: string) {
-      return request<{ ok: boolean }>("POST", `/v1/consents/${encodeURIComponent(consentId)}`, {
+      return request<OkResponse>("POST", `/v1/consents/${encodeURIComponent(consentId)}`, {
         decision,
       });
     },
     uploadFile(consentId: string, input: { name: string; text?: string; contentBase64?: string }) {
-      return request<{ ok: boolean }>(
+      return request<OkResponse>(
         "POST",
         `/v1/consents/${encodeURIComponent(consentId)}/file`,
         input,
@@ -226,7 +225,7 @@ export const api = {
         error?: string;
       },
     ) {
-      return request<{ ok: boolean }>(
+      return request<OkResponse>(
         "POST",
         `/v1/consents/${encodeURIComponent(consentId)}/result`,
         input,
@@ -234,7 +233,7 @@ export const api = {
     },
   },
   health() {
-    return request<{ ok: boolean; agentId?: string; db?: boolean }>("GET", "/health");
+    return request<HealthResponse>("GET", "/health");
   },
   memory: {
     list(botId: string) {
@@ -250,10 +249,10 @@ export const api = {
       return request<MemoryDocument>("PATCH", `/v1/memory/${documentId}`, { content });
     },
     remove(documentId: string) {
-      return request<{ ok: boolean }>("DELETE", `/v1/memory/${documentId}`);
+      return request<OkResponse>("DELETE", `/v1/memory/${documentId}`);
     },
     exportMarkdown(botId: string) {
-      return request<{ markdown: string }>(
+      return request<MarkdownExport>(
         "GET",
         `/v1/memory/export?bot_id=${encodeURIComponent(botId)}`,
       ).then((data) => data.markdown ?? "");
@@ -291,59 +290,27 @@ export const api = {
       return request<Routine>("PATCH", `/v1/routines/${routineId}`, input);
     },
     remove(routineId: string) {
-      return request<{ ok: boolean }>("DELETE", `/v1/routines/${routineId}`);
+      return request<OkResponse>("DELETE", `/v1/routines/${routineId}`);
     },
     testRun(routineId: string) {
-      return request<{ routineId: string; taskId: string; runId: string; seq: number }>(
-        "POST",
-        `/v1/routines/${routineId}/test`,
-      );
+      return request<TestRunResult>("POST", `/v1/routines/${routineId}/test`);
     },
   },
   me: {
     get() {
-      return request<{
-        userId: string;
-        email: string;
-        name: string;
-        workspaceId: string;
-        isDeploymentOwner: boolean;
-        needsModel: boolean;
-        defaultProvider?: string | null;
-        defaultModel?: string | null;
-        computerHost?: "docker" | "host" | null;
-        canChooseHostComputer: boolean;
-      }>("GET", "/v1/me");
+      return request<Me>("GET", "/v1/me");
     },
   },
   deployment: {
     get() {
-      return request<{
-        ownerUserId?: string | null;
-        signupsEnabled: boolean;
-        signupAllowlist: string[];
-        hasDeploymentModelCredential: boolean;
-        defaultProvider?: string | null;
-        defaultModel?: string | null;
-        computerHost?: "docker" | "host" | null;
-        canChooseHostComputer: boolean;
-      }>("GET", "/v1/deployment");
+      return request<DeploymentSettings>("GET", "/v1/deployment");
     },
     update(patch: {
       signupsEnabled?: boolean;
       signupAllowlist?: string[];
       computerHost?: "docker" | "host" | null;
     }) {
-      return request<{
-        ownerUserId?: string | null;
-        signupsEnabled: boolean;
-        signupAllowlist: string[];
-        hasDeploymentModelCredential: boolean;
-        defaultProvider?: string | null;
-        defaultModel?: string | null;
-        computerHost?: "docker" | "host" | null;
-        canChooseHostComputer: boolean;
-      }>("PATCH", "/v1/deployment", patch);
+      return request<DeploymentSettings>("PATCH", "/v1/deployment", patch);
     },
   },
   bots: {
@@ -385,14 +352,14 @@ export const api = {
       return request<Bot>("PATCH", `/v1/bots/${botId}`, patch);
     },
     archive(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/bots/${botId}/archive`);
+      return request<OkResponse>("POST", `/v1/bots/${botId}/archive`);
     },
     restore(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/bots/${botId}/restore`);
+      return request<OkResponse>("POST", `/v1/bots/${botId}/restore`);
     },
     remove(botId: string, deleteMemories: boolean = false) {
       const query = deleteMemories ? "?delete_memories=true" : "";
-      return request<{ ok: boolean }>("DELETE", `/v1/bots/${botId}${query}`);
+      return request<OkResponse>("DELETE", `/v1/bots/${botId}${query}`);
     },
   },
   subagents: {
@@ -425,22 +392,19 @@ export const api = {
       return request<ComputerStatus>("POST", `/v1/computer/${botId}/reset`);
     },
     takeover(botId: string) {
-      return request<{ leaseId: string; expiresAt: string }>(
-        "POST",
-        `/v1/computer/${botId}/takeover`,
-      );
+      return request<TakeoverResult>("POST", `/v1/computer/${botId}/takeover`);
     },
     release(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/computer/${botId}/release`);
+      return request<OkResponse>("POST", `/v1/computer/${botId}/release`);
     },
     input(botId: string, body: { kind: string; payload: Record<string, unknown> }) {
-      return request<{ ok: boolean }>("POST", `/v1/computer/${botId}/input`, body);
+      return request<OkResponse>("POST", `/v1/computer/${botId}/input`, body);
     },
     heartbeat(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/computer/${botId}/heartbeat`);
+      return request<OkResponse>("POST", `/v1/computer/${botId}/heartbeat`);
     },
     screenUrl(botId: string) {
-      return request<{ url: string | null }>("GET", `/v1/computer/${botId}/screen`);
+      return request<ScreenUrlResult>("GET", `/v1/computer/${botId}/screen`);
     },
     files(botId: string, path = "", hidden = false) {
       const query = new URLSearchParams();
@@ -450,7 +414,7 @@ export const api = {
       return request<ComputerFileList>("GET", `/v1/computer/${botId}/files${suffix}`);
     },
     readFile(botId: string, path: string) {
-      return request<{ path: string; content: string }>(
+      return request<ComputerFileContent>(
         "GET",
         `/v1/computer/${botId}/files/read?path=${encodeURIComponent(path)}`,
       );
@@ -491,16 +455,16 @@ export const api = {
       );
     },
     stop(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/threads/${botId}/stop`);
+      return request<OkResponse>("POST", `/v1/threads/${botId}/stop`);
     },
     followUp(botId: string, text: string) {
-      return request<{ ok: boolean }>("POST", `/v1/threads/${botId}/follow-up`, { text });
+      return request<OkResponse>("POST", `/v1/threads/${botId}/follow-up`, { text });
     },
     markRead(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/threads/${botId}/read`);
+      return request<OkResponse>("POST", `/v1/threads/${botId}/read`);
     },
     markUnread(botId: string) {
-      return request<{ ok: boolean }>("POST", `/v1/threads/${botId}/unread`);
+      return request<OkResponse>("POST", `/v1/threads/${botId}/unread`);
     },
     async *subscribe(
       botId: string,

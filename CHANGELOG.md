@@ -13,6 +13,7 @@
 - `THREAT-MODEL.md` names the host / supervisor / sandbox / pairing boundary, including `:8080` on `0.0.0.0` and Funnel residual risk.
 - Computer boxes keep image-default root (uid 1000 failed the live Chromium canary). They get `CapDrop: ALL`, 1536 MiB / 1 CPU / 512 pids, tmpfs `/tmp`. Playwright in the computer image is pinned to `1.55.0`. Chromium stays `--no-sandbox --disable-setuid-sandbox`; the rootfs stays writable.
 - `ARCHITECTURE.md` and `adr/0001`–`0007` record the running Compose trade-offs (supervisor socket, Team/Private, scripted vs Cursor, Compose, SQL migrations, consent cards, bind/Funnel).
+- CI dumps the FastAPI schema (`python -m artek_buddy.openapi_export`) and generates `client/web/src/generated/openapi.d.ts`. `/docs` stays off. Dirty schema/types fail `backend`.
 
 ## [0.10.26] - 2026-08-21
 
