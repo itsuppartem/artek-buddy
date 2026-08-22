@@ -24,7 +24,12 @@ Postgres. Do not print `CURSOR_API_KEY`, host tokens, or
 
 ## Linux client package
 
-Owners build their own `.deb`. CI does not attach one.
+GitHub Releases attach `artek-buddy-client_<version>_all.deb` (no baked host URL)
+after a `VERSION` bump on `main` when `test` on that commit is green
+(`release.yml` is `workflow_run` on `test`). The `test` workflow builds a
+`.deb` for Playwright; it does not upload that artifact.
+
+You can still build a local package (unreleased tree, or `ARTEK_BAKE_URL=1`):
 
 ```bash
 client/build-deb.sh
@@ -38,8 +43,8 @@ Build on a machine with Node 22. Install on Debian/Ubuntu. Do not commit `*.deb`
 
 - `.env`, `client/token`, `client/url`, `*.deb`, `data/`, `docs/`,
   `docker-compose.local.yml`, Funnel hostnames, tailnet or LAN IPs
-- Packaged owner clients. CI does not attach a `.deb`; each owner builds
-  their own.
+- Packaged owner clients. Releases attach a clean `.deb`; do not commit
+  a local build.
 
 ## Pull requests
 

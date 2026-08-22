@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+- README and CONTRIBUTING match GitHub Releases: the client `.deb` is attached after `test` on `main` is green. Local `client/build-deb.sh` is optional.
+
 ## [0.10.26] - 2026-08-21
 
 ### Fixed
