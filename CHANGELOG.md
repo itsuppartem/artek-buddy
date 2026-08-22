@@ -4,6 +4,7 @@
 
 ### Changed
 - README and CONTRIBUTING match GitHub Releases: the client `.deb` is attached after `test` on `main` is green. Local `client/build-deb.sh` is optional.
+- `client/artek_buddy.py` is the entrypoint. Pairing, loopback proxy, notifications, and the GTK window live in sibling modules; `build-deb.sh` ships them next to the entry.
 
 ### Added
 - `pyproject.toml` is the Python tool config (Ruff, mypy, pytest, coverage). CI `quality` and `backend` jobs run Ruff + mypy; `backend` records pytest-cov on the Actions summary and fails under 56% (measured on this change).
