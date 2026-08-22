@@ -63,6 +63,7 @@ known-first-party = ["artek_buddy"]
 python_version = "3.13"
 mypy_path = "src"
 packages = ["artek_buddy"]
+plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 # Baseline 2026-08-22: 205 errors, almost all mixin/Protocol attr-defined.
 # Tighten these codes in a later PR; do not silently re-enable a failing tree.
