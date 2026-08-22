@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 CLIENT_DIR = Path(__file__).resolve().parents[2] / "client"
@@ -29,6 +30,10 @@ def test_deb_script_installs_artek_icon() -> None:
     assert "client/assets/app-icon.png" in text
     assert "owner_paths.py" in text
     assert "window_chrome.py" in text
+    assert "pairing.py" in text
+    assert "proxy.py" in text
+    assert "notifications.py" in text
+    assert "window.py" in text
 
 
 def test_bundled_icon_path_finds_source_tree(client_mod) -> None:
@@ -45,10 +50,11 @@ def test_notify_passes_bundled_icon(client_mod, monkeypatch) -> None:
         seen["cmd"] = list(cmd)
         return None
 
+    notify_mod = sys.modules["notifications"]
     monkeypatch.delenv("ARTEK_BUDDY_NOTIFY", raising=False)
-    monkeypatch.setattr(client_mod.shutil, "which", lambda _name: "/usr/bin/notify-send")
-    monkeypatch.setattr(client_mod.subprocess, "run", fake_run)
-    monkeypatch.setattr(client_mod, "_apply_urgency", lambda *_args: None)
+    monkeypatch.setattr(notify_mod.shutil, "which", lambda _name: "/usr/bin/notify-send")
+    monkeypatch.setattr(notify_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(notify_mod, "_apply_urgency", lambda *_args: None)
     client_mod._desktop_notify("Hello", "Body", "normal")
     cmd = seen["cmd"]
     icon_args = [item for item in cmd if str(item).startswith("--icon=")]
