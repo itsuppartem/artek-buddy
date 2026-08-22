@@ -44,3 +44,12 @@ before posting a write-up.
    changed to print env or upload traces.
 5. Rebuild `artek-buddy-computer:local` after you pull a computer-image
    change, then recreate running desktops so they join `artek-computers`.
+
+## What CI scans
+
+Dependabot (pip, `client/web` npm, GitHub Actions, Docker bases), CodeQL
+(Python and JavaScript), `pip-audit` and `npm audit --audit-level=high` on
+`test.yml`, Trivy filesystem on `test.yml` (`scan` job), Trivy image on
+`release.yml` after the host image is pushed (CRITICAL, ignore unfixed).
+Known exceptions live in `.github/pip-audit-ignore.txt` and `.trivyignore`.
+Third-party Actions are pinned by commit SHA.
