@@ -34,6 +34,9 @@ from owner_paths import (
     owner_downloads_dir,
     unique_download_dest,
 )
+from owner_paths import (
+    resolve_owner_path as resolve_owner_path,
+)
 from window_chrome import (
     _apply_urgency,
     _gtk_choose_save_path,
@@ -45,6 +48,9 @@ from window_chrome import (
     _unregister_window,
     apply_window_icon,
     notify_icon_args,
+)
+from window_chrome import (
+    bundled_icon_path as bundled_icon_path,
 )
 
 WEB_ROOTS = (
