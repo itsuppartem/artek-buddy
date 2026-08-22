@@ -8,6 +8,7 @@
 ### Added
 - `pyproject.toml` is the Python tool config (Ruff, mypy, pytest, coverage). CI `quality` and `backend` jobs run Ruff + mypy; `backend` records pytest-cov on the Actions summary and fails under 56% (measured on this change).
 - `client/web` has Biome lint and Vitest on pure helpers (`npm run lint` / `npm test`), wired next to `tsc` on the `backend` job.
+- Dependabot (pip, npm, Actions, Docker), CodeQL, pip-audit, `npm audit --audit-level=high`, and Trivy (filesystem on `test`, host image on `release`). Third-party Actions are pinned by commit SHA.
 
 ## [0.10.26] - 2026-08-21
 
