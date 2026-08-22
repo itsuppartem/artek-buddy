@@ -15,12 +15,10 @@ if str(_CLIENT_DIR) not in sys.path:
     sys.path.insert(0, str(_CLIENT_DIR))
 
 from notifications import _desktop_notify as _desktop_notify
-from owner_paths import (
-    _owner_path_status as _owner_path_status,
-    inspect_owner_path as inspect_owner_path,
-    resolve_owner_path as resolve_owner_path,
-    unique_download_dest as unique_download_dest,
-)
+from owner_paths import _owner_path_status as _owner_path_status
+from owner_paths import inspect_owner_path as inspect_owner_path
+from owner_paths import resolve_owner_path as resolve_owner_path
+from owner_paths import unique_download_dest as unique_download_dest
 from pairing import _load_token, _load_url, _log
 from pairing import pairing_url_allowed as pairing_url_allowed
 from proxy import proxy_origin_allowed as proxy_origin_allowed
