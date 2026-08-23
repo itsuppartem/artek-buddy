@@ -244,16 +244,11 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "the owner released the desktop" in hay:
         return [scripted_finish("continuing after takeover")]
-    if "e2e-park-takeover" in hay:
+    if "e2e-park-takeover" in hay or "e2e-takeover" in hay:
         return [
             scripted_tool("request_takeover", reason=E2E_TAKEOVER_REASON),
             scripted_delay(E2E_HANG_S),
             scripted_finish("should not finish"),
-        ]
-    if "e2e-takeover" in hay:
-        return [
-            ScriptedStep(event=("computer.takeover.requested", {})),
-            scripted_finish("need you"),
         ]
     if "e2e-load-earlier" in hay:
         return [

@@ -226,6 +226,21 @@ export function ShellPage() {
     setAttention((current) => (shouldReplaceAttention(current, next) ? next : current));
   }
 
+  function flushHeldAlerts() {
+    const viewing = activeIdRef.current || botIdRef.current || null;
+    for (const [id, held] of [...pendingAlerts.current.entries()]) {
+      if (id === viewing) continue;
+      pendingAlerts.current.delete(id);
+      dispatchAlert(held.alert, held.key, held.notifyOnFinish);
+    }
+  }
+
+  function openBot(id: string) {
+    activeIdRef.current = id;
+    botIdRef.current = id;
+    navigate(`/app/${id}`);
+  }
+
   function dismissAttention(alert: AttentionAlert | null = attention) {
     if (alert) {
       dismissedAlerts.current.add(attentionFingerprint(alert));
@@ -253,6 +268,7 @@ export function ShellPage() {
       dismissedAlerts.current.add(`${bot.id}:ask:${answered}`);
       pendingAlerts.current.delete(bot.id);
     }
+    flushHeldAlerts();
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
     if (incoming.type === "run.started") {
       const stored = prevBotsRef.current.get(bot.id);
@@ -265,12 +281,7 @@ export function ShellPage() {
   considerEventRef.current = considerEvent;
 
   useEffect(() => {
-    const viewing = active?.id ?? null;
-    for (const [id, held] of [...pendingAlerts.current.entries()]) {
-      if (id === viewing) continue;
-      pendingAlerts.current.delete(id);
-      dispatchAlert(held.alert, held.key, held.notifyOnFinish);
-    }
+    flushHeldAlerts();
   }, [active?.id]);
 
   useEffect(() => {
@@ -1054,7 +1065,7 @@ export function ShellPage() {
                   data-bot-id={bot.id}
                   data-bot-name={bot.name}
                   aria-label={`Open chat ${bot.name}`}
-                  onClick={() => navigate(`/app/${bot.id}`)}
+                  onClick={() => openBot(bot.id)}
                   onContextMenu={(event) => {
                     event.preventDefault();
                     setContextMenu({

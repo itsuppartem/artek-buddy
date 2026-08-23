@@ -86,8 +86,8 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert len([step for step in older if step.blocks]) == E2E_OLDER_COUNT
 
     takeover = steps_for_prompt("please e2e-takeover")
-    assert takeover[0].event is not None
-    assert takeover[0].event[0] == "computer.takeover.requested"
+    assert takeover[0].tool == "request_takeover"
+    assert not any(step.result == "need you" for step in takeover)
 
     parked = steps_for_prompt("please e2e-park-takeover")
     assert parked[0].tool == "request_takeover"
