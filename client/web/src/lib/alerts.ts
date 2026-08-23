@@ -190,6 +190,9 @@ export function shouldReplaceAttention(
   next: AttentionAlert,
 ): boolean {
   if (!current) return true;
+  if ((current.kind === "takeover" || current.kind === "ask") && next.kind === "replied") {
+    return false;
+  }
   const delta = urgencyRank[next.urgency] - urgencyRank[current.urgency];
   if (delta !== 0) return delta > 0;
   const nextAt = Date.parse(next.at);

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { ProductEvent } from "../types";
 import {
   allowAlert,
+  attentionFromBotChange,
   attentionFromEvent,
+  type BotAlertSnapshot,
   isHistoricalEvent,
+  shouldReplaceAttention,
   shouldSendDesktopAlert,
 } from "./alerts";
 
@@ -77,5 +80,72 @@ describe("isHistoricalEvent", () => {
     const opened = Date.parse("2026-01-01T00:00:00Z");
     expect(isHistoricalEvent(event({ type: "run.completed" }), opened + 1)).toBe(true);
     expect(isHistoricalEvent(event({ type: "run.completed" }), opened - 1)).toBe(false);
+  });
+});
+
+function botSnap(over: Partial<BotAlertSnapshot>): BotAlertSnapshot {
+  return {
+    id: "bot-a",
+    name: "Need",
+    status: "idle",
+    unread: false,
+    preview: "",
+    updatedAt: "2026-01-01T00:00:00Z",
+    ...over,
+  };
+}
+
+describe("shouldReplaceAttention", () => {
+  it("does not let a later replied alert replace takeover", () => {
+    const takeover = attentionFromEvent(
+      event({ type: "computer.takeover.requested", createdAt: "2026-01-01T00:00:00Z" }),
+      "Need",
+    );
+    const replied = attentionFromEvent(
+      event({ type: "run.completed", createdAt: "2026-01-01T00:00:01Z" }),
+      "Need",
+    );
+    expect(takeover?.title).toBe("Need needs you");
+    expect(replied?.title).toBe("Need replied");
+    expect(takeover && replied && shouldReplaceAttention(takeover, replied)).toBe(false);
+  });
+
+  it("replaces replied with a later takeover", () => {
+    const replied = attentionFromEvent(event({ type: "run.completed" }), "Need");
+    const takeover = attentionFromEvent(
+      event({ type: "computer.takeover.requested", createdAt: "2026-01-01T00:00:02Z" }),
+      "Need",
+    );
+    expect(replied && takeover && shouldReplaceAttention(replied, takeover)).toBe(true);
+  });
+});
+
+describe("attentionFromBotChange", () => {
+  it("raises takeover when the bot enters waiting_takeover", () => {
+    const alert = attentionFromBotChange(
+      botSnap({ status: "running" }),
+      botSnap({
+        status: "waiting_takeover",
+        unread: true,
+        preview: "need you",
+        updatedAt: "2026-01-01T00:00:02Z",
+      }),
+    );
+    expect(alert?.kind).toBe("takeover");
+    expect(alert?.title).toBe("Need needs you");
+  });
+
+  it("does not emit replied while the bot stays waiting_takeover", () => {
+    expect(
+      attentionFromBotChange(
+        botSnap({ status: "waiting_takeover", unread: false }),
+        botSnap({
+          status: "waiting_takeover",
+          unread: true,
+          preview: "need you",
+          updatedAt: "2026-01-01T00:00:02Z",
+        }),
+      ),
+    ).toBeNull();
   });
 });

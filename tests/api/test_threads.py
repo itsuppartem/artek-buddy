@@ -111,6 +111,20 @@ def test_stop_does_not_complete_cancelled_body(client, auth_header) -> None:
     assert E2E_SLOW_ANSWER not in message_texts(later.json())
 
 
+def test_e2e_takeover_parks_waiting_takeover(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "TakeoverPark")["id"]
+    parked = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-takeover"},
+    )
+    assert parked.status_code == 200
+    run_id = parked.json()["run_id"]
+    snap = wait_run_status(client, auth_header, bot_id, run_id, "waiting_takeover")
+    assert snap["run"]["status"] == "waiting_takeover"
+    assert "need you" not in message_texts(snap)
+
+
 def test_send_while_waiting_takeover_starts_turn(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "TakeoverSend")["id"]
     parked = client.post(
