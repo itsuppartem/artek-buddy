@@ -16,7 +16,7 @@ the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 4. Do not add a second model provider. Cursor Cloud is the live runtime.
 5. Do not add a vendor cloud desktop or a laptop sandbox.
 
-CI is `.github/workflows/test.yml`: `quality` (Ruff + mypy + pip-audit), `backend`
+CI is `.github/workflows/test.yml` on PRs into `develop`/`main` and on pushes to those branches: `quality` (Ruff + mypy + pip-audit), `backend`
 (pytest + coverage + `npm audit --audit-level=high`, no Docker desktop), `scan`
 (Trivy filesystem), `ui` (scripted `.deb` window),
 and optional `live` (Grok, needs the Actions secret). CodeQL is

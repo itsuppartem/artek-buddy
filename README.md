@@ -308,7 +308,7 @@ Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel host
 
 **CI tests the same packaged `.deb` owners install**, not a development server. The `ui` job builds the Debian package, installs it, and drives `--serve` with Playwright.
 
-Tests run in Actions on every pull request and on pushes to `develop` and `main`. They do **not** run on this Pi and must not use the live `:8080` stack or owner Postgres.
+Tests run in Actions on pull requests into `develop` and `main`, and on pushes to those branches (`workflow_dispatch` still works). They do **not** run on this Pi and must not use the live `:8080` stack or owner Postgres.
 
 | Job | What |
 | --- | --- |
