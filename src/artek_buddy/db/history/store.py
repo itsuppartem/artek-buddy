@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -17,9 +18,17 @@ from artek_buddy.db.sql_split import split_sql_statements
 
 log = logging.getLogger("artek_buddy")
 
+# Session lock so host API and worker cannot apply the same file at once.
+# Advisory key space is not a secret; 872451 is this product's schema_migrations.
+MIGRATION_LOCK_KEY = 872451
+
 
 class InboxFullError(Exception):
     pass
+
+
+class MigrationChecksumError(ValueError):
+    """A recorded migration file no longer matches the sha256 stored at apply."""
 
 
 class HistoryStoreCore:
@@ -83,30 +92,58 @@ class HistoryStoreCore:
     def apply_migrations(self) -> None:
         files = sorted(MIGRATIONS_DIR.glob("*.sql"))
         with self._conn() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS schema_migrations (
-                    id TEXT PRIMARY KEY,
-                    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                )
-                """
-            )
-            conn.commit()
-            applied = {
-                row["id"] for row in conn.execute("SELECT id FROM schema_migrations").fetchall()
-            }
-            for path in files:
-                if path.name in applied:
-                    continue
-                sql = path.read_text(encoding="utf-8")
-                for statement in split_sql_statements(sql):
-                    conn.execute(statement)
+            conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,)).fetchone()
+            try:
                 conn.execute(
-                    "INSERT INTO schema_migrations (id) VALUES (%s)",
-                    (path.name,),
+                    """
+                    CREATE TABLE IF NOT EXISTS schema_migrations (
+                        id TEXT PRIMARY KEY,
+                        applied_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                        checksum TEXT NOT NULL DEFAULT ''
+                    )
+                    """
+                )
+                conn.execute(
+                    "ALTER TABLE schema_migrations "
+                    "ADD COLUMN IF NOT EXISTS checksum TEXT NOT NULL DEFAULT ''"
                 )
                 conn.commit()
-                log.info("applied migration %s", path.name)
+                recorded = {
+                    row["id"]: row["checksum"] or ""
+                    for row in conn.execute("SELECT id, checksum FROM schema_migrations").fetchall()
+                }
+                for path in files:
+                    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                    if path.name in recorded:
+                        previous = recorded[path.name]
+                        if previous and previous != digest:
+                            raise MigrationChecksumError(
+                                f"migration {path.name} checksum mismatch: "
+                                f"recorded {previous}, file {digest}"
+                            )
+                        if not previous:
+                            conn.execute(
+                                "UPDATE schema_migrations SET checksum = %s WHERE id = %s",
+                                (digest, path.name),
+                            )
+                            conn.commit()
+                        continue
+                    sql = path.read_text(encoding="utf-8")
+                    for statement in split_sql_statements(sql):
+                        conn.execute(statement)
+                    conn.execute(
+                        "INSERT INTO schema_migrations (id, checksum) VALUES (%s, %s)",
+                        (path.name, digest),
+                    )
+                    conn.commit()
+                    log.info("applied migration %s", path.name)
+            finally:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,)).fetchone()
+                conn.commit()
 
     def ensure_workspace(self) -> None:
         with self._conn() as conn:
