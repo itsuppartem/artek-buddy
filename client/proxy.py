@@ -79,11 +79,17 @@ def proxy_origin_allowed(origin: str | None, fetch_site: str | None, proxy_port:
     return _origin_is_this_proxy(origin, proxy_port)
 
 
-def local_rpc_origin_allowed(origin: str | None, fetch_site: str | None, proxy_port: int) -> bool:
+def local_rpc_origin_allowed(
+    origin: str | None,
+    fetch_site: str | None,
+    proxy_port: int,
+    *,
+    require_origin: bool = True,
+) -> bool:
     if (fetch_site or "").lower() == "cross-site":
         return False
     if not origin:
-        return False
+        return not require_origin
     return _origin_is_this_proxy(origin, proxy_port)
 
 
@@ -186,7 +192,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(403, "forbidden")
             return False
         if not local_rpc_origin_allowed(
-            self.headers.get("Origin"), self.headers.get("Sec-Fetch-Site"), port
+            self.headers.get("Origin"),
+            self.headers.get("Sec-Fetch-Site"),
+            port,
+            require_origin=mutating,
         ):
             self.send_error(403, "forbidden")
             return False

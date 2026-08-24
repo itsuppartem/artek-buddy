@@ -53,6 +53,14 @@ def _no_wildcard_cors(headers: list[tuple[str, str]]) -> None:
 
 def test_local_rpc_origin_requires_loopback_origin(client_mod) -> None:
     assert client_mod.local_rpc_origin_allowed(None, "same-origin", 7777) is False
+    assert (
+        client_mod.local_rpc_origin_allowed(None, "same-origin", 7777, require_origin=False)
+        is True
+    )
+    assert (
+        client_mod.local_rpc_origin_allowed(None, "cross-site", 7777, require_origin=False)
+        is False
+    )
     assert client_mod.local_rpc_origin_allowed("http://127.0.0.1:7777", "same-origin", 7777) is True
     assert client_mod.local_rpc_origin_allowed("http://evil.example", "same-origin", 7777) is False
     assert client_mod.local_rpc_origin_allowed("http://127.0.0.1:7777", "cross-site", 7777) is False
@@ -181,12 +189,23 @@ def test_status_issues_nonce_only_to_this_origin(
             blank = HTTPConnection("127.0.0.1", port, timeout=5)
             blank.request("GET", "/local/status")
             missing = blank.getresponse()
-            missing.read()
+            missing_body = json.loads(missing.read().decode("utf-8"))
             blank.close()
+            cross = HTTPConnection("127.0.0.1", port, timeout=5)
+            cross.request(
+                "GET",
+                "/local/status",
+                headers={"Sec-Fetch-Site": "cross-site"},
+            )
+            crossed = cross.getresponse()
+            crossed.read()
+            cross.close()
         finally:
             ok.close()
             denied.close()
     assert good.status == 200
     assert payload["nonce"] == httpd.local_nonce
     assert bad.status == 403
-    assert missing.status == 403
+    assert missing.status == 200
+    assert missing_body["nonce"] == httpd.local_nonce
+    assert crossed.status == 403
