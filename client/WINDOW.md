@@ -19,11 +19,11 @@ flowchart LR
 │ New bot        │ attention plate + Dismiss      │ Preview · view  │
 │ bot rows       │ thread / empty / create        │ Open / Take /   │
 │ Archived       │ composer strip  Attach Send    │ Rel             │
-│ You (label)    │ Stop while a run is live       │ Memory Routines │
+│ You → Models   │ Stop while a run is live       │ Memory Routines │
 └────────────────┴────────────────────────────────┴─────────────────┘
 ```
 
-The computer pane and Settings overlay sit on the right of the same shell. Settings on the pane opens Settings; closing Settings returns to the pane. Create opened while the pane is up returns to the pane after Create or Cancel. Release does not close the pane. Fullscreen screen is a separate overlay. Settings does **not** boot. Offline • Click to start boots and takes control.
+The computer pane, Models, and Settings overlay sit on the right of the same shell. Settings on the pane opens Settings; closing Settings returns to the pane. Create opened while the pane is up returns to the pane after Create or Cancel. Models opened while the computer pane is up returns to the pane on Close. Release does not close the pane. Fullscreen screen is a separate overlay. Settings does **not** boot. Offline • Click to start boots and takes control. Pairing does not open Models.
 
 ## Screens
 
@@ -31,7 +31,7 @@ The computer pane and Settings overlay sit on the right of the same shell. Setti
 | --- | --- | --- |
 | Proxy error | loopback `status` failed | Retry (reload) |
 | Pairing | not paired | Lying-pose mark, Host URL (last host from boot status, not refetched), code `XXXX-XXXX`, device name, Pair (disabled until the code is non-empty). Fail text under the form. Visible tan `:focus-visible`. |
-| Shell | paired | rack + thread; optional Settings / Create / computer pane / fullscreen. Pairing does not open the pane. Create focuses the new chat. Settings opens the pane without booting. Offline boots. |
+| Shell | paired | rack + thread; optional Settings / Create / computer pane / Models / fullscreen. Pairing does not open the pane or Models. Create focuses the new chat. Settings opens the pane without booting. Offline boots. You opens Models. |
 
 Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
@@ -45,7 +45,7 @@ Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 - No bots: Create your first bot.
 - Archived list: Back to Inbox, Restore on each row.
 - Plugins are not in the chrome until that feature ships.
-- You: label, not a settings screen.
+- You: door to **Models** (host keys). The visible word on the control is Models. Not a tooltip. Per-bot Settings stay name / mode / Reset / Delete.
 
 ## Thread
 
@@ -76,6 +76,25 @@ Errors: host Retry, auth re-pair, action Dismiss.
 If the user is pinned to the bottom, new cards keep the latest in view. Switching chats lands on the latest messages. Stop cancels the lead and workers; a later completed token must not append. The host prompt includes a compact summary of this chat (byte-capped) plus owner lines that never reached the model (inbox kept across Stop). `waiting_takeover` is a pause: no typing dots and no Stop. A new send starts a turn. **Release** resumes the same parked run.
 
 Not in this window: `threads.followUp` (the host queues on send while a lead is running; a parked takeover starts work), `subagents.steer`, `me`, `deployment`. `notify-send` exists on the proxy and is unused by React.
+
+## Models (host)
+
+Host-wide. Open from **You** (`open-models`). Close returns to the thread, and to the computer pane if that was open.
+
+```
+┌── Models ──┐
+│ Cursor     │  API key · Save · Forget · Model · Use this model
+│ OpenRouter │
+│ OpenAI     │
+│ Anthropic  │
+│ xAI (Grok) │
+│ Default    │  one host choice · Using {id}
+└────────────┘
+```
+
+Fresh host: five empty rows, Default model disabled, thread plate `needs-model` with the next step. Save is disabled while the key field is empty. After Save the field is gone: `••••` + last four + Connected. Forget empties that row. Fetch errors sit under that row with Retry. Model picker disabled until a key is saved and the list is in. Empty list: `No models yet`. Send with no default does not start a turn; the thread repeats the next step. The page never receives a previously saved full key.
+
+Copy: Save, Forget, Retry, Models, API key, Model, Use this model. Do not say credential, runtime, or env.
 
 ## Create / Settings
 

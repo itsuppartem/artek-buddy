@@ -29,8 +29,19 @@ async def open_runtime(
         return
     if kind != "cursor":
         raise AgentRuntimeError(f"unknown agent runtime {kind!r}")
-    if not (settings.cursor_api_key or "").strip():
-        raise AgentRuntimeError("CURSOR_API_KEY is required for the cursor runtime")
+    key = (settings.cursor_api_key or "").strip()
+    if not key and store is not None:
+        try:
+            key = (store.raw_key("cursor") or "").strip()
+        except Exception:
+            key = ""
+    if not key:
+        from artek_buddy.runtime.http_chat import HttpChatRuntime
+
+        runtime = HttpChatRuntime(settings, store=store, computers=computers)
+        await runtime.start()
+        yield runtime
+        return
     from cursor_sdk import AsyncClient
 
     from artek_buddy.runtime.cursor import CursorRuntime

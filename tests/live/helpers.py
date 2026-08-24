@@ -109,9 +109,36 @@ def open_chat(page: Page, name: str) -> None:
     expect(thread_header(page)).to_contain_text(name, timeout=8_000)
 
 
+def open_models(page: Page) -> None:
+    page.get_by_role("button", name="Models").click()
+    expect(page.get_by_test_id("models-pane")).to_be_visible(timeout=8_000)
+
+
+def ensure_model(page: Page) -> None:
+    door = page.get_by_test_id("open-models")
+    expect(door).to_be_visible(timeout=20_000)
+    if door.get_attribute("data-models-ready") == "true":
+        return
+    open_models(page)
+    key = page.get_by_label("OpenRouter API key")
+    if key.count() and key.first.is_visible(timeout=0):
+        key.fill("test-secret-uiok")
+        page.get_by_test_id("models-save-openrouter").click()
+    picker = page.get_by_label("OpenRouter model")
+    expect(picker).to_be_enabled(timeout=10_000)
+    picker.select_option("scripted")
+    page.get_by_test_id("models-use-openrouter").click()
+    expect(page.get_by_text("Using scripted")).to_be_visible(timeout=8_000)
+    page.get_by_role("button", name="Close Models").click()
+    expect(page.get_by_test_id("open-models")).to_have_attribute(
+        "data-models-ready", "true", timeout=8_000
+    )
+
+
 def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
     """Open this chat if named, type, press Enter, wait for the user bubble."""
     arm_page(page)
+    ensure_model(page)
     if bot_name:
         open_chat(page, bot_name)
     box = composer(page)

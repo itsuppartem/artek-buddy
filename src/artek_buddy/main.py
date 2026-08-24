@@ -35,6 +35,7 @@ from artek_buddy.http.computer import router as computer_router
 from artek_buddy.http.consents import router as consents_router
 from artek_buddy.http.devices import router as devices_router
 from artek_buddy.http.memory import router as memory_router
+from artek_buddy.http.models import router as models_router
 from artek_buddy.http.routines import router as routines_router
 from artek_buddy.http.session import router as session_router
 from artek_buddy.http.threads import router as threads_router
@@ -48,6 +49,9 @@ async def lifespan(app: FastAPI):
     try:
         store.open()
         store.apply_migrations()
+        store.seed_env_cursor(settings.cursor_api_key)
+        if runtime_kind(settings) == "scripted" and store.raw_key("cursor"):
+            store.replace_catalog("cursor", ["scripted"])
         log.info("postgres ready")
     except DatabaseUnavailable:
         log.exception("postgres unavailable at boot; history routes will return 503")
@@ -116,6 +120,7 @@ app.add_middleware(RequestContextMiddleware)
 
 app.include_router(devices_router)
 app.include_router(session_router)
+app.include_router(models_router)
 app.include_router(bots_router)
 app.include_router(threads_router)
 app.include_router(consents_router)

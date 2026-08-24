@@ -1,14 +1,13 @@
 #!/bin/sh
 # One-shot host bring-up from a GitHub Release. No secrets in the script.
-# Fill CURSOR_API_KEY in .env yourself, then run again.
+# A provider key is optional here: paste it in Models after pairing, or set
+# CURSOR_API_KEY in .env to seed the same store.
 set -eu
 
 REPO="${ARTEK_REPO:-https://github.com/itsuppartem/artek-buddy.git}"
 DEST="${ARTEK_HOME:-$HOME/artek-buddy}"
 IMAGE_HOST="${ARTEK_HOST_IMAGE:-ghcr.io/itsuppartem/artek-buddy}"
 IMAGE_COMPUTER="${ARTEK_COMPUTER_IMAGE:-ghcr.io/itsuppartem/artek-buddy-computer}"
-PLACEHOLDER="crsr_your_key_here"
-
 need() {
   command -v "$1" >/dev/null 2>&1 || {
     echo "install $1 first (docker, git, curl, openssl)" >&2
@@ -29,11 +28,6 @@ latest_version() {
     exit 1
   fi
   echo "$tag"
-}
-
-key_is_placeholder() {
-  key=$(sed -n 's/^CURSOR_API_KEY=//p' "$1" | tr -d '[:space:]')
-  [ -z "$key" ] || [ "$key" = "$PLACEHOLDER" ]
 }
 
 need git
@@ -60,13 +54,7 @@ if [ ! -f .env ]; then
   fi
   echo "COMPUTER_IMAGE=$IMAGE_COMPUTER:$VERSION" >>.env
   echo "wrote $DEST/.env (tokens generated)."
-  echo "open that file, set CURSOR_API_KEY=crsr_… from Cursor Dashboard, run this script again."
-  exit 2
-fi
-
-if key_is_placeholder .env; then
-  echo "$DEST/.env still has the placeholder CURSOR_API_KEY. Paste your crsr_ key and re-run." >&2
-  exit 2
+  echo "pair the window and add a key in Models, or set CURSOR_API_KEY in .env to seed Cursor."
 fi
 
 if [ "${ARTEK_INSTALL_SKIP_STACK:-}" = "1" ]; then

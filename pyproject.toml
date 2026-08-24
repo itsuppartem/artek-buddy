@@ -83,6 +83,7 @@ testpaths = ["tests"]
 markers = [
     "live: installed .deb against an ephemeral compose stack",
     "model: Cursor/Grok turn (needs CURSOR_API_KEY; skipped on the ui job)",
+    "no_model_seed: do not attach a default model for this API test",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]
 addopts = "-q --tb=short"

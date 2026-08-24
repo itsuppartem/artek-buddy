@@ -719,6 +719,30 @@
         "title": "ConnectBlock",
         "type": "object"
       },
+      "ConnectModelInput": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "title": "ConnectModelInput",
+        "type": "object"
+      },
       "ConsentAnswerInput": {
         "properties": {
           "decision": {
@@ -1543,7 +1567,6 @@
                 "type": "null"
               }
             ],
-            "default": "grok-4.6",
             "title": "Default Model"
           },
           "default_provider": {
@@ -1555,7 +1578,6 @@
                 "type": "null"
               }
             ],
-            "default": "cursor",
             "title": "Default Provider"
           },
           "email": {
@@ -1574,7 +1596,7 @@
             "type": "string"
           },
           "needs_model": {
-            "default": false,
+            "default": true,
             "title": "Needs Model",
             "type": "boolean"
           },
@@ -1731,6 +1753,134 @@
           "text"
         ],
         "title": "MetaBlock",
+        "type": "object"
+      },
+      "ModelCredential": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "has_key": {
+            "title": "Has Key",
+            "type": "boolean"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_four": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Four"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "label",
+          "has_key",
+          "is_default"
+        ],
+        "title": "ModelCredential",
+        "type": "object"
+      },
+      "ModelCredentialList": {
+        "properties": {
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/ModelCredential"
+            },
+            "title": "Credentials",
+            "type": "array"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          },
+          "default_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Provider"
+          }
+        },
+        "required": [
+          "credentials"
+        ],
+        "title": "ModelCredentialList",
+        "type": "object"
+      },
+      "ModelInfo": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider"
+        ],
+        "title": "ModelInfo",
+        "type": "object"
+      },
+      "ModelListResponse": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelInfo"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "title": "ModelListResponse",
         "type": "object"
       },
       "OkResponse": {
@@ -2118,6 +2268,24 @@
           "mode"
         ],
         "title": "SetComputerInput",
+        "type": "object"
+      },
+      "SetDefaultModelInput": {
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "model"
+        ],
+        "title": "SetDefaultModelInput",
         "type": "object"
       },
       "SteerSubagentInput": {
@@ -3103,13 +3271,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [
@@ -5931,9 +6092,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Models V1 Models Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ModelListResponse"
                 }
               }
             },
@@ -5951,6 +6110,217 @@
           }
         },
         "summary": "List Models"
+      }
+    },
+    "/v1/models/credentials": {
+      "get": {
+        "operationId": "list_credentials_v1_models_credentials_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelCredentialList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Credentials"
+      },
+      "post": {
+        "operationId": "connect_model_v1_models_credentials_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectModelInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelCredential"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connect Model"
+      }
+    },
+    "/v1/models/credentials/{provider}": {
+      "delete": {
+        "operationId": "forget_model_v1_models_credentials__provider__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forget Model"
+      }
+    },
+    "/v1/models/default": {
+      "post": {
+        "operationId": "set_default_model_v1_models_default_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDefaultModelInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Default Model"
       }
     },
     "/v1/routines": {
