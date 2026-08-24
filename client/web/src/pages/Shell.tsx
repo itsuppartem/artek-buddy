@@ -52,10 +52,11 @@ import {
 import {
   addPendingFiles,
   clipboardFilePaths,
-  clipboardHasAttachable,
+  clipboardShouldClaim,
   droppedFiles,
   filesFromAttachedPayload,
   type PendingFile,
+  pasteClipboardData,
   pastedFiles,
   previewKind,
   readClipboardFiles,
@@ -118,6 +119,7 @@ export function ShellPage() {
   const panelAfterModels = useRef<"computer" | null>(null);
   const creatingBot = useRef(false);
   const filesEpoch = useRef(0);
+  const queueFilesRef = useRef<(incoming: File[]) => void>(() => undefined);
   const pendingAlerts = useRef(
     new Map<string, { alert: AttentionAlert; notifyOnFinish: boolean; key: string }>(),
   );
@@ -780,6 +782,19 @@ export function ShellPage() {
     }
     setPendingFiles(files);
   }
+  queueFilesRef.current = queueFiles;
+
+  useEffect(() => {
+    const win = window as Window & {
+      __artekAttachPastedImage?: (contentBase64: string, type: string, name: string) => void;
+    };
+    win.__artekAttachPastedImage = (contentBase64, type, name) => {
+      queueFilesRef.current(filesFromAttachedPayload([{ name, type, contentBase64 }]));
+    };
+    return () => {
+      delete win.__artekAttachPastedImage;
+    };
+  }, []);
 
   function attachLocalPaths(paths: string[]) {
     if (!active || !paths.length) return;
@@ -800,21 +815,22 @@ export function ShellPage() {
   }
 
   function onChatPaste(event: ClipboardEvent<HTMLElement>) {
-    const paths = clipboardFilePaths(event);
-    if (!clipboardHasAttachable(event)) return;
+    const wrapped = { clipboardData: pasteClipboardData(event) };
+    if (!clipboardShouldClaim(wrapped)) return;
     event.preventDefault();
     event.stopPropagation();
-    const files = pastedFiles(event);
+    const files = pastedFiles(wrapped);
     if (files.length) {
       queueFiles(files);
       return;
     }
+    const paths = clipboardFilePaths(wrapped);
     if (paths.length) {
       attachLocalPaths(paths);
       return;
     }
     const epoch = filesEpoch.current;
-    void readClipboardFiles(event).then((extra) => {
+    void readClipboardFiles(wrapped).then((extra) => {
       if (epoch !== filesEpoch.current) return;
       if (extra.length) queueFiles(extra);
     });
@@ -1481,6 +1497,7 @@ export function ShellPage() {
             className="flex items-end gap-2"
             onDragOver={(event) => event.preventDefault()}
             onDrop={onComposerDrop}
+            onPaste={onChatPaste}
           >
             <input
               ref={fileInputRef}

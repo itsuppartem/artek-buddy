@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+
 import pytest
 from playwright.sync_api import Page, expect
 from tests.live.helpers import (
@@ -128,6 +130,47 @@ def test_thread_reply_quote_and_cancel(page: Page, client_url: str, host_url: st
     )
     expect(quoted).to_be_visible(timeout=15_000)
     expect(quoted).to_contain_text("ok")
+
+
+def test_composer_paste_screenshot_attaches_chip(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    _named(page, client_url, host_url, "Paste")
+    box = composer(page)
+    box.click()
+    png_b64 = base64.b64encode(TINY_PNG).decode("ascii")
+    box.evaluate(
+        """(el, b64) => {
+          const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+          const file = new File([bytes], "", { type: "image/png" });
+          const data = new DataTransfer();
+          data.items.add(file);
+          const event = new Event("paste", { bubbles: true, cancelable: true });
+          Object.defineProperty(event, "clipboardData", { value: data });
+          el.dispatchEvent(event);
+        }""",
+        png_b64,
+    )
+    chip = page.get_by_test_id("attach-chip")
+    expect(chip).to_contain_text("screenshot-1.png", timeout=5_000)
+    expect(page.get_by_test_id("attach-preview")).to_be_visible(timeout=5_000)
+    expect(box).to_have_value("")
+
+
+def test_composer_paste_text_does_not_attach(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "TextPaste")
+    box = composer(page)
+    box.click()
+    box.evaluate(
+        """el => {
+          const data = new DataTransfer();
+          data.setData("text/plain", "hello from the clipboard");
+          const event = new Event("paste", { bubbles: true, cancelable: true });
+          Object.defineProperty(event, "clipboardData", { value: data });
+          el.dispatchEvent(event);
+        }"""
+    )
+    expect(page.get_by_test_id("attach-chip")).to_have_count(0)
 
 
 def test_composer_drop_attaches_chip(page: Page, client_url: str, host_url: str) -> None:
