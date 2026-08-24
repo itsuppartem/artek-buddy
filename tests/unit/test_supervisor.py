@@ -95,3 +95,82 @@ def test_inspect_is_hardened_rejects_unlimited_box() -> None:
     unlimited = dict(spec["HostConfig"])
     unlimited["CapDrop"] = []
     assert inspect_is_hardened({"Config": {}, "HostConfig": unlimited}) is False
+
+
+class _RecordingEngine:
+    def __init__(self) -> None:
+        self.commands: list[str] = []
+        self.files: dict[str, bytes] = {}
+        self.exec_code = 0
+
+    def exec(self, container_id: str, command: str) -> tuple[int, str]:
+        self.commands.append(command)
+        return self.exec_code, "mkdir failed" if self.exec_code else ""
+
+    def put_file(self, container_id: str, path: str, data: bytes) -> None:
+        self.files[path] = data
+
+
+def test_write_container_file_does_not_put_bytes_in_the_shell_command() -> None:
+    from artek_buddy.supervisor.docker_engine import write_container_file
+
+    engine = _RecordingEngine()
+    payload = b"hello\nARTEK_EOF\nrm -rf /\n"
+    code, output = write_container_file(engine, "cid", "/home/artek/note.txt", payload)
+    assert code == 0
+    assert output == ""
+    assert engine.files["/home/artek/note.txt"] == payload
+    joined = "\n".join(engine.commands)
+    assert "ARTEK_EOF" not in joined
+    assert "rm -rf" not in joined
+    assert "hello" not in joined
+    assert "mkdir -p" in engine.commands[0]
+    assert "/home/artek" in engine.commands[0]
+
+
+def test_write_container_file_stores_nul_and_non_utf8_bytes() -> None:
+    from artek_buddy.supervisor.docker_engine import write_container_file
+
+    engine = _RecordingEngine()
+    payload = b"\x00\xffARTEK_EOF"
+    code, _ = write_container_file(engine, "cid", "/home/artek/bin.dat", payload)
+    assert code == 0
+    assert engine.files["/home/artek/bin.dat"] == payload
+    assert payload not in "\n".join(engine.commands).encode("utf-8")
+
+
+def test_write_container_file_skips_put_when_mkdir_fails() -> None:
+    from artek_buddy.supervisor.docker_engine import write_container_file
+
+    engine = _RecordingEngine()
+    engine.exec_code = 1
+    code, output = write_container_file(engine, "cid", "/home/artek/x.txt", b"secret")
+    assert code == 1
+    assert output == "mkdir failed"
+    assert engine.files == {}
+
+
+def test_tar_one_file_roundtrips_binary_payload() -> None:
+    import io
+    import tarfile
+
+    from artek_buddy.supervisor.docker_engine import tar_one_file
+
+    payload = b"\x00ARTEK_EOF\xff"
+    archive = tar_one_file("note.bin", payload)
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r") as tar:
+        member = tar.getmembers()[0]
+        assert member.name == "note.bin"
+        extracted = tar.extractfile(member)
+        assert extracted is not None
+        assert extracted.read() == payload
+
+
+def test_supervisor_write_source_has_no_heredoc_delimiter() -> None:
+    import inspect
+
+    from artek_buddy.supervisor import server as supervisor_server
+
+    source = inspect.getsource(supervisor_server)
+    assert "ARTEK_EOF" not in source
+    assert "<<" not in source

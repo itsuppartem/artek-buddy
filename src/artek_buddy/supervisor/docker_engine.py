@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import io
 import json
 import socket
+import tarfile
 from http.client import HTTPConnection
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -113,6 +116,27 @@ class DockerEngine:
         if status not in {204, 404} and status >= 300:
             raise RuntimeError(f"docker remove failed: {status} {data}")
 
+    def put_file(self, container_id: str, path: str, data: bytes) -> None:
+        parent = str(Path(path).parent)
+        payload = tar_one_file(Path(path).name, data)
+        conn = UnixHTTPConnection(self.socket_path, timeout=60)
+        try:
+            conn.request(
+                "PUT",
+                f"/containers/{quote(container_id)}/archive?path={quote(parent, safe='/')}",
+                body=payload,
+                headers={
+                    "Content-Type": "application/x-tar",
+                    "Content-Length": str(len(payload)),
+                },
+            )
+            resp = conn.getresponse()
+            raw = resp.read()
+            if resp.status >= 300:
+                raise RuntimeError(f"docker put archive failed: {resp.status} {raw[:200]!r}")
+        finally:
+            conn.close()
+
     def exec(self, container_id: str, command: str) -> tuple[int, str]:
         status, created = self.request(
             "POST",
@@ -153,6 +177,29 @@ class DockerEngine:
         import base64
 
         return base64.b64decode(text.strip())
+
+
+def tar_one_file(name: str, data: bytes) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        info = tarfile.TarInfo(name=name)
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def write_container_file(engine: Any, container_id: str, path: str, data: bytes) -> tuple[int, str]:
+    from artek_buddy.supervisor.logic import shell_quote
+
+    parent = str(Path(path).parent)
+    code, text = engine.exec(container_id, f"mkdir -p {shell_quote(parent)}")
+    if code != 0:
+        return code, text
+    try:
+        engine.put_file(container_id, path, data)
+    except Exception as err:
+        return 1, str(err)
+    return 0, ""
 
 
 def shell_path(path: str) -> str:
