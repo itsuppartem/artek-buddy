@@ -256,7 +256,8 @@ jobs:
           nohup artek-buddy --serve --port 4173 > "$RUNNER_TEMP/client-serve.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/client.pid"
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:4173/local/status >/dev/null; then
+            if curl -fsS -H "Origin: http://127.0.0.1:4173" \
+              http://127.0.0.1:4173/local/status >/dev/null; then
               echo "ARTEK_CLIENT_URL=http://127.0.0.1:4173" >> "$GITHUB_ENV"
               exit 0
             fi
@@ -446,7 +447,8 @@ jobs:
           nohup artek-buddy --serve --port 4173 > "$RUNNER_TEMP/client-serve.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/client.pid"
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:4173/local/status >/dev/null; then
+            if curl -fsS -H "Origin: http://127.0.0.1:4173" \
+              http://127.0.0.1:4173/local/status >/dev/null; then
               echo "ARTEK_CLIENT_URL=http://127.0.0.1:4173" >> "$GITHUB_ENV"
               exit 0
             fi

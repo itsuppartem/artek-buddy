@@ -178,9 +178,15 @@ def test_status_issues_nonce_only_to_this_origin(
             denied.request("GET", "/local/status", headers={"Origin": "https://evil.example"})
             bad = denied.getresponse()
             bad.read()
+            blank = HTTPConnection("127.0.0.1", port, timeout=5)
+            blank.request("GET", "/local/status")
+            missing = blank.getresponse()
+            missing.read()
+            blank.close()
         finally:
             ok.close()
             denied.close()
     assert good.status == 200
     assert payload["nonce"] == httpd.local_nonce
     assert bad.status == 403
+    assert missing.status == 403
