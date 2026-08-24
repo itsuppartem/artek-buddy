@@ -1,14 +1,6 @@
-# pip-audit suppressions. First field is the PYSEC id; rest is why.
-# Production image installs requirements.txt only. pytest is CI/dev.
-#
-# FastAPI 0.116.1 requires starlette<0.48. The listed fixes need 0.49.1 or 1.x,
-# which means a FastAPI bump (Dependabot pip). Do not silent-upgrade the ASGI stack
-# in the scanner change.
+# pip-audit suppressions. Each data line is:
+#   id  package  YYYY-MM-DD  reason
+# Host image installs requirements.txt only. Do not ignore FastAPI or Starlette.
+# quality fails if a row is past expiry or missing a reason.
 
-PYSEC-2026-1845 pytest 8.4.1 is not in the host image; bump with the next pytest pin
-PYSEC-2026-161 starlette 0.47.3 capped by fastapi==0.116.1
-PYSEC-2026-248 starlette 0.47.3 capped by fastapi==0.116.1
-PYSEC-2026-249 starlette 0.47.3 capped by fastapi==0.116.1
-PYSEC-2026-1942 starlette 0.47.3 capped by fastapi==0.116.1
-PYSEC-2026-2281 starlette 0.47.3 capped by fastapi==0.116.1
-PYSEC-2026-2280 starlette 0.47.3 capped by fastapi==0.116.1
+PYSEC-2026-1845 pytest 2026-12-31 not in the host image; bump with the next pytest pin

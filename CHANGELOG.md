@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+- Host FastAPI/Starlette pins no longer need runtime pip-audit ignores. Remaining ignores require a reason and expiry.
+
 ## [0.10.27] - 2026-08-22
 
 ### Fixed
