@@ -87,8 +87,11 @@ count is 0; do not push `main` or `develop` directly.
 A merge into `main` that changes `VERSION` publishes a GitHub Release only after
 the **push** `test` run on that commit is green (`release.yml` is `workflow_run`
 on `test`, not a parallel `push`). The computer image is not built in Actions.
-Only the five newest Releases stay; `infra/prune-releases.sh` deletes the rest
-and matching GHCR tags.
+The host image is pushed by digest, Trivy-scanned (HIGH and CRITICAL), then
+tagged as the version and `latest` — same digest, no rebuild. A second upload
+of the same Release asset name fails (no `--clobber`). GitHub Releases stay;
+`infra/prune-releases.sh` is a **manual** operator script, not the default
+release path.
 
 - One product version for host and client (`VERSION`,
   `src/artek_buddy/__init__.py`, `client/VERSION`).

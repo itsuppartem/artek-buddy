@@ -8,6 +8,9 @@ name: release
 # live is not required. Protect develop uses the same checks.
 # The computer image is not built here: Chromium under QEMU hangs the job.
 # install-host.sh pulls it when present, otherwise builds on the Pi.
+# Host image: push by digest, Trivy HIGH+CRITICAL on that digest, then tag
+# VERSION and latest (same digest, no rebuild). A second upload of the same
+# Release asset name fails. Do not prune GitHub Releases from this workflow.
 on:
   workflow_run:
     workflows: [test]
@@ -83,12 +86,20 @@ jobs:
           PY
           cp infra/install-host.sh install-host.sh
 
-      - name: SBOM client (CycloneDX)
+      - name: Unpack client .deb for SBOM
+        if: steps.ver.outputs.changed == 'true'
+        run: |
+          mkdir -p "${{ runner.temp }}/artek-client-deb"
+          dpkg-deb -x \
+            "artek-buddy-client_${{ steps.ver.outputs.new }}_all.deb" \
+            "${{ runner.temp }}/artek-client-deb"
+
+      - name: SBOM client .deb (CycloneDX)
         if: steps.ver.outputs.changed == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
-          scan-ref: client
+          scan-ref: ${{ runner.temp }}/artek-client-deb
           format: cyclonedx
           output: sbom-client.cdx.json
           exit-code: "0"
@@ -107,25 +118,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push host image
+      - name: Push host image digest
         if: steps.ver.outputs.changed == 'true'
         id: image
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}
-            ghcr.io/itsuppartem/artek-buddy:latest
+          outputs: type=image,name=ghcr.io/itsuppartem/artek-buddy,push-by-digest=true,name-canonical=true,push=true
 
       - name: Trivy host image
         if: steps.ver.outputs.changed == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}
-          severity: CRITICAL
+          image-ref: ghcr.io/itsuppartem/artek-buddy@${{ steps.image.outputs.digest }}
+          severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
           format: table
@@ -136,11 +144,22 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}
+          image-ref: ghcr.io/itsuppartem/artek-buddy@${{ steps.image.outputs.digest }}
           format: cyclonedx
           output: sbom-host.cdx.json
           exit-code: "0"
           trivyignores: .trivyignore
+
+      - name: Promote scanned host image
+        if: steps.ver.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.image.outputs.digest }}"
+          test -n "$DIGEST"
+          docker buildx imagetools create \
+            --tag "ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}" \
+            --tag "ghcr.io/itsuppartem/artek-buddy:latest" \
+            "ghcr.io/itsuppartem/artek-buddy@${DIGEST}"
 
       - name: Attest client .deb
         if: steps.ver.outputs.changed == 'true'
@@ -174,6 +193,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           TAG="v${{ steps.ver.outputs.new }}"
           ASSETS=(
             "artek-buddy-client_${{ steps.ver.outputs.new }}_all.deb"
@@ -183,18 +203,10 @@ jobs:
             install-host.sh
           )
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "${ASSETS[@]}" --clobber
-            gh release edit "$TAG" --notes-file RELEASE_NOTES.md
-            echo "updated assets on $TAG"
-            exit 0
+            echo "refusing to replace existing GitHub Release $TAG" >&2
+            exit 1
           fi
           gh release create "$TAG" \
             --title "$TAG" \
             --notes-file RELEASE_NOTES.md \
             "${ASSETS[@]}"
-
-      - name: Keep five GitHub Releases
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTEK_RELEASE_KEEP: "5"
-        run: infra/prune-releases.sh

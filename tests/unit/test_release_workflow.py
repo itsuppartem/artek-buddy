@@ -21,3 +21,50 @@ def test_release_workflow_ships_sbom_attestations_and_changelog_notes() -> None:
     assert "cyclonedx" in text
     assert "python3 -m artek_buddy.release_notes" in text
     assert "--notes-file" in text
+
+
+def test_release_workflow_scans_host_digest_before_promoting_latest() -> None:
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    trivy = text.find("name: Trivy host image")
+    promote = text.find("name: Promote scanned host image")
+    assert trivy != -1
+    assert promote != -1
+    assert trivy < promote
+    assert "artek-buddy:latest" not in text[:trivy]
+    assert "artek-buddy:latest" in text[promote:]
+    assert "push-by-digest=true" in text
+    assert "ghcr.io/itsuppartem/artek-buddy@${{ steps.image.outputs.digest }}" in text
+    host_scan = text[trivy:promote]
+    assert "HIGH,CRITICAL" in host_scan or "CRITICAL,HIGH" in host_scan
+    assert "docker buildx imagetools create" in text[promote:]
+
+
+def test_release_workflow_does_not_clobber_release_assets() -> None:
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert "--clobber" not in text
+    assert "gh release upload" not in text
+    assert "gh release create" in text
+    assert "refusing to replace existing GitHub Release" in text
+
+
+def test_release_workflow_does_not_prune_github_releases() -> None:
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert "prune-releases.sh" not in text
+    assert "Keep five GitHub Releases" not in text
+
+
+def test_release_client_sbom_covers_the_packaged_deb() -> None:
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert "dpkg-deb -x" in text
+    assert "scan-ref: client" not in text
+    assert "artek-client-deb" in text
+
+
+def test_contributing_treats_release_prune_as_manual() -> None:
+    text = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "Only the five newest Releases stay" not in text
+    assert "infra/prune-releases.sh" in text
+    assert "manual" in text.lower()
+    prune = (ROOT / "infra" / "prune-releases.sh").read_text(encoding="utf-8")
+    assert "Manual operator script" in prune
+    assert "release.yml does not run this" in prune
