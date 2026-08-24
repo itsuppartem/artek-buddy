@@ -1,5 +1,6 @@
 #!/bin/sh
-# Keep the newest GitHub Releases. Older ones (and their tags) go away.
+# Manual operator script. release.yml does not run this.
+# Deleting old GitHub Releases and GHCR tags rewrites history that provenance should pin.
 # Usage: prune-releases.sh [keep]
 set -eu
 
