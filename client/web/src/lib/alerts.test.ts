@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { ProductEvent } from "../types";
 import {
   allowAlert,
+  attentionFingerprint,
   attentionFromBotChange,
   attentionFromEvent,
+  attentionFromParkedBot,
   type BotAlertSnapshot,
   isHistoricalEvent,
+  parkedAttentionForView,
   shouldClearAttentionForView,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
@@ -172,5 +175,54 @@ describe("attentionFromBotChange", () => {
     );
     expect(alert?.kind).toBe("replied");
     expect(alert?.title).toBe("Need replied");
+  });
+});
+
+describe("attentionFromParkedBot", () => {
+  it("raises takeover from a bot that is already waiting_takeover", () => {
+    const alert = attentionFromParkedBot(
+      botSnap({
+        status: "waiting_takeover",
+        preview: "Pass the site check, then Release.",
+        updatedAt: "2026-01-01T00:00:02Z",
+      }),
+    );
+    expect(alert?.kind).toBe("takeover");
+    expect(alert?.title).toBe("Need needs you");
+  });
+
+  it("does not raise from idle or waiting_input", () => {
+    expect(attentionFromParkedBot(botSnap({ status: "idle" }))).toBeNull();
+    expect(attentionFromParkedBot(botSnap({ status: "waiting_input" }))).toBeNull();
+  });
+});
+
+describe("parkedAttentionForView", () => {
+  const speaker = botSnap({
+    id: "bot-a",
+    name: "Need",
+    status: "waiting_takeover",
+    updatedAt: "2026-01-01T00:00:02Z",
+  });
+  const watcher = botSnap({
+    id: "bot-b",
+    name: "Idle",
+    status: "idle",
+    updatedAt: "2026-01-01T00:00:03Z",
+  });
+
+  it("shows needs you on the other chat, not on the parked chat", () => {
+    expect(parkedAttentionForView([speaker, watcher], "bot-b", new Set())?.title).toBe(
+      "Need needs you",
+    );
+    expect(parkedAttentionForView([speaker, watcher], "bot-a", new Set())).toBeNull();
+  });
+
+  it("does not resurrect a dismissed takeover", () => {
+    const alert = attentionFromParkedBot(speaker);
+    expect(alert).not.toBeNull();
+    if (!alert) return;
+    const dismissed = new Set([attentionFingerprint(alert)]);
+    expect(parkedAttentionForView([speaker, watcher], "bot-b", dismissed)).toBeNull();
   });
 });
