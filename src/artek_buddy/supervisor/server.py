@@ -15,7 +15,11 @@ from artek_buddy.supervisor.desktop_spec import (
     desktop_create_spec,
     inspect_is_hardened,
 )
-from artek_buddy.supervisor.docker_engine import DockerEngine, published_port
+from artek_buddy.supervisor.docker_engine import (
+    DockerEngine,
+    published_port,
+    write_container_file,
+)
 from artek_buddy.supervisor.logic import (
     action_command,
     input_command,
@@ -256,10 +260,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if write and body and "content" in body:
             content = str(body.get("content") or "")
-            code, text = STATE.engine.exec(
-                cid,
-                f"mkdir -p $(dirname {shell_quote(target)}) && cat > {shell_quote(target)} <<'ARTEK_EOF'\n{content}\nARTEK_EOF",
-            )
+            code, text = write_container_file(STATE.engine, cid, target, content.encode("utf-8"))
             self._json(200, {"ok": code == 0, "path": rel, "output": text})
             return
         if write:
