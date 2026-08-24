@@ -98,10 +98,7 @@ function botSnap(over: Partial<BotAlertSnapshot>): BotAlertSnapshot {
 
 describe("shouldClearAttentionForView", () => {
   it("clears the banner only for the chat already on screen", () => {
-    const takeover = attentionFromEvent(
-      event({ type: "computer.takeover.requested" }),
-      "Need",
-    );
+    const takeover = attentionFromEvent(event({ type: "computer.takeover.requested" }), "Need");
     expect(takeover).not.toBeNull();
     expect(shouldClearAttentionForView(takeover, "bot-a")).toBe(true);
     expect(shouldClearAttentionForView(takeover, "bot-b")).toBe(false);
