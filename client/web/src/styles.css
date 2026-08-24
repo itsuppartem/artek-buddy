@@ -2,21 +2,88 @@
 
 @source "./**/*.{ts,tsx}";
 
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/atkinson-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/atkinson-700.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: Fraunces;
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/fraunces-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Azeret Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/azeret-mono-400.woff2") format("woff2");
+}
+
+@theme {
+  --color-ink: #161310;
+  --color-plate: #221c18;
+  --color-raised: #2a241f;
+  --color-hairline: #3d342c;
+  --color-paper: #f1ebe3;
+  --color-mute: #9a9086;
+  --color-tan: #c4a06a;
+  --color-tan-press: #b48c54;
+  --color-sage: #7ea586;
+  --color-sage-bg: #243028;
+  --color-danger: #d18a7a;
+  --color-danger-bg: #2a1c1a;
+  --color-close: #ff5f57;
+  --color-min: #febc2e;
+  --color-full: #28c840;
+  --font-ui: "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
+  --font-display: Fraunces, ui-serif, Georgia, serif;
+  --font-mono: "Azeret Mono", ui-monospace, monospace;
+}
+
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
-  background: #050506;
-  color: #dfdfe2;
-  font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-ui);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-tan);
+  outline-offset: 2px;
 }
 
 .ab-scroll::-webkit-scrollbar {
   width: 6px;
 }
 .ab-scroll::-webkit-scrollbar-thumb {
-  background: #2a2a2e;
+  background: var(--color-hairline);
   border-radius: 3px;
 }
 
@@ -35,5 +102,16 @@ body,
   }
   50% {
     opacity: 0.3;
+  }
+}
+
+.ab-pulse {
+  animation: abPulse 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ab-pulse,
+  .ab-chat-markdown-cursor {
+    animation: none;
   }
 }

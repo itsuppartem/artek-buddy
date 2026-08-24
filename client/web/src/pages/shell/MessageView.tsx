@@ -50,7 +50,7 @@ export function MessageView({
     >
       {quote ? (
         <div className={`mb-1 flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-          <div className="max-w-[70%] min-w-0 break-words [overflow-wrap:anywhere] border-l-2 border-[#3D3D42] pl-2.5 text-[13px] leading-[1.4] text-[#85858A]">
+          <div className="max-w-[70%] min-w-0 break-words [overflow-wrap:anywhere] border-l-2 border-tan pl-2.5 text-[13px] leading-[1.4] text-mute">
             {stripMarkdown(quote.excerpt)}
           </div>
         </div>
@@ -61,9 +61,9 @@ export function MessageView({
             <div
               key={index}
               data-testid="meta-block"
-              className="flex items-center justify-center gap-2 py-1 text-[13.5px] text-[#85858A]"
+              className="flex items-center justify-center gap-2 py-1 text-[13.5px] text-mute"
             >
-              <span className="text-[#E65707]">◷</span>
+              <span className="text-tan">◷</span>
               <span>{block.text}</span>
             </div>
           );
@@ -74,7 +74,7 @@ export function MessageView({
           }
           return (
             <div key={index} className="flex justify-start" data-testid="progress-block">
-              <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]">
+              <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[16px] bg-plate px-[18px] py-3 text-[15.5px] leading-[1.5] text-paper">
                 <ChatMarkdown streaming>{block.text}</ChatMarkdown>
               </div>
             </div>
@@ -182,7 +182,7 @@ export function MessageView({
         if (block.kind === "text" && message.role === "user") {
           return (
             <div key={index} className="flex justify-end">
-              <div className="max-w-[70%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[20px] bg-[#F1F1EF] px-[18px] py-3 text-[15.5px] leading-[1.45] text-[#1A1A1A]">
+              <div className="max-w-[70%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[16px] bg-paper px-[18px] py-3 text-[15.5px] leading-[1.45] text-ink">
                 {block.text}
               </div>
             </div>
@@ -191,7 +191,7 @@ export function MessageView({
         if (block.kind === "text") {
           return (
             <div key={index} className="flex justify-start">
-              <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]">
+              <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[16px] bg-plate px-[18px] py-3 text-[15.5px] leading-[1.5] text-paper">
                 <ChatMarkdown>{block.text}</ChatMarkdown>
               </div>
             </div>

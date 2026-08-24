@@ -56,7 +56,7 @@ export function BotContextMenu({
       <div
         role="menu"
         aria-label={`Actions for ${bot.name}`}
-        className="fixed z-10 w-[264px] rounded-[18px] border border-[#343438] bg-[#1A1A1D] p-2 shadow-[0_24px_60px_rgba(0,0,0,.62)]"
+        className="fixed z-10 w-[264px] rounded-[12px] border border-hairline bg-plate p-2"
         style={{ left: Math.max(margin, left), top: Math.max(margin, top) }}
       >
         <MenuItem
@@ -67,11 +67,11 @@ export function BotContextMenu({
         />
         <MenuItem
           icon={<ReadStatusIcon unread={bot.unread} />}
-          label={bot.unread ? "Mark as Read" : "Mark as Unread"}
+          label={bot.unread ? "Mark as read" : "Mark as unread"}
           onSelect={onToggleUnread}
         />
         <div className="my-1 border-t border-[#343438]" />
-        <MenuItem icon={<EditIcon />} label="Edit Profile" onSelect={onEdit} />
+        <MenuItem icon={<EditIcon />} label="Edit profile" onSelect={onEdit} />
         <MenuItem icon={<DuplicateIcon />} label="Duplicate" onSelect={onDuplicate} />
         <div className="my-1 border-t border-[#343438]" />
         <MenuItem icon={<ArchiveIcon />} label="Archive" onSelect={onArchive} />
@@ -99,8 +99,8 @@ function MenuItem({
       ref={buttonRef}
       type="button"
       role="menuitem"
-      className={`flex w-full items-center gap-3 rounded-[11px] px-3 py-2.5 text-left text-[15px] outline-none hover:bg-[#29292D] focus-visible:bg-[#29292D] ${
-        tone === "danger" ? "text-[#FF5364]" : "text-[#ECECEE]"
+      className={`flex w-full items-center gap-3 rounded-[8px] px-3 py-2.5 text-left text-[15px] hover:bg-raised focus-visible:bg-raised ${
+        tone === "danger" ? "text-danger" : "text-paper"
       }`}
       onClick={onSelect}
     >

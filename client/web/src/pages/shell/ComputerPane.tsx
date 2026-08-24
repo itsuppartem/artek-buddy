@@ -9,6 +9,7 @@ import {
 } from "../../lib/screen";
 import type { Bot, ComputerStatus } from "../../types";
 import { Button } from "../../ui/button";
+import { IconClose, IconComputer, IconSettings } from "../../ui/icons";
 import { MemoryPanel } from "./MemoryPanel";
 import { RoutinesPanel } from "./RoutinesPanel";
 
@@ -57,76 +58,77 @@ export function ComputerPane({
 
   return (
     <div>
-      <div className="mb-3.5 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isRunning ? (
             <span
               data-testid="computer-state"
               data-state={paneState}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(48,162,75,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#4ECB71]"
+              className="inline-flex items-center gap-1.5 rounded-full bg-sage-bg px-2.5 py-0.5 text-[12px] font-medium text-sage"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-[#30A24B] shadow-[0_0_6px_rgba(48,162,75,0.8)]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-sage" />
               Running
             </span>
           ) : isBooting ? (
             <span
               data-testid="computer-state"
               data-state={paneState}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(230,87,7,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FF8542]"
+              className="inline-flex items-center gap-1.5 rounded-full bg-raised px-2.5 py-0.5 text-[12px] font-medium text-tan"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-[#E65707] animate-pulse" />
+              <span className="ab-pulse h-1.5 w-1.5 rounded-full bg-tan" />
               Booting…
             </span>
           ) : isError ? (
             <span
               data-testid="computer-state"
               data-state={paneState}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(224,49,49,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FA5252]"
+              className="inline-flex items-center gap-1.5 rounded-full bg-danger-bg px-2.5 py-0.5 text-[12px] font-medium text-danger"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-[#E03131]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-danger" />
               Error
             </span>
           ) : isSleeping ? (
             <span
               data-testid="computer-state"
               data-state={paneState}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(230,87,7,0.14)] px-2.5 py-0.5 text-[12px] font-medium text-[#FF8542]"
+              className="inline-flex items-center gap-1.5 rounded-full bg-sage-bg px-2.5 py-0.5 text-[12px] font-medium text-sage"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-[#E65707]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-sage" />
               Sleeping
             </span>
           ) : (
             <span
               data-testid="computer-state"
               data-state={paneState}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#1E1E22] px-2.5 py-0.5 text-[12px] font-medium text-[#85858A]"
+              className="inline-flex items-center gap-1.5 rounded-full bg-raised px-2.5 py-0.5 text-[12px] font-medium text-mute"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-[#4E4E54]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-mute" />
               Offline
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-[#85858A]">
+        <div className="flex items-center gap-2 text-mute">
           <button
             type="button"
             onClick={onSettings}
-            className="rounded p-1 hover:text-[#ECECEE] transition-colors"
-            title="Settings"
+            className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[13px] text-paper hover:bg-raised"
           >
-            ⚙
+            <IconSettings />
+            Settings
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 hover:text-[#ECECEE] transition-colors"
             title="Close panel"
+            className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[13px] text-paper hover:bg-raised"
           >
-            ✕
+            <IconClose />
+            Close
           </button>
         </div>
       </div>
 
-      <div className="group relative aspect-[16/10] w-full overflow-hidden rounded-[14px] border border-[#232326] bg-[#0E0E10]">
+      <div className="group relative aspect-[16/10] w-full overflow-hidden rounded-[8px] border border-hairline bg-[#0e0c0b] shadow-[inset_0_0_0_2px_var(--color-tan)]">
         {!heldByOther && preview ? (
           <>
             <iframe
@@ -141,10 +143,13 @@ export function ComputerPane({
               style={{ pointerEvents: previewPointerEvents() }}
               onLoad={onScreenFrameLoad}
             />
+            <p className="pointer-events-none absolute top-2 left-2 rounded bg-ink/80 px-2 py-0.5 text-[11px] text-paper">
+              Preview · view only
+            </p>
             {screenError ? (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#0E0E10] px-6 text-center">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#3A3A40] border-t-[#30A24B]" />
-                <span className="text-[13px] font-medium text-[#ECECEE]">{screenError}</span>
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#0e0c0b] px-6 text-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-hairline border-t-sage" />
+                <span className="text-[13px] font-medium text-paper">{screenError}</span>
                 <Button type="button" variant="outline" size="sm" onClick={onRetryScreen}>
                   Retry
                 </Button>
@@ -152,12 +157,12 @@ export function ComputerPane({
             ) : (
               <button
                 type="button"
-                className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100 cursor-pointer"
+                className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
                 onClick={onOpenFullscreen}
                 aria-label="Open computer fullscreen"
               >
-                <span className="flex items-center gap-1.5 rounded-lg border border-[#303036] bg-[#161619]/90 px-3 py-1.5 text-[13px] font-medium text-[#ECECEE] shadow-lg backdrop-blur-sm">
-                  Open screen ↗
+                <span className="flex items-center gap-1.5 rounded-lg border border-hairline bg-plate/90 px-3 py-1.5 text-[13px] font-medium text-paper">
+                  Open screen
                 </span>
               </button>
             )}
@@ -168,15 +173,15 @@ export function ComputerPane({
             data-testid="computer-preview"
             aria-label="Open computer fullscreen"
             onClick={onOpenFullscreen}
-            className="grid h-full w-full place-items-center px-6 text-center cursor-pointer"
+            className="grid h-full w-full place-items-center px-6 text-center"
           >
-            <div className="flex flex-col items-center gap-2 text-[#85858A]">
+            <div className="flex flex-col items-center gap-2 text-mute">
               {screenError ? (
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#3A3A40] border-t-[#30A24B]" />
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-hairline border-t-sage" />
               ) : null}
               <span
                 data-testid={screenError ? "computer-connecting" : "computer-running"}
-                className="text-[13px] font-medium text-[#ECECEE]"
+                className="text-[13px] font-medium text-paper"
               >
                 {screenError || "Desktop is running"}
               </span>
@@ -200,7 +205,7 @@ export function ComputerPane({
             type="button"
             data-testid="computer-start"
             disabled={Boolean(computer?.busyBotName)}
-            className="grid h-full w-full place-items-center px-6 text-center cursor-pointer disabled:cursor-not-allowed"
+            className="grid h-full w-full place-items-center px-6 text-center disabled:cursor-not-allowed"
             onClick={() => {
               if (computer?.busyBotName) return;
               if (isRunning) onOpenFullscreen();
@@ -209,63 +214,35 @@ export function ComputerPane({
             }}
           >
             {isBooting ? (
-              <div className="flex flex-col items-center gap-2 text-[#A0A0A6]">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#3A3A40] border-t-[#E65707]" />
+              <div className="flex flex-col items-center gap-2 text-mute">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-hairline border-t-tan" />
                 <span className="text-[13px] font-medium">Starting desktop…</span>
               </div>
             ) : computer?.busyBotName ? (
-              <div className="flex flex-col items-center gap-1 text-[#85858A]">
-                <span className="text-[14px] font-medium text-[#ECECEE]">
+              <div className="flex flex-col items-center gap-1 text-mute">
+                <span className="text-[14px] font-medium text-paper">
                   {computer.busyBotName} is using the computer
                 </span>
               </div>
             ) : isError ? (
-              <div className="flex flex-col items-center gap-1 text-[#FA5252]">
+              <div className="flex flex-col items-center gap-1 text-danger">
                 <span className="text-[13.5px] font-medium">Failed to start</span>
-                <span className="text-[12px] text-[#85858A]">Click to retry</span>
+                <span className="text-[12px] text-mute">Click to retry</span>
               </div>
             ) : isSleeping ? (
-              <div className="flex flex-col items-center gap-2 text-[#85858A]">
-                <svg
-                  width="26"
-                  height="26"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-[#4E4E54]"
-                >
-                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                  <line x1="8" y1="21" x2="16" y2="21"></line>
-                  <line x1="12" y1="17" x2="12" y2="21"></line>
-                </svg>
+              <div className="flex flex-col items-center gap-2 text-sage">
+                <IconComputer />
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[13px] font-medium text-[#ECECEE]">{label}</span>
-                  <span className="text-[11.5px] text-[#6C6C70]">Sleeping • Click to start</span>
+                  <span className="text-[13px] font-medium text-paper">{label}</span>
+                  <span className="text-[11.5px] text-sage">Sleeping · Click to start</span>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2 text-[#85858A]">
-                <svg
-                  width="26"
-                  height="26"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-[#4E4E54]"
-                >
-                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                  <line x1="8" y1="21" x2="16" y2="21"></line>
-                  <line x1="12" y1="17" x2="12" y2="21"></line>
-                </svg>
+              <div className="flex flex-col items-center gap-2 text-mute">
+                <IconComputer />
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[13px] font-medium text-[#ECECEE]">{label}</span>
-                  <span className="text-[11.5px] text-[#6C6C70]">Offline • Click to start</span>
+                  <span className="text-[13px] font-medium text-paper">{label}</span>
+                  <span className="text-[11.5px] text-mute">Offline · Click to start</span>
                 </div>
               </div>
             )}
@@ -274,7 +251,7 @@ export function ComputerPane({
       </div>
 
       <div className="mt-3 flex items-center justify-between">
-        <span data-testid="computer-label" data-mode={mode} className="text-[13px] text-[#85858A]">
+        <span data-testid="computer-label" data-mode={mode} className="text-[13px] text-mute">
           {computer?.busyBotName
             ? `${computer.busyBotName} is using it`
             : computer?.controlHolder === "user"
@@ -288,7 +265,7 @@ export function ComputerPane({
               variant="ghost"
               size="sm"
               onClick={onOpenFullscreen}
-              className="text-[13px] text-[#ECECEE]"
+              className="text-[13px] text-paper"
             >
               Open screen
             </Button>

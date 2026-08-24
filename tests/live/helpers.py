@@ -100,7 +100,7 @@ def open_computer_pane(page: Page) -> None:
             return
     except Exception:
         pass
-    page.get_by_title("Agent computer").click(timeout=5_000)
+    page.get_by_role("button", name="Computer").click(timeout=5_000)
     expect(memory).to_be_visible(timeout=8_000)
 
 
@@ -126,7 +126,7 @@ def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
 
 def open_settings(page: Page, name: str) -> None:
     open_chat(page, name)
-    thread_header(page).click()
+    page.get_by_role("button", name="Settings").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=8_000)
 
 
@@ -158,9 +158,9 @@ def create_named_bot(
     *,
     private: bool | None = None,
 ) -> None:
-    """+ is always in the sidebar. Product default is Team; pass private=True for a dedicated desktop."""
+    """New bot is always in the sidebar. Product default is Team; pass private=True for a dedicated desktop."""
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
-    page.get_by_title("New bot").click()
+    page.get_by_role("button", name="New bot").click()
     box = page.get_by_placeholder("Name this bot")
     expect(box).to_be_visible(timeout=10_000)
     box.fill(name)

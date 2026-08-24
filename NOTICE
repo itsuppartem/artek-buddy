@@ -13,3 +13,11 @@ run/event status vocabulary) was adapted from:
 Artek Buddy's implementation — the Python host, Cursor runtime, Linux
 .deb client, bot colors, and bot avatar — is original work and is not a
 copy of the Rakazo TypeScript sources.
+
+Bundled window fonts (OFL-1.1), latin subsets only:
+
+  Atkinson Hyperlegible — Braille Institute
+  Fraunces — Undercase Type
+  Azeret Mono — Displaay
+
+License texts: `client/web/src/fonts/OFL-*.txt`.

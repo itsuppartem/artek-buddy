@@ -103,7 +103,7 @@ export function BotSettings({
               data-testid="bot-name-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
+              className="mt-1 w-full rounded-lg border border-hairline bg-raised px-3 py-1.5 text-[14px] text-paper"
             />
           </label>
           <label className="text-[12px] text-[#85858A]">
@@ -112,7 +112,7 @@ export function BotSettings({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Code Reviewer"
-              className="mt-1 w-full rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
+              className="mt-1 w-full rounded-lg border border-hairline bg-raised px-3 py-1.5 text-[14px] text-paper"
             />
           </label>
           <label className="text-[12px] text-[#85858A]">
@@ -162,7 +162,7 @@ export function BotSettings({
           </p>
           <div className="mt-3">
             <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
-              Edit Profile
+              Edit profile
             </Button>
           </div>
         </>
