@@ -268,6 +268,7 @@ export function ShellPage() {
       })),
       viewing,
       dismissedAlerts.current,
+      shellOpenedAt.current,
     );
     if (!next) return;
     const source = botsRef.current.find((bot) => bot.id === next.botId);

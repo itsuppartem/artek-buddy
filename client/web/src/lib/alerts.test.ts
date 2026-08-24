@@ -225,4 +225,16 @@ describe("parkedAttentionForView", () => {
     const dismissed = new Set([attentionFingerprint(alert)]);
     expect(parkedAttentionForView([speaker, watcher], "bot-b", dismissed)).toBeNull();
   });
+
+  it("ignores a takeover parked before the window opened", () => {
+    const leftover = botSnap({
+      status: "waiting_takeover",
+      updatedAt: "2026-01-01T00:00:00Z",
+    });
+    const opened = Date.parse("2026-01-01T00:00:01Z");
+    expect(parkedAttentionForView([leftover, watcher], "bot-b", new Set(), opened)).toBeNull();
+    expect(parkedAttentionForView([speaker, watcher], "bot-b", new Set(), opened)?.title).toBe(
+      "Need needs you",
+    );
+  });
 });

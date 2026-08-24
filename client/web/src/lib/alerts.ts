@@ -141,10 +141,15 @@ export function parkedAttentionForView(
   bots: BotAlertSnapshot[],
   viewingBotId: string | null,
   dismissed: ReadonlySet<string>,
+  openedAtMs?: number,
 ): AttentionAlert | null {
   let best: AttentionAlert | null = null;
   for (const bot of bots) {
     if (bot.id === viewingBotId) continue;
+    if (openedAtMs != null) {
+      const updated = Date.parse(bot.updatedAt);
+      if (Number.isFinite(updated) && updated < openedAtMs) continue;
+    }
     const alert = attentionFromParkedBot(bot);
     if (!alert) continue;
     if (dismissed.has(attentionFingerprint(alert))) continue;
