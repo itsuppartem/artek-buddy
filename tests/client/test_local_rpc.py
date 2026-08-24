@@ -55,9 +55,7 @@ def test_local_rpc_origin_requires_loopback_origin(client_mod) -> None:
     assert client_mod.local_rpc_origin_allowed(None, "same-origin", 7777) is False
     assert client_mod.local_rpc_origin_allowed("http://127.0.0.1:7777", "same-origin", 7777) is True
     assert client_mod.local_rpc_origin_allowed("http://evil.example", "same-origin", 7777) is False
-    assert (
-        client_mod.local_rpc_origin_allowed("http://127.0.0.1:7777", "cross-site", 7777) is False
-    )
+    assert client_mod.local_rpc_origin_allowed("http://127.0.0.1:7777", "cross-site", 7777) is False
 
 
 def test_proxy_host_must_be_this_loopback_listener(client_mod) -> None:
