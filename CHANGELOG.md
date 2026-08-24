@@ -6,6 +6,7 @@
 - A takeover on another chat shows «needs you», not «replied». The bot stays `waiting_takeover` (same idea as `waiting_input`), and the window does not dismiss that banner during the chat switch.
 
 ### Changed
+- Window identity: Cavalier marks, ink/plate/tan tokens, Atkinson + Fraunces + Azeret Mono, labeled New bot / Computer / Settings / Send / Stop. Plugins stay out of the chrome. Send is disabled when empty.
 - Release scans the host image digest (HIGH and CRITICAL) before tagging `latest`, refuses `--clobber` on GitHub Release assets, and does not prune old Releases. Client CycloneDX SBOM is the packaged `.deb`.
 - Host FastAPI/Starlette pins no longer need runtime pip-audit ignores. Remaining ignores require a reason and expiry.
 - Host and worker serialize `apply_migrations` with a Postgres advisory lock and store a sha256 per applied file.

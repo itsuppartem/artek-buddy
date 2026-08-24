@@ -72,7 +72,7 @@ def test_pairing_with_device_name_shows_empty_bots(
 
 def test_create_cancel_and_disabled_until_named(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
-    page.get_by_title("New bot").click()
+    page.get_by_role("button", name="New bot").click()
     expect(page.get_by_placeholder("Name this bot")).to_be_visible()
     create = page.get_by_role("button", name="Create", exact=True)
     expect(create).to_be_disabled()
@@ -105,7 +105,7 @@ def test_archive_only_bot_shows_empty_inbox(page: Page, client_url: str, host_ur
 def test_create_does_not_run_on_name_focus(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("Focus")
     pair_fresh(page, client_url, host_url)
-    page.get_by_title("New bot").click()
+    page.get_by_role("button", name="New bot").click()
     box = page.get_by_placeholder("Name this bot")
     expect(box).to_be_visible()
     box.click()

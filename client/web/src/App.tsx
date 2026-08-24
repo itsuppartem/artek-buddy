@@ -24,12 +24,12 @@ export function App() {
 
   if (bootError) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#050506] px-6 text-center">
-        <div data-testid="proxy-error" className="max-w-sm text-[14px] leading-6 text-[#F0AAA0]">
+      <div className="flex h-full items-center justify-center bg-ink px-6 text-center">
+        <div data-testid="proxy-error" className="max-w-sm text-[14px] leading-6 text-danger">
           <div>{bootError}</div>
           <button
             type="button"
-            className="mt-3 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+            className="mt-3 text-[13px] font-medium text-paper underline underline-offset-2"
             onClick={() => window.location.reload()}
           >
             Retry
@@ -39,7 +39,7 @@ export function App() {
     );
   }
   if (paired === null) {
-    return <div className="h-full bg-[#050506]" />;
+    return <div className="h-full bg-ink" />;
   }
   if (!paired) {
     return <PairingPage onPaired={() => setPaired(true)} initialUrl={savedHostUrl} />;

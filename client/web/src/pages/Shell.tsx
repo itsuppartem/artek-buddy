@@ -23,6 +23,7 @@ import {
   shouldReplaceAttention,
   shouldSendDesktopAlert,
 } from "../lib/alerts";
+import { composerCanSend } from "../lib/composer";
 import {
   composerRedo,
   composerUndo,
@@ -70,6 +71,15 @@ import type {
 } from "../types";
 import { BotAvatar } from "../ui/bot-avatar";
 import { Button } from "../ui/button";
+import {
+  IconClose,
+  IconComputer,
+  IconPlus,
+  IconSearch,
+  IconSend,
+  IconSettings,
+  IconStop,
+} from "../ui/icons";
 import { WindowChrome } from "../ui/window-chrome";
 import { BotContextMenu, type ContextMenuPosition } from "./BotContextMenu";
 import { MessageContextMenu } from "./MessageContextMenu";
@@ -994,28 +1004,30 @@ export function ShellPage() {
   }, [later]);
 
   return (
-    <div className="relative flex h-full min-w-0 overflow-hidden bg-[#050506] text-[#DFDFE2]">
-      <aside className="flex w-[316px] shrink-0 flex-col border-r border-[#171719] bg-[#0B0B0C]">
-        <div className="app-drag flex items-center justify-between px-[18px] pb-3 pt-4">
+    <div className="relative flex h-full min-w-0 overflow-hidden bg-ink text-paper">
+      <aside className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613]">
+        <div className="app-drag flex items-center justify-between px-3 pb-2 pt-3">
           <WindowChrome />
+        </div>
+        <div className="mb-2 flex items-center gap-2 px-3">
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-[8px] border border-hairline bg-raised px-2.5 py-1.5 text-[14px] text-mute">
+            <IconSearch />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search"
+              aria-label="Search inbox"
+              className="w-full bg-transparent"
+            />
+          </label>
           <button
             type="button"
             onClick={() => openCreate()}
-            className="app-no-drag text-[21px] text-[#7A7A80] hover:text-[#C9C9CE]"
-            title="New bot"
-            aria-label="New bot"
+            className="app-no-drag inline-flex h-[34px] shrink-0 items-center gap-1 rounded-[8px] border border-hairline bg-raised px-2.5 text-[13px] text-paper"
           >
-            +
+            <IconPlus />
+            New bot
           </button>
-        </div>
-        <div className="mx-3.5 mb-3 flex items-center gap-2.5 rounded-xl border border-[#202023] bg-[#141416] px-3 py-2 text-[14px] text-[#6C6C70]">
-          <span>⌕</span>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search"
-            className="w-full bg-transparent outline-none"
-          />
         </div>
         <div className="ab-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
           {sidebarView === "archived" ? (
@@ -1024,7 +1036,7 @@ export function ShellPage() {
                 type="button"
                 data-testid="back-inbox"
                 onClick={() => setSidebarView("inbox")}
-                className="mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13.5px] text-[#85858A] hover:bg-[#131315] hover:text-[#ECECEE]"
+                className="mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13.5px] text-mute hover:bg-raised hover:text-paper"
               >
                 ← Inbox
               </button>
@@ -1038,10 +1050,10 @@ export function ShellPage() {
                   >
                     <BotAvatar color={bot.color} size={38} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[15px] font-medium text-[#ECECEE]">
+                      <div className="truncate font-display text-[14.5px] text-paper">
                         {bot.name}
                       </div>
-                      <div className="mt-0.5 truncate text-[13.5px] text-[#85858A]">
+                      <div className="mt-0.5 truncate text-[12.5px] text-mute">
                         {stripMarkdown(bot.preview || bot.title)}
                       </div>
                     </div>
@@ -1049,7 +1061,7 @@ export function ShellPage() {
                       type="button"
                       data-testid="restore-chat"
                       onClick={() => void restoreBot(bot)}
-                      className="shrink-0 rounded-lg border border-[#303036] px-2.5 py-1 text-[12.5px] text-[#ECECEE] hover:bg-[#1A1A1D]"
+                      className="shrink-0 rounded-lg border border-hairline px-2.5 py-1 text-[12.5px] text-paper hover:bg-raised"
                     >
                       Restore
                     </button>
@@ -1075,39 +1087,42 @@ export function ShellPage() {
                       position: { x: event.clientX, y: event.clientY },
                     });
                   }}
-                  className="flex gap-3 rounded-xl px-2.5 py-[11px] text-left"
-                  style={{ background: active?.id === bot.id ? "#161618" : "transparent" }}
+                  className={`flex gap-2.5 border-l-[3px] px-2.5 py-[11px] text-left ${
+                    active?.id === bot.id
+                      ? "border-tan bg-plate"
+                      : "border-transparent hover:bg-raised"
+                  }`}
                 >
                   <BotAvatar color={bot.color} size={38} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <span
-                        className={`flex items-center gap-1.5 text-[15px] text-[#ECECEE] ${
-                          bot.unread ? "font-semibold" : "font-medium"
+                        className={`flex items-center gap-1.5 font-display text-[14.5px] text-paper ${
+                          bot.unread ? "font-semibold" : "font-normal"
                         }`}
                       >
                         {bot.name}
                         {bot.pinned ? (
-                          <span title="Pinned" className="text-[11px] text-[#A8A8AD]">
+                          <span title="Pinned" className="text-[11px] text-mute">
                             📌
                           </span>
                         ) : null}
                       </span>
-                      <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-[#6C6C70]">
+                      <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-mute">
                         {bot.status === "idle" ? "" : bot.status}
                         {bot.unread ? (
                           <span
                             data-testid="unread-dot"
                             aria-hidden="true"
-                            className="inline-block h-2 w-2 rounded-full bg-[#8B5CF6]"
+                            className="inline-block h-[7px] w-[7px] bg-tan"
                           />
                         ) : null}
                       </span>
                     </div>
                     <div
                       data-testid="bot-preview"
-                      className={`mt-0.5 truncate text-[13.5px] ${
-                        bot.unread ? "font-medium text-[#C9C9CE]" : "text-[#85858A]"
+                      className={`mt-0.5 truncate text-[12.5px] ${
+                        bot.unread ? "font-medium text-paper" : "text-mute"
                       }`}
                     >
                       {stripMarkdown(bot.preview || bot.title)}
@@ -1120,7 +1135,7 @@ export function ShellPage() {
                   type="button"
                   data-testid="open-archived"
                   onClick={() => setSidebarView("archived")}
-                  className="mt-1 flex items-center justify-between rounded-xl px-2.5 py-[11px] text-left text-[14px] text-[#85858A] hover:bg-[#131315] hover:text-[#ECECEE]"
+                  className="mt-1 flex items-center justify-between rounded-xl px-2.5 py-[11px] text-left text-[14px] text-mute hover:bg-raised hover:text-paper"
                 >
                   <span>Archived</span>
                   <span data-testid="archived-count">{archivedBots.length}</span>
@@ -1129,100 +1144,77 @@ export function ShellPage() {
             </>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setLater("Plugins ship with a later stage.")}
-          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-[#131315]"
-        >
-          <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-[#17171A] text-[#9A9AA0]">
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M4 7h3a1 1 0 0 0 1-1 1.5 1.5 0 1 1 3 0 1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1 1.5 1.5 0 1 1 0 3 1 1 0 0 0-1 1v3h-3a1 1 0 0 0-1 1 1.5 1.5 0 1 1-3 0 1 1 0 0 0-1-1H4v-3a1 1 0 0 0-1-1 1.5 1.5 0 1 1 0-3 1 1 0 0 0 1-1z" />
-            </svg>
-          </span>
-          <span className="text-[14.5px] text-[#C9C9CE]">Plugins</span>
-        </button>
-        <div className="flex items-center gap-[11px] px-[18px] py-3.5">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-[#232326] text-[12px] text-[#A8A8AD]">
+        <div className="flex items-center gap-[11px] border-t border-hairline px-[14px] py-3.5">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-raised text-[12px] text-mute">
             Y
           </span>
-          <span className="text-[14.5px] text-[#C9C9CE]">You</span>
+          <span className="text-[13px] text-mute">You</span>
         </div>
       </aside>
 
       <main
         data-testid="thread-pane"
-        className="relative flex min-w-0 flex-1 flex-col bg-[#0D0D0E]"
+        className="relative flex min-w-0 flex-1 flex-col bg-ink"
         onPaste={onChatPaste}
       >
-        <div className="flex items-center justify-between border-b border-[#141416] px-[22px] py-[17px]">
-          <button
-            type="button"
-            data-testid="thread-header"
-            disabled={!active}
-            aria-label={active ? `Open settings for ${active.name}` : "Bot settings"}
-            onClick={() => {
-              panelAfterSettings.current = null;
-              setPanel("settings");
-            }}
-            className="flex min-w-0 items-center gap-3 disabled:cursor-default"
-          >
+        <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
+          <div data-testid="thread-header" className="flex min-w-0 items-center gap-3">
             {active ? <BotAvatar color={active.color} size={26} /> : null}
-            <span className="min-w-0">
-              <span className="block truncate text-[16px] font-medium text-[#ECECEE]">
-                {active?.name ?? "Select a bot"}
-              </span>
+            <span className="min-w-0 truncate font-display text-[16px] font-semibold text-paper">
+              {active?.name ?? "Select a bot"}
             </span>
-          </button>
-          <button
-            type="button"
-            title="Agent computer"
-            disabled={!active}
-            onClick={() => setPanel((current) => (current === "computer" ? null : "computer"))}
-            className="grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-[#1B1B1E] disabled:opacity-40"
-            style={{ background: panel ? "#1B1B1E" : "transparent" }}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#A8A8AD"
-              strokeWidth="1.6"
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={!active}
+              onClick={() => setPanel((current) => (current === "computer" ? null : "computer"))}
+              className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
+                panel === "computer"
+                  ? "border-tan bg-raised text-paper"
+                  : "border-hairline bg-raised text-paper"
+              }`}
             >
-              <rect x="2" y="4" width="20" height="13" rx="2" />
-              <path d="M8 21h8M12 17v4" />
-            </svg>
-          </button>
+              <IconComputer />
+              Computer
+            </button>
+            <button
+              type="button"
+              disabled={!active}
+              onClick={() => {
+                panelAfterSettings.current = panel === "computer" ? "computer" : null;
+                setPanel("settings");
+              }}
+              className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
+                panel === "settings"
+                  ? "border-tan bg-raised text-paper"
+                  : "border-hairline bg-raised text-paper"
+              }`}
+            >
+              <IconSettings />
+              Settings
+            </button>
+          </div>
         </div>
         {attention || later ? (
-          <div className="flex w-full shrink-0 flex-col items-center gap-2 px-4 py-2">
+          <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
             {attention ? (
               <div
                 data-testid="attention-alert"
-                className="flex max-w-[min(480px,90vw)] items-center gap-2 rounded-full bg-[#1A1A1D] py-2 pr-2 pl-4 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]"
+                className="flex w-full items-center gap-2 border border-hairline border-l-[3px] border-l-tan bg-plate px-3 py-2 text-[13.5px] text-paper"
               >
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left hover:text-[#ECECEE]"
+                  className="min-w-0 flex-1 text-left hover:text-tan"
                   onClick={() => {
                     dismissedAlerts.current.add(attentionFingerprint(attention));
                     navigate(`/app/${attention.botId}`);
                     setAttention(null);
                   }}
                 >
-                  <span className="font-medium text-[#ECECEE]">{attention.title}</span>
+                  <span className="font-medium text-paper">{attention.title}</span>
                   {attention.body ? (
-                    <span className="mt-0.5 block truncate text-[12.5px] text-[#85858A]">
+                    <span className="mt-0.5 block truncate text-[12.5px] text-mute">
                       {attention.body}
                     </span>
                   ) : null}
@@ -1230,16 +1222,15 @@ export function ShellPage() {
                 <button
                   type="button"
                   data-testid="attention-dismiss"
-                  aria-label="Dismiss alert"
                   onClick={() => dismissAttention()}
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[#85858A] hover:bg-[#222226] hover:text-[#ECECEE]"
+                  className="shrink-0 px-2 text-[13px] text-mute hover:text-paper"
                 >
-                  ✕
+                  Dismiss
                 </button>
               </div>
             ) : null}
             {later ? (
-              <div className="rounded-full bg-[#1A1A1D] px-4 py-2 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]">
+              <div className="border border-hairline bg-plate px-4 py-2 text-[13.5px] text-paper">
                 {later}
               </div>
             ) : null}
@@ -1265,14 +1256,14 @@ export function ShellPage() {
                     ? "auth-error"
                     : "action-error"
               }
-              className="self-center rounded-xl border border-[#4A2522] bg-[#1A1110] px-4 py-3 text-center text-[13.5px] text-[#F0AAA0]"
+              className="self-center rounded-xl border border-danger/40 bg-danger-bg px-4 py-3 text-center text-[13.5px] text-danger"
             >
               <div>{error}</div>
               {errorKind === "host" ? (
                 <button
                   type="button"
                   onClick={() => void reconnectHost(true)}
-                  className="mt-2 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
                 >
                   Retry connection
                 </button>
@@ -1280,7 +1271,7 @@ export function ShellPage() {
                 <button
                   type="button"
                   onClick={() => void forgetDevice()}
-                  className="mt-2 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
                 >
                   Pair this computer again
                 </button>
@@ -1288,7 +1279,7 @@ export function ShellPage() {
                 <button
                   type="button"
                   onClick={() => setError(null)}
-                  className="mt-2 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
                 >
                   Dismiss
                 </button>
@@ -1300,8 +1291,8 @@ export function ShellPage() {
               data-testid="empty-inbox"
               className="m-auto flex max-w-sm flex-col items-center text-center"
             >
-              <div className="text-[17px] font-medium text-[#ECECEE]">Chats are archived</div>
-              <p className="mt-2 text-[14px] leading-5 text-[#85858A]">
+              <div className="font-display text-[17px] text-paper">Chats are archived</div>
+              <p className="mt-2 text-[14px] leading-5 text-mute">
                 Restore one from Archived, or create a new bot.
               </p>
               <div className="mt-5 flex gap-2">
@@ -1319,11 +1310,11 @@ export function ShellPage() {
               data-testid="empty-bots"
               className="m-auto flex max-w-sm flex-col items-center text-center"
             >
-              <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-[#1A1A1D] text-[23px] text-[#A8A8AD]">
-                +
+              <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-raised text-mute">
+                <IconPlus />
               </div>
-              <div className="text-[17px] font-medium text-[#ECECEE]">Create your first bot</div>
-              <p className="mt-2 text-[14px] leading-5 text-[#85858A]">
+              <div className="font-display text-[17px] text-paper">Create your first bot</div>
+              <p className="mt-2 text-[14px] leading-5 text-mute">
                 Give it a purpose, then it gets its own chat, memory, routines, and computer.
               </p>
               <Button type="button" className="mt-5" onClick={() => openCreate()}>
@@ -1337,7 +1328,7 @@ export function ShellPage() {
               data-testid="load-earlier"
               disabled={loadingOlder}
               onClick={() => void loadOlderMessages()}
-              className="self-center rounded-lg px-3 py-1.5 text-[13px] text-[#85858A] hover:bg-[#1A1A1D] hover:text-[#C9C9CE] disabled:opacity-50"
+              className="self-center rounded-lg px-3 py-1.5 text-[13px] text-mute hover:bg-raised hover:text-paper disabled:opacity-50"
             >
               {loadingOlder ? "Loading…" : "Load earlier messages"}
             </button>
@@ -1371,7 +1362,7 @@ export function ShellPage() {
           {thread?.run && (thread.run.status === "failed" || thread.run.status === "cancelled") ? (
             <div
               data-testid="run-error"
-              className="self-start rounded-xl border border-[#4A2522] bg-[#1A1110] px-4 py-2 text-[13.5px] text-[#F0AAA0]"
+              className="self-start rounded-xl border border-danger/40 bg-danger-bg px-4 py-2 text-[13.5px] text-danger"
             >
               {thread.run.error ||
                 (thread.run.status === "cancelled" ? "Stopped." : "The turn failed.")}
@@ -1381,41 +1372,41 @@ export function ShellPage() {
             <div className="flex justify-start">
               <div
                 data-testid="typing-indicator"
-                className="flex items-center gap-1.5 rounded-[18px] bg-[#161619] border border-[#222226] px-4 py-3"
+                className="flex items-center gap-1.5 rounded-[18px] border border-hairline bg-plate px-4 py-3"
                 title="Typing…"
               >
-                <span className="inline-block h-2 w-2 rounded-full bg-[#C45C26] animate-pulse" />
+                <span className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan" />
                 <span
-                  className="inline-block h-2 w-2 rounded-full bg-[#C45C26] animate-pulse"
+                  className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
                   style={{ animationDelay: "150ms" }}
                 />
                 <span
-                  className="inline-block h-2 w-2 rounded-full bg-[#C45C26] animate-pulse"
+                  className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
                   style={{ animationDelay: "300ms" }}
                 />
               </div>
             </div>
           ) : null}
         </div>
-        <div className="px-6 pb-6 pt-3">
+        <div className="border-t border-hairline px-3 pb-3 pt-2.5">
           {replyTo ? (
             <div
               data-testid="reply-bar"
-              className="mb-2 flex items-center gap-3 rounded-[16px] border border-[#202023] bg-[#131315] px-3.5 py-2"
+              className="mb-2 flex items-center gap-3 rounded-[10px] border border-hairline bg-raised px-3.5 py-2"
             >
               <div className="min-w-0 flex-1">
-                <div className="text-[12px] text-[#85858A]">
+                <div className="text-[12px] text-mute">
                   Replying to {replyTo.role === "bot" ? active?.name || "bot" : "you"}
                 </div>
-                <div className="truncate text-[13.5px] text-[#C9C9CE]">{replyExcerpt(replyTo)}</div>
+                <div className="truncate text-[13.5px] text-paper">{replyExcerpt(replyTo)}</div>
               </div>
               <button
                 type="button"
-                className="text-[16px] text-[#85858A] hover:text-[#ECECEE]"
+                className="text-mute hover:text-paper"
                 aria-label="Cancel reply"
                 onClick={() => setReplyTo(null)}
               >
-                ✕
+                <IconClose />
               </button>
             </div>
           ) : null}
@@ -1434,7 +1425,7 @@ export function ShellPage() {
           ) : null}
           <div
             data-testid="thread-composer"
-            className="flex items-end gap-3.5 rounded-[28px] border border-[#202023] bg-[#131315] py-[9px] pr-2.5 pl-3"
+            className="flex items-end gap-2"
             onDragOver={(event) => event.preventDefault()}
             onDrop={onComposerDrop}
           >
@@ -1454,9 +1445,9 @@ export function ShellPage() {
               aria-label="Attach files"
               disabled={!active}
               onClick={() => fileInputRef.current?.click()}
-              className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-full border border-[#26262A] text-[18px] text-[#9A9AA0] hover:bg-[#1B1B1E] disabled:opacity-40"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-hairline bg-raised text-paper disabled:opacity-40"
             >
-              +
+              <IconPlus />
             </button>
             <textarea
               ref={composerRef}
@@ -1474,7 +1465,7 @@ export function ShellPage() {
                     ? `Message ${active.name}`
                     : "Create a bot to start"
               }
-              className="max-h-40 min-h-[22px] flex-1 resize-none bg-transparent py-1.5 text-[15.5px] leading-[22px] text-[#E9E9EA] outline-none disabled:cursor-not-allowed disabled:opacity-40"
+              className="max-h-40 min-h-[44px] flex-1 resize-none rounded-[10px] border border-hairline bg-raised px-3 py-2.5 text-[15px] leading-[22px] text-paper disabled:cursor-not-allowed disabled:opacity-40"
             />
             {isBusy ? (
               <button
@@ -1482,34 +1473,33 @@ export function ShellPage() {
                 data-testid="thread-stop"
                 aria-label="Stop"
                 onClick={() => void stop()}
-                className="grid h-9 w-9 place-items-center rounded-full bg-[#E65707] text-white hover:bg-[#D44E06]"
-                title="Stop the lead and workers"
+                className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-tan px-3.5 text-[13px] font-bold text-tan"
               >
-                ■
+                <IconStop />
+                Stop
               </button>
             ) : null}
             <button
               type="button"
               aria-label="Send"
-              disabled={!active || sending}
+              disabled={!active || sending || !composerCanSend(draft, pendingFiles.length)}
               onClick={() => void send()}
-              className={`grid h-9 w-9 place-items-center rounded-full bg-[#F1F1EF] text-[#17171A] disabled:opacity-40 ${
-                !draft.trim() && pendingFiles.length === 0 ? "opacity-40" : ""
-              }`}
+              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-tan px-4 text-[13px] font-bold text-ink disabled:opacity-40"
             >
-              ↑
+              <IconSend />
+              Send
             </button>
           </div>
         </div>
       </main>
 
       <aside
-        className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#0A0A0B] transition-[width] duration-200 ease-out ${
-          panel && (active || panel === "create") ? "w-[384px] border-l border-[#141416]" : "w-0"
+        className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out ${
+          panel && (active || panel === "create") ? "w-[360px] border-l border-hairline" : "w-0"
         }`}
       >
         {panel && (active || panel === "create") ? (
-          <div className="ab-scroll h-full w-[384px] overflow-y-auto px-5 py-[17px]">
+          <div className="ab-scroll h-full w-[360px] overflow-y-auto px-4 py-3">
             {panel === "create" ? (
               <CreateBotForm
                 onCancel={() => {
@@ -1679,7 +1669,7 @@ function AttachChip({ item, onRemove }: { item: PendingFile; onRemove: () => voi
     <span
       data-testid="attach-chip"
       data-kind={kind}
-      className="flex max-w-full items-center gap-2 rounded-xl border border-[#26262A] bg-[#1B1B1E] px-2 py-1.5 text-[13px] text-[#C9C9CE]"
+      className="flex max-w-full items-center gap-2 rounded-xl border border-hairline bg-raised px-2 py-1.5 text-[13px] text-paper"
     >
       {kind === "image" && url ? (
         <img
@@ -1705,7 +1695,7 @@ function AttachChip({ item, onRemove }: { item: PendingFile; onRemove: () => voi
       <button
         type="button"
         aria-label={`Remove ${item.file.name}`}
-        className="text-[#85858A] hover:text-[#ECECEE]"
+        className="text-mute hover:text-paper"
         onClick={onRemove}
       >
         ✕

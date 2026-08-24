@@ -80,9 +80,9 @@
 }
 
 .ab-chat-markdown a {
-  color: #86b7ff;
+  color: var(--color-tan);
   text-decoration: underline;
-  text-decoration-color: rgba(134, 183, 255, 0.55);
+  text-decoration-color: color-mix(in srgb, var(--color-tan) 55%, transparent);
   text-underline-offset: 0.15em;
 }
 
@@ -175,7 +175,7 @@
   width: 0.16em;
   height: 1em;
   border-radius: 999px;
-  background: #85858a;
+  background: var(--color-mute);
   animation: abMarkdownCursor 1s steps(2, jump-none) infinite;
 }
 

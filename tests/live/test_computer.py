@@ -77,7 +77,7 @@ def test_create_memory_routine_and_settings(
     expect(page.get_by_text("Routine started")).to_be_visible(timeout=8_000)
 
     open_settings(page, name)
-    page.get_by_role("button", name="Edit Profile").click()
+    page.get_by_role("button", name="Edit profile").click()
     renamed = f"{name} Renamed"
     page.get_by_test_id("bot-name-input").fill(renamed)
     page.get_by_role("button", name="Save").click()
@@ -121,7 +121,7 @@ def test_computer_pane_start_and_close(page: Page, client_url: str, host_url: st
         "data-state", "running", timeout=8_000
     )
     expect(page.get_by_test_id("computer-running")).to_be_visible()
-    page.get_by_title("Settings").click()
+    page.get_by_role("button", name="Settings").last.click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
     page.get_by_test_id("computer-stop").click()
@@ -150,7 +150,7 @@ def test_team_busy_shows_other_bot(page: Page, client_url: str, host_url: str) -
     expect(page.get_by_text(f"{alpha} is using the computer")).to_be_visible(timeout=8_000)
     expect(page.get_by_role("button", name="Take control")).to_be_disabled()
     expect(page.get_by_test_id("computer-start")).to_be_disabled()
-    page.get_by_title("Settings").click()
+    page.get_by_role("button", name="Settings").last.click()
     expect(page.get_by_text(f"{alpha} is using this computer.")).to_be_visible()
     expect(page.get_by_test_id("computer-restart")).to_be_disabled()
     expect(page.get_by_test_id("computer-stop")).to_be_disabled()
@@ -168,7 +168,7 @@ def test_computer_pane_stays_open_after_settings_release_and_create(
     create_named_bot(page, first, private=True)
     open_computer_pane(page)
     expect(page.get_by_test_id("new-memory")).to_be_visible()
-    page.get_by_title("Settings").click()
+    page.get_by_role("button", name="Settings").last.click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     page.get_by_label("Close settings").click()
     expect(page.get_by_test_id("new-memory")).to_be_visible()
@@ -242,7 +242,7 @@ def test_settings_stop_shows_sleeping_on_pane(page: Page, client_url: str, host_
         "data-state", "running", timeout=8_000
     )
     expect(page.get_by_test_id("computer-running")).to_be_visible()
-    page.get_by_title("Settings").click()
+    page.get_by_role("button", name="Settings").last.click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
     page.get_by_test_id("computer-stop").click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Sleeping", timeout=8_000)

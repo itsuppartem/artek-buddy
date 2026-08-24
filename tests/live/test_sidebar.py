@@ -27,11 +27,10 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
 
     pair_fresh(page, client_url, host_url)
 
-    page.get_by_title("New bot").click()
+    page.get_by_role("button", name="New bot").click()
     expect(page.get_by_placeholder("Name this bot")).to_be_visible()
 
-    page.get_by_text("Plugins", exact=True).click()
-    expect(page.get_by_text("Plugins ship with a later stage.")).to_be_visible()
+    expect(page.get_by_text("Plugins", exact=True)).to_have_count(0)
     page.get_by_text("You", exact=True).click()
     expect(page.get_by_text("Bot Settings")).to_have_count(0)
 
@@ -64,13 +63,13 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
     page.get_by_role("menuitem", name="Unpin").click()
     expect(bot_row(page, alpha).get_by_title("Pinned")).to_have_count(0)
     open_bot_menu(page, alpha)
-    page.get_by_role("menuitem", name="Mark as Unread").click()
+    page.get_by_role("menuitem", name="Mark as unread").click()
     expect(bot_row(page, alpha).get_by_test_id("unread-dot")).to_be_visible()
     open_bot_menu(page, alpha)
-    page.get_by_role("menuitem", name="Mark as Read").click()
+    page.get_by_role("menuitem", name="Mark as read").click()
     expect(bot_row(page, alpha).get_by_test_id("unread-dot")).to_have_count(0)
     open_bot_menu(page, alpha)
-    page.get_by_role("menuitem", name="Edit Profile").click()
+    page.get_by_role("menuitem", name="Edit profile").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     open_bot_menu(page, alpha)
     page.get_by_role("menuitem", name="Duplicate").click()
@@ -93,7 +92,7 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
     # restore() navigates to Bravo. Open Alpha settings from the row menu.
     bot_row(page, alpha).click()
     open_bot_menu(page, alpha)
-    page.get_by_role("menuitem", name="Edit Profile").click()
+    page.get_by_role("menuitem", name="Edit profile").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     page.get_by_role("button", name="Delete chat…").click()
     page.get_by_role("button", name="Cancel").click()

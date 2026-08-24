@@ -13,38 +13,38 @@ flowchart LR
 ```
 
 ```
-┌──────── sidebar 316px ────────┬────────────── thread ──────────────┬── computer pane ──┐
-│ chrome  +                                                     │ header: bot name → Settings │ gear  ✕           │
-│ Search                                                        │ thread / empty / create     │ state badge       │
-│ bot rows  (unread · pin · preview)                            │ composer  +  textarea  ⏹ ➤  │ preview iframe    │
-│ Archived (n)                                                  │                             │ Open / Take / Rel │
-│ Plugins  (toast: later)                                       │ overlays: create / settings │ Memory            │
-│ You                                                           │ attention (top, Dismiss)    │ Routines          │
-└───────────────────────────────────────────────────────────────┴─────────────────────────────┴───────────────────┘
+┌── rack 252px ──┬──────── bench / thread ────────┬── hatch 360px ──┐
+│ chrome         │ header: name (identity)        │ state badge     │
+│ Search inbox   │ Computer · Settings            │ Settings Close  │
+│ New bot        │ attention plate + Dismiss      │ Preview · view  │
+│ bot rows       │ thread / empty / create        │ Open / Take /   │
+│ Archived       │ composer strip  Attach Send    │ Rel             │
+│ You (label)    │ Stop while a run is live       │ Memory Routines │
+└────────────────┴────────────────────────────────┴─────────────────┘
 ```
 
-The computer pane and Settings overlay sit on the right of the same shell. Gear on the pane opens Settings; closing Settings returns to the pane. Create opened while the pane is up returns to the pane after Create or Cancel. Release does not close the pane. Fullscreen screen is a separate overlay. Gear in the thread header opens Settings and does **not** boot. Offline • Click to start boots and takes control.
+The computer pane and Settings overlay sit on the right of the same shell. Settings on the pane opens Settings; closing Settings returns to the pane. Create opened while the pane is up returns to the pane after Create or Cancel. Release does not close the pane. Fullscreen screen is a separate overlay. Settings does **not** boot. Offline • Click to start boots and takes control.
 
 ## Screens
 
 | Screen | When | Controls |
 | --- | --- | --- |
 | Proxy error | loopback `status` failed | Retry (reload) |
-| Pairing | not paired | Mascot mark, Host URL (last host from boot status, not refetched), code `XXXX-XXXX`, device name, Pair. Fail text under the form. |
-| Shell | paired | sidebar + thread; optional Settings / Create / computer pane / fullscreen. Pairing does not open the pane. Create focuses the new chat. Gear opens the pane without booting. Offline boots. |
+| Pairing | not paired | Lying-pose mark, Host URL (last host from boot status, not refetched), code `XXXX-XXXX`, device name, Pair (disabled until the code is non-empty). Fail text under the form. Visible tan `:focus-visible`. |
+| Shell | paired | rack + thread; optional Settings / Create / computer pane / fullscreen. Pairing does not open the pane. Create focuses the new chat. Settings opens the pane without booting. Offline boots. |
 
 Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
-## Sidebar
+## Sidebar (rack)
 
-- `+` opens Create.
-- Search filters inbox and archived by name / preview.
-- Bot row: name, pin mark, unread dot, status, preview. Accessible name is `Open chat {name}`. Click opens the chat. Right-click: Pin / Unpin, Mark read / unread, Edit Profile, Duplicate, Archive, Delete. Inbox order is pinned first, then created; a later message does not jump a row under the pointer.
+- **New bot** opens Create. Accessible name is the visible label.
+- Search filters inbox and archived by name / preview. Accessible name is `Search inbox`.
+- Bot row: Fraunces name, pin mark, tan square unread pin (`unread-dot`), status, preview. Selected row has a tan 3px left rail. Accessible name is `Open chat {name}`. Click opens the chat. Right-click: Pin / Unpin, Mark as read / unread, Edit profile, Duplicate, Archive, Delete. Inbox order is pinned first, then created; a later message does not jump a row under the pointer.
 - The selected row, thread header, composer, and computer pane always name the same bot. The thread never blanks to an empty column on a switch.
 - Empty inbox (all archived): Restore one from Archived, or create a new bot.
 - No bots: Create your first bot.
 - Archived list: Back to Inbox, Restore on each row.
-- Plugins: toast only (`Plugins ship with a later stage.`).
+- Plugins are not in the chrome until that feature ships.
 - You: label, not a settings screen.
 
 ## Thread
@@ -53,7 +53,7 @@ SSE. Blocks in a message:
 
 | Block | What you see |
 | --- | --- |
-| user / bot text | markdown bubbles; user is right-aligned |
+| user / bot text | markdown bubbles; user is paper on the right, bot is plate on the left |
 | hidden live draft | not shown |
 | progress | streaming bot bubble |
 | meta | centered clock line |
@@ -65,7 +65,7 @@ SSE. Blocks in a message:
 | subagent | `#n name`, status, Stop while running, Restart after |
 | child_bot | click opens that chat (disabled if deleted/archived) |
 
-Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator, `run-error` for failed / cancelled, Stop (lead + workers, `thread-stop`). Composer: Enter send, Shift+Enter newline, undo/redo, Plus / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. Attention banner sits under the thread header (`attention-alert`): replied / ask / takeover / failed. It is in the layout, so it does not cover Send or Load earlier. Opening that chat or Dismiss (`attention-dismiss`) is sticky for that ask or takeover: switching chats does not resurrect a dismissed or already-answered pill. It is not shown for the chat already on screen, or for events from before this window opened. A chat you already read that then finishes in the background still raises replied / failed. Finishing a turn does not switch the open chat. A newer banner replaces an older one of the same urgency; an older leftover cannot keep the pill. Title opens that chat; Dismiss (`attention-dismiss`) does not. `notifyOnFinish` mutes only replied / failed. Thread header is `thread-header`. Send stays enabled while a bot is selected so Enter can post the live textarea; an empty click is a no-op.
+Also: Reply on right-click (`reply-bar`, quote in the next user bubble), Load earlier (`load-earlier`), typing indicator (`ab-pulse`, honors `prefers-reduced-motion`), `run-error` for failed / cancelled, Stop (lead + workers, `thread-stop`, hidden while `waiting_takeover`). Composer is a full-width strip: Enter send, Shift+Enter newline, undo/redo, Attach / drop / Ctrl+V (file, screenshot, file-manager path). Attachment chips with preview. **Send** is disabled when there is no text and no files. Attention sits under the thread header (`attention-alert`) as a plate with a tan left rail: replied / ask / takeover / failed. It is in the layout, so it does not cover Send or Load earlier. Opening that chat or Dismiss (`attention-dismiss`) is sticky for that ask or takeover: switching chats does not resurrect a dismissed or already-answered pill. It is not shown for the chat already on screen, or for events from before this window opened. A chat you already read that then finishes in the background still raises replied / failed. Finishing a turn does not switch the open chat. A newer banner replaces an older one of the same urgency; an older leftover cannot keep the pill. Title opens that chat; Dismiss does not. `notifyOnFinish` mutes only replied / failed. Thread header (`thread-header`) is the bot name, not a Settings control. **Computer** and **Settings** are separate labeled buttons.
 
 The open chat uses `/v1/threads/{id}/events` for the thread. Inbox banners use one `/v1/events` stream for every bot, including the open chat, so a switch cannot drop `run.completed`. Duplicate event ids are ignored. Chrome HTTP/1.1 allows six connections per host; one SSE per leftover chat would starve Create and pair.
 
@@ -81,11 +81,11 @@ Not in this window: `threads.followUp` (the host queues on send while a lead is 
 
 Create: name, title, description, Team | Private (`computer-mode-team` / `computer-mode-private`).
 
-Settings: the same fields plus instructions, mode change (rebinds the desktop; home is not copied), Restart / Stop / Reset (Reset wipes that home; Team reset wipes the shared desktop), busy-bot name, notifyOnFinish, Delete with optional purge memories.
+Settings: the same fields plus instructions, mode change (rebinds the desktop; home is not copied), Restart / Stop / Reset (Reset wipes that home; Team reset wipes the shared desktop), busy-bot name, notifyOnFinish, Delete with optional purge memories. **Edit profile** opens the fields.
 
-## Computer pane
+## Computer pane (hatch)
 
-States: Offline, Booting, Running, Sleeping, Error (`computer-state` / `data-state`). Click Offline to boot and take control. Click Sleeping to wake. Gear does not auto-boot. Stop in Settings is Sleeping (`suspended`), not Offline. Preview click / Open screen opens the screen view (`computer-overlay`) and does **not** grant control. Take control is the only control grant (`computer-overlay-holder` while held). Caps Lock is forwarded during Take control. View-only preview iframe when the screen URL is `/novnc/…`. Fake sandbox has no noVNC URL, so the pane shows `computer-running` instead of spinning Connecting. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows `{name} is using the computer` on the start tile (one line; the bot that booted or holds the shared desktop, not only a bot with an active run) and disables Take / Restart / Stop / Reset. The pane keeps the start tile in that case instead of the running preview. Dedicated vs Team is `computer-label` `data-mode`.
+States: Offline, Booting, Running, Sleeping, Error (`computer-state` / `data-state`). Sleeping uses sage; Offline uses mute. Click Offline to boot and take control. Click Sleeping to wake. Settings does not auto-boot. Stop in Settings is Sleeping (`suspended`), not Offline. Preview click / Open screen opens the screen view (`computer-overlay`) and does **not** grant control. The preview bezel caption is **Preview · view only**. Take control is the only control grant (`computer-overlay-holder` while held). Caps Lock is forwarded during Take control. View-only preview iframe when the screen URL is `/novnc/…`. Fake sandbox has no noVNC URL, so the pane shows `computer-running` instead of spinning Connecting. Open screen / fullscreen overlay. Take control / Release. Heartbeat 60s. Retry. Team busy shows `{name} is using the computer` on the start tile (one line; the bot that booted or holds the shared desktop, not only a bot with an active run) and disables Take / Restart / Stop / Reset. The pane keeps the start tile in that case instead of the running preview. Dedicated vs Team is `computer-label` `data-mode`.
 
 Memory (same pane): owner / work / charter list, New (this bot \| shared, `memory-save`), Edit, Outdated = delete, Export `.md`.
 
@@ -93,7 +93,7 @@ Routines (same pane): New (name, cron, prompt; invalid cron disables Save), on/o
 
 ## Consent and this PC
 
-Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job marked `auto` runs without a card (`/local/owner-*`). After Allow the client reads, writes, lists, or execs under `$HOME` and posts the result. Paths outside `$HOME` are 403 and stay on the consent card. Composer Stop is `thread-stop` (`aria-label="Stop"`); the thread title is `Open settings for {name}`.
+Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job marked `auto` runs without a card (`/local/owner-*`). After Allow the client reads, writes, lists, or execs under `$HOME` and posts the result. Paths outside `$HOME` are 403 and stay on the consent card. Composer Stop is `thread-stop` (`aria-label="Stop"`). Settings is the Settings button, not the thread title.
 
 ## Loopback proxy (`/local/*`)
 
