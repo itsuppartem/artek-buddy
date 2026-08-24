@@ -43,6 +43,7 @@ jobs:
           python -m ruff format --check src tests client
           python -m ruff check src tests client
           python -m mypy
+          PYTHONPATH=src python -m artek_buddy.pip_audit_ignore
           ignores=()
           while read -r id _; do
             case "$id" in
