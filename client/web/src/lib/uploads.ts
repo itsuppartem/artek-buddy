@@ -140,6 +140,13 @@ export function clipboardFilePaths(event: { clipboardData?: DataTransfer | null 
   return transferFilePaths(event.clipboardData);
 }
 
+export function pasteClipboardData(event: {
+  clipboardData?: DataTransfer | null;
+  nativeEvent?: { clipboardData?: DataTransfer | null };
+}): DataTransfer | null {
+  return event.clipboardData ?? event.nativeEvent?.clipboardData ?? null;
+}
+
 export function clipboardHasAttachable(event: { clipboardData?: DataTransfer | null }): boolean {
   const data = event.clipboardData;
   if (!data) return false;
@@ -149,7 +156,17 @@ export function clipboardHasAttachable(event: { clipboardData?: DataTransfer | n
   ) {
     return true;
   }
+  const types = Array.from(data.types || []);
+  if (types.some((type) => isMediaClipboardType(type) || type === "Files")) return true;
   return transferFilePaths(data).length > 0;
+}
+
+export function clipboardShouldClaim(event: { clipboardData?: DataTransfer | null }): boolean {
+  if (clipboardHasAttachable(event)) return true;
+  const data = event.clipboardData;
+  if (!data) return false;
+  const text = (clipboardText(data, "text/plain") || clipboardText(data, "text")).trim();
+  return !text;
 }
 
 export function filesFromAttachedPayload(

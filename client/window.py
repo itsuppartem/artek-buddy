@@ -34,6 +34,12 @@ def _open_webkit2(local_url: str) -> bool:
     window.connect("destroy", lambda *_args: (_unregister_window(window), Gtk.main_quit()))
     window.connect("focus-in-event", _on_focus_in)
     view = WebKit2.WebView()
+    try:
+        from clipboard_image import bind_webkit_paste
+
+        bind_webkit_paste(view)
+    except Exception:
+        pass
     view.load_uri(local_url)
     window.add(view)
     _register_window(window)
@@ -60,6 +66,12 @@ def _open_webkit6(local_url: str) -> bool:
         window.connect("notify::is-active", _on_gtk_active)
         window.connect("destroy", lambda *_args: _unregister_window(window))
         view = WebKit.WebView()
+        try:
+            from clipboard_image import bind_webkit_paste
+
+            bind_webkit_paste(view)
+        except Exception:
+            pass
         view.load_uri(local_url)
         window.set_child(view)
         _register_window(window)
