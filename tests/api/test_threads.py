@@ -122,6 +122,9 @@ def test_e2e_takeover_parks_waiting_takeover(client, auth_header) -> None:
     run_id = parked.json()["run_id"]
     snap = wait_run_status(client, auth_header, bot_id, run_id, "waiting_takeover")
     assert snap["run"]["status"] == "waiting_takeover"
+    listed = client.get(f"/v1/bots/{bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    assert listed.json()["status"] == "waiting_takeover"
     assert "need you" not in message_texts(snap)
 
 

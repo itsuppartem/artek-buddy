@@ -185,6 +185,13 @@ const urgencyRank: Record<AttentionAlert["urgency"], number> = {
   critical: 2,
 };
 
+export function shouldClearAttentionForView(
+  attention: AttentionAlert | null,
+  viewingBotId: string | null | undefined,
+): attention is AttentionAlert {
+  return attention != null && viewingBotId === attention.botId;
+}
+
 export function shouldReplaceAttention(
   current: AttentionAlert | null,
   next: AttentionAlert,

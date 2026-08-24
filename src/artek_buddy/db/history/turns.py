@@ -505,7 +505,10 @@ class TurnsMixin:
                 (run_id,),
             ).fetchone()
             conn.execute(
-                "UPDATE bots SET status = 'idle', updated_at = %s WHERE id = (SELECT bot_id FROM runs WHERE id = %s)",
+                """
+                UPDATE bots SET status = 'waiting_takeover', updated_at = %s
+                WHERE id = (SELECT bot_id FROM runs WHERE id = %s)
+                """,
                 (now, run_id),
             )
             conn.commit()

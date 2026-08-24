@@ -6,6 +6,7 @@ import {
   attentionFromEvent,
   type BotAlertSnapshot,
   isHistoricalEvent,
+  shouldClearAttentionForView,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
 } from "./alerts";
@@ -95,6 +96,19 @@ function botSnap(over: Partial<BotAlertSnapshot>): BotAlertSnapshot {
   };
 }
 
+describe("shouldClearAttentionForView", () => {
+  it("clears the banner only for the chat already on screen", () => {
+    const takeover = attentionFromEvent(
+      event({ type: "computer.takeover.requested" }),
+      "Need",
+    );
+    expect(takeover).not.toBeNull();
+    expect(shouldClearAttentionForView(takeover, "bot-a")).toBe(true);
+    expect(shouldClearAttentionForView(takeover, "bot-b")).toBe(false);
+    expect(shouldClearAttentionForView(null, "bot-a")).toBe(false);
+  });
+});
+
 describe("shouldReplaceAttention", () => {
   it("does not let a later replied alert replace takeover", () => {
     const takeover = attentionFromEvent(
@@ -147,5 +161,19 @@ describe("attentionFromBotChange", () => {
         }),
       ),
     ).toBeNull();
+  });
+
+  it("treats running to idle unread as replied even if the preview is a takeover reason", () => {
+    const alert = attentionFromBotChange(
+      botSnap({ status: "running" }),
+      botSnap({
+        status: "idle",
+        unread: true,
+        preview: "Pass the site check, then Release.",
+        updatedAt: "2026-01-01T00:00:02Z",
+      }),
+    );
+    expect(alert?.kind).toBe("replied");
+    expect(alert?.title).toBe("Need replied");
   });
 });

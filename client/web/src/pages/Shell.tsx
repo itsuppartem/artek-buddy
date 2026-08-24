@@ -19,6 +19,7 @@ import {
   attentionFromBotChange,
   attentionFromEvent,
   isHistoricalEvent,
+  shouldClearAttentionForView,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
 } from "../lib/alerts";
@@ -285,7 +286,8 @@ export function ShellPage() {
   }, [active?.id]);
 
   useEffect(() => {
-    if (attention && active?.id === attention.botId) {
+    const viewing = activeIdRef.current || botIdRef.current;
+    if (shouldClearAttentionForView(attention, viewing)) {
       dismissedAlerts.current.add(attentionFingerprint(attention));
       setAttention(null);
     }
