@@ -4,6 +4,7 @@
 
 ### Changed
 - Host FastAPI/Starlette pins no longer need runtime pip-audit ignores. Remaining ignores require a reason and expiry.
+- Host and worker serialize `apply_migrations` with a Postgres advisory lock and store a sha256 per applied file.
 
 ## [0.10.27] - 2026-08-22
 
