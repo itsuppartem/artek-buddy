@@ -22,7 +22,17 @@ def test_unpair_returns_to_pairing(page: Page, client_url: str, host_url: str) -
     pair_fresh(page, client_url, host_url)
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     page.evaluate(
-        """() => fetch('/local/unpair', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})"""
+        """async () => {
+          const status = await fetch('/local/status').then((r) => r.json());
+          await fetch('/local/unpair', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Artek-Local-Nonce': status.nonce,
+            },
+            body: '{}',
+          });
+        }"""
     )
     page.goto(client_url, timeout=15_000, wait_until="domcontentloaded")
     expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)
