@@ -55,8 +55,30 @@ PROCEDURES: list[Procedure] = [
         True,
     ),
     # Models (reserved extras)
-    _p("models.credentials", "GET", "/v1/models/credentials", None, "ModelCredentialList"),
-    _p("models.connect", "POST", "/v1/models/credentials", "ConnectModelInput", "ModelCredential"),
+    _p(
+        "models.credentials",
+        "GET",
+        "/v1/models/credentials",
+        None,
+        "ModelCredentialList",
+        True,
+    ),
+    _p(
+        "models.connect",
+        "POST",
+        "/v1/models/credentials",
+        "ConnectModelInput",
+        "ModelCredential",
+        True,
+    ),
+    _p(
+        "models.forget",
+        "DELETE",
+        "/v1/models/credentials/{provider}",
+        None,
+        "OkResponse",
+        True,
+    ),
     _p(
         "models.begin_oauth",
         "POST",
@@ -71,7 +93,14 @@ PROCEDURES: list[Procedure] = [
         "CompleteOAuthInput",
         "CompleteOAuthResult",
     ),
-    _p("models.set_default", "POST", "/v1/models/default", "SetDefaultModelInput", "OkResponse"),
+    _p(
+        "models.set_default",
+        "POST",
+        "/v1/models/default",
+        "SetDefaultModelInput",
+        "OkResponse",
+        True,
+    ),
     # Bots
     _p("bots.list", "GET", "/v1/bots", None, "BotList", True),
     _p("bots.list_archived", "GET", "/v1/bots/archived", None, "BotList", True),

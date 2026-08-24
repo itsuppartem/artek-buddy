@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import Depends
 
@@ -36,11 +35,6 @@ from artek_buddy.http.deps import (
 router = APIRouter()
 
 
-@router.get("/v1/models", dependencies=[Depends(require_auth)])
-async def list_models(rt: AgentRuntime = Depends(runtime)) -> dict[str, Any]:
-    return {"models": await rt.list_models()}
-
-
 @router.get("/v1/session", dependencies=[Depends(require_auth)])
 async def get_session(
     rt: AgentRuntime = Depends(runtime),
@@ -72,8 +66,16 @@ async def create_session(
 
 
 @router.get("/v1/me", dependencies=[Depends(require_auth)])
-async def get_me() -> Me:
-    return Me()
+async def get_me(history: HistoryStore = Depends(store)) -> Me:
+    try:
+        default = history.get_default_model()
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    return Me(
+        needs_model=default is None,
+        default_provider=default[0] if default else None,
+        default_model=default[1] if default else None,
+    )
 
 
 @router.get("/v1/deployment", dependencies=[Depends(require_auth)])

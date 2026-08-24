@@ -5,6 +5,7 @@ from artek_buddy.db.history.devices import DevicesMixin
 from artek_buddy.db.history.inbox import InboxMixin
 from artek_buddy.db.history.memory import MemoryMixin
 from artek_buddy.db.history.messages import MessagesMixin
+from artek_buddy.db.history.models import ModelsMixin
 from artek_buddy.db.history.routines import RoutinesMixin
 from artek_buddy.db.history.store import HistoryStoreCore, InboxFullError, MigrationChecksumError
 from artek_buddy.db.history.subagents import SubagentsMixin
@@ -25,5 +26,6 @@ class HistoryStore(
     RoutinesMixin,
     MemoryMixin,
     ComputerMixin,
+    ModelsMixin,
 ):
     pass

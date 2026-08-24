@@ -137,13 +137,13 @@ TOKEN=$(grep AGENT_HTTP_TOKEN .env | cut -d= -f2)
 curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/v1/models
 ```
 
-Put one of those `id` values in `CURSOR_MODEL`. Restart the host. If the id is not in the catalog, the host refuses to start.
+Put one of those `id` values in `CURSOR_MODEL`, or pick the model in **Models** after pairing. The host no longer requires a key at boot.
 
 Common ids you may see: `grok-4.6`, `composer-2.5`, `auto-smart` (Cursor Router, if your team allows it). Do not guess — use the list above.
 
 ### 3. Host on the Raspberry Pi
 
-One action after Docker is installed. The script writes `.env` with random tokens, then stops so you can paste `CURSOR_API_KEY`. Run it again to pull images and start the stack.
+One action after Docker is installed. The script writes `.env` with random tokens and starts the stack. A provider key is not required to boot: pair the window and paste a key in **Models**, or set `CURSOR_API_KEY` in `.env` to seed Cursor.
 
 ```bash
 sudo apt-get update
@@ -152,7 +152,7 @@ sudo usermod -aG docker "$USER"   # then log out and back in
 curl -fsSL https://github.com/itsuppartem/artek-buddy/releases/latest/download/install-host.sh | sh
 ```
 
-Edit `~/artek-buddy/.env`, set `CURSOR_API_KEY=crsr_…`, run the same `curl | sh` again.
+Optional: edit `~/artek-buddy/.env` and set `CURSOR_API_KEY=crsr_…` if you want Cursor seeded from env. The window can add or replace keys later.
 
 Manual clone and `docker compose up --build` still work. After the first GHCR publish, set each package visibility to **Public** so the Pi can pull without login.
 

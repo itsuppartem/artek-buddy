@@ -36,6 +36,7 @@ from artek_buddy.memory import (
     wrap_turn_prompt,
 )
 from artek_buddy.memory_hub import MemoryHub, should_persist_ask
+from artek_buddy.model_catalog import NEEDS_MODEL_TEXT, complete_chat
 from artek_buddy.observe import (
     bind_turn,
     current_request_id,
@@ -377,6 +378,66 @@ def _format_inbox(
     return "\n".join(lines)
 
 
+def _chosen_model_id(history: HistoryStore, rt: AgentRuntime) -> str:
+    default = history.get_default_model()
+    if default is not None:
+        return default[1]
+    return rt.settings.cursor_model
+
+
+def _needs_model_send(
+    history: HistoryStore,
+    events: EventHub,
+    bot: Bot,
+    text: str,
+) -> ThreadSendResult:
+    display = (text or "").strip() or " "
+    user_msg = history.append_user_message(bot, display)
+    notice = history.append_bot_message(bot, [{"kind": "text", "text": NEEDS_MODEL_TEXT}])
+    _emit(
+        events,
+        bot,
+        ProductEventType.THREAD_MESSAGE_CREATED,
+        {"message": user_msg.model_dump(mode="json")},
+    )
+    _emit(
+        events,
+        bot,
+        ProductEventType.THREAD_MESSAGE_CREATED,
+        {"message": notice.model_dump(mode="json")},
+    )
+    return ThreadSendResult(
+        task_id=new_id("task"),
+        run_id=new_id("run"),
+        seq=user_msg.seq,
+        message=user_msg,
+        run=None,
+        queued=False,
+    )
+
+
+async def _turn_stream(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    prompt: str,
+    agent_id: str,
+    bot: Bot,
+):
+    default = history.get_default_model()
+    if runtime_kind(rt.settings) != "scripted" and default and default[0] != "cursor":
+        provider, model = default
+        key = history.raw_key(provider)
+        text = await complete_chat(provider, key, model, prompt) if key else ""
+        yield ProductStreamEvent(
+            "thread.message.updated",
+            {"text": text, "kind": "text", "replace": True},
+        )
+        yield RunRecord(id=new_id("run"), agent_id=agent_id, status="completed", result=text)
+        return
+    async for item in rt.stream(prompt, session_id=agent_id, bot_id=bot.id):
+        yield item
+
+
 async def _accept_turn(
     history: HistoryStore,
     rt: AgentRuntime,
@@ -387,6 +448,11 @@ async def _accept_turn(
     reply_to_id: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
 ) -> ThreadSendResult:
+    try:
+        if history.get_default_model() is None:
+            return _needs_model_send(history, events, bot, text)
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
     bot = await _ensure_agent(history, rt, bot)
     hosted = attachments or []
     display = (text or "").strip()
@@ -411,7 +477,7 @@ async def _accept_turn(
             bot,
             prompt,
             model_provider=runtime_kind(rt.settings),
-            model_id=rt.settings.cursor_model,
+            model_id=_chosen_model_id(history, rt),
             trigger=trigger,
             reply_to_id=reply_msg.id if reply_msg else None,
             max_inbox=MAX_INBOX,
@@ -529,7 +595,7 @@ async def _run_turn(
             thread_context=thread_context,
             inbox_context=inbox_context,
         )
-        async for item in rt.stream(memory_prompt, session_id=agent_id, bot_id=bot.id):
+        async for item in _turn_stream(history, rt, memory_prompt, agent_id, bot):
             if isinstance(item, RunRecord):
                 if attach_agent and item.agent_id and item.agent_id != bot.cursor_agent_id:
                     bot = history.attach_agent(bot.id, item.agent_id)
@@ -655,7 +721,7 @@ async def _kick_inbox(
         claimed = history.claim_inbox_follow_up(
             live,
             model_provider=runtime_kind(rt.settings),
-            model_id=rt.settings.cursor_model,
+            model_id=_chosen_model_id(history, rt),
         )
     except Exception:
         log.exception("failed to claim inbox")

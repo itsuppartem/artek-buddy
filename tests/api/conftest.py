@@ -44,6 +44,14 @@ def client(
 
 
 @pytest.fixture(autouse=True)
+def seed_default_model(client: TestClient, request: pytest.FixtureRequest) -> None:
+    store = client.app.state.store
+    store.clear_model_state()
+    if "no_model_seed" not in request.keywords:
+        store.seed_scripted_default()
+
+
+@pytest.fixture(autouse=True)
 def reset_pairing_limiter() -> Iterator[None]:
     from artek_buddy.auth import pairing_attempts
 

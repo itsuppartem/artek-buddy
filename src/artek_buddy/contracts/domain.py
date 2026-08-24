@@ -397,6 +397,41 @@ class ModelCredential(BaseModel):
     label: str
     has_key: bool
     is_default: bool
+    last_four: str | None = None
+    error: str | None = None
+
+
+class ModelCredentialList(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    credentials: list[ModelCredential]
+    default_provider: str | None = None
+    default_model: str | None = None
+
+
+class ConnectModelInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    provider: str
+    api_key: str | None = None
+
+
+class SetDefaultModelInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    provider: str
+    model: str
+
+
+class ModelInfo(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: str
+    provider: str
+
+
+class ModelListResponse(BaseModel):
+    models: list[ModelInfo]
 
 
 class DeploymentSettings(BaseModel):
@@ -428,9 +463,9 @@ class Me(BaseModel):
     name: str = "Owner"
     workspace_id: Id = "ws_default"
     is_deployment_owner: bool = True
-    needs_model: bool = False
-    default_provider: str | None = "cursor"
-    default_model: str | None = "grok-4.6"
+    needs_model: bool = True
+    default_provider: str | None = None
+    default_model: str | None = None
     computer_host: Literal["docker", "host"] | None = "docker"
     can_choose_host_computer: bool = True
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from tests.support import mask_secret
 
 from artek_buddy.auth import PAIRING_ATTEMPT_LIMIT
@@ -50,11 +51,11 @@ def test_me_is_the_owner(client, auth_header) -> None:
     assert body["is_deployment_owner"] is True
 
 
-def test_models_lists_scripted(client, auth_header) -> None:
+@pytest.mark.no_model_seed
+def test_models_lists_empty_without_keys(client, auth_header) -> None:
     response = client.get("/v1/models", headers=auth_header)
     assert response.status_code == 200
-    models = response.json()["models"]
-    assert models[0]["id"] == "scripted"
+    assert response.json()["models"] == []
 
 
 def test_session_get_and_create(client, auth_header) -> None:

@@ -33,13 +33,20 @@ def test_runtime_kind_defaults_and_scripted() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unknown_runtime_and_missing_cursor_key() -> None:
+async def test_unknown_runtime_and_cursor_boots_without_key(tmp_path) -> None:
     with pytest.raises(AgentRuntimeError, match="unknown"):
         async with open_runtime(_settings("nope")):
             pass
-    with pytest.raises(AgentRuntimeError, match="CURSOR_API_KEY"):
-        async with open_runtime(_settings("cursor", key="")):
-            pass
+    empty = Settings(
+        agent_http_token="ci-host-token-aabbccddeeff001122334455",
+        agent_runtime="cursor",
+        cursor_api_key="",
+        sandbox_provider="fake",
+        agent_data_dir=str(tmp_path / "data"),
+        agent_cwd=str(tmp_path / "cwd"),
+    )
+    async with open_runtime(empty) as runtime:
+        assert runtime.default_agent_id
 
 
 def test_scripted_fail_and_default_steps() -> None:

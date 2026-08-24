@@ -31,6 +31,22 @@ export type ConsentJob = Camelize<Schema["ConsentJob"]>;
 export type OkResponse = Camelize<Schema["OkResponse"]>;
 export type TestRunResult = Camelize<Schema["TestRunResult"]>;
 export type MarkdownExport = Camelize<Schema["MarkdownExport"]>;
+export type ModelCredential = {
+  id: string;
+  provider: string;
+  label: string;
+  hasKey: boolean;
+  isDefault: boolean;
+  lastFour?: string | null;
+  error?: string | null;
+};
+export type ModelCredentialList = {
+  credentials: ModelCredential[];
+  defaultProvider: string | null;
+  defaultModel: string | null;
+};
+export type ModelInfo = { id: string; provider: string };
+export type ModelListResponse = { models: ModelInfo[] };
 
 export type ProductEvent = {
   id: string;

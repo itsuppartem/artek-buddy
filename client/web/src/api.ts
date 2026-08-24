@@ -11,6 +11,9 @@ import type {
   MarkdownExport,
   Me,
   MemoryDocument,
+  ModelCredential,
+  ModelCredentialList,
+  ModelListResponse,
   OkResponse,
   ProductEvent,
   Routine,
@@ -389,6 +392,26 @@ export const api = {
     },
     restart(botId: string, subagentId: string) {
       return request<Subagent>("POST", `/v1/bots/${botId}/subagents/${subagentId}/restart`);
+    },
+  },
+  models: {
+    credentials() {
+      return request<ModelCredentialList>("GET", "/v1/models/credentials");
+    },
+    list() {
+      return request<ModelListResponse>("GET", "/v1/models");
+    },
+    connect(provider: string, apiKey?: string) {
+      return request<ModelCredential>("POST", "/v1/models/credentials", {
+        provider,
+        apiKey,
+      });
+    },
+    forget(provider: string) {
+      return request<OkResponse>("DELETE", `/v1/models/credentials/${provider}`);
+    },
+    setDefault(provider: string, model: string) {
+      return request<OkResponse>("POST", "/v1/models/default", { provider, model });
     },
   },
   computer: {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
+
 ### Fixed
 - A takeover on another chat shows «needs you», not «replied». The bot stays `waiting_takeover` (same idea as `waiting_input`), and the window does not dismiss that banner during the chat switch.
 

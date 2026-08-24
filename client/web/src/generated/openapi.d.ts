@@ -709,6 +709,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/models/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Credentials */
+        get: operations["list_credentials_v1_models_credentials_get"];
+        put?: never;
+        /** Connect Model */
+        post: operations["connect_model_v1_models_credentials_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/models/credentials/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Forget Model */
+        delete: operations["forget_model_v1_models_credentials__provider__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/models/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Default Model */
+        post: operations["set_default_model_v1_models_default_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/routines": {
         parameters: {
             query?: never;
@@ -1203,6 +1255,13 @@ export interface components {
              */
             status: "pending" | "connected";
         };
+        /** ConnectModelInput */
+        ConnectModelInput: {
+            /** Api Key */
+            api_key?: string | null;
+            /** Provider */
+            provider: string;
+        };
         /** ConsentAnswerInput */
         ConsentAnswerInput: {
             /** Decision */
@@ -1496,16 +1555,10 @@ export interface components {
              * @default docker
              */
             computer_host: ("docker" | "host") | null;
-            /**
-             * Default Model
-             * @default grok-4.6
-             */
-            default_model: string | null;
-            /**
-             * Default Provider
-             * @default cursor
-             */
-            default_provider: string | null;
+            /** Default Model */
+            default_model?: string | null;
+            /** Default Provider */
+            default_provider?: string | null;
             /**
              * Email
              * @default owner@artek.local
@@ -1523,7 +1576,7 @@ export interface components {
             name: string;
             /**
              * Needs Model
-             * @default false
+             * @default true
              */
             needs_model: boolean;
             /**
@@ -1590,6 +1643,44 @@ export interface components {
             kind: "meta";
             /** Text */
             text: string;
+        };
+        /** ModelCredential */
+        ModelCredential: {
+            /** Error */
+            error?: string | null;
+            /** Has Key */
+            has_key: boolean;
+            /** Id */
+            id: string;
+            /** Is Default */
+            is_default: boolean;
+            /** Label */
+            label: string;
+            /** Last Four */
+            last_four?: string | null;
+            /** Provider */
+            provider: string;
+        };
+        /** ModelCredentialList */
+        ModelCredentialList: {
+            /** Credentials */
+            credentials: components["schemas"]["ModelCredential"][];
+            /** Default Model */
+            default_model?: string | null;
+            /** Default Provider */
+            default_provider?: string | null;
+        };
+        /** ModelInfo */
+        ModelInfo: {
+            /** Id */
+            id: string;
+            /** Provider */
+            provider: string;
+        };
+        /** ModelListResponse */
+        ModelListResponse: {
+            /** Models */
+            models: components["schemas"]["ModelInfo"][];
         };
         /** OkResponse */
         OkResponse: {
@@ -1727,6 +1818,13 @@ export interface components {
              * @enum {string}
              */
             mode: "team" | "dedicated";
+        };
+        /** SetDefaultModelInput */
+        SetDefaultModelInput: {
+            /** Model */
+            model: string;
+            /** Provider */
+            provider: string;
         };
         /** SteerSubagentInput */
         SteerSubagentInput: {
@@ -3634,9 +3732,141 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ModelListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_credentials_v1_models_credentials_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelCredentialList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connect_model_v1_models_credentials_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectModelInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelCredential"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_model_v1_models_credentials__provider__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_default_model_v1_models_default_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetDefaultModelInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
                 };
             };
             /** @description Validation Error */

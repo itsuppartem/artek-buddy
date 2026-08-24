@@ -34,6 +34,7 @@ import {
 } from "../lib/composer-undo";
 import { fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/consent";
 import { stripMarkdown } from "../lib/markdown";
+import { NEEDS_MODEL_TEXT } from "../lib/models";
 import {
   embeddableScreenUrl,
   screenFrameLooksFailed,
@@ -65,6 +66,7 @@ import type {
   Bot,
   ComputerMode,
   ComputerStatus,
+  ModelCredentialList,
   ProductEvent,
   ThreadMessage,
   ThreadSnapshot,
@@ -89,8 +91,9 @@ import { ComputerOverlay } from "./shell/ComputerOverlay";
 import { ComputerPane } from "./shell/ComputerPane";
 import { CreateBotForm } from "./shell/CreateBotForm";
 import { MessageView, replyExcerpt } from "./shell/MessageView";
+import { ModelsPane } from "./shell/ModelsPane";
 
-type Panel = "computer" | "settings" | "create" | null;
+type Panel = "computer" | "settings" | "create" | "models" | null;
 
 export function ShellPage() {
   const { botId } = useParams();
@@ -109,8 +112,10 @@ export function ShellPage() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
+  const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
   const panelAfterSettings = useRef<"computer" | null>(null);
   const panelAfterCreate = useRef<"computer" | null>(null);
+  const panelAfterModels = useRef<"computer" | null>(null);
   const creatingBot = useRef(false);
   const filesEpoch = useRef(0);
   const pendingAlerts = useRef(
@@ -333,9 +338,28 @@ export function ShellPage() {
     setArchivedBots(archivedList);
     if (archivedList.length === 0) setSidebarView("inbox");
     setBotsReady(true);
+    void refreshModels();
     return list;
   }
   refreshBotsRef.current = refreshBots;
+
+  async function refreshModels() {
+    try {
+      setModelState(await api.models.credentials());
+    } catch {
+      // Host errors stay on the existing banner.
+    }
+  }
+
+  function openModels() {
+    panelAfterModels.current = panel === "computer" ? "computer" : null;
+    setPanel("models");
+  }
+
+  function closeModels() {
+    setPanel(panelAfterModels.current);
+    panelAfterModels.current = null;
+  }
 
   function showError(err: unknown, fallback: string) {
     const classified = classifyError(err);
@@ -688,6 +712,7 @@ export function ShellPage() {
     [archivedBots, query],
   );
   const emptyInbox = inboxEmptyState(bots.length, archivedBots.length);
+  const needsModel = !modelState?.defaultModel;
 
   function writeDraft(value: string, reset = false) {
     if (reset) {
@@ -1144,12 +1169,24 @@ export function ShellPage() {
             </>
           )}
         </div>
-        <div className="flex items-center gap-[11px] border-t border-hairline px-[14px] py-3.5">
+        <button
+          type="button"
+          data-testid="open-models"
+          data-models-ready={needsModel ? "false" : "true"}
+          aria-label="Models"
+          onClick={() => openModels()}
+          className={`flex w-full items-center gap-[11px] border-t px-[14px] py-3.5 text-left ${
+            panel === "models" ? "border-tan bg-plate" : "border-hairline hover:bg-raised"
+          }`}
+        >
           <span className="grid h-8 w-8 place-items-center rounded-full bg-raised text-[12px] text-mute">
             Y
           </span>
-          <span className="text-[13px] text-mute">You</span>
-        </div>
+          <span className="min-w-0">
+            <span className="block text-[13px] text-mute">You</span>
+            <span className="block text-[14px] text-paper">Models</span>
+          </span>
+        </button>
       </aside>
 
       <main
@@ -1320,6 +1357,22 @@ export function ShellPage() {
               <Button type="button" className="mt-5" onClick={() => openCreate()}>
                 Create bot
               </Button>
+            </div>
+          ) : null}
+          {active && needsModel && !error ? (
+            <div
+              data-testid="needs-model"
+              className="mx-4 mt-3 rounded-[12px] border border-hairline border-l-[3px] border-l-tan bg-plate px-3.5 py-3"
+            >
+              <p className="text-[14px] leading-5 text-paper">{NEEDS_MODEL_TEXT}</p>
+              <button
+                type="button"
+                data-testid="open-models-thread"
+                className="mt-2 text-[13px] font-medium text-tan underline underline-offset-2"
+                onClick={() => openModels()}
+              >
+                Open Models
+              </button>
             </div>
           ) : null}
           {thread?.olderCursor != null ? (
@@ -1495,11 +1548,16 @@ export function ShellPage() {
 
       <aside
         className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out ${
-          panel && (active || panel === "create") ? "w-[360px] border-l border-hairline" : "w-0"
+          panel && (active || panel === "create" || panel === "models")
+            ? "w-[360px] border-l border-hairline"
+            : "w-0"
         }`}
       >
-        {panel && (active || panel === "create") ? (
+        {panel && (active || panel === "create" || panel === "models") ? (
           <div className="ab-scroll h-full w-[360px] overflow-y-auto px-4 py-3">
+            {panel === "models" ? (
+              <ModelsPane credentials={modelState} onChange={setModelState} onClose={closeModels} />
+            ) : null}
             {panel === "create" ? (
               <CreateBotForm
                 onCancel={() => {
