@@ -126,7 +126,7 @@ def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
 
 def open_settings(page: Page, name: str) -> None:
     open_chat(page, name)
-    page.get_by_role("button", name="Settings").click()
+    page.get_by_test_id("thread-pane").get_by_role("button", name="Settings").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=8_000)
 
 

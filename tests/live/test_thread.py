@@ -482,7 +482,7 @@ def test_notify_off_mutes_replied_not_ask(page: Page, client_url: str, host_url:
     watcher = unique_bot("Hear")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, speaker)
-    page.get_by_role("button", name="Settings").click()
+    page.get_by_test_id("thread-pane").get_by_role("button", name="Settings").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     page.get_by_test_id("notify-on-finish").uncheck()
     page.get_by_label("Close settings").click()
