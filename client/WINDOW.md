@@ -23,7 +23,7 @@ flowchart LR
 └────────────────┴────────────────────────────────┴─────────────────┘
 ```
 
-The computer pane and Settings overlay sit on the right of the same shell. Settings on the pane opens Settings; closing Settings returns to the pane. Create opened while the pane is up returns to the pane after Create or Cancel. Release does not close the pane. Fullscreen screen is a separate overlay. Settings does **not** boot. Offline · Click to start boots and takes control.
+The computer pane and Settings overlay sit on the right of the same shell. Settings on the pane opens Settings; closing Settings returns to the pane. Create opened while the pane is up returns to the pane after Create or Cancel. Release does not close the pane. Fullscreen screen is a separate overlay. Settings does **not** boot. Offline • Click to start boots and takes control.
 
 ## Screens
 

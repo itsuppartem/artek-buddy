@@ -234,7 +234,7 @@ export function ComputerPane({
                 <IconComputer />
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[13px] font-medium text-paper">{label}</span>
-                  <span className="text-[11.5px] text-sage">Sleeping · Click to start</span>
+                  <span className="text-[11.5px] text-sage">Sleeping • Click to start</span>
                 </div>
               </div>
             ) : (
@@ -242,7 +242,7 @@ export function ComputerPane({
                 <IconComputer />
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[13px] font-medium text-paper">{label}</span>
-                  <span className="text-[11.5px] text-mute">Offline · Click to start</span>
+                  <span className="text-[11.5px] text-mute">Offline • Click to start</span>
                 </div>
               </div>
             )}
