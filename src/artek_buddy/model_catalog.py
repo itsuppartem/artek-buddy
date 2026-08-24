@@ -105,6 +105,28 @@ def _ids_from_payload(payload: object) -> list[str]:
     return ids
 
 
+async def fetch_cursor_models(key: str, runtime: object | None = None) -> list[str]:
+    """List Cursor models from the running bridge. There is no public catalog URL."""
+    _ = key
+    lister = getattr(runtime, "list_models", None)
+    if lister is None:
+        raise RuntimeError(fetch_failed_message())
+    rows = await lister()
+    ids: list[str] = []
+    for item in rows or []:
+        if isinstance(item, dict):
+            if item.get("provider") not in (None, "cursor"):
+                continue
+            model_id = item.get("id")
+        else:
+            model_id = getattr(item, "id", None)
+        if model_id:
+            ids.append(str(model_id))
+    if not ids:
+        raise RuntimeError(fetch_failed_message())
+    return ids
+
+
 async def fetch_models(provider: str, key: str, *, scripted: bool = False) -> list[str]:
     if unknown_provider(provider):
         raise ValueError("unknown provider")

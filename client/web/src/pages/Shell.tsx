@@ -1367,6 +1367,7 @@ export function ShellPage() {
               <p className="text-[14px] leading-5 text-paper">{NEEDS_MODEL_TEXT}</p>
               <button
                 type="button"
+                data-testid="open-models-thread"
                 className="mt-2 text-[13px] font-medium text-tan underline underline-offset-2"
                 onClick={() => openModels()}
               >

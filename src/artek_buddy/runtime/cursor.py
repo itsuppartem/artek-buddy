@@ -46,13 +46,13 @@ async def _cancel_cursor_run(run: Any) -> None:
         return
 
 
-def build_model(settings: Settings) -> ModelSelection:
+def build_model(settings: Settings, model_id: str | None = None) -> ModelSelection:
     params: list[ModelParameterValue] = []
     if settings.cursor_model_effort:
         params.append(ModelParameterValue(id="effort", value=settings.cursor_model_effort))
     if settings.cursor_model_fast:
         params.append(ModelParameterValue(id="fast", value="true"))
-    return ModelSelection(id=settings.cursor_model, params=params)
+    return ModelSelection(id=model_id or settings.cursor_model, params=params)
 
 
 class CursorRuntime(RuntimeBase):
@@ -65,10 +65,24 @@ class CursorRuntime(RuntimeBase):
     ) -> None:
         super().__init__(settings, store=store, computers=computers)
         self.client = client
-        self.model = build_model(settings)
         self._locks: dict[str, asyncio.Lock] = {}
         self._auth_fails = 0
         self.bridge_recycles = 0
+
+    def model_selection(self) -> ModelSelection:
+        model_id = self.settings.cursor_model
+        if self.store is not None:
+            try:
+                default = self.store.get_default_model()
+            except Exception:
+                default = None
+            if default and default[0] == "cursor" and default[1]:
+                model_id = default[1]
+        return build_model(self.settings, model_id)
+
+    @property
+    def model(self) -> ModelSelection:
+        return self.model_selection()
 
     def _custom_tools(self, bot_id: str | None = None, role: str = "lead") -> dict[str, CustomTool]:
         registry = ProductTools(self)
@@ -110,6 +124,11 @@ class CursorRuntime(RuntimeBase):
         models = await self.client.models.list()
         ids = [model.id for model in models]
         log.info("catalog models: %s", ", ".join(ids))
+        if self.store is not None:
+            try:
+                self.store.replace_catalog("cursor", ids)
+            except Exception:
+                log.exception("failed to persist Cursor catalog")
         if self.settings.cursor_model not in ids:
             raise AgentRuntimeError(
                 f"model {self.settings.cursor_model!r} is not available for this key: {ids}"

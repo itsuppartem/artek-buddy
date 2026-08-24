@@ -13,14 +13,16 @@ from artek_buddy.contracts import (
 )
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
-from artek_buddy.http.deps import _db_error, require_auth, settings, store
+from artek_buddy.http.deps import _db_error, require_auth, runtime, settings, store
 from artek_buddy.model_catalog import (
+    fetch_cursor_models,
     fetch_failed_message,
     fetch_models,
     is_placeholder_key,
     unknown_provider,
 )
 from artek_buddy.runtime.factory import runtime_kind
+from artek_buddy.runtime.protocol import AgentRuntime
 
 router = APIRouter()
 
@@ -48,11 +50,20 @@ async def list_credentials(history: HistoryStore = Depends(store)) -> ModelCrede
         raise _db_error(err) from err
 
 
+async def _catalog(provider: str, key: str, cfg, rt: AgentRuntime) -> list[str]:
+    if _scripted(cfg):
+        return await fetch_models(provider, key, scripted=True)
+    if provider == "cursor":
+        return await fetch_cursor_models(key, rt)
+    return await fetch_models(provider, key, scripted=False)
+
+
 @router.post("/v1/models/credentials", dependencies=[Depends(require_auth)])
 async def connect_model(
     body: ConnectModelInput,
     history: HistoryStore = Depends(store),
     cfg=Depends(settings),
+    rt: AgentRuntime = Depends(runtime),
 ) -> ModelCredential:
     if unknown_provider(body.provider):
         raise HTTPException(status_code=400, detail="unknown provider")
@@ -68,7 +79,7 @@ async def connect_model(
             if not key:
                 raise HTTPException(status_code=400, detail="API key is empty")
         try:
-            models = await fetch_models(body.provider, key, scripted=_scripted(cfg))
+            models = await _catalog(body.provider, key, cfg, rt)
         except PermissionError as err:
             return history.set_credential_error(body.provider, str(err))
         except Exception:

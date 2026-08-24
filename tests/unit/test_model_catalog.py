@@ -6,6 +6,8 @@ from artek_buddy.model_catalog import (
     NEEDS_MODEL_TEXT,
     PROVIDERS,
     complete_chat,
+    fetch_cursor_models,
+    fetch_failed_message,
     fetch_models,
     is_placeholder_key,
     last_four,
@@ -37,6 +39,30 @@ def test_provider_labels_and_last_four() -> None:
 async def test_scripted_catalog_is_canned() -> None:
     models = await fetch_models("openrouter", "test-secret-xxxx", scripted=True)
     assert models == ["scripted"]
+    assert await fetch_models("cursor", "crsr_live", scripted=True) == ["scripted"]
+
+
+@pytest.mark.asyncio
+async def test_cursor_catalog_comes_from_the_running_runtime() -> None:
+    class _Runtime:
+        async def list_models(self) -> list[dict[str, str]]:
+            return [{"id": "grok-4.6"}, {"id": "composer-2"}]
+
+    assert await fetch_cursor_models("crsr_live", _Runtime()) == ["grok-4.6", "composer-2"]
+
+    class _Mixed:
+        async def list_models(self) -> list[dict[str, str]]:
+            return [
+                {"id": "scripted", "provider": "openrouter"},
+                {"id": "grok-4.6", "provider": "cursor"},
+            ]
+
+    assert await fetch_cursor_models("crsr_live", _Mixed()) == ["grok-4.6"]
+    with pytest.raises(RuntimeError, match="Could not load models"):
+        await fetch_cursor_models("crsr_live", None)
+    with pytest.raises(RuntimeError, match="Could not load models"):
+        await fetch_models("cursor", "crsr_live", scripted=False)
+    assert "Could not load" in fetch_failed_message()
 
 
 class _Resp:

@@ -92,7 +92,7 @@ Host-wide. Open from **You** (`open-models`). Close returns to the thread, and t
 └────────────┘
 ```
 
-Fresh host: five empty rows, Default model disabled, thread plate `needs-model` with the next step. Save is disabled while the key field is empty. After Save the field is gone: `••••` + last four + Connected. Forget empties that row. Fetch errors sit under that row with Retry. Model picker disabled until a key is saved and the list is in. Empty list: `No models yet`. Send with no default does not start a turn; the thread repeats the next step. The page never receives a previously saved full key.
+Fresh host: five empty rows, Default model disabled, thread plate `needs-model` (`open-models-thread`) with the next step. Cursor model names come from the running host after that key is connected. Save is disabled while the key field is empty. After Save the field is gone: `••••` + last four + Connected. Forget empties that row. Fetch errors sit under that row with Retry. Model picker disabled until a key is saved and the list is in. Empty list: `No models yet`. Send with no default does not start a turn; the thread repeats the next step. The page never receives a previously saved full key.
 
 Copy: Save, Forget, Retry, Models, API key, Model, Use this model. Do not say credential, runtime, or env.
 

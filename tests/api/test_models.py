@@ -94,6 +94,21 @@ def test_connect_list_default_forget_and_never_echoes_key(client, auth_header) -
     assert SECRET not in json.dumps(empty.json())
 
 
+def test_connect_cursor_uses_scripted_catalog(client, auth_header) -> None:
+    connected = client.post(
+        "/v1/models/credentials",
+        headers=auth_header,
+        json={"provider": "cursor", "api_key": SECRET},
+    )
+    assert connected.status_code == 200
+    assert connected.json()["provider"] == "cursor"
+    assert connected.json()["has_key"] is True
+    assert connected.json()["last_four"] == "wxyz"
+    models = client.get("/v1/models", headers=auth_header)
+    assert models.status_code == 200
+    assert models.json()["models"] == [{"id": "scripted", "provider": "cursor"}]
+
+
 def test_send_without_default_does_not_start_a_turn(client, auth_header) -> None:
     bot = create_bot(client, auth_header, "NeedModel")
     sent = client.post(

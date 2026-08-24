@@ -378,6 +378,13 @@ def _format_inbox(
     return "\n".join(lines)
 
 
+def _chosen_model_id(history: HistoryStore, rt: AgentRuntime) -> str:
+    default = history.get_default_model()
+    if default is not None:
+        return default[1]
+    return rt.settings.cursor_model
+
+
 def _needs_model_send(
     history: HistoryStore,
     events: EventHub,
@@ -470,7 +477,7 @@ async def _accept_turn(
             bot,
             prompt,
             model_provider=runtime_kind(rt.settings),
-            model_id=rt.settings.cursor_model,
+            model_id=_chosen_model_id(history, rt),
             trigger=trigger,
             reply_to_id=reply_msg.id if reply_msg else None,
             max_inbox=MAX_INBOX,
@@ -714,7 +721,7 @@ async def _kick_inbox(
         claimed = history.claim_inbox_follow_up(
             live,
             model_provider=runtime_kind(rt.settings),
-            model_id=rt.settings.cursor_model,
+            model_id=_chosen_model_id(history, rt),
         )
     except Exception:
         log.exception("failed to claim inbox")

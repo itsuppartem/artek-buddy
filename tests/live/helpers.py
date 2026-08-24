@@ -110,8 +110,20 @@ def open_chat(page: Page, name: str) -> None:
 
 
 def open_models(page: Page) -> None:
-    page.get_by_role("button", name="Models").click()
+    page.get_by_test_id("open-models").click()
     expect(page.get_by_test_id("models-pane")).to_be_visible(timeout=8_000)
+
+
+def _picker_values(page: Page, test_id: str) -> list[str]:
+    picker = page.get_by_test_id(test_id)
+    return picker.evaluate("el => [...el.options].map(option => option.value).filter(Boolean)")
+
+
+def _close_models_ready(page: Page) -> None:
+    page.get_by_role("button", name="Close Models").click()
+    expect(page.get_by_test_id("open-models")).to_have_attribute(
+        "data-models-ready", "true", timeout=8_000
+    )
 
 
 def ensure_model(page: Page) -> None:
@@ -120,6 +132,22 @@ def ensure_model(page: Page) -> None:
     if door.get_attribute("data-models-ready") == "true":
         return
     open_models(page)
+    cursor_status = page.get_by_test_id("models-status-cursor")
+    if cursor_status.count() and cursor_status.first.is_visible(timeout=0):
+        retry = page.get_by_test_id("models-retry-cursor")
+        if retry.count() and retry.first.is_visible(timeout=0):
+            retry.click()
+        picker = page.get_by_test_id("models-picker-cursor")
+        expect(picker).to_be_enabled(timeout=20_000)
+        values = _picker_values(page, "models-picker-cursor")
+        if not values:
+            raise AssertionError("Cursor model list was empty")
+        chosen = "grok-4.6" if "grok-4.6" in values else values[0]
+        picker.select_option(chosen)
+        page.get_by_test_id("models-use-cursor").click()
+        expect(page.get_by_test_id("models-using")).to_contain_text(chosen, timeout=8_000)
+        _close_models_ready(page)
+        return
     key = page.get_by_label("OpenRouter API key")
     if key.count() and key.first.is_visible(timeout=0):
         key.fill("test-secret-uiok")
@@ -129,10 +157,7 @@ def ensure_model(page: Page) -> None:
     picker.select_option("scripted")
     page.get_by_test_id("models-use-openrouter").click()
     expect(page.get_by_text("Using scripted")).to_be_visible(timeout=8_000)
-    page.get_by_role("button", name="Close Models").click()
-    expect(page.get_by_test_id("open-models")).to_have_attribute(
-        "data-models-ready", "true", timeout=8_000
-    )
+    _close_models_ready(page)
 
 
 def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
