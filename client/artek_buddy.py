@@ -21,6 +21,8 @@ from owner_paths import resolve_owner_path as resolve_owner_path
 from owner_paths import unique_download_dest as unique_download_dest
 from pairing import _load_token, _load_url, _log
 from pairing import pairing_url_allowed as pairing_url_allowed
+from proxy import local_rpc_origin_allowed as local_rpc_origin_allowed
+from proxy import proxy_host_allowed as proxy_host_allowed
 from proxy import proxy_origin_allowed as proxy_origin_allowed
 from proxy import serve
 from window import open_window

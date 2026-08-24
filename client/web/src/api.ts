@@ -25,6 +25,8 @@ import type {
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
+let localNonce = "";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -64,9 +66,18 @@ export async function request<T>(
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   const init: RequestInit = { method, headers, signal: controller.signal };
+  const localMutating = path.startsWith("/local/") && method !== "GET";
+  if (localMutating) {
+    headers["Content-Type"] = "application/json";
+    if (localNonce) {
+      headers["X-Artek-Local-Nonce"] = localNonce;
+    }
+  }
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(snakify(body));
+  } else if (localMutating) {
+    init.body = "{}";
   }
   let response: Response;
   try {
@@ -123,7 +134,12 @@ export async function request<T>(
 export const api = {
   local: {
     status() {
-      return request<LocalStatus>("GET", "/local/status");
+      return request<LocalStatus>("GET", "/local/status").then((status) => {
+        if (status.nonce) {
+          localNonce = status.nonce;
+        }
+        return status;
+      });
     },
     pair(input: { url?: string; pairingCode: string; name: string; platform?: string }) {
       return request<{ ok: boolean; device: PairedDevice; error?: string }>(

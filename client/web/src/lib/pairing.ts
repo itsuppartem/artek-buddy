@@ -10,6 +10,7 @@ export function formatPairingCode(value: string): string {
 export type LocalStatus = {
   paired: boolean;
   url: string;
+  nonce: string;
 };
 
 export type PairedDevice = {

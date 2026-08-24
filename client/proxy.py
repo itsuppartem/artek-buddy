@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
+import hmac
 import http.client
 import json
 import mimetypes
 import os
+import secrets
 import select
 import socket
 import ssl
@@ -36,6 +38,9 @@ OWNER_EXEC_TIMEOUT = 60
 ATTACH_FILE_MAX = 25 * 1024 * 1024
 ATTACH_TOTAL_MAX = 50 * 1024 * 1024
 ATTACH_MAX_FILES = 10
+LOCAL_JSON_MAX = 2_000_000
+LOCAL_NONCE_HEADER = "X-Artek-Local-Nonce"
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 save_path_chooser = None
@@ -53,19 +58,82 @@ def choose_save_path(name: str) -> Path | None:
     return unique_download_dest(owner_downloads_dir(), name)
 
 
-def proxy_origin_allowed(origin: str | None, fetch_site: str | None, proxy_port: int) -> bool:
-    if (fetch_site or "").lower() == "cross-site":
-        return False
-    if not origin:
-        return True
+def _origin_is_this_proxy(origin: str, proxy_port: int) -> bool:
     parsed = urlsplit(origin)
+    if parsed.scheme not in {"http", "https"}:
+        return False
     host = (parsed.hostname or "").lower()
-    if host not in {"127.0.0.1", "localhost", "::1"}:
+    if host not in _LOOPBACK_HOSTS:
         return False
     port = parsed.port
     if port is None:
         port = 443 if parsed.scheme == "https" else 80
     return port == proxy_port
+
+
+def proxy_origin_allowed(origin: str | None, fetch_site: str | None, proxy_port: int) -> bool:
+    if (fetch_site or "").lower() == "cross-site":
+        return False
+    if not origin:
+        return True
+    return _origin_is_this_proxy(origin, proxy_port)
+
+
+def local_rpc_origin_allowed(
+    origin: str | None,
+    fetch_site: str | None,
+    proxy_port: int,
+    *,
+    require_origin: bool = True,
+) -> bool:
+    if (fetch_site or "").lower() == "cross-site":
+        return False
+    if not origin:
+        return not require_origin
+    return _origin_is_this_proxy(origin, proxy_port)
+
+
+def proxy_host_allowed(host_header: str | None, proxy_port: int) -> bool:
+    if not host_header:
+        return False
+    raw = host_header.strip()
+    if raw.startswith("["):
+        end = raw.find("]")
+        if end < 0:
+            return False
+        host = raw[1:end].lower()
+        rest = raw[end + 1 :]
+        if rest == "":
+            port = 80
+        elif rest.startswith(":"):
+            try:
+                port = int(rest[1:])
+            except ValueError:
+                return False
+        else:
+            return False
+    else:
+        if raw.count(":") > 1:
+            return False
+        if ":" in raw:
+            host, port_s = raw.rsplit(":", 1)
+            try:
+                port = int(port_s)
+            except ValueError:
+                return False
+            host = host.lower()
+        else:
+            host = raw.lower()
+            port = 80
+    if host not in _LOOPBACK_HOSTS:
+        return False
+    return port == proxy_port
+
+
+def _json_content_type(value: str | None) -> bool:
+    if not value:
+        return False
+    return value.split(";", 1)[0].strip().lower() == "application/json"
 
 
 def _host_request(
@@ -115,12 +183,55 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(403, "cross-origin request blocked")
         return False
 
+    def _accept_local(self, *, mutating: bool) -> bool:
+        if not self._local_only():
+            self.send_error(403, "forbidden")
+            return False
+        port = int(self.server.server_address[1])
+        if not proxy_host_allowed(self.headers.get("Host"), port):
+            self.send_error(403, "forbidden")
+            return False
+        if not local_rpc_origin_allowed(
+            self.headers.get("Origin"),
+            self.headers.get("Sec-Fetch-Site"),
+            port,
+            require_origin=mutating,
+        ):
+            self.send_error(403, "forbidden")
+            return False
+        if not mutating:
+            return True
+        if not _json_content_type(self.headers.get("Content-Type")):
+            self.send_error(403, "forbidden")
+            return False
+        raw_len = self.headers.get("Content-Length") or "0"
+        try:
+            length = int(raw_len)
+        except ValueError:
+            self.send_error(400, "invalid content-length")
+            return False
+        if length < 0:
+            self.send_error(400, "invalid content-length")
+            return False
+        limit = ATTACH_TOTAL_MAX * 2 if self._route() == "/local/attach-files" else LOCAL_JSON_MAX
+        if length > limit:
+            self.send_error(413, "payload too large")
+            return False
+        expected = getattr(self.server, "local_nonce", "") or ""
+        given = self.headers.get(LOCAL_NONCE_HEADER) or ""
+        if not expected or not hmac.compare_digest(given, expected):
+            self.send_error(403, "forbidden")
+            return False
+        return True
+
     def _route(self) -> str:
         return self.path.split("?", 1)[0]
 
     def do_GET(self) -> None:
         path = self._route()
         if path == "/local/status":
+            if not self._accept_local(mutating=False):
+                return
             self._local_status()
             return
         if path == "/health" or path.startswith("/v1/") or path.startswith("/novnc/"):
@@ -136,6 +247,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self._route()
+        if path.startswith("/local/"):
+            if not self._accept_local(mutating=True):
+                return
         if path == "/local/pair":
             self._local_pair()
             return
@@ -187,7 +301,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self._accept_browser():
             return
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Authorization, Content-Type, Accept, X-Artek-Local-Nonce",
+        )
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
         self.end_headers()
 
@@ -209,7 +326,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         token = self.server.token  # type: ignore[attr-defined]
         url = self.server.upstream  # type: ignore[attr-defined]
-        self._json(200, {"paired": bool(token), "url": url})
+        nonce = getattr(self.server, "local_nonce", "") or ""
+        self._json(200, {"paired": bool(token), "url": url, "nonce": nonce})
 
     def _local_pair(self) -> None:
         if not self._local_only():
@@ -821,4 +939,5 @@ def serve(url: str, token: str, port: int = 0) -> ThreadingHTTPServer:
     httpd.upstream = url
     httpd.token = token
     httpd.web_root = web_root()
+    httpd.local_nonce = secrets.token_urlsafe(32)
     return httpd

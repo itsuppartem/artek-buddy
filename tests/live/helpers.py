@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import urllib.error
 import urllib.request
@@ -22,15 +23,28 @@ def mint_pairing_code() -> str:
 
 
 def reset_pairing(client_url: str) -> None:
-    req = urllib.request.Request(
-        client_url.rstrip("/") + "/local/unpair",
-        data=b"{}",
-        method="POST",
-        headers={"Content-Type": "application/json"},
-    )
+    origin = client_url.rstrip("/")
     try:
+        status_req = urllib.request.Request(
+            origin + "/local/status",
+            method="GET",
+            headers={"Origin": origin, "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(status_req, timeout=5) as resp:
+            payload = json.loads(resp.read().decode())
+        nonce = str(payload.get("nonce") or "")
+        req = urllib.request.Request(
+            origin + "/local/unpair",
+            data=b"{}",
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Origin": origin,
+                "X-Artek-Local-Nonce": nonce,
+            },
+        )
         urllib.request.urlopen(req, timeout=5)
-    except urllib.error.URLError:
+    except (OSError, ValueError, json.JSONDecodeError, urllib.error.URLError):
         return
 
 
