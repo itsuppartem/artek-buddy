@@ -78,7 +78,12 @@ Build on a machine with Node 22. Install on Debian/Ubuntu. Do not commit `*.deb`
 Daily work is a pull request **into `develop`**. `main` is release-only:
 open `develop` → `main` when shipping. Never push `main` directly.
 New issues can use the GitHub forms (bug, feature, engineering).
-PRs into `main` cannot merge while `backend` or `ui` is red.
+PRs into `develop` or `main` cannot merge while any of these checks is red:
+`quality`, `backend`, `ui`, `scan`, `live_gate`, `analyze (python)`,
+`analyze (javascript-typescript)`, and `CodeQL`. That is rulesets
+**Protect develop** and **Protect main**. `live` is not required (it needs
+the Actions secret; `live_gate` already records skipped vs failed). Review
+count is 0; do not push `main` or `develop` directly.
 A merge into `main` that changes `VERSION` publishes a GitHub Release only after
 the **push** `test` run on that commit is green (`release.yml` is `workflow_run`
 on `test`, not a parallel `push`). The computer image is not built in Actions.

@@ -3,7 +3,9 @@ name: release
 # Publishes the GitHub Release, clean .deb, and host GHCR image.
 # Does not run on push. It starts only after the `test` workflow succeeds
 # on a push to main (or a manual Force run from main). A red PR into main
-# cannot merge: ruleset "Protect main" requires jobs backend and ui.
+# cannot merge: ruleset "Protect main" requires quality, backend, ui, scan,
+# live_gate, analyze (python), analyze (javascript-typescript), and CodeQL.
+# live is not required. Protect develop uses the same checks.
 # The computer image is not built here: Chromium under QEMU hangs the job.
 # install-host.sh pulls it when present, otherwise builds on the Pi.
 on:
