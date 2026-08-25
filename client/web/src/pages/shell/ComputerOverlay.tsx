@@ -1,4 +1,4 @@
-import type { RefObject, SyntheticEvent } from "react";
+import { type RefObject, type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import {
   computerLabel,
@@ -6,6 +6,7 @@ import {
   overlayPointerEvents,
   screenIframeSandbox,
   screenTargetKey,
+  shouldReportOwnerActivity,
 } from "../../lib/screen";
 import type { Bot, ComputerStatus } from "../../types";
 import { BotAvatar } from "../../ui/bot-avatar";
@@ -42,6 +43,34 @@ export function ComputerOverlay({
   onScreenFrameLoad: (event: SyntheticEvent<HTMLIFrameElement>) => void;
   onScreenError: (message: string) => void;
 }) {
+  const lastActivityMs = useRef(0);
+  const [frameReady, setFrameReady] = useState(0);
+
+  function reportOwnerActivity() {
+    if (computer?.controlHolder !== "user" || !bot) return;
+    const now = Date.now();
+    if (!shouldReportOwnerActivity(lastActivityMs.current, now)) return;
+    lastActivityMs.current = now;
+    void api.computer.input(bot.id, { kind: "activity", payload: {} });
+  }
+
+  useEffect(() => {
+    if (!open || computer?.controlHolder !== "user") return;
+    const doc = overlayFrameRef.current?.contentDocument;
+    if (!doc) return;
+    const onAct = () => reportOwnerActivity();
+    doc.addEventListener("pointerdown", onAct);
+    doc.addEventListener("pointermove", onAct);
+    doc.addEventListener("keydown", onAct);
+    doc.addEventListener("wheel", onAct, { passive: true });
+    return () => {
+      doc.removeEventListener("pointerdown", onAct);
+      doc.removeEventListener("pointermove", onAct);
+      doc.removeEventListener("keydown", onAct);
+      doc.removeEventListener("wheel", onAct);
+    };
+  }, [open, computer?.controlHolder, overlayFrameRef, screenEpoch, screenUrl, frameReady]);
+
   if (booting) {
     return (
       <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-[rgba(4,4,5,.96)]">
@@ -61,7 +90,11 @@ export function ComputerOverlay({
       className="absolute inset-0 z-30 flex flex-col bg-[#050506]"
       data-testid="computer-overlay"
       tabIndex={0}
+      onPointerDown={reportOwnerActivity}
+      onPointerMove={reportOwnerActivity}
+      onWheel={reportOwnerActivity}
       onKeyDown={(event) => {
+        reportOwnerActivity();
         if (event.key !== "CapsLock" || computer?.controlHolder !== "user") return;
         event.preventDefault();
         void api.computer.input(bot.id, { kind: "key", payload: { key: "Caps_Lock" } });
@@ -78,7 +111,7 @@ export function ComputerOverlay({
               data-testid="computer-overlay-holder"
               className="rounded-full bg-[rgba(48,162,75,.14)] px-[11px] py-1 text-[13px] text-[#4ECB71]"
             >
-              You have control
+              You have control · returns to the bot after two idle minutes
             </span>
           ) : null}
         </div>
@@ -114,7 +147,10 @@ export function ComputerOverlay({
               className="h-full w-full border-0 bg-black"
               allow="clipboard-read; clipboard-write; fullscreen"
               style={{ pointerEvents: overlayPointerEvents(computer?.controlHolder) }}
-              onLoad={onScreenFrameLoad}
+              onLoad={(event) => {
+                onScreenFrameLoad(event);
+                setFrameReady((value) => value + 1);
+              }}
               onError={() => onScreenError("Screen preview failed to load")}
             />
             {screenError ? (

@@ -255,7 +255,7 @@ export function ComputerPane({
           {computer?.busyBotName
             ? `${computer.busyBotName} is using it`
             : computer?.controlHolder === "user"
-              ? "You have control"
+              ? "You have control · idle 2 min returns it"
               : label}
         </span>
         <div className="flex items-center gap-2">

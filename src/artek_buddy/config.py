@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     sandbox_supervisor_token: str = ""
     sandbox_provider: str = "docker"
     computer_image: str = "artek-buddy-computer:local"
-    computer_idle_seconds: int = 600
+    computer_idle_seconds: int = 900
+    computer_takeover_idle_seconds: int = 120
     computer_takeover_ttl_seconds: int = 900
     memory_gateway_url: str = "http://127.0.0.1:8420"
     consent_auto: str = ""

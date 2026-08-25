@@ -25,6 +25,7 @@ class ComputerRecord:
     execution_lease_expires_at: str | None
     sleep_at: str | None
     updated_at: str
+    last_input_at: str | None = None
 
     def status_for(
         self, bot_id: str, mode: str, busy_bot_name: str | None = None

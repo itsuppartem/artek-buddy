@@ -733,11 +733,16 @@ export function ShellPage() {
 
   useEffect(() => {
     if ((panel !== "computer" && !computerOpen) || !active || computer?.state !== "running") return;
-    const ping = () => void api.computer.heartbeat(active.id).catch(() => undefined);
+    const ping = () =>
+      void api.computer
+        .status(active.id)
+        .then(setComputer)
+        .catch(() => undefined);
     ping();
-    const timer = window.setInterval(ping, 60_000);
+    const ms = computer?.controlHolder === "user" ? 15_000 : 60_000;
+    const timer = window.setInterval(ping, ms);
     return () => window.clearInterval(timer);
-  }, [panel, computerOpen, active?.id, computer?.state]);
+  }, [panel, computerOpen, active?.id, computer?.state, computer?.controlHolder]);
 
   useEffect(() => {
     if (!active || computer?.state !== "running" || !screenError) return;
