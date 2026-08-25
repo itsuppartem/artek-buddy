@@ -444,8 +444,13 @@ export const api = {
     forget(provider: string) {
       return request<OkResponse>("DELETE", `/v1/models/credentials/${provider}`);
     },
-    setDefault(provider: string, model: string) {
-      return request<OkResponse>("POST", "/v1/models/default", { provider, model });
+    setDefault(provider: string, model: string, effort?: string, fast?: boolean) {
+      return request<OkResponse>("POST", "/v1/models/default", {
+        provider,
+        model,
+        effort,
+        fast,
+      });
     },
   },
   computer: {

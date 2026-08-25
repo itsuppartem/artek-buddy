@@ -44,6 +44,8 @@ export type ModelCredentialList = {
   credentials: ModelCredential[];
   defaultProvider: string | null;
   defaultModel: string | null;
+  defaultEffort?: string | null;
+  defaultFast?: boolean | null;
 };
 export type ModelInfo = { id: string; provider: string };
 export type ModelListResponse = { models: ModelInfo[] };

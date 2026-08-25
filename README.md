@@ -143,7 +143,7 @@ Common ids you may see: `grok-4.6`, `composer-2.5`, `auto-smart` (Cursor Router,
 
 ### 3. Host on the Raspberry Pi
 
-One action after Docker is installed. The script writes `.env` with random tokens and starts the stack. A provider key is not required to boot: pair the window and paste a key in **Models**, or set `CURSOR_API_KEY` in `.env` to seed Cursor.
+One action after Docker is installed. The script writes `.env` with random tokens and starts the stack. A provider key is not required to boot: pair the window and paste a key in **Models**, or set `CURSOR_API_KEY` in `.env` to seed Cursor. Paste a key in **Plugins**, or set `COMPOSIO_API_KEY` to seed that host key.
 
 ```bash
 sudo apt-get update
@@ -152,7 +152,7 @@ sudo usermod -aG docker "$USER"   # then log out and back in
 curl -fsSL https://github.com/itsuppartem/artek-buddy/releases/latest/download/install-host.sh | sh
 ```
 
-Optional: edit `~/artek-buddy/.env` and set `CURSOR_API_KEY=crsr_…` if you want Cursor seeded from env. The window can add or replace keys later.
+Optional: edit `~/artek-buddy/.env` and set `CURSOR_API_KEY=crsr_…` if you want Cursor seeded from env, or `COMPOSIO_API_KEY` for the Plugins key. The window can add or replace keys later.
 
 Manual clone and `docker compose up --build` still work. After the first GHCR publish, set each package visibility to **Public** so the Pi can pull without login.
 
