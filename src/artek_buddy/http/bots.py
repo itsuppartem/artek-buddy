@@ -6,6 +6,8 @@ from pathlib import Path
 
 from fastapi import Depends, HTTPException, Query
 
+from artek_buddy.bot_asks import BotAskError, resolve_ask
+from artek_buddy.bus import EventHub
 from artek_buddy.computer.service import (
     ComputerBusy,
     ComputerError,
@@ -13,6 +15,8 @@ from artek_buddy.computer.service import (
 )
 from artek_buddy.contracts import (
     Bot,
+    BotAskInput,
+    BotAskResult,
     BotList,
     CreateBotInput,
     OkResponse,
@@ -41,12 +45,14 @@ from artek_buddy.http.deps import (
     _require_bot,
     computers,
     current_app,
+    hub,
     require_auth,
     runtime,
     store,
 )
 from artek_buddy.http.turns import (
     _cancel_turns,
+    _launch_bot_ask,
 )
 
 router = APIRouter()
@@ -230,6 +236,27 @@ async def set_bot_computer(
         raise _computer_http(err) from err
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
+
+
+@router.post("/v1/bots/{bot_id}/asks", dependencies=[Depends(require_auth)])
+async def ask_other_bot(
+    bot_id: str,
+    body: BotAskInput,
+    history: HistoryStore = Depends(store),
+    rt: AgentRuntime = Depends(runtime),
+    events: EventHub = Depends(hub),
+) -> BotAskResult:
+    try:
+        source = _require_bot(history, bot_id)
+        dest = resolve_ask(history, source, body.text, body.bot)
+        sent = await _launch_bot_ask(
+            history, rt, events, source, dest, body.text.strip(), None, post_card=True
+        )
+    except BotAskError as err:
+        raise HTTPException(status_code=err.status, detail=err.detail) from err
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    return BotAskResult(ok=True, to_bot_id=dest.id, to_run_id=sent.run_id, name=dest.name)
 
 
 @router.post("/v1/bots/{bot_id}/archive", dependencies=[Depends(require_auth)])

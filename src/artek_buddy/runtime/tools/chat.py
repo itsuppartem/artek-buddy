@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from artek_buddy.bot_asks import BotAskError, asked_card_blocks, resolve_ask
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.db.shaping import isoformat_utc, new_id
 from artek_buddy.runtime.tools.common import (
@@ -122,6 +123,37 @@ class ChatToolsMixin:
             return {"ok": True, "message_id": msg.id}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
+
+    def _exec_message_bot(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
+        dest_ref = str(args.get("bot") or args.get("name") or "").strip()
+        question = str(args.get("text") or args.get("message") or "").strip()
+        bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+        store = self.runtime.store
+        if store is None or not bot_id:
+            return {"ok": False, "error": "store is not available"}
+        source = store.get_bot(bot_id)
+        if source is None:
+            return {"ok": False, "error": "bot not found"}
+        try:
+            dest = resolve_ask(store, source, question, dest_ref)
+        except BotAskError as err:
+            return {"ok": False, "error": err.detail}
+        posted = self._append_bot_blocks(args, bound_bot_id, asked_card_blocks(dest, question))
+        if not posted.get("ok"):
+            return posted
+        starter = getattr(self.runtime, "on_bot_ask", None)
+        if starter is None:
+            return {"ok": False, "error": "cannot start the other bot"}
+        try:
+            starter(source.id, dest.id, question, run_id)
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+        return {
+            "ok": True,
+            "asked": dest.name,
+            "to_bot_id": dest.id,
+            "waiting": True,
+        }
 
     def _exec_send_message(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
         text = str(args.get("text") or args.get("message") or "").strip()

@@ -89,6 +89,11 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert worker[0].tool == "spawn_subagent"
     assert worker[0].args["name"] == E2E_SUBAGENT_NAME
 
+    ask = steps_for_prompt("please e2e-ask-bot KnowsPeer | what city do you know")
+    assert ask[0].tool == "message_bot"
+    assert ask[0].args["bot"] == "KnowsPeer"
+    assert ask[0].args["text"] == "what city do you know"
+
     older = steps_for_prompt("please e2e-load-earlier")
     assert len([step for step in older if step.blocks]) == E2E_OLDER_COUNT
 

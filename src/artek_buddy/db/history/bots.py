@@ -49,6 +49,10 @@ class BotsMixin:
                     )
                 else:
                     conn.execute("DELETE FROM memory_documents WHERE bot_id = %s", (bot_id,))
+                conn.execute(
+                    "DELETE FROM bot_asks WHERE from_bot_id = %s OR to_bot_id = %s",
+                    (bot_id, bot_id),
+                )
                 conn.execute("DELETE FROM consent_requests WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM consent_grants WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM routines WHERE bot_id = %s", (bot_id,))

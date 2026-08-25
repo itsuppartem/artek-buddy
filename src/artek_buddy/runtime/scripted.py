@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from artek_buddy.bot_asks import ASK_REPLY_MARK, ASKED_YOU_MARK
 from artek_buddy.config import Settings
 from artek_buddy.consent import (
     CLASS_BROWSE,
@@ -42,6 +43,8 @@ E2E_CHILD_NAME = "Spawned pal"
 E2E_CHILD_ARCHIVED = "Old pal"
 E2E_SUBAGENT_NAME = "Researcher"
 E2E_SUBAGENT_TASK = "please e2e-slow now"
+E2E_ASK_READY = "I am ready to answer. The city is Subotica."
+E2E_ASK_ANSWER = "They said the city is Subotica."
 E2E_OLDER_PREFIX = "e2e-old-"
 E2E_OLDER_COUNT = 51
 E2E_HANG_S = 12.0
@@ -153,9 +156,39 @@ def _user_tail(prompt: str) -> str:
     return (prompt or "").rsplit("\n\n", 1)[-1]
 
 
+def _parse_ask_bot(user: str) -> tuple[str, str] | None:
+    key = "e2e-ask-bot "
+    idx = user.lower().find(key)
+    if idx < 0:
+        return None
+    rest = user[idx + len(key) :]
+    if " | " not in rest:
+        return None
+    name, question = rest.split(" | ", 1)
+    name = name.strip()
+    question = question.strip()
+    if not name or not question:
+        return None
+    return name, question
+
+
 def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     user = _user_tail(prompt or "")
     hay = user.lower()
+    if ASKED_YOU_MARK in hay:
+        return [
+            scripted_tool("send_message", text=E2E_ASK_READY),
+            scripted_finish(""),
+        ]
+    if ASK_REPLY_MARK in hay:
+        return [scripted_finish(E2E_ASK_ANSWER)]
+    parsed_ask = _parse_ask_bot(user)
+    if parsed_ask is not None:
+        dest_name, question = parsed_ask
+        return [
+            scripted_tool("message_bot", bot=dest_name, text=question),
+            scripted_finish("I asked them."),
+        ]
     if "e2e-hide-draft" in hay:
         return [
             scripted_progress("planning the lookup"),

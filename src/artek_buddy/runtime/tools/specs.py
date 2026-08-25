@@ -366,6 +366,30 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         lead_only=True,
     ),
     ToolSpec(
+        name="message_bot",
+        description=(
+            "Ask another inbox bot something by exact name or id. This chat shows that "
+            "you asked and the question. They work in their own chat. Their last "
+            "message comes back here so you can answer the owner. Do not paste their "
+            "thread. Do not use this for a worker in this chat (that is spawn_subagent)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "bot": {
+                    "type": "string",
+                    "description": "Exact inbox name or bot id.",
+                },
+                "text": {
+                    "type": "string",
+                    "description": "The question or task for that bot.",
+                },
+            },
+            "required": ["bot", "text"],
+        },
+        lead_only=True,
+    ),
+    ToolSpec(
         name="spawn_subagent",
         description="Start a worker on this chat's desktop for one task. Returns immediately with an index.",
         input_schema={

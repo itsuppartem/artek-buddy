@@ -72,10 +72,12 @@ class TurnsMixin:
         max_inbox: int = 20,
         blocks: list[dict[str, Any]] | None = None,
         preview: str | None = None,
+        inbox_text: str | None = None,
     ) -> tuple[ThreadMessage, Run, bool]:
         """Atomically start a lead turn or queue behind the current lead."""
         message_blocks = blocks or text_blocks(text)
         preview_text = preview or text
+        inbox_body = inbox_text if inbox_text is not None else text
         with self._conn() as conn:
             with conn.transaction():
                 locked = conn.execute(
@@ -144,7 +146,7 @@ class TurnsMixin:
                         INSERT INTO turn_inbox (id, bot_id, message_id, text, reply_to_id, created_at)
                         VALUES (%s, %s, %s, %s, %s, %s)
                         """,
-                        (new_id("inb"), bot.id, msg_id, text, reply_to_id, now),
+                        (new_id("inb"), bot.id, msg_id, inbox_body, reply_to_id, now),
                     )
                     conn.execute(
                         "UPDATE bots SET preview = %s, unread = FALSE, updated_at = %s WHERE id = %s",

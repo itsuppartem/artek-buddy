@@ -40,7 +40,12 @@ from artek_buddy.http.models import router as models_router
 from artek_buddy.http.routines import router as routines_router
 from artek_buddy.http.session import router as session_router
 from artek_buddy.http.threads import router as threads_router
-from artek_buddy.http.turns import _handle_takeover_request, _kick_inbox, _shutdown_work
+from artek_buddy.http.turns import (
+    _handle_bot_ask,
+    _handle_takeover_request,
+    _kick_inbox,
+    _shutdown_work,
+)
 
 
 @asynccontextmanager
@@ -93,6 +98,7 @@ async def lifespan(app: FastAPI):
             runtime.loop = asyncio.get_running_loop()
             app.state.subagents = subagents
             runtime.on_takeover_requested = _handle_takeover_request
+            runtime.on_bot_ask = _handle_bot_ask
             try:
                 for bot in store.list_bots():
                     asyncio.create_task(
