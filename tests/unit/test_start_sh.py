@@ -11,3 +11,11 @@ def test_startup_keepalive_does_not_spawn_xterm() -> None:
     assert "xterm" not in keepalive
     assert text.count("xterm ") == 1
     assert "/tmp/artek/xterm.fallback" in text
+
+
+def test_fluxbox_starts_from_usr_not_a_tmp_script() -> None:
+    """Docker tmpfs /tmp is noexec even when the create spec omits that flag."""
+    text = (ROOT / "infra" / "computer" / "start.sh").read_text(encoding="utf-8")
+    assert "fluxbox -rc /tmp/fluxbox-home/.fluxbox/init" in text
+    assert "chmod +x /tmp/fluxbox-home/.fluxbox/startup" not in text
+    assert "/tmp/fluxbox-home/.fluxbox/startup" not in text
