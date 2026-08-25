@@ -7,6 +7,17 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from artek_buddy.bot_asks import (
+    ASKED_YOU_MARK,
+    asked_card_blocks,
+    format_other_bots,
+    inbound_model_prompt,
+    inbound_visible_text,
+    last_bot_reply,
+    normalize_question,
+    ready_card_blocks,
+    reply_model_prompt,
+)
 from artek_buddy.bus import EventHub
 from artek_buddy.computer.service import (
     ComputerService,
@@ -28,6 +39,7 @@ from artek_buddy.db.shaping import (
     isoformat_utc,
     new_id,
     preview_snippet,
+    text_blocks,
 )
 from artek_buddy.memory import (
     compact_thread_context,
@@ -447,6 +459,7 @@ async def _accept_turn(
     trigger: str = "user",
     reply_to_id: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
+    model_prompt: str | None = None,
 ) -> ThreadSendResult:
     try:
         if history.get_default_model() is None:
@@ -456,7 +469,12 @@ async def _accept_turn(
     bot = await _ensure_agent(history, rt, bot)
     hosted = attachments or []
     display = (text or "").strip()
-    prompt = format_user_turn(display, hosted) if hosted else display
+    stored = display
+    prompt = (
+        model_prompt
+        if model_prompt is not None
+        else (format_user_turn(display, hosted) if hosted else display)
+    )
     try:
         parked = history.waiting_takeover_run(bot.id)
         if parked is not None:
@@ -475,14 +493,23 @@ async def _accept_turn(
                 raise HTTPException(status_code=400, detail="reply target not found")
         user_msg, run, queued = history.begin_or_enqueue_turn(
             bot,
-            prompt,
+            stored if model_prompt is not None else prompt,
             model_provider=runtime_kind(rt.settings),
             model_id=_chosen_model_id(history, rt),
             trigger=trigger,
             reply_to_id=reply_msg.id if reply_msg else None,
             max_inbox=MAX_INBOX,
-            blocks=user_file_blocks(display, hosted) if hosted else None,
-            preview=preview_for_upload(display, hosted) if hosted else None,
+            blocks=(
+                text_blocks(stored)
+                if model_prompt is not None
+                else (user_file_blocks(display, hosted) if hosted else None)
+            ),
+            preview=(
+                display
+                if model_prompt is not None
+                else (preview_for_upload(display, hosted) if hosted else None)
+            ),
+            inbox_text=prompt,
         )
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
@@ -549,6 +576,141 @@ async def _accept_turn(
     return ThreadSendResult(task_id=run.task_id, run_id=run.id, seq=user_msg.seq, run=run)
 
 
+def _handle_bot_ask(from_bot_id: str, dest_id: str, question: str, from_run_id: str | None) -> None:
+    async def _go() -> None:
+        app = current_app()
+        history = getattr(app.state, "store", None)
+        rt = getattr(app.state, "runtime", None)
+        events = getattr(app.state, "hub", None)
+        if history is None or rt is None or events is None:
+            return
+        source = history.get_bot(from_bot_id)
+        dest = history.get_bot(dest_id)
+        if source is None or dest is None:
+            return
+        try:
+            await _launch_bot_ask(
+                history, rt, events, source, dest, question, from_run_id, post_card=False
+            )
+        except Exception:
+            log.exception("failed to start asked bot %s", dest_id)
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_go(), name=f"bot-ask-{dest_id}")
+    except RuntimeError:
+        loop = getattr(getattr(current_app().state, "runtime", None), "loop", None)
+        if loop is not None:
+            asyncio.run_coroutine_threadsafe(_go(), loop)
+
+
+async def _launch_bot_ask(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+    source: Bot,
+    dest: Bot,
+    question: str,
+    from_run_id: str | None,
+    *,
+    post_card: bool,
+) -> ThreadSendResult:
+    question = normalize_question(question)
+    if post_card:
+        card = history.append_bot_message(source, asked_card_blocks(dest, question))
+        _emit(
+            events,
+            source,
+            ProductEventType.THREAD_MESSAGE_CREATED,
+            {"message": card.model_dump(mode="json")},
+            run_id=from_run_id,
+        )
+    history.create_bot_ask(
+        from_bot_id=source.id,
+        to_bot_id=dest.id,
+        question=question,
+        from_run_id=from_run_id,
+    )
+    return await _accept_turn(
+        history,
+        rt,
+        events,
+        dest,
+        inbound_visible_text(source.name, question),
+        trigger="user",
+        model_prompt=inbound_model_prompt(source.name, question),
+    )
+
+
+async def _deliver_bot_ask_reply(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+    bot: Bot,
+    run: Run,
+    status: str,
+    error: str | None,
+    reply_text: str,
+) -> None:
+    take = getattr(history, "take_undelivered_ask_for_run", None)
+    if not callable(take):
+        return
+    page = history.page_messages(bot.thread_id, limit=40)
+    answer = last_bot_reply(page.messages) or (reply_text or "").strip()
+    if status == "cancelled":
+        answer = f"{bot.name} was stopped."
+    elif status != "completed":
+        answer = f"{bot.name} failed." + (f" {error}" if error else "")
+    elif not answer:
+        answer = f"{bot.name} finished without a reply."
+    ask = take(run.id, answer)
+    if ask is None:
+        return
+    source = history.get_bot(str(ask.get("from_bot_id") or ""))
+    if source is None:
+        return
+    ready = history.append_bot_message(source, ready_card_blocks(bot))
+    _emit(
+        events,
+        source,
+        ProductEventType.THREAD_MESSAGE_CREATED,
+        {"message": ready.model_dump(mode="json")},
+        run_id=str(ask.get("from_run_id") or "") or None,
+    )
+    prompt = reply_model_prompt(bot.name, answer)
+    if history.active_run_count(source.id) > 0:
+        history.enqueue_inbox(source.id, ready.id, prompt)
+        return
+    live = await _ensure_agent(history, rt, source)
+    follow = history.begin_run(
+        live,
+        trigger="follow_up",
+        model_provider=runtime_kind(rt.settings),
+        model_id=_chosen_model_id(history, rt),
+    )
+    _emit(
+        events,
+        live,
+        ProductEventType.RUN_STARTED,
+        {"run": follow.model_dump(mode="json")},
+        run_id=follow.id,
+    )
+    task = asyncio.create_task(
+        _run_turn(
+            history,
+            rt,
+            events,
+            live,
+            prompt,
+            follow,
+            session_id=live.cursor_agent_id,
+            attach_agent=True,
+        ),
+        name=f"turn-{follow.id}",
+    )
+    _register_turn(live.id, follow.id, task)
+
+
 async def _run_turn(
     history: HistoryStore,
     rt: AgentRuntime,
@@ -577,6 +739,11 @@ async def _run_turn(
     reply_text = ""
     error: str | None = None
     status = "failed"
+    if ASKED_YOU_MARK in (text or ""):
+        try:
+            history.bind_pending_ask_run(bot.id, run.id)
+        except Exception:
+            log.exception("failed to bind asked turn %s", run.id)
     try:
         page = history.page_messages(bot.thread_id, limit=40)
         thread_context = compact_thread_context(page.messages)
@@ -594,6 +761,7 @@ async def _run_turn(
             subagent_context=format_subagent_context(history.list_subagents(bot.id)),
             thread_context=thread_context,
             inbox_context=inbox_context,
+            other_bots=format_other_bots(history.list_bots(), bot.id),
         )
         async for item in _turn_stream(history, rt, memory_prompt, agent_id, bot):
             if isinstance(item, RunRecord):
@@ -706,6 +874,10 @@ async def _run_turn(
                     _emit_remembered(events, bot, entry.text, run.id)
             except Exception:
                 log.exception("failed to extract memory after turn")
+    try:
+        await _deliver_bot_ask_reply(history, rt, events, bot, finished, status, error, reply_text)
+    except Exception:
+        log.exception("failed to return asked reply from %s", bot.id)
     if status != "cancelled":
         await _kick_inbox(history, rt, events, bot)
 

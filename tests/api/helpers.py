@@ -47,6 +47,26 @@ def wait_run_status(
     raise AssertionError(f"turn {run_id} not {status}: {last.get('run')}")
 
 
+def wait_thread_has(
+    client,
+    auth_header: dict[str, str],
+    bot_id: str,
+    needle: str,
+    timeout: float = 15.0,
+) -> dict[str, Any]:
+    deadline = time.time() + timeout
+    last: dict[str, Any] = {}
+    while time.time() < deadline:
+        snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+        assert snap.status_code == 200, snap.text
+        last = snap.json()
+        blob = "\n".join(message_texts(last))
+        if needle in blob:
+            return last
+        time.sleep(0.1)
+    raise AssertionError(f"{bot_id} never showed {needle!r}: {message_texts(last)}")
+
+
 def message_texts(payload: dict[str, Any]) -> list[str]:
     texts: list[str] = []
     for msg in payload.get("messages") or []:

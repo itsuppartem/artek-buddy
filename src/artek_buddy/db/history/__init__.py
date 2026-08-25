@@ -1,3 +1,4 @@
+from artek_buddy.db.history.asks import AsksMixin
 from artek_buddy.db.history.bots import BotsMixin
 from artek_buddy.db.history.computer import ComputerMixin
 from artek_buddy.db.history.consents import ConsentsMixin
@@ -16,6 +17,7 @@ __all__ = ["HistoryStore", "InboxFullError", "MigrationChecksumError"]
 
 class HistoryStore(
     HistoryStoreCore,
+    AsksMixin,
     BotsMixin,
     MessagesMixin,
     TurnsMixin,

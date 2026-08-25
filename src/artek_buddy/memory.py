@@ -238,6 +238,7 @@ def wrap_turn_prompt(
     steer: bool = False,
     thread_context: str | None = None,
     inbox_context: str | None = None,
+    other_bots: str | None = None,
 ) -> str:
     parts: list[str] = []
     if memory_context:
@@ -279,6 +280,9 @@ def wrap_turn_prompt(
             "and take over to finish the job directly.\n"
             "- Delegation: when the user asks for substantive, distinct parallel background jobs (e.g. running scripts, doing complex parallel workflows), spawn a subagent using spawn_subagent(name=..., task=...). Do not spawn subagents for trivial questions or simple answers you can give directly.\n"
             "- Use list_subagents, inspect_subagent, steer_subagent, stop_subagent to monitor and steer workers.\n"
+            "- To ask another inbox bot what it knows, call message_bot(bot=exact name or id, text=the question). "
+            "This chat shows that you asked. They work in their chat. Their last message comes back here; "
+            "you then answer the owner. Do not paste their thread. Do not spawn_subagent for that.\n"
             "- Memory: if the user states a durable fact, preference, path, ban, or current work, "
             "call remember and put it in the right section "
             "(identity, tone, contacts, machines, paths, purpose, bans, do_not, wait). "
@@ -316,6 +320,8 @@ def wrap_turn_prompt(
         parts.append(thread_context)
     if inbox_context:
         parts.append(inbox_context)
+    if other_bots:
+        parts.append(other_bots)
     if reply_excerpt:
         who = reply_role or "message"
         parts.append(f'The user is replying to this {who}:\n"""\n{reply_excerpt}\n"""')

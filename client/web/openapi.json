@@ -332,6 +332,56 @@
         "title": "Bot",
         "type": "object"
       },
+      "BotAskInput": {
+        "properties": {
+          "bot": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Bot",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bot"
+        ],
+        "title": "BotAskInput",
+        "type": "object"
+      },
+      "BotAskResult": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "to_bot_id": {
+            "minLength": 1,
+            "title": "To Bot Id",
+            "type": "string"
+          },
+          "to_run_id": {
+            "minLength": 1,
+            "title": "To Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_bot_id",
+          "to_run_id",
+          "name"
+        ],
+        "title": "BotAskResult",
+        "type": "object"
+      },
       "BotList": {
         "properties": {
           "bots": {
@@ -3823,6 +3873,71 @@
           }
         },
         "summary": "Archive Bot"
+      }
+    },
+    "/v1/bots/{bot_id}/asks": {
+      "post": {
+        "operationId": "ask_other_bot_v1_bots__bot_id__asks_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bot_id",
+            "required": true,
+            "schema": {
+              "title": "Bot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BotAskInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotAskResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask Other Bot"
       }
     },
     "/v1/bots/{bot_id}/computer": {

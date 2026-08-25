@@ -64,6 +64,22 @@ class UpdateBotInput(BaseModel):
     computer_mode: Literal["team", "dedicated"] | None = None
 
 
+class BotAskInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    bot: str = Field(min_length=1, max_length=80)
+    text: str = ""
+
+
+class BotAskResult(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    ok: bool = True
+    to_bot_id: Id
+    to_run_id: Id
+    name: str
+
+
 class BotIdInput(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 

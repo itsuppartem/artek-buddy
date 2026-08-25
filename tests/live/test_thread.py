@@ -68,6 +68,37 @@ def test_thread_blocks_render_and_child_opens_other_chat(
     expect(thread_header(page)).not_to_contain_text(name)
 
 
+def test_ask_other_bot_card_opens_them_then_asker_answers(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    asker = unique_bot("AskWin")
+    knows = unique_bot("KnowsWin")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, knows)
+    create_named_bot(page, asker)
+    send_message(page, f"please e2e-ask-bot {knows} | what city do you know", asker)
+    card = page.get_by_test_id("child-bot-card").filter(has_text=knows).first
+    expect(card).to_be_enabled(timeout=15_000)
+    expect(page.get_by_text(f"Asked {knows}", exact=False)).to_be_visible()
+    card.click()
+    expect(thread_header(page)).to_contain_text(knows, timeout=8_000)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="what city do you know"
+        )
+    ).to_be_visible(timeout=15_000)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="bot"]').filter(
+            has_text="ready to answer"
+        )
+    ).to_be_visible(timeout=15_000)
+    open_chat(page, asker)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="Subotica")
+    ).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("computer-card")).to_have_count(0)
+
+
 def test_open_chat_has_no_replied_banner(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Here")
     send_message(page, "hello", name)
