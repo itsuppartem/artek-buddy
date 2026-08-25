@@ -45,13 +45,8 @@ mkdir -p /tmp/fluxbox-home/.fluxbox
 cp /etc/artek/fluxbox/init /tmp/fluxbox-home/.fluxbox/init
 cp /etc/artek/fluxbox/apps /tmp/fluxbox-home/.fluxbox/apps 2>/dev/null || true
 cp /etc/artek/fluxbox/menu /tmp/fluxbox-home/.fluxbox/menu 2>/dev/null || true
-cat > /tmp/fluxbox-home/.fluxbox/startup <<'EOF'
-#!/bin/sh
-xsetroot -solid "#111113"
-exec fluxbox -rc /tmp/fluxbox-home/.fluxbox/init
-EOF
-chmod +x /tmp/fluxbox-home/.fluxbox/startup
-HOME=/tmp/fluxbox-home /tmp/fluxbox-home/.fluxbox/startup >/tmp/artek/fluxbox.log 2>&1 &
+# /tmp is tmpfs noexec. Do not exec a generated script from there.
+HOME=/tmp/fluxbox-home fluxbox -rc /tmp/fluxbox-home/.fluxbox/init >/tmp/artek/fluxbox.log 2>&1 &
 
 HOME="$AGENT_HOME" artek-browser >/tmp/artek/browser.log 2>&1 &
 browser_up=0

@@ -17,3 +17,11 @@ def test_start_disables_pcmanfm_volume_autorun() -> None:
     text = (ROOT / "infra" / "computer" / "start.sh").read_text(encoding="utf-8")
     assert "autorun=0" in text
     assert "mount_on_startup=0" in text
+
+
+def test_fluxbox_starts_from_usr_not_a_tmp_script() -> None:
+    """Docker tmpfs /tmp is noexec even when the create spec omits that flag."""
+    text = (ROOT / "infra" / "computer" / "start.sh").read_text(encoding="utf-8")
+    assert "fluxbox -rc /tmp/fluxbox-home/.fluxbox/init" in text
+    assert "chmod +x /tmp/fluxbox-home/.fluxbox/startup" not in text
+    assert "/tmp/fluxbox-home/.fluxbox/startup" not in text
