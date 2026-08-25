@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-from tests.live.helpers import composer, create_named_bot, pair_fresh, unique_bot
+from tests.live.helpers import composer, create_named_bot, ensure_model, pair_fresh, unique_bot
 
 pytestmark = pytest.mark.live
 
@@ -39,6 +39,7 @@ def test_plugins_pane_key_connect_docs_then_chat_answers(
     expect(row.get_by_text("Connected")).to_be_visible()
     page.get_by_role("button", name="Close Plugins").click()
     create_named_bot(page, name)
+    ensure_model(page)
     chip = page.get_by_test_id("plugin-ask-docs")
     expect(chip).to_be_visible()
     chip.click()
