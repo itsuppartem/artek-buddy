@@ -22,6 +22,8 @@ export type BotAlertSnapshot = {
 };
 
 const busyStatus = new Set(["queued", "leased", "running", "waiting_input", "waiting_takeover"]);
+const watchBackgroundStatus = new Set(["queued", "leased", "running", "waiting_takeover"]);
+const ALERT_KIND_WINDOW_MS = 8_000;
 
 const urgencyByKind: Record<AttentionKind, AttentionAlert["urgency"]> = {
   replied: "normal",
@@ -203,6 +205,30 @@ export function shouldSendDesktopAlert(input: {
 }): boolean {
   if (!input.windowFocused) return true;
   return input.viewingBotId !== input.alertBotId;
+}
+
+export function shouldWatchBackgroundBot(
+  status: string,
+  botId: string,
+  viewingBotId: string | null | undefined,
+): boolean {
+  return botId !== viewingBotId && watchBackgroundStatus.has(status);
+}
+
+export function rememberShownAlert(
+  seen: Set<string>,
+  recentKindAt: Map<string, number>,
+  key: string,
+  kindKey: string,
+  now: number,
+  windowMs = ALERT_KIND_WINDOW_MS,
+): "show" | "skip" {
+  if (seen.has(key)) return "skip";
+  const last = recentKindAt.get(kindKey) ?? 0;
+  if (now - last < windowMs) return "skip";
+  seen.add(key);
+  recentKindAt.set(kindKey, now);
+  return "show";
 }
 
 const urgencyRank: Record<AttentionAlert["urgency"], number> = {
