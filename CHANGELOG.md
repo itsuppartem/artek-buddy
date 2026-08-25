@@ -10,6 +10,11 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Opening a website on the bot desktop no longer also opens the file manager. `open` treats `HTTPS://` like `https://`, and leftover pcmanfm volume autorun is off.
+- The bot desktop starts fluxbox again. Docker tmpfs `/tmp` is noexec, so the old generated startup script never ran and windows had no toolbar or close buttons.
+- A running desktop opened from the pane shows the live preview. The window fetches the screen URL when the box is already Booting or Running, so a bot-started session is not stuck on the text-only Desktop is running fallback.
+- Worker cards no longer dump the full task in the thread. The lead writes a one-line Started / Finished / Stopped step instead. Composer Stop still cancels workers.
+- A bot that opens a path on a stopped desktop updates the computer tile to Running without a click. The host publishes `computer.status`; Offline still polls while that turn is live.
 - Reasoning and Fast can be saved while the host already uses that model. The open chat gets a Using line; a live turn keeps going and the next send uses the new default.
 - A parked takeover on another chat keeps being watched so «needs you» still appears if the first switch missed the event. The same-kind debounce does not permanently consume that pill. A chat created in this window is not treated as a leftover park, and opening that chat does not stick Dismiss if the takeover arrived while it was already on screen.
 - A takeover on another chat shows «needs you», not «replied». The bot stays `waiting_takeover` (same idea as `waiting_input`), and the window does not dismiss that banner during the chat switch. If the takeover event arrives while that chat is open, or the thread stream drops it on switch, the other chat still raises the pill from the parked status.
