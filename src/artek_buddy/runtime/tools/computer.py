@@ -25,6 +25,11 @@ class ComputerToolsMixin:
             return {"ok": False, "error": "bot not found"}
         return bot, bot_id
 
+    def _publish_computer(self, bot: Any) -> None:
+        if self.runtime.events is None or self.runtime.computers is None:
+            return
+        emit_computer_event(self.runtime.events, bot, self.runtime.computers.status(bot))
+
     def _exec_computer_observe(
         self, args: dict[str, Any], bound_bot_id: str | None
     ) -> dict[str, Any]:
@@ -33,9 +38,11 @@ class ComputerToolsMixin:
             return found
         bot, _bot_id = found
         try:
-            return self.runtime.computers.observe(
+            result = self.runtime.computers.observe(
                 bot, include_image=bool(args.get("include_image"))
             )
+            self._publish_computer(bot)
+            return result
         except Exception as exc:
             log.exception("computer_observe failed")
             return {"ok": False, "error": str(exc)}
@@ -71,11 +78,13 @@ class ComputerToolsMixin:
             if denied:
                 return denied
         try:
-            return self.runtime.computers.act(
+            result = self.runtime.computers.act(
                 bot,
                 actions,
                 return_observe=bool(args.get("return_observe")),
             )
+            self._publish_computer(bot)
+            return result
         except Exception as exc:
             log.exception("computer_act failed")
             return {"ok": False, "error": str(exc)}
@@ -114,14 +123,18 @@ class ComputerToolsMixin:
         runner = getattr(self.runtime.computers, "browser_act", None)
         if callable(runner):
             try:
-                return runner(bot, actions)
+                result = runner(bot, actions)
+                self._publish_computer(bot)
+                return result
             except Exception as exc:
                 log.exception("browser_act failed")
                 return {"ok": False, "error": str(exc)}
         exec_fn = getattr(self.runtime.computers, "exec_command", None)
         if callable(exec_fn):
             try:
-                return exec_fn(bot, _playwright_browser_command(actions))
+                result = exec_fn(bot, _playwright_browser_command(actions))
+                self._publish_computer(bot)
+                return result
             except Exception as exc:
                 log.exception("browser_act exec failed")
                 return {"ok": False, "error": str(exc)}
@@ -141,7 +154,9 @@ class ComputerToolsMixin:
             elif kind in {"click", "submit"}:
                 mapped.append({"kind": "key", "key": "Return"} if kind == "submit" else item)
         try:
-            return self.runtime.computers.act(bot, mapped or actions)
+            result = self.runtime.computers.act(bot, mapped or actions)
+            self._publish_computer(bot)
+            return result
         except Exception as exc:
             log.exception("browser_act fallback failed")
             return {"ok": False, "error": str(exc)}
@@ -166,8 +181,7 @@ class ComputerToolsMixin:
                 return denied
         try:
             res = self.runtime.computers.open_path(bot, path)
-            if self.runtime.events is not None:
-                emit_computer_event(self.runtime.events, bot, self.runtime.computers.status(bot))
+            self._publish_computer(bot)
             if (
                 isinstance(res, dict)
                 and origin
@@ -200,8 +214,7 @@ class ComputerToolsMixin:
                 return denied
         try:
             res = self.runtime.computers.launch_app(bot, app_name, uri=uri)
-            if self.runtime.events is not None:
-                emit_computer_event(self.runtime.events, bot, self.runtime.computers.status(bot))
+            self._publish_computer(bot)
             if (
                 isinstance(res, dict)
                 and origin
@@ -223,8 +236,7 @@ class ComputerToolsMixin:
             return {"ok": False, "error": "application name is required"}
         try:
             res = self.runtime.computers.close_app(bot, app_name)
-            if self.runtime.events is not None:
-                emit_computer_event(self.runtime.events, bot, self.runtime.computers.status(bot))
+            self._publish_computer(bot)
             return res
         except Exception as exc:
             log.exception("close_app failed")

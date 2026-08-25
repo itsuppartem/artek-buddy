@@ -10,6 +10,7 @@ from tests.live.helpers import (
     open_computer_pane,
     open_settings,
     pair_fresh,
+    send_message,
     unique_bot,
 )
 
@@ -253,4 +254,24 @@ def test_settings_stop_shows_sleeping_on_pane(page: Page, client_url: str, host_
         "data-state", "sleeping", timeout=8_000
     )
     expect(page.get_by_text("Sleeping • Click to start")).to_be_visible()
+    expect(page.get_by_text("Offline • Click to start")).to_have_count(0)
+
+
+def test_bot_open_path_starts_computer_without_click(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("Wake")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    open_computer_pane(page)
+    expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "offline")
+    send_message(page, "e2e-wake-computer")
+    card = page.get_by_test_id("consent-card")
+    expect(card).to_be_visible(timeout=20_000)
+    page.get_by_test_id("ask-option").filter(has_text="Always").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=8_000
+    )
+    expect(page.get_by_test_id("computer-running")).to_be_visible()
+    expect(page.get_by_text("The desktop is up.")).to_have_count(0)
     expect(page.get_by_text("Offline • Click to start")).to_have_count(0)
