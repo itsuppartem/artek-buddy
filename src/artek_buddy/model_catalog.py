@@ -151,7 +151,9 @@ async def fetch_models(provider: str, key: str, *, scripted: bool = False) -> li
     return ids
 
 
-async def complete_chat(provider: str, key: str, model: str, prompt: str) -> str:
+async def complete_chat(
+    provider: str, key: str, model: str, prompt: str, max_tokens: int = 2048
+) -> str:
     spec = PROVIDERS_BY_ID[provider]
     if spec.style == "anthropic":
         headers = {
@@ -161,7 +163,7 @@ async def complete_chat(provider: str, key: str, model: str, prompt: str) -> str
         }
         body = {
             "model": model,
-            "max_tokens": 2048,
+            "max_tokens": max_tokens,
             "messages": [{"role": "user", "content": prompt}],
         }
         async with httpx.AsyncClient(timeout=90.0) as client:
@@ -185,6 +187,7 @@ async def complete_chat(provider: str, key: str, model: str, prompt: str) -> str
     body = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
     }
     async with httpx.AsyncClient(timeout=90.0) as client:
         response = await client.post(spec.complete_url, headers=headers, json=body)

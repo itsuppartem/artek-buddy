@@ -17,10 +17,11 @@ LEGACY_SLOTS = {
     "format": "tone",
     "language": "tone",
 }
-MAX_SECTION_CHARS = 8000
+MAX_SECTION_CHARS = 24000
 MAX_EXTRACT_CHARS = 800
 MAX_WORK = 12
-MAX_BOT_INSTRUCTIONS = 4000
+MAX_BOT_INSTRUCTIONS = 12000
+REWRITE_MAX_TOKENS = 8192
 
 _PATH = re.compile(r"(?i)(?:~/|/home/|/Users/|\\\\|[a-z]:\\|\bpath\b|\bпуть\b|\bcwd\b)")
 _EMAIL = re.compile(r"\b\S+@\S+\.\S+\b")
@@ -166,3 +167,104 @@ def format_recalled_memory(
         packed.append(piece)
         used += _byte_length(piece)
     return "".join(packed) or None
+
+
+_FACT_KIND = (
+    re.compile(r"(?i)(?:name is|меня зовут|зови меня)"),
+    re.compile(r"(?i)(?:lives in|live in|живу в|\bгород\b)"),
+    re.compile(r"(?i)(?:timezone|часовой пояс|\btz\b)"),
+)
+_FENCE = re.compile(r"^```(?:\w+)?\s*|\s*```$", re.MULTILINE)
+
+REWRITE_PROMPT = (
+    "Revise one section of a durable memory book. Return only the new body.\n"
+    "Section: {section}\n"
+    "Current text:\n{current}\n\n"
+    "This chat turn:\n{turn}\n\n"
+    "Facts already extracted this turn:\n{extracted}\n\n"
+    "Keep durable facts. Drop one-off tasks. If a newer fact contradicts an older one, "
+    "keep the newer. Write compact lines. No preamble. At most {limit} characters."
+)
+
+
+def _lines(text: str) -> list[str]:
+    return [line.strip() for line in (text or "").splitlines() if line.strip()]
+
+
+def _fact_clash(old: str, incoming: str) -> bool:
+    return any(pattern.search(old) and pattern.search(incoming) for pattern in _FACT_KIND)
+
+
+def scripted_rewrite(_section: str, current: str, turn_text: str, extracted: str) -> str:
+    incoming = _lines(extracted) or _lines(turn_text)
+    kept = [
+        line for line in _lines(current) if not any(_fact_clash(line, newer) for newer in incoming)
+    ]
+    seen = {line.lower() for line in kept}
+    for line in incoming:
+        if line.lower() not in seen:
+            kept.append(line)
+            seen.add(line.lower())
+    return "\n".join(kept)[:MAX_SECTION_CHARS]
+
+
+def clean_rewrite(text: str | None) -> str:
+    body = _FENCE.sub("", text or "").strip()
+    if body.lower().startswith("section:"):
+        body = body.split("\n", 1)[-1].strip()
+    return body[:MAX_SECTION_CHARS]
+
+
+class HostBookRewriter:
+    """Default-model rewrite when a key exists. Scripted / no-key uses a local revise."""
+
+    def __init__(self, store: object | None = None) -> None:
+        self.store = store
+
+    def _use_model(self) -> tuple[str, str, str] | None:
+        getter = getattr(self.store, "get_default_model", None)
+        if getter is None:
+            return None
+        try:
+            default = getter()
+        except Exception:
+            return None
+        if not default or default[0] == "scripted" or default[1] == "scripted":
+            return None
+        raw = getattr(self.store, "raw_key", None)
+        if raw is None:
+            return None
+        try:
+            key = raw(default[0])
+        except Exception:
+            return None
+        if not key:
+            return None
+        return default[0], default[1], str(key)
+
+    async def rewrite_section(
+        self,
+        section: str,
+        current: str,
+        turn_text: str,
+        extracted: str,
+    ) -> str | None:
+        live = self._use_model()
+        if live is None:
+            return scripted_rewrite(section, current, turn_text, extracted)
+        provider, model, key = live
+        from artek_buddy.model_catalog import complete_chat
+
+        prompt = REWRITE_PROMPT.format(
+            section=section,
+            current=current or "(empty)",
+            turn=turn_text or "(empty)",
+            extracted=extracted or "(none)",
+            limit=MAX_SECTION_CHARS,
+        )
+        try:
+            body = await complete_chat(provider, key, model, prompt, max_tokens=REWRITE_MAX_TOKENS)
+        except Exception:
+            return scripted_rewrite(section, current, turn_text, extracted)
+        cleaned = clean_rewrite(body)
+        return cleaned or scripted_rewrite(section, current, turn_text, extracted)

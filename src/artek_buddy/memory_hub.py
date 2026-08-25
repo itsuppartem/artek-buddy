@@ -14,6 +14,7 @@ from artek_buddy.memory_book import (
     MAX_SECTION_CHARS,
     MAX_WORK,
     charter_book_entries,
+    clean_rewrite,
     format_recalled_memory,
     infer_book_shelf,
     infer_section,
@@ -364,11 +365,16 @@ class MemoryHub:
     """Postgres is the panel source of truth. The gateway is a search index."""
 
     def __init__(
-        self, store: Any, gateway: MemoryGateway | None = None, user_id: str = "owner"
+        self,
+        store: Any,
+        gateway: MemoryGateway | None = None,
+        user_id: str = "owner",
+        rewriter: Any | None = None,
     ) -> None:
         self.store = store
         self.gateway = gateway or NullGateway()
         self.user_id = user_id
+        self.rewriter = rewriter
         self._captures: dict[str, int] = {}
         self._slots: dict[str, set[str]] = {}
 
@@ -644,3 +650,38 @@ class MemoryHub:
             if entry is not None:
                 saved.append(entry)
         return saved
+
+    async def revise_after_turn(
+        self, user_text: str, run_id: str | None, bot_id: str | None
+    ) -> list[MemoryEntry]:
+        saved = self.extract_after_turn(user_text, run_id, bot_id)
+        sections = self.slots_during(run_id)
+        if not sections or self.rewriter is None:
+            return saved
+        fresh = extract_unwritten_memories(user_text)
+        revised: list[MemoryEntry] = []
+        for section in sections:
+            scope = "bot" if section in CHARTER_SECTIONS else "user"
+            entry = self.store.find_live_memory_entry_by_slot(section, scope=scope, bot_id=bot_id)
+            if entry is None:
+                continue
+            extracted = "\n".join(item.text for item in fresh if item.slot == section)
+            try:
+                body = await self.rewriter.rewrite_section(
+                    section, entry.text, user_text, extracted
+                )
+            except Exception:
+                log.exception("memory book rewrite failed")
+                continue
+            ready = clean_rewrite(body)
+            if not ready or ready == entry.text:
+                continue
+            updated = self._revise(entry, ready, run_id, None)
+            if updated is None:
+                continue
+            try:
+                self.gateway.capture(updated, self.user_id, bot_id)
+            except Exception:
+                log.exception("memory gateway capture failed")
+            revised.append(updated)
+        return revised or saved

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from artek_buddy.memory import wrap_turn_prompt
+import pytest
+
+from artek_buddy.memory import MAX_AGENT_MEMORY_BYTES, wrap_turn_prompt
+from artek_buddy.memory_book import HostBookRewriter, format_recalled_memory
 from artek_buddy.memory_hub import MemoryEntry, MemoryHub
 
 
@@ -141,9 +144,10 @@ class _BookStore:
         return []
 
 
-def _hub() -> tuple[MemoryHub, _BookStore]:
+def _hub(rewrite: bool = False) -> tuple[MemoryHub, _BookStore]:
     store = _BookStore()
-    return MemoryHub(store, user_id="owner"), store
+    rewriter = HostBookRewriter(store) if rewrite else None
+    return MemoryHub(store, user_id="owner", rewriter=rewriter), store
 
 
 def test_hub_writes_and_revises_sections_from_a_turn() -> None:
@@ -265,3 +269,51 @@ def test_wrap_turn_prompt_tells_lead_to_revise_book_sections() -> None:
     assert "remember" in wrapped
     assert "section" in wrapped
     assert "one short sentence" not in wrapped
+
+
+@pytest.mark.asyncio
+async def test_rewrite_replaces_a_contradiction_instead_of_appending() -> None:
+    hub, store = _hub(rewrite=True)
+    hub.extract_after_turn("My name is Artek. I live in Belgrade.", "run_1", "bot_book")
+    await hub.revise_after_turn("I live in Subotica.", "run_2", "bot_book")
+    identity = store.find_live_memory_entry_by_slot("identity", bot_id="bot_book")
+    assert identity is not None
+    assert "Artek" in identity.text
+    assert "Subotica" in identity.text
+    assert "Belgrade" not in identity.text
+    prompt = hub.context_for_turn("bot_book", "hello there")
+    assert prompt is not None
+    assert "Subotica" in prompt
+    assert "Belgrade" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_idle_hello_does_not_rewrite_the_book() -> None:
+    hub, store = _hub(rewrite=True)
+    hub.extract_after_turn("My name is Artek. I live in Belgrade.", "run_1", "bot_book")
+    before = store.find_live_memory_entry_by_slot("identity", bot_id="bot_book")
+    assert before is not None
+    changed = await hub.revise_after_turn("hello there", "run_idle", "bot_book")
+    after = store.find_live_memory_entry_by_slot("identity", bot_id="bot_book")
+    assert changed == []
+    assert after is not None
+    assert after.text == before.text
+
+
+def test_book_prompt_budget_fits_a_wide_chapter() -> None:
+    assert MAX_AGENT_MEMORY_BYTES >= 256 * 1024
+    chapter = "Keep the Pi notes on disk. " * 6000
+    entry = MemoryEntry(
+        id="ment_wide",
+        scope="user",
+        kind="preference",
+        text=chapter,
+        source="remember",
+        bot_id="bot_book",
+        slot="paths",
+        shelf="owner",
+    )
+    prompt = format_recalled_memory([entry], [], [])
+    assert prompt is not None
+    assert "Keep the Pi notes on disk." in prompt
+    assert len(prompt.encode("utf-8")) > 128 * 1024
