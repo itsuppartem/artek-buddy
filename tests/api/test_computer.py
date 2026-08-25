@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from tests.api.helpers import create_bot
+import time
+
+from tests.api.helpers import consent_id_from_thread, create_bot, wait_run_status
 
 
 def test_computer_boot_stop_on_fake(client, auth_header) -> None:
@@ -272,3 +274,40 @@ def test_startup_does_not_respawn_xterm_when_browser_is_up(client, auth_header) 
 def test_computer_requires_auth(client) -> None:
     response = client.get("/v1/computer/bot_missing")
     assert response.status_code == 401
+
+
+def test_open_path_from_stopped_emits_computer_status(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "WakeBox", computer_mode="dedicated")["id"]
+    before = client.get(f"/v1/computer/{bot_id}", headers=auth_header)
+    assert before.status_code == 200
+    assert before.json()["state"] == "stopped"
+
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "e2e-wake-computer"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    snap = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input")
+    consent_id = consent_id_from_thread(snap)
+    allowed = client.post(
+        f"/v1/consents/{consent_id}",
+        headers=auth_header,
+        json={"decision": "always"},
+    )
+    assert allowed.status_code == 200
+
+    deadline = time.time() + 8.0
+    types: list[str] = []
+    while time.time() < deadline:
+        types = [str(event.type) for event in client.app.state.hub.replay(bot_id)]
+        if "computer.status" in types:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"no computer.status in {types}")
+
+    after = client.get(f"/v1/computer/{bot_id}", headers=auth_header)
+    assert after.status_code == 200
+    assert after.json()["state"] == "running"

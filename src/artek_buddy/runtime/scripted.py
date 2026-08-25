@@ -326,6 +326,13 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 "I can keep sources open on this Pi desktop."
             ),
         ]
+    if "e2e-wake-computer" in hay:
+        return [
+            scripted_progress("opening the desktop"),
+            scripted_tool("open_path", path="https://en.wikipedia.org/wiki/Belgrade"),
+            scripted_delay(E2E_HANG_S),
+            scripted_finish("The desktop is up."),
+        ]
     if "open wikipedia" in hay or "open the belgrade page" in hay:
         return [
             scripted_progress("launching Chromium"),
