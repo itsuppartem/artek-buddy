@@ -301,7 +301,10 @@ def test_open_path_from_stopped_emits_computer_status(client, auth_header) -> No
     deadline = time.time() + 8.0
     types: list[str] = []
     while time.time() < deadline:
-        types = [str(event.type) for event in client.app.state.hub.replay(bot_id)]
+        types = [
+            event.type.value if hasattr(event.type, "value") else str(event.type)
+            for event in client.app.state.hub.replay(bot_id)
+        ]
         if "computer.status" in types:
             break
         time.sleep(0.1)
