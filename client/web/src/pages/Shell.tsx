@@ -906,8 +906,7 @@ export function ShellPage() {
       .catch(() => undefined);
   }, [panel, active?.id]);
 
-  const runLive =
-    snapshot?.run?.status === "running" || snapshot?.run?.status === "waiting_input";
+  const runLive = snapshot?.run?.status === "running" || snapshot?.run?.status === "waiting_input";
 
   useEffect(() => {
     if ((panel !== "computer" && !computerOpen) || !active) return;
