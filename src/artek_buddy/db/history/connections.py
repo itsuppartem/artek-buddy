@@ -27,6 +27,12 @@ class ConnectionsMixin:
         key = (row or {}).get("api_key") if row else None
         return str(key).strip() if key else None
 
+    def seed_env_connection_key(self, key: str) -> None:
+        incoming = (key or "").strip()
+        if not incoming or self.raw_connection_key():
+            return
+        self.save_connection_key(incoming)
+
     def save_connection_key(self, key: str) -> ConnectionKeyStatus:
         now = isoformat_utc()
         with self._conn() as conn:

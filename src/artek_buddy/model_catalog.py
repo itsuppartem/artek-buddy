@@ -67,6 +67,13 @@ def unknown_provider(provider: str) -> bool:
     return provider not in PROVIDERS_BY_ID
 
 
+def preferred_model(ids: list[str], want: str = "grok-4.6") -> str | None:
+    names = [item for item in ids if item]
+    if want in names:
+        return want
+    return names[0] if names else None
+
+
 def last_four(key: str) -> str:
     text = (key or "").strip()
     return text[-4:] if text else ""

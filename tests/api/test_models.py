@@ -35,6 +35,45 @@ def test_credentials_start_empty_and_models_list_is_empty(client, auth_header) -
     assert models.json()["models"] == []
 
 
+def test_model_key_routes_exist(client) -> None:
+    missing = client.post(
+        "/v1/models/credentials",
+        json={"provider": "cursor", "api_key": "x"},
+    )
+    assert missing.status_code == 401
+    listed = client.get("/v1/models/credentials")
+    assert listed.status_code == 401
+    default = client.post(
+        "/v1/models/default",
+        json={"provider": "cursor", "model": "scripted"},
+    )
+    assert default.status_code == 401
+    bad = {"Authorization": "Bearer nope"}
+    refused = client.post(
+        "/v1/models/credentials",
+        headers=bad,
+        json={"provider": "cursor", "api_key": "x"},
+    )
+    assert refused.status_code == 403
+
+
+def test_connect_empty_key_is_400(client, auth_header) -> None:
+    empty = client.post(
+        "/v1/models/credentials",
+        headers=auth_header,
+        json={"provider": "cursor", "api_key": "   "},
+    )
+    assert empty.status_code == 400
+    assert empty.json()["detail"] == "API key is empty"
+    placeholder = client.post(
+        "/v1/models/credentials",
+        headers=auth_header,
+        json={"provider": "cursor", "api_key": "crsr_your_key_here"},
+    )
+    assert placeholder.status_code == 400
+    assert placeholder.json()["detail"] == "API key is empty"
+
+
 def test_connect_list_default_forget_and_never_echoes_key(client, auth_header) -> None:
     connected = client.post(
         "/v1/models/credentials",
@@ -63,6 +102,8 @@ def test_connect_list_default_forget_and_never_echoes_key(client, auth_header) -
     models = client.get("/v1/models", headers=auth_header)
     assert models.status_code == 200
     assert models.json()["models"] == [{"id": "scripted", "provider": "openrouter"}]
+    assert listed.json()["default_provider"] == "openrouter"
+    assert listed.json()["default_model"] == "scripted"
 
     missing = client.post(
         "/v1/models/default",
@@ -107,6 +148,39 @@ def test_connect_cursor_uses_scripted_catalog(client, auth_header) -> None:
     models = client.get("/v1/models", headers=auth_header)
     assert models.status_code == 200
     assert models.json()["models"] == [{"id": "scripted", "provider": "cursor"}]
+    listed = client.get("/v1/models/credentials", headers=auth_header)
+    assert listed.status_code == 200
+    body = listed.json()
+    assert body["default_provider"] == "cursor"
+    assert body["default_model"] == "scripted"
+    assert body["default_effort"] == "xhigh"
+    assert body["default_fast"] is True
+
+
+def test_set_default_persists_effort_and_fast(client, auth_header) -> None:
+    client.post(
+        "/v1/models/credentials",
+        headers=auth_header,
+        json={"provider": "openrouter", "api_key": SECRET},
+    )
+    chosen = client.post(
+        "/v1/models/default",
+        headers=auth_header,
+        json={"provider": "openrouter", "model": "scripted", "effort": "high", "fast": False},
+    )
+    assert chosen.status_code == 200
+    after = client.get("/v1/models/credentials", headers=auth_header)
+    assert after.json()["default_effort"] == "high"
+    assert after.json()["default_fast"] is False
+    kept = client.post(
+        "/v1/models/default",
+        headers=auth_header,
+        json={"provider": "openrouter", "model": "scripted"},
+    )
+    assert kept.status_code == 200
+    same = client.get("/v1/models/credentials", headers=auth_header)
+    assert same.json()["default_effort"] == "high"
+    assert same.json()["default_fast"] is False
 
 
 def test_send_without_default_does_not_start_a_turn(client, auth_header) -> None:
@@ -133,11 +207,6 @@ def test_me_needs_model_until_default_is_set(client, auth_header) -> None:
         "/v1/models/credentials",
         headers=auth_header,
         json={"provider": "openai", "api_key": SECRET},
-    )
-    client.post(
-        "/v1/models/default",
-        headers=auth_header,
-        json={"provider": "openai", "model": "scripted"},
     )
     ready = client.get("/v1/me", headers=auth_header)
     assert ready.json()["needs_model"] is False

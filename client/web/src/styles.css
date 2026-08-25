@@ -67,8 +67,19 @@ body,
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
+}
+
+select {
+  color: var(--color-ink);
+  background-color: var(--color-paper);
+}
+
+select option {
+  color: var(--color-ink);
+  background-color: var(--color-paper);
 }
 
 button:focus-visible,
