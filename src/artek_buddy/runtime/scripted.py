@@ -267,6 +267,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 name=E2E_SUBAGENT_NAME,
                 task="please e2e-hang now",
             ),
+            scripted_delay(E2E_HANG_S),
             scripted_finish("worker started"),
         ]
     if "e2e-subagent" in hay:

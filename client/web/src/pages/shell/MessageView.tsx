@@ -1,5 +1,4 @@
 import type { MouseEvent } from "react";
-import { api } from "../../api";
 import { ChatMarkdown } from "../../lib/chat-markdown";
 import { stripMarkdown } from "../../lib/markdown";
 import { isHiddenLiveDraft } from "../../lib/thread-events";
@@ -15,7 +14,6 @@ export function replyExcerpt(message: ThreadMessage): string {
 }
 
 export function MessageView({
-  botId,
   canAnswer,
   message,
   queued = false,
@@ -24,10 +22,8 @@ export function MessageView({
   onAnswer,
   onOpenBot,
   onOpenComputer,
-  onSubagentChange,
   onContextMenu,
 }: {
-  botId: string;
   canAnswer: boolean;
   message: ThreadMessage;
   queued?: boolean;
@@ -36,7 +32,6 @@ export function MessageView({
   onAnswer: (text: string) => Promise<void>;
   onOpenBot: (botId: string) => void;
   onOpenComputer?: () => void;
-  onSubagentChange?: () => void;
   onContextMenu?: (event: MouseEvent, message: ThreadMessage) => void;
 }) {
   const quote = message.replyTo;
@@ -86,79 +81,7 @@ export function MessageView({
           );
         }
         if (block.kind === "subagent") {
-          const running = block.status === "queued" || block.status === "running";
-          const failed = block.status === "failed" || block.status === "cancelled";
-          const label = block.index ? `#${block.index} ${block.name}` : block.name;
-          return (
-            <div
-              key={index}
-              data-testid="subagent-card"
-              data-status={block.status}
-              className="max-w-[74%] min-w-[340px] w-fit rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[15px] font-medium text-[#ECECEE]">{label}</span>
-                <span
-                  className="rounded-full px-[11px] py-1 text-[13px]"
-                  style={{
-                    background: failed
-                      ? "rgba(230,87,7,.14)"
-                      : running
-                        ? "rgba(245,160,60,.14)"
-                        : "rgba(48,162,75,.14)",
-                    color: failed ? "#E65707" : running ? "#D4A017" : "#4ECB71",
-                    animation: running ? "abPulse 1.2s ease-in-out infinite" : undefined,
-                  }}
-                >
-                  {block.status}
-                </span>
-              </div>
-              <div className="mt-2 text-[13.5px] text-[#85858A]">{block.task}</div>
-              {block.clarifications ? (
-                <div className="mt-2 text-[13px] leading-[1.45] text-[#9A9AA0]">
-                  {block.clarifications}
-                </div>
-              ) : null}
-              {block.progress || block.result ? (
-                <div className="mt-2.5 text-[14.5px] leading-[1.5] text-[#A8A8AD]">
-                  <ChatMarkdown streaming={running}>
-                    {block.result || block.progress || ""}
-                  </ChatMarkdown>
-                </div>
-              ) : null}
-              {botId && block.agentId ? (
-                <div className="mt-3 flex gap-2">
-                  {running ? (
-                    <button
-                      type="button"
-                      className="rounded-full bg-[#2A1510] px-3 py-1 text-[13px] text-[#E65707] hover:bg-[#3A1C14]"
-                      onClick={() => {
-                        void api.subagents
-                          .stop(botId, block.agentId)
-                          .then(() => onSubagentChange?.())
-                          .catch(() => undefined);
-                      }}
-                    >
-                      Stop
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="rounded-full bg-[#1B1B1E] px-3 py-1 text-[13px] text-[#C9C9CE] hover:bg-[#242428]"
-                      onClick={() => {
-                        void api.subagents
-                          .restart(botId, block.agentId)
-                          .then(() => onSubagentChange?.())
-                          .catch(() => undefined);
-                      }}
-                    >
-                      Restart
-                    </button>
-                  )}
-                </div>
-              ) : null}
-            </div>
-          );
+          return null;
         }
         if (block.kind === "child_bot") {
           const removed = block.status === "deleted" || block.status === "archived";

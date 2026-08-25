@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.api.helpers import create_bot, wait_run
+from tests.api.helpers import create_bot, message_texts, wait_run, wait_thread_has
 
 
 def test_ordinary_chat_grows_memory_book_without_panel(client, auth_header) -> None:
@@ -195,3 +195,20 @@ def test_subagents_empty_and_missing_stop(client, auth_header) -> None:
         json={"text": "keep going"},
     )
     assert steered.status_code == 404
+
+
+def test_spawn_subagent_writes_started_line(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_SUBAGENT_NAME
+
+    bot_id = create_bot(client, auth_header, "WorkerStep")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-subagent"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    snap = wait_thread_has(client, auth_header, bot_id, f"Started {E2E_SUBAGENT_NAME}.")
+    texts = message_texts(snap)
+    assert f"Started {E2E_SUBAGENT_NAME}." in texts

@@ -525,13 +525,14 @@ def test_user_stop_during_generate_shows_stopped_and_no_later_card(
 
 
 def test_subagent_stop_while_running(page: Page, client_url: str, host_url: str) -> None:
+    from artek_buddy.runtime.scripted import E2E_SUBAGENT_NAME
+
     name = _named(page, client_url, host_url, "Worker")
     send_message(page, "please e2e-subagent-hang", name)
-    card = page.get_by_test_id("subagent-card")
-    expect(card).to_be_visible(timeout=15_000)
-    expect(card).to_contain_text("#")
-    card.get_by_role("button", name="Stop").click()
-    expect(card.get_by_role("button", name="Restart")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+    expect(page.get_by_text(f"Started {E2E_SUBAGENT_NAME}.")).to_be_visible(timeout=15_000)
+    page.get_by_test_id("thread-stop").click()
+    expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
 
 
 def test_takeover_banner_on_other_chat(page: Page, client_url: str, host_url: str) -> None:

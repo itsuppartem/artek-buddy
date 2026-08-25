@@ -107,6 +107,25 @@ describe("isToolNoise", () => {
         createdAt: "2026-01-01T00:00:00Z",
       }),
     ).toBe(true);
+    expect(
+      isToolNoise({
+        id: "subagent:s1",
+        threadId: "t",
+        seq: 1,
+        role: "bot",
+        blocks: [
+          {
+            kind: "subagent",
+            agentId: "s1",
+            name: "Researcher",
+            task: "please e2e-slow now",
+            status: "running",
+          },
+        ],
+        runId: "run1",
+        createdAt: "2026-01-01T00:00:00Z",
+      }),
+    ).toBe(true);
   });
 });
 

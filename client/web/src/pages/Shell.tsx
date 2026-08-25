@@ -1680,7 +1680,6 @@ export function ShellPage() {
             .map((message) => (
               <MessageView
                 key={message.id}
-                botId={active?.id ?? ""}
                 canAnswer
                 message={message}
                 queued={isQueuedMessageId(message.id)}
@@ -1690,9 +1689,6 @@ export function ShellPage() {
                 onOpenComputer={() => void openOverlay("preview")}
                 onOpenBot={(id) => {
                   void refreshBots().then(() => navigate(`/app/${id}`));
-                }}
-                onSubagentChange={() => {
-                  if (active) void refreshThread(active.id);
                 }}
                 onContextMenu={(event, item) => {
                   event.preventDefault();
