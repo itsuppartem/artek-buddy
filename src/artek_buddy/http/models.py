@@ -19,6 +19,7 @@ from artek_buddy.model_catalog import (
     fetch_failed_message,
     fetch_models,
     is_placeholder_key,
+    preferred_model,
     unknown_provider,
 )
 from artek_buddy.runtime.factory import runtime_kind
@@ -85,6 +86,17 @@ async def connect_model(
         except Exception:
             return history.set_credential_error(body.provider, fetch_failed_message())
         history.replace_catalog(body.provider, models)
+        picked = preferred_model(models)
+        if picked and history.get_default_model() is None:
+            if body.provider == "cursor":
+                history.set_default_model(
+                    body.provider,
+                    picked,
+                    effort=cfg.cursor_model_effort,
+                    fast=cfg.cursor_model_fast,
+                )
+            else:
+                history.set_default_model(body.provider, picked)
         return history.set_credential_error(body.provider, None)
     except HTTPException:
         raise
@@ -113,7 +125,7 @@ async def set_default_model(
     try:
         if body.model not in history.catalog_ids(body.provider):
             raise HTTPException(status_code=400, detail="model is not on this provider's list")
-        history.set_default_model(body.provider, body.model)
+        history.set_default_model(body.provider, body.model, effort=body.effort, fast=body.fast)
         return OkResponse(ok=True)
     except HTTPException:
         raise

@@ -34,6 +34,7 @@ def client(
     monkeypatch.setenv("AGENT_RUNTIME", "scripted")
     monkeypatch.setenv("SANDBOX_PROVIDER", "fake")
     monkeypatch.setenv("CURSOR_API_KEY", "")
+    monkeypatch.setenv("COMPOSIO_API_KEY", "")
     monkeypatch.setenv("AGENT_HTTP_TOKEN", host_token)
     monkeypatch.chdir(tmp_path)
 

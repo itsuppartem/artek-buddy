@@ -76,6 +76,7 @@ jobs:
       AGENT_RUNTIME: scripted
       SANDBOX_PROVIDER: fake
       CURSOR_API_KEY: ""
+      COMPOSIO_API_KEY: ""
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -173,6 +174,7 @@ jobs:
             printf 'AGENT_RUNTIME=scripted\n'
             printf 'SANDBOX_PROVIDER=fake\n'
             printf 'CURSOR_API_KEY=\n'
+            printf 'COMPOSIO_API_KEY=\n'
             printf 'CONSENT_AUTO=ask\n'
           } > "$RUNNER_TEMP/artek.env"
           {

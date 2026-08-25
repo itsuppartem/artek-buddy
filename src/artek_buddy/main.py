@@ -57,6 +57,7 @@ async def lifespan(app: FastAPI):
         store.open()
         store.apply_migrations()
         store.seed_env_cursor(settings.cursor_api_key)
+        store.seed_env_connection_key(settings.composio_api_key)
         if runtime_kind(settings) == "scripted" and store.raw_key("cursor"):
             store.replace_catalog("cursor", ["scripted"])
         log.info("postgres ready")
