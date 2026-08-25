@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 from tests.api.helpers import create_bot, wait_thread_has
 
@@ -172,29 +170,12 @@ def test_store_seeds_plugins_key_once(client, auth_header) -> None:
     assert again.json()["last_four"] == "abcd"
 
 
-def test_lifespan_seeds_plugins_key(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    postgres_ok: None,
-    host_token: str,
-    auth_header: dict[str, str],
-) -> None:
-    data = tmp_path / "data"
-    data.mkdir()
-    monkeypatch.setenv("AGENT_DATA_DIR", str(data))
-    monkeypatch.setenv("AGENT_CWD", str(tmp_path / "workspace"))
-    monkeypatch.setenv("AGENT_RUNTIME", "scripted")
-    monkeypatch.setenv("SANDBOX_PROVIDER", "fake")
-    monkeypatch.setenv("CURSOR_API_KEY", "")
-    monkeypatch.setenv("COMPOSIO_API_KEY", "")
-    monkeypatch.setenv("AGENT_HTTP_TOKEN", host_token)
-    monkeypatch.chdir(tmp_path)
+def test_lifespan_seeds_plugins_key(client, monkeypatch, auth_header) -> None:
+    client.app.state.store.clear_connections()
+    monkeypatch.setenv("COMPOSIO_API_KEY", "ak-env-seed-env1")
 
     from artek_buddy.main import app
 
-    with TestClient(app) as wipe:
-        wipe.app.state.store.clear_connections()
-    monkeypatch.setenv("COMPOSIO_API_KEY", "ak-env-seed-env1")
     with TestClient(app) as session:
         status = session.get("/v1/connections/status", headers=auth_header)
         assert status.status_code == 200

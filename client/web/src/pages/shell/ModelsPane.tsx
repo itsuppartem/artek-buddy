@@ -25,6 +25,7 @@ export function ModelsPane({
   const [busy, setBusy] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [autoRetried, setAutoRetried] = useState<Record<string, boolean>>({});
   const [effort, setEffort] = useState(credentials?.defaultEffort || "xhigh");
   const [fast, setFast] = useState(credentials?.defaultFast !== false);
   const rows = credentials?.credentials ?? [];
@@ -32,6 +33,20 @@ export function ModelsPane({
   useEffect(() => {
     void api.models.list().then((list) => setModels(list.models ?? []));
   }, [credentials]);
+
+  useEffect(() => {
+    for (const row of rows) {
+      if (
+        row.hasKey &&
+        !row.error &&
+        !autoRetried[row.provider] &&
+        !models.some((item) => item.provider === row.provider)
+      ) {
+        setAutoRetried((current) => ({ ...current, [row.provider]: true }));
+        void retry(row.provider);
+      }
+    }
+  }, [autoRetried, credentials, models, rows]);
 
   useEffect(() => {
     if (credentials?.defaultEffort) setEffort(credentials.defaultEffort);
@@ -97,6 +112,7 @@ export function ModelsPane({
       await api.models.forget(provider);
       setDrafts((current) => ({ ...current, [provider]: "" }));
       setErrors((current) => ({ ...current, [provider]: "" }));
+      setAutoRetried((current) => ({ ...current, [provider]: false }));
       await refresh();
     } finally {
       setBusy((current) => {
@@ -284,7 +300,7 @@ function ProviderRow({
               Forget
             </Button>
           ) : null}
-          {row?.error || error ? (
+          {row?.error || error || (row?.hasKey && models.length === 0) ? (
             <Button
               type="button"
               variant="outline"
