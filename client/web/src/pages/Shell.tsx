@@ -1864,7 +1864,12 @@ export function ShellPage() {
               />
             ) : null}
             {panel === "models" ? (
-              <ModelsPane credentials={modelState} onChange={setModelState} onClose={closeModels} />
+              <ModelsPane
+                botId={active?.id}
+                credentials={modelState}
+                onChange={setModelState}
+                onClose={closeModels}
+              />
             ) : null}
             {panel === "create" ? (
               <CreateBotForm

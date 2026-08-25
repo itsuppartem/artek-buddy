@@ -2051,6 +2051,8 @@ export interface components {
         };
         /** SetDefaultModelInput */
         SetDefaultModelInput: {
+            /** Bot Id */
+            bot_id?: string | null;
             /** Effort */
             effort?: string | null;
             /** Fast */
