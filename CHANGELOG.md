@@ -10,6 +10,7 @@
 
 ### Changed
 - Memory is a book the bot revises from chat: owner sections (identity, tone, contacts, machines, paths) and this-chat standing rules always ride in the next turn. Work notes still match the request. The 3+4 card caps and 200-character Settings cut no longer drop a weeks-grown book.
+- After a turn that saved a section, the host rewrites that section (default model when a key is set) so a newer fact replaces a contradiction instead of stacking both. The book block in the model prompt is 256 KiB.
 - Send while the host is down parks the user bubble and flushes it when health returns, with a «sent while offline» caption. A reconnect banner replaces the red host-error card.
 - Take control auto-releases after two minutes with no mouse or key. The 15-minute hard lease stays as a cap. A quiet computer sleeps after 15 minutes; an open pane and the 60s heartbeat do not keep it warm. A parked `waiting_takeover` no longer pins the box.
 - Window identity: Cavalier marks, ink/plate/tan tokens, Atkinson + Fraunces + Azeret Mono, labeled New bot / Computer / Settings / Send / Stop. Plugins stay out of the chrome. Send is disabled when empty.

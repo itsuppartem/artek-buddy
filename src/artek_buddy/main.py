@@ -17,6 +17,7 @@ from artek_buddy.contracts import (
 )
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
+from artek_buddy.memory_book import HostBookRewriter
 from artek_buddy.memory_gateway import GatewayClient
 from artek_buddy.memory_hub import MemoryHub
 from artek_buddy.observe import RequestContextMiddleware, configure_logging
@@ -75,7 +76,11 @@ async def lifespan(app: FastAPI):
             app.state.computers = computers
             app.state.hub = EventHub()
             app.state.active_turns = {}
-            memory = MemoryHub(store, GatewayClient(settings.memory_gateway_url))
+            memory = MemoryHub(
+                store,
+                GatewayClient(settings.memory_gateway_url),
+                rewriter=HostBookRewriter(store),
+            )
             runtime.memory = memory
             app.state.memory = memory
             consent = ConsentHub(store, app.state.hub, settings)

@@ -5,7 +5,7 @@ from typing import Any
 
 from artek_buddy.contracts.domain import MemoryDocument
 
-MAX_AGENT_MEMORY_BYTES = 128 * 1024
+MAX_AGENT_MEMORY_BYTES = 256 * 1024
 MAX_MEMORY_CONTENT_CHARS = 100_000
 DEFAULT_MEMORY_PATH = "MEMORY.md"
 _PATH_RE = re.compile(r"^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")

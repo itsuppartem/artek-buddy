@@ -25,6 +25,41 @@ def test_ordinary_chat_grows_memory_book_without_panel(client, auth_header) -> N
     assert any("Belgrade" in str(item.get("content") or "") for item in identity)
 
 
+def test_ordinary_chat_rewrites_identity_when_the_city_changes(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "BookRewrite")["id"]
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "My name is Artek. I live in Belgrade."},
+    )
+    assert first.status_code == 200
+    assert wait_run(client, auth_header, bot_id, first.json()["run_id"])["run"]["status"] == (
+        "completed"
+    )
+    later = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "I live in Subotica."},
+    )
+    assert later.status_code == 200
+    assert wait_run(client, auth_header, bot_id, later.json()["run_id"])["run"]["status"] == (
+        "completed"
+    )
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    identity = [
+        item
+        for item in listed.json()["documents"]
+        if "Artek" in str(item.get("content") or "")
+        or "Subotica" in str(item.get("content") or "")
+        or "Belgrade" in str(item.get("content") or "")
+    ]
+    blob = "\n".join(str(item.get("content") or "") for item in identity)
+    assert "Artek" in blob
+    assert "Subotica" in blob
+    assert "Belgrade" not in blob
+
+
 def test_memory_create_update_export_delete(client, auth_header) -> None:
     bot = client.post("/v1/bots", headers=auth_header, json={"name": "Mem"})
     bot_id = bot.json()["id"]

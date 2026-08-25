@@ -702,7 +702,7 @@ async def _run_turn(
         hub = _memory_hub(rt)
         if hub is not None:
             try:
-                for entry in hub.extract_after_turn(text, run.id, bot.id):
+                for entry in await hub.revise_after_turn(text, run.id, bot.id):
                     _emit_remembered(events, bot, entry.text, run.id)
             except Exception:
                 log.exception("failed to extract memory after turn")
