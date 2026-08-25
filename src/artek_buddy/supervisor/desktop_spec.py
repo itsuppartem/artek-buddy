@@ -8,7 +8,9 @@ DESKTOP_MEMORY_BYTES = 1536 * 1024 * 1024
 DESKTOP_NANO_CPUS = 1_000_000_000
 DESKTOP_PIDS_LIMIT = 512
 DESKTOP_SHM_SIZE = 256 * 1024 * 1024
-DESKTOP_TMPFS_OPTS = "rw,nosuid,nodev,size=256m,mode=1777"
+# Docker still mounts tmpfs noexec unless the flag is named. Keep it explicit:
+# start.sh must launch fluxbox from /usr, not a +x script on /tmp.
+DESKTOP_TMPFS_OPTS = "rw,noexec,nosuid,nodev,size=256m,mode=1777"
 DESKTOP_CAP_DROP = ["ALL"]
 DESKTOP_SECURITY_OPT = ["no-new-privileges:true"]
 
