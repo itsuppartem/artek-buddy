@@ -1,10 +1,14 @@
 import { camelize, snakify } from "./camel";
 import type { LocalStatus, PairedDevice } from "./lib/pairing";
 import type {
+  BeginConnectionResult,
   Bot,
   ComputerFileContent,
   ComputerFileList,
   ComputerStatus,
+  Connection,
+  ConnectionCatalog,
+  ConnectionKeyStatus,
   ConsentJob,
   DeploymentSettings,
   HealthResponse,
@@ -392,6 +396,36 @@ export const api = {
     },
     restart(botId: string, subagentId: string) {
       return request<Subagent>("POST", `/v1/bots/${botId}/subagents/${subagentId}/restart`);
+    },
+  },
+  connections: {
+    status() {
+      return request<ConnectionKeyStatus>("GET", "/v1/connections/status");
+    },
+    setKey(apiKey: string) {
+      return request<ConnectionKeyStatus>("POST", "/v1/connections/key", { apiKey });
+    },
+    clearKey() {
+      return request<OkResponse>("DELETE", "/v1/connections/key");
+    },
+    catalog(q = "") {
+      const query = q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+      return request<ConnectionCatalog>("GET", `/v1/connections/catalog${query}`);
+    },
+    list() {
+      return request<{ connections: Connection[] }>("GET", "/v1/connections");
+    },
+    begin(provider: string, redirectUrl: string) {
+      return request<BeginConnectionResult>("POST", "/v1/connections", {
+        provider,
+        redirectUrl,
+      });
+    },
+    complete(connectionId: string) {
+      return request<Connection>("POST", `/v1/connections/${connectionId}/complete`);
+    },
+    revoke(connectionId: string) {
+      return request<OkResponse>("POST", `/v1/connections/${connectionId}/revoke`);
     },
   },
   models: {

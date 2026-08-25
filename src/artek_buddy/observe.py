@@ -134,6 +134,7 @@ def _secrets() -> list[str]:
     for key in (
         "AGENT_HTTP_TOKEN",
         "CURSOR_API_KEY",
+        "COMPOSIO_API_KEY",
         "SANDBOX_SUPERVISOR_TOKEN",
         "MEMORY_DB_PASSWORD",
     ):

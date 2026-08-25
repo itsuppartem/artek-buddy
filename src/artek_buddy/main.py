@@ -33,6 +33,7 @@ log = logging.getLogger("artek_buddy")
 
 from artek_buddy.http.bots import router as bots_router
 from artek_buddy.http.computer import router as computer_router
+from artek_buddy.http.connections import router as connections_router
 from artek_buddy.http.consents import router as consents_router
 from artek_buddy.http.devices import router as devices_router
 from artek_buddy.http.memory import router as memory_router
@@ -137,6 +138,7 @@ app.include_router(threads_router)
 app.include_router(consents_router)
 app.include_router(memory_router)
 app.include_router(routines_router)
+app.include_router(connections_router)
 app.include_router(computer_router)
 
 

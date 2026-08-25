@@ -189,6 +189,8 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             scripted_tool("message_bot", bot=dest_name, text=question),
             scripted_finish("I asked them."),
         ]
+    if "e2e-plugin-docs" in hay:
+        return [scripted_tool("docs_read"), scripted_finish("")]
     if "e2e-hide-draft" in hay:
         return [
             scripted_progress("planning the lookup"),
@@ -719,6 +721,13 @@ class ScriptedRuntime(RuntimeBase):
                     step.tool, step.tool, step.args, "completed"
                 ):
                     yield ProductStreamEvent(type=typ, payload=payload)
+                spoken = tool_result.get("text") if tool_result.get("announce") else None
+                if spoken:
+                    result = str(spoken)
+                    yield ProductStreamEvent(
+                        type="thread.message.updated",
+                        payload={"text": result, "kind": "text", "replace": True},
+                    )
                 continue
             if step.event:
                 yield ProductStreamEvent(type=step.event[0], payload=step.event[1])

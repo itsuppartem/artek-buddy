@@ -19,7 +19,8 @@ flowchart LR
 │ New bot        │ attention plate + Dismiss      │ Preview · view  │
 │ bot rows       │ thread / empty / create        │ Open / Take /   │
 │ Archived       │ composer strip  Attach Send    │ Rel             │
-│ You → Models   │ Stop while a run is live       │ Memory Routines │
+│ Plugins        │ Stop while a run is live       │ Memory Routines │
+│ You → Models   │                                │                 │
 └────────────────┴────────────────────────────────┴─────────────────┘
 ```
 
@@ -31,7 +32,7 @@ The computer pane, Models, and Settings overlay sit on the right of the same she
 | --- | --- | --- |
 | Proxy error | loopback `status` failed | Retry (reload) |
 | Pairing | not paired | Lying-pose mark, Host URL (last host from boot status, not refetched), code `XXXX-XXXX`, device name, Pair (disabled until the code is non-empty). Fail text under the form. Visible tan `:focus-visible`. |
-| Shell | paired | rack + thread; optional Settings / Create / computer pane / Models / fullscreen. Pairing does not open the pane or Models. Create focuses the new chat. Settings opens the pane without booting. Offline boots. You opens Models. |
+| Shell | paired | rack + thread; optional Settings / Create / computer pane / Models / Plugins / fullscreen. Pairing does not open the pane or Models. Create focuses the new chat. Settings opens the pane without booting. Offline boots. You opens Models. Plugins opens the apps pane (works with an empty inbox). |
 
 Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
@@ -44,7 +45,7 @@ Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 - Empty inbox (all archived): Restore one from Archived, or create a new bot.
 - No bots: Create your first bot.
 - Archived list: Back to Inbox, Restore on each row.
-- Plugins are not in the chrome until that feature ships.
+- **Plugins** (`open-plugins`) opens the apps pane (`plugins-pane`). Works with an empty inbox. Not a toast.
 - You: door to **Models** (host keys). The visible word on the control is Models. Not a tooltip. Per-bot Settings stay name / mode / Reset / Delete.
 
 ## Thread
@@ -97,6 +98,22 @@ Host-wide. Open from **You** (`open-models`). Close returns to the thread, and t
 Fresh host: five empty rows, Default model disabled, thread plate `needs-model` (`open-models-thread`) with the next step. Cursor model names come from the running host after that key is connected. Save is disabled while the key field is empty. After Save the field is gone: `••••` + last four + Connected. Forget empties that row. Fetch errors sit under that row with Retry. Model picker disabled until a key is saved and the list is in. Empty list: `No models yet`. Send with no default does not start a turn; the thread repeats the next step. The page never receives a previously saved full key.
 
 Copy: Save, Forget, Retry, Models, API key, Model, Use this model. Do not say credential, runtime, or env.
+
+## Plugins (host)
+
+Host-wide connected apps. Open from **Plugins** (`open-plugins`). Works with an empty inbox. Close returns to the thread.
+
+```
+┌── Plugins ──┐
+│ Key         │  password field · Save · after save: Key saved · Replace / Remove
+│ Search apps │
+│ Catalog     │  Connect / Disconnect · Connected mark
+└─────────────┘
+```
+
+Without a key the pane says to paste one. Save is disabled while the field is empty. After Save the field is gone: Key saved + last four + Replace / Remove. GET never returns the full key. Search filters the catalog. Connect on a no-auth app marks it connected. Connect on an app that needs a browser opens that tab; Finish marks it connected. Disconnect removes its tools on the next turn. The page never receives a previously saved full key.
+
+Copy: Plugins, Plugins key, Save, Replace, Remove, Search apps, Connect, Disconnect, Finish, Connected, Key saved, Paste a key to connect apps.
 
 ## Create / Settings
 

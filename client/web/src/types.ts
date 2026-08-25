@@ -47,6 +47,27 @@ export type ModelCredentialList = {
 };
 export type ModelInfo = { id: string; provider: string };
 export type ModelListResponse = { models: ModelInfo[] };
+export type ConnectionKeyStatus = { configured: boolean; lastFour?: string | null };
+export type ConnectionCatalogItem = {
+  slug: string;
+  name: string;
+  logo?: string | null;
+  connected: boolean;
+  noAuth: boolean;
+};
+export type ConnectionCatalog = { items: ConnectionCatalogItem[] };
+export type Connection = {
+  id: string;
+  provider: string;
+  displayName: string;
+  status: "pending" | "connected" | "revoked" | "error";
+  capabilities: string[];
+  createdAt: string;
+};
+export type BeginConnectionResult = {
+  connection: Connection;
+  authorizationUrl?: string | null;
+};
 
 export type ProductEvent = {
   id: string;
