@@ -14,6 +14,7 @@ from artek_buddy.bot_asks import (
     inbound_model_prompt,
     inbound_visible_text,
     last_bot_reply,
+    normalize_question,
     ready_card_blocks,
     reply_model_prompt,
 )
@@ -614,6 +615,7 @@ async def _launch_bot_ask(
     *,
     post_card: bool,
 ) -> ThreadSendResult:
+    question = normalize_question(question)
     if post_card:
         card = history.append_bot_message(source, asked_card_blocks(dest, question))
         _emit(

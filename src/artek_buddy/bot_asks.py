@@ -5,6 +5,7 @@ from typing import Any
 ASKED_YOU_MARK = "asked you this:"
 ASK_REPLY_MARK = "replied:"
 MAX_REPLY_CHARS = 8000
+MAX_ASK_CHARS = 4000
 
 
 class BotAskError(Exception):
@@ -27,10 +28,15 @@ def find_inbox_bot(store: Any, ref: str) -> Any | None:
     return matches[0] if matches else None
 
 
-def resolve_ask(store: Any, source: Any, text: str, dest_ref: str) -> Any:
+def normalize_question(text: str) -> str:
     question = str(text or "").strip()
     if not question:
         raise BotAskError(400, "text is required")
+    return question[:MAX_ASK_CHARS]
+
+
+def resolve_ask(store: Any, source: Any, text: str, dest_ref: str) -> Any:
+    normalize_question(text)
     dest = find_inbox_bot(store, dest_ref)
     if dest is None:
         raise BotAskError(404, "bot not found")

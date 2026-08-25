@@ -5,7 +5,12 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from artek_buddy.bot_asks import BotAskError, asked_card_blocks, resolve_ask
+from artek_buddy.bot_asks import (
+    BotAskError,
+    asked_card_blocks,
+    normalize_question,
+    resolve_ask,
+)
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.db.shaping import isoformat_utc, new_id
 from artek_buddy.runtime.tools.common import (
@@ -126,7 +131,6 @@ class ChatToolsMixin:
 
     def _exec_message_bot(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
         dest_ref = str(args.get("bot") or args.get("name") or "").strip()
-        question = str(args.get("text") or args.get("message") or "").strip()
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         store = self.runtime.store
         if store is None or not bot_id:
@@ -135,6 +139,7 @@ class ChatToolsMixin:
         if source is None:
             return {"ok": False, "error": "bot not found"}
         try:
+            question = normalize_question(str(args.get("text") or args.get("message") or ""))
             dest = resolve_ask(store, source, question, dest_ref)
         except BotAskError as err:
             return {"ok": False, "error": err.detail}

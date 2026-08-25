@@ -14,3 +14,9 @@ def test_isoformat_utc_orders_runs_in_the_same_second() -> None:
 
 def test_strip_markdown_removes_nested_html_leftovers() -> None:
     assert strip_markdown("<<b>hi") == "hi"
+
+
+def test_strip_markdown_bounds_a_long_unclosed_markdown_prefix() -> None:
+    blob = "![" * 4000 + "x"
+    assert strip_markdown(blob)
+    assert "<" not in strip_markdown("<" * 4000 + "hi")
