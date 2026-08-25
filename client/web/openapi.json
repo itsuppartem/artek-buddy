@@ -2564,6 +2564,18 @@
       },
       "SetDefaultModelInput": {
         "properties": {
+          "bot_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bot Id"
+          },
           "effort": {
             "anyOf": [
               {

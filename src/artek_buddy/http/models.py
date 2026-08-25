@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from artek_buddy.bus import EventHub
 from artek_buddy.contracts import (
     ConnectModelInput,
     ModelCredential,
@@ -11,9 +12,11 @@ from artek_buddy.contracts import (
     OkResponse,
     SetDefaultModelInput,
 )
+from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
-from artek_buddy.http.deps import _db_error, require_auth, runtime, settings, store
+from artek_buddy.db.shaping import isoformat_utc, new_id
+from artek_buddy.http.deps import _db_error, hub, require_auth, runtime, settings, store
 from artek_buddy.model_catalog import (
     fetch_cursor_models,
     fetch_failed_message,
@@ -22,6 +25,7 @@ from artek_buddy.model_catalog import (
     preferred_model,
     unknown_provider,
 )
+from artek_buddy.model_switch import default_model_line
 from artek_buddy.runtime.factory import runtime_kind
 from artek_buddy.runtime.protocol import AgentRuntime
 
@@ -119,15 +123,42 @@ async def forget_model(provider: str, history: HistoryStore = Depends(store)) ->
 async def set_default_model(
     body: SetDefaultModelInput,
     history: HistoryStore = Depends(store),
+    events: EventHub = Depends(hub),
 ) -> OkResponse:
     if unknown_provider(body.provider):
         raise HTTPException(status_code=400, detail="unknown provider")
     try:
         if body.model not in history.catalog_ids(body.provider):
             raise HTTPException(status_code=400, detail="model is not on this provider's list")
+        before = (history.get_default_model(), history.get_model_params())
         history.set_default_model(body.provider, body.model, effort=body.effort, fast=body.fast)
+        after = (history.get_default_model(), history.get_model_params())
+        if body.bot_id and after != before:
+            _write_default_meta(history, events, body.bot_id, body.model)
         return OkResponse(ok=True)
     except HTTPException:
         raise
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
+
+
+def _write_default_meta(history: HistoryStore, events: EventHub, bot_id: str, model: str) -> None:
+    bot = history.get_bot(bot_id)
+    if bot is None:
+        return
+    effort, fast = history.get_model_params()
+    live = history.has_active_run(bot.id)
+    text = default_model_line(model, effort, fast, live=live)
+    msg = history.append_bot_message(bot, [{"kind": "meta", "text": text}])
+    events.publish(
+        ProductEvent(
+            id=new_id("evt"),
+            workspace_id=bot.workspace_id,
+            thread_id=bot.thread_id,
+            bot_id=bot.id,
+            seq=events.next_seq(bot.id),
+            type=ProductEventType.THREAD_MESSAGE_CREATED,
+            created_at=isoformat_utc(),
+            payload={"message": msg.model_dump(mode="json")},
+        )
+    )

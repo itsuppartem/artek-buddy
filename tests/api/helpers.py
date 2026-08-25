@@ -77,6 +77,16 @@ def message_texts(payload: dict[str, Any]) -> list[str]:
     return texts
 
 
+def message_metas(payload: dict[str, Any]) -> list[str]:
+    texts: list[str] = []
+    for msg in payload.get("messages") or []:
+        for block in msg.get("blocks") or []:
+            text = block.get("text")
+            if block.get("kind") == "meta" and text:
+                texts.append(str(text))
+    return texts
+
+
 def consent_id_from_thread(snap: dict[str, Any]) -> str:
     for msg in snap.get("messages") or []:
         for block in msg.get("blocks") or []:

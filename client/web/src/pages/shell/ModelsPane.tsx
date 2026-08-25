@@ -12,11 +12,26 @@ const EFFORTS = [
   { id: "low", label: "Low" },
 ] as const;
 
+function usingCaption(model: string, effort?: string | null, fast?: boolean | null): string {
+  const labels: Record<string, string> = {
+    xhigh: "Extra high",
+    high: "High",
+    medium: "Medium",
+    low: "Low",
+  };
+  const parts = [`Using ${model}`];
+  if (effort) parts.push(labels[effort] || effort);
+  if (fast) parts.push("Fast");
+  return parts.join(" · ");
+}
+
 export function ModelsPane({
+  botId,
   credentials,
   onChange,
   onClose,
 }: {
+  botId?: string;
   credentials: ModelCredentialList | null;
   onChange: (next: ModelCredentialList) => void;
   onClose: () => void;
@@ -126,7 +141,7 @@ export function ModelsPane({
   async function choose(provider: string, model: string, nextEffort = effort, nextFast = fast) {
     if (!model) return;
     try {
-      await api.models.setDefault(provider, model, nextEffort, nextFast);
+      await api.models.setDefault(provider, model, nextEffort, nextFast, botId);
       await refresh();
     } catch (err) {
       setErrors((current) => ({
@@ -194,7 +209,11 @@ export function ModelsPane({
       </div>
       {credentials?.defaultModel ? (
         <p className="mt-3 text-[13px] text-sage" data-testid="models-using">
-          Using {credentials.defaultModel}
+          {usingCaption(
+            credentials.defaultModel,
+            credentials.defaultEffort,
+            credentials.defaultFast,
+          )}
         </p>
       ) : null}
     </div>
@@ -381,6 +400,16 @@ function ProviderRow({
             />
             Fast
           </label>
+          <Button
+            type="button"
+            variant="cream"
+            size="sm"
+            data-testid="models-save-settings-cursor"
+            disabled={!using}
+            onClick={() => onUse(using)}
+          >
+            Save
+          </Button>
         </div>
       ) : null}
       <Button
@@ -389,8 +418,8 @@ function ProviderRow({
         size="sm"
         className="mt-2"
         data-testid={`models-use-${spec.id}`}
-        disabled={!picked}
-        onClick={() => onUse(picked)}
+        disabled={!picked && !using}
+        onClick={() => onUse(picked || using)}
       >
         Use this model
       </Button>
