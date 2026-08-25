@@ -6,7 +6,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
-- A takeover on another chat shows «needs you», not «replied». The bot stays `waiting_takeover` (same idea as `waiting_input`), and the window does not dismiss that banner during the chat switch.
+- A takeover on another chat shows «needs you», not «replied». The bot stays `waiting_takeover` (same idea as `waiting_input`), and the window does not dismiss that banner during the chat switch. If the takeover event arrives while that chat is open, or the thread stream drops it on switch, the other chat still raises the pill from the parked status.
 
 ### Changed
 - Window identity: Cavalier marks, ink/plate/tan tokens, Atkinson + Fraunces + Azeret Mono, labeled New bot / Computer / Settings / Send / Stop. Plugins stay out of the chrome. Send is disabled when empty.

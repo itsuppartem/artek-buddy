@@ -132,6 +132,32 @@ export function attentionFromEvent(event: ProductEvent, botName: string): Attent
   return null;
 }
 
+export function attentionFromParkedBot(bot: BotAlertSnapshot): AttentionAlert | null {
+  if (bot.status !== "waiting_takeover") return null;
+  return makeAlert("takeover", bot.id, bot.name, "Take control of the computer.", bot.updatedAt);
+}
+
+export function parkedAttentionForView(
+  bots: BotAlertSnapshot[],
+  viewingBotId: string | null,
+  dismissed: ReadonlySet<string>,
+  openedAtMs?: number,
+): AttentionAlert | null {
+  let best: AttentionAlert | null = null;
+  for (const bot of bots) {
+    if (bot.id === viewingBotId) continue;
+    if (openedAtMs != null) {
+      const updated = Date.parse(bot.updatedAt);
+      if (Number.isFinite(updated) && updated < openedAtMs) continue;
+    }
+    const alert = attentionFromParkedBot(bot);
+    if (!alert) continue;
+    if (dismissed.has(attentionFingerprint(alert))) continue;
+    if (!best || shouldReplaceAttention(best, alert)) best = alert;
+  }
+  return best;
+}
+
 export function attentionFromBotChange(
   prev: BotAlertSnapshot,
   next: BotAlertSnapshot,

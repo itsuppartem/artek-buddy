@@ -19,6 +19,7 @@ import {
   attentionFromBotChange,
   attentionFromEvent,
   isHistoricalEvent,
+  parkedAttentionForView,
   shouldClearAttentionForView,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
@@ -253,6 +254,27 @@ export function ShellPage() {
     }
   }
 
+  function raiseParkedAlerts() {
+    flushHeldAlerts();
+    const viewing = activeIdRef.current || botIdRef.current || null;
+    const next = parkedAttentionForView(
+      botsRef.current.map((bot) => ({
+        id: bot.id,
+        name: bot.name,
+        status: bot.status,
+        unread: bot.unread,
+        preview: bot.preview,
+        updatedAt: bot.updatedAt,
+      })),
+      viewing,
+      dismissedAlerts.current,
+      shellOpenedAt.current,
+    );
+    if (!next) return;
+    const source = botsRef.current.find((bot) => bot.id === next.botId);
+    dispatchAlert(next, `${next.botId}:${next.kind}:parked`, source?.notifyOnFinish ?? true);
+  }
+
   function openBot(id: string) {
     activeIdRef.current = id;
     botIdRef.current = id;
@@ -289,8 +311,24 @@ export function ShellPage() {
     flushHeldAlerts();
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
     if (incoming.type === "run.started") {
+      const running = { ...bot, status: "running" };
+      botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? running : item));
       const stored = prevBotsRef.current.get(bot.id);
       if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "running" });
+      setBots((list) =>
+        list.map((item) => (item.id === bot.id ? { ...item, status: "running" } : item)),
+      );
+    }
+    if (incoming.type === "computer.takeover.requested") {
+      const parked = { ...bot, status: "waiting_takeover" };
+      botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? parked : item));
+      const stored = prevBotsRef.current.get(bot.id);
+      if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "waiting_takeover" });
+      setBots((list) =>
+        list.map((item) => (item.id === bot.id ? { ...item, status: "waiting_takeover" } : item)),
+      );
+      raiseParkedAlerts();
+      void refreshBotsRef.current().catch(() => undefined);
     }
     if (incoming.type === "run.completed" || incoming.type === "run.failed") {
       void refreshBotsRef.current().catch(() => undefined);
@@ -299,8 +337,22 @@ export function ShellPage() {
   considerEventRef.current = considerEvent;
 
   useEffect(() => {
-    flushHeldAlerts();
+    raiseParkedAlerts();
+    void refreshBotsRef.current().catch(() => undefined);
   }, [active?.id]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const viewing = activeIdRef.current || botIdRef.current;
+      const watch = botsRef.current.some(
+        (bot) =>
+          bot.id !== viewing &&
+          (bot.status === "queued" || bot.status === "leased" || bot.status === "running"),
+      );
+      if (watch) void refreshBotsRef.current().catch(() => undefined);
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const viewing = activeIdRef.current || botIdRef.current;
@@ -334,9 +386,11 @@ export function ShellPage() {
       }
     }
     prevBotsRef.current = new Map(list.map((item) => [item.id, item]));
+    botsRef.current = list;
     for (const item of list) discardedBotIds.current.delete(item.id);
     const archivedList = await api.bots.listArchived().catch(() => [] as Bot[]);
     setBots(list);
+    raiseParkedAlerts();
     setArchivedBots(archivedList);
     if (archivedList.length === 0) setSidebarView("inbox");
     setBotsReady(true);
@@ -581,12 +635,16 @@ export function ShellPage() {
             }
             after = event.id;
             retryMs = 250;
-            if (discardedBotIds.current.has(active.id) || activeIdRef.current !== active.id) {
-              break;
+            const leftChat =
+              discardedBotIds.current.has(active.id) ||
+              abort.signal.aborted ||
+              activeIdRef.current !== active.id;
+            if (!leftChat) {
+              applyThreadEvent(event, setSnapshot, setComputer);
             }
-            applyThreadEvent(event, setSnapshot, setComputer);
             const bot = botsRef.current.find((item) => item.id === active.id) ?? active;
             considerEvent(event, bot);
+            if (leftChat) break;
             if (event.type === "run.completed" || event.type === "run.failed") {
               void refreshBotsRef.current().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
