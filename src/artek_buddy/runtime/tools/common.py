@@ -103,6 +103,8 @@ def _playwright_browser_command(actions: list[Any]) -> str:
 
 def emit_computer_event(events: Any, bot: Any, status: Any) -> None:
     try:
+        payload = status.model_dump(mode="json")
+        payload["status"] = status.state
         events.publish(
             ProductEvent(
                 id=new_id("evt"),
@@ -110,9 +112,9 @@ def emit_computer_event(events: Any, bot: Any, status: Any) -> None:
                 thread_id=bot.thread_id,
                 bot_id=bot.id,
                 seq=events.next_seq(bot.id),
-                type=ProductEventType.THREAD_COMPUTER,
+                type=ProductEventType.COMPUTER_STATUS,
                 created_at=isoformat_utc(),
-                payload=status.model_dump(mode="json"),
+                payload=payload,
             )
         )
     except Exception:

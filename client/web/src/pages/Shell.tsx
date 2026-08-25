@@ -907,8 +907,11 @@ export function ShellPage() {
       .catch(() => undefined);
   }, [panel, active?.id]);
 
+  const runLive = snapshot?.run?.status === "running" || snapshot?.run?.status === "waiting_input";
+
   useEffect(() => {
-    if ((panel !== "computer" && !computerOpen) || !active || computer?.state !== "running") return;
+    if ((panel !== "computer" && !computerOpen) || !active) return;
+    if (computer?.state !== "running" && !runLive) return;
     const ping = () =>
       void api.computer
         .status(active.id)
@@ -918,7 +921,7 @@ export function ShellPage() {
     const ms = computer?.controlHolder === "user" ? 15_000 : 60_000;
     const timer = window.setInterval(ping, ms);
     return () => window.clearInterval(timer);
-  }, [panel, computerOpen, active?.id, computer?.state, computer?.controlHolder]);
+  }, [panel, computerOpen, active?.id, computer?.state, computer?.controlHolder, runLive]);
 
   useEffect(() => {
     if (!active) return;

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { ComputerStatus, ProductEvent, Run, ThreadSnapshot } from "../types";
 import {
+  isComputerStatusEvent,
   isHiddenLiveDraft,
   isLiveMessageId,
   isToolNoise,
   liveMessageId,
+  reduceComputerStatus,
   reduceThreadSnapshot,
 } from "./thread-events";
 
@@ -129,5 +131,22 @@ describe("reduceThreadSnapshot", () => {
     const next = reduceThreadSnapshot(prev, event({ type: "run.completed" }));
     expect(next?.run?.status).toBe("cancelled");
     expect(next?.messages.map((message) => message.id)).toEqual(["stream:run1"]);
+  });
+});
+
+describe("reduceComputerStatus", () => {
+  it("applies computer.status so a stopped tile can become running", () => {
+    const next = reduceComputerStatus(
+      computer(),
+      event({
+        type: "computer.status",
+        payload: { status: "running", state: "running" },
+      }),
+    );
+    expect(next?.state).toBe("running");
+  });
+
+  it("does not treat thread.computer as a pane update", () => {
+    expect(isComputerStatusEvent(event({ type: "thread.computer" }))).toBe(false);
   });
 });
