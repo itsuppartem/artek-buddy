@@ -8,7 +8,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
-- A parked takeover on another chat keeps being watched so «needs you» still appears if the first switch missed the event. The same-kind debounce does not permanently consume that pill.
+- A parked takeover on another chat keeps being watched so «needs you» still appears if the first switch missed the event. The same-kind debounce does not permanently consume that pill. A chat created in this window is not treated as a leftover park, and opening that chat does not stick Dismiss if the takeover arrived while it was already on screen.
 - A takeover on another chat shows «needs you», not «replied». The bot stays `waiting_takeover` (same idea as `waiting_input`), and the window does not dismiss that banner during the chat switch. If the takeover event arrives while that chat is open, or the thread stream drops it on switch, the other chat still raises the pill from the parked status.
 
 ### Changed

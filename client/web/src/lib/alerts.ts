@@ -144,11 +144,12 @@ export function parkedAttentionForView(
   viewingBotId: string | null,
   dismissed: ReadonlySet<string>,
   openedAtMs?: number,
+  freshBotIds?: ReadonlySet<string>,
 ): AttentionAlert | null {
   let best: AttentionAlert | null = null;
   for (const bot of bots) {
     if (bot.id === viewingBotId) continue;
-    if (openedAtMs != null) {
+    if (openedAtMs != null && !freshBotIds?.has(bot.id)) {
       const updated = Date.parse(bot.updatedAt);
       if (Number.isFinite(updated) && updated < openedAtMs) continue;
     }
@@ -242,6 +243,15 @@ export function shouldClearAttentionForView(
   viewingBotId: string | null | undefined,
 ): attention is AttentionAlert {
   return attention != null && viewingBotId === attention.botId;
+}
+
+export function shouldStickDismissOnView(
+  attention: AttentionAlert | null,
+  viewingBotId: string | null | undefined,
+  previousViewingBotId: string | null | undefined,
+): boolean {
+  if (!shouldClearAttentionForView(attention, viewingBotId)) return false;
+  return Boolean(previousViewingBotId && previousViewingBotId !== viewingBotId);
 }
 
 export function shouldReplaceAttention(

@@ -24,6 +24,7 @@ import {
   shouldClearAttentionForView,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
+  shouldStickDismissOnView,
   shouldWatchBackgroundBot,
 } from "../lib/alerts";
 import { composerCanSend } from "../lib/composer";
@@ -187,6 +188,8 @@ export function ShellPage() {
   const botIdRef = useRef<string | undefined>(undefined);
   const botsRef = useRef<Bot[]>([]);
   const shellOpenedAt = useRef(Date.now());
+  const freshBotIds = useRef(new Set<string>());
+  const previousViewingRef = useRef<string | null>(null);
   const refreshBotsRef = useRef<() => Promise<Bot[]>>(async () => []);
   const considerEventRef = useRef<
     (incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) => void
@@ -302,6 +305,7 @@ export function ShellPage() {
       viewing,
       dismissedAlerts.current,
       shellOpenedAt.current,
+      freshBotIds.current,
     );
     if (!next) return;
     const source = botsRef.current.find((bot) => bot.id === next.botId);
@@ -398,11 +402,14 @@ export function ShellPage() {
   }, []);
 
   useEffect(() => {
-    const viewing = activeIdRef.current || botIdRef.current;
+    const viewing = activeIdRef.current || botIdRef.current || null;
     if (shouldClearAttentionForView(attention, viewing)) {
-      dismissedAlerts.current.add(attentionFingerprint(attention));
+      if (shouldStickDismissOnView(attention, viewing, previousViewingRef.current)) {
+        dismissedAlerts.current.add(attentionFingerprint(attention));
+      }
       setAttention(null);
     }
+    previousViewingRef.current = viewing;
   }, [active?.id, attention]);
 
   async function refreshBots() {
@@ -415,7 +422,13 @@ export function ShellPage() {
         const alert = attentionFromBotChange(before, next);
         if (alert) {
           const updated = Date.parse(next.updatedAt);
-          if (Number.isFinite(updated) && updated < shellOpenedAt.current) continue;
+          if (
+            !freshBotIds.current.has(next.id) &&
+            Number.isFinite(updated) &&
+            updated < shellOpenedAt.current
+          ) {
+            continue;
+          }
           dispatchAlert(alert, `${next.id}:${alert.kind}:${next.updatedAt}`, next.notifyOnFinish);
         }
       }
@@ -1222,6 +1235,7 @@ export function ShellPage() {
         instructions: input.description,
         computerMode: input.computerMode,
       });
+      freshBotIds.current.add(bot.id);
       await refreshBots();
       navigate(`/app/${bot.id}`);
       setPanel(panelAfterCreate.current);
@@ -1916,6 +1930,7 @@ export function ShellPage() {
             setContextMenu(null);
             try {
               const duplicated = await api.bots.duplicate(target.id);
+              freshBotIds.current.add(duplicated.id);
               await refreshBots();
               navigate(`/app/${duplicated.id}`);
             } catch (err) {

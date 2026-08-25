@@ -13,6 +13,7 @@ import {
   shouldClearAttentionForView,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
+  shouldStickDismissOnView,
   shouldWatchBackgroundBot,
 } from "./alerts";
 
@@ -238,6 +239,40 @@ describe("parkedAttentionForView", () => {
     expect(parkedAttentionForView([speaker, watcher], "bot-b", new Set(), opened)?.title).toBe(
       "Need needs you",
     );
+  });
+
+  it("still raises a bot created in this window even if its stamp looks older than open", () => {
+    const opened = Date.parse("2026-01-01T00:00:10Z");
+    const createdHere = botSnap({
+      id: "bot-new",
+      name: "AskA",
+      status: "waiting_takeover",
+      updatedAt: "2026-01-01T00:00:01Z",
+    });
+    expect(
+      parkedAttentionForView(
+        [createdHere, watcher],
+        "bot-b",
+        new Set(),
+        opened,
+        new Set(["bot-new"]),
+      )?.title,
+    ).toBe("AskA needs you");
+    expect(parkedAttentionForView([createdHere, watcher], "bot-b", new Set(), opened)).toBeNull();
+  });
+});
+
+describe("shouldStickDismissOnView", () => {
+  const takeover = attentionFromEvent(event({ type: "computer.takeover.requested" }), "Need");
+
+  it("does not stick dismiss when the parked chat was already open", () => {
+    expect(shouldStickDismissOnView(takeover, "bot-a", "bot-a")).toBe(false);
+    expect(shouldStickDismissOnView(takeover, "bot-a", null)).toBe(false);
+  });
+
+  it("sticks dismiss only when switching onto the parked chat", () => {
+    expect(shouldStickDismissOnView(takeover, "bot-a", "bot-b")).toBe(true);
+    expect(shouldStickDismissOnView(takeover, "bot-b", "bot-a")).toBe(false);
   });
 });
 
