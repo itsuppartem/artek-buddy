@@ -95,12 +95,12 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="remember",
         description=(
-            "Save one short durable sentence about the owner or this chat. "
-            "Call this when the user states a preference, rule, person, project, place, "
-            "or correction. Default scope is shared (every bot sees it). "
-            "Use scope=bot only for a note that belongs to this chat. "
+            "Write or revise a section of the durable book for this owner or this chat. "
+            "Call this when the user states a preference, rule, person, path, machine, "
+            "project, or correction. Default scope is the shared owner book. "
+            "Use scope=bot for standing rules of this chat (bans, wait for go-ahead). "
             "Do not store one-off tasks such as opening a tab. "
-            "A new note on the same slot (name, city, tz, tone, format, language) replaces the old one. "
+            "A later note on the same section revises that section; other sections stay. "
             "To erase something, set forget=true with the text to drop."
         ),
         input_schema={
@@ -108,7 +108,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             "properties": {
                 "content": {
                     "type": "string",
-                    "description": "One short sentence to remember, or the text to forget.",
+                    "description": "Fact or rule to write into a book section, or the text to forget.",
                 },
                 "kind": {
                     "type": "string",
@@ -121,9 +121,16 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                     "type": "string",
                     "description": "user (shared, default) or bot (this chat only).",
                 },
+                "section": {
+                    "type": "string",
+                    "description": (
+                        "Book section to revise: identity, tone, contacts, machines, paths, "
+                        "purpose, bans, do_not, wait."
+                    ),
+                },
                 "slot": {
                     "type": "string",
-                    "description": "Optional singleton topic: name, city, tz, tone, format, language.",
+                    "description": "Deprecated alias of section.",
                 },
                 "forget": {
                     "type": "boolean",

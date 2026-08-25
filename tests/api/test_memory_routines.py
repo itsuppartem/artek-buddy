@@ -3,6 +3,28 @@ from __future__ import annotations
 from tests.api.helpers import create_bot, wait_run
 
 
+def test_ordinary_chat_grows_memory_book_without_panel(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "BookChat")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "My name is Artek. I live in Belgrade. Never open Gmail."},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    documents = listed.json()["documents"]
+    blob = "\n".join(str(item.get("content") or "") for item in documents)
+    assert "Artek" in blob
+    assert "Belgrade" in blob
+    assert "Gmail" in blob
+    identity = [item for item in documents if "Artek" in str(item.get("content") or "")]
+    assert identity
+    assert any("Belgrade" in str(item.get("content") or "") for item in identity)
+
+
 def test_memory_create_update_export_delete(client, auth_header) -> None:
     bot = client.post("/v1/bots", headers=auth_header, json={"name": "Mem"})
     bot_id = bot.json()["id"]

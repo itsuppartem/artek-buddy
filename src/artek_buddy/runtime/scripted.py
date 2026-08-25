@@ -175,6 +175,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 "remember",
                 content="Prefers short answers without emoji",
                 kind="preference",
+                section="tone",
             ),
             scripted_finish("I'll remember that."),
         ]
