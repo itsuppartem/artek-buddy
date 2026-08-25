@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from tests.api.helpers import create_bot, message_texts
+from tests.api.helpers import create_bot, message_metas, message_texts, wait_run_status
 
 from artek_buddy.model_catalog import NEEDS_MODEL_TEXT
 
@@ -181,6 +181,42 @@ def test_set_default_persists_effort_and_fast(client, auth_header) -> None:
     same = client.get("/v1/models/credentials", headers=auth_header)
     assert same.json()["default_effort"] == "high"
     assert same.json()["default_fast"] is False
+
+
+def test_set_default_writes_meta_and_does_not_cancel_a_live_run(client, auth_header) -> None:
+    from artek_buddy.model_switch import default_model_line
+
+    client.post(
+        "/v1/models/credentials",
+        headers=auth_header,
+        json={"provider": "cursor", "api_key": SECRET},
+    )
+    bot_id = create_bot(client, auth_header, "ModelNote")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-hang now"},
+    )
+    assert sent.status_code == 200
+    wait_run_status(client, auth_header, bot_id, sent.json()["run_id"], "running")
+    chosen = client.post(
+        "/v1/models/default",
+        headers=auth_header,
+        json={
+            "provider": "cursor",
+            "model": "scripted",
+            "effort": "low",
+            "fast": True,
+            "bot_id": bot_id,
+        },
+    )
+    assert chosen.status_code == 200
+    snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert snap.status_code == 200
+    body = snap.json()
+    assert body["run"]["status"] == "running"
+    assert body["run"]["id"] == sent.json()["run_id"]
+    assert default_model_line("scripted", "low", True, live=True) in message_metas(body)
 
 
 def test_send_without_default_does_not_start_a_turn(client, auth_header) -> None:
