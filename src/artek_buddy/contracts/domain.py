@@ -474,6 +474,8 @@ class ModelCredentialList(BaseModel):
     credentials: list[ModelCredential]
     default_provider: str | None = None
     default_model: str | None = None
+    default_effort: str | None = None
+    default_fast: bool | None = None
 
 
 class ConnectModelInput(BaseModel):
@@ -488,6 +490,8 @@ class SetDefaultModelInput(BaseModel):
 
     provider: str
     model: str
+    effort: str | None = None
+    fast: bool | None = None
 
 
 class ModelInfo(BaseModel):

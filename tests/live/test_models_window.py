@@ -3,11 +3,14 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 from tests.live.helpers import (
+    assert_readable_chip,
     composer,
     create_named_bot,
     ensure_model,
+    fulfill_json,
     open_models,
     pair_fresh,
+    restore_host,
     unique_bot,
 )
 
@@ -29,9 +32,21 @@ def test_models_empty_save_pick_send_and_forget(page: Page, client_url: str, hos
     open_models(page)
     for name in ("Cursor", "OpenRouter", "OpenAI", "Anthropic", "xAI (Grok)"):
         expect(page.get_by_test_id("models-pane").get_by_text(name, exact=True)).to_be_visible()
-    expect(page.get_by_test_id("models-save-openrouter")).to_be_disabled()
+    expect(page.get_by_test_id("models-default")).to_have_count(0)
     expect(page.get_by_test_id("models-forget-openrouter")).to_have_count(0)
-    expect(page.get_by_label("OpenRouter model")).to_be_disabled()
+    expect(
+        page.get_by_test_id("models-picker-openrouter").get_by_text("No models yet")
+    ).to_be_visible(timeout=8_000)
+    save_cursor = page.get_by_test_id("models-save-cursor")
+    expect(save_cursor).to_be_enabled()
+    save_cursor.click()
+    expect(page.get_by_test_id("models-error-cursor")).to_contain_text("Paste a key first")
+    page.get_by_label("Cursor API key").fill("crsr_test-save-fail")
+    expect(page.get_by_label("Cursor API key")).to_have_value("crsr_test-save-fail")
+    fulfill_json(page, "**/v1/models/credentials", 404, '{"detail":"Not Found"}', method="POST")
+    save_cursor.click()
+    expect(page.get_by_test_id("models-error-cursor")).to_contain_text("Not Found")
+    restore_host(page)
     page.get_by_role("button", name="Close Models").click()
 
     box = composer(page)
@@ -49,8 +64,42 @@ def test_models_empty_save_pick_send_and_forget(page: Page, client_url: str, hos
     expect(page.get_by_test_id("models-status-openrouter")).to_contain_text("•••• uiok")
     expect(page.get_by_test_id("models-status-openrouter")).to_contain_text("Connected")
     expect(page.get_by_label("OpenRouter API key")).to_have_count(0)
+    expect(page.get_by_test_id("models-picker-openrouter").locator("select")).to_have_count(0)
+    chip = page.get_by_test_id("models-picker-openrouter").locator("[data-model]").first
+    expect(chip).to_be_visible()
+    assert_readable_chip(chip)
+    expect(page.get_by_test_id("models-using")).to_contain_text("scripted")
     page.get_by_test_id("models-forget-openrouter").click()
     expect(page.get_by_label("OpenRouter API key")).to_be_visible(timeout=8_000)
     expect(page.get_by_test_id("models-forget-openrouter")).to_have_count(0)
     page.get_by_role("button", name="Close Models").click()
     expect(page.get_by_test_id("needs-model")).to_be_visible(timeout=8_000)
+
+
+def test_models_cursor_save_sets_effort_fast_and_keeps_using(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, unique_bot("CursorKey"))
+    open_models(page)
+    leftover = page.get_by_test_id("models-forget-cursor")
+    if leftover.count() and leftover.first.is_visible(timeout=0):
+        leftover.click()
+        expect(page.get_by_label("Cursor API key")).to_be_visible()
+    page.get_by_label("Cursor API key").fill("test-secret-cursor")
+    expect(page.get_by_label("Cursor API key")).to_have_value("test-secret-cursor")
+    page.get_by_test_id("models-save-cursor").click()
+    expect(page.get_by_test_id("models-status-cursor")).to_contain_text("Connected", timeout=8_000)
+    expect(page.get_by_test_id("models-using")).to_contain_text("scripted")
+    expect(page.get_by_test_id("models-effort-cursor")).to_have_value("xhigh")
+    expect(page.get_by_test_id("models-fast-cursor")).to_be_checked()
+    chip = page.get_by_test_id("models-picker-cursor").locator("[data-model]").first
+    expect(chip).to_be_visible()
+    assert_readable_chip(chip)
+    page.get_by_role("button", name="Close Models").click()
+    open_models(page)
+    expect(page.get_by_test_id("models-using")).to_contain_text("scripted")
+    expect(page.get_by_test_id("models-effort-cursor")).to_have_value("xhigh")
+    expect(page.get_by_test_id("models-fast-cursor")).to_be_checked()
+    page.get_by_test_id("models-forget-cursor").click()
+    expect(page.get_by_label("Cursor API key")).to_be_visible(timeout=8_000)

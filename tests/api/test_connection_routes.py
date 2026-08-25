@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import json
 
+from fastapi.testclient import TestClient
 from tests.api.helpers import create_bot, wait_thread_has
 
 SECRET = "ak-test-secret-wxyz"
 
 
 def test_connections_require_auth_and_key(client, auth_header) -> None:
+    assert client.post("/v1/connections/key", json={"api_key": "x"}).status_code == 401
+    assert (
+        client.post(
+            "/v1/connections/key",
+            headers={"Authorization": "Bearer nope"},
+            json={"api_key": "x"},
+        ).status_code
+        == 403
+    )
     assert client.get("/v1/connections/status").status_code == 401
     assert (
         client.get("/v1/connections/catalog", headers={"Authorization": "Bearer nope"}).status_code
@@ -144,3 +154,31 @@ def test_connection_begin_rejects_unknown_self_and_bad_redirect(client, auth_hea
     assert finished.status_code == 200
     assert finished.json()["status"] == "connected"
     assert "mail_inbox" in finished.json()["capabilities"]
+
+
+def test_store_seeds_plugins_key_once(client, auth_header) -> None:
+    store = client.app.state.store
+    store.clear_connections()
+    store.seed_env_connection_key("ak-env-seed-abcd")
+    status = client.get("/v1/connections/status", headers=auth_header)
+    assert status.status_code == 200
+    assert status.json()["configured"] is True
+    assert status.json()["last_four"] == "abcd"
+    assert "ak-env-seed-abcd" not in json.dumps(status.json())
+    store.seed_env_connection_key("ak-other-zzzz")
+    again = client.get("/v1/connections/status", headers=auth_header)
+    assert again.json()["last_four"] == "abcd"
+
+
+def test_lifespan_seeds_plugins_key(client, monkeypatch, auth_header) -> None:
+    client.app.state.store.clear_connections()
+    monkeypatch.setenv("COMPOSIO_API_KEY", "ak-env-seed-env1")
+
+    from artek_buddy.main import app
+
+    with TestClient(app) as session:
+        status = session.get("/v1/connections/status", headers=auth_header)
+        assert status.status_code == 200
+        assert status.json()["configured"] is True
+        assert status.json()["last_four"] == "env1"
+        assert "ak-env-seed-env1" not in json.dumps(status.json())

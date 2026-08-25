@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     cursor_model: str = "grok-4.6"
     cursor_model_effort: str = "xhigh"
     cursor_model_fast: bool = True
+    composio_api_key: str = ""
     agent_cwd: str = "/workspace"
     agent_data_dir: str = "/data"
     http_host: str = "0.0.0.0"

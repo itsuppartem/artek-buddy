@@ -87,18 +87,19 @@ Host-wide. Open from **You** (`open-models`). Close returns to the thread, and t
 
 ```
 ┌── Models ──┐
-│ Cursor     │  API key · Save · Forget · Model · Use this model
-│ OpenRouter │
+│ Cursor     │  API key · Save · Forget · model chips · Use this model
+│            │  Reasoning · Fast
+│ OpenRouter │  same key + chips
 │ OpenAI     │
 │ Anthropic  │
 │ xAI (Grok) │
-│ Default    │  one host choice · Using {id}
+│ Using {id} │
 └────────────┘
 ```
 
-Fresh host: five empty rows, Default model disabled, thread plate `needs-model` (`open-models-thread`) with the next step. Cursor model names come from the running host after that key is connected. Save is disabled while the key field is empty. After Save the field is gone: `••••` + last four + Connected. Forget empties that row. Fetch errors sit under that row with Retry. Model picker disabled until a key is saved and the list is in. Empty list: `No models yet`. Send with no default does not start a turn; the thread repeats the next step. The page never receives a previously saved full key.
+Fresh host: five empty rows, thread plate `needs-model` (`open-models-thread`) with the next step. There is no second Default model list. Save on a row fetches that catalog and uses the preferred id (`grok-4.6` when present, else the first). Cursor also sets extra-high reasoning and Fast. Save always reports success or an error under that row — a failed host call is never silent. Model chips are ink on paper so names stay readable. Empty list: `No models yet`. After Save the field is gone: `••••` + last four + Connected. Forget empties that row. Cursor model names come from the running host after that key is connected. Send with no chosen model does not start a turn; the thread repeats the next step. The page never receives a previously saved full key.
 
-Copy: Save, Forget, Retry, Models, API key, Model, Use this model. Do not say credential, runtime, or env.
+Copy: Save, Forget, Retry, Models, API key, Model, Use this model, Reasoning, Fast, Extra high. Do not say credential, runtime, or env.
 
 ## Plugins (host)
 
@@ -112,7 +113,7 @@ Host-wide connected apps. Open from **Plugins** (`open-plugins`). Works with an 
 └─────────────┘
 ```
 
-Without a key the pane says to paste one. Save is disabled while the field is empty. After Save the field is gone: Key saved + last four + Replace / Remove. GET never returns the full key. Search filters the catalog. Connect on a no-auth app marks it connected. Connect on an app that needs a browser opens that tab; Finish marks it connected. Disconnect removes its tools on the next turn. A connected app also puts a chip above Message; click fills `please use {name}` (owner reviews, then Send). That turn shows a `plugin-card` with the app name and the result. Disconnect or Remove hides the chip. The page never receives a previously saved full key.
+Without a key the pane says to paste one. Save stays clickable on an empty field and says Paste a key first. A failed host call shows the error (`plugins-error`) — never silent. After a good Save the field is gone: Key saved + last four + Replace / Remove. GET never returns the full key. Search filters the catalog. Connect on a no-auth app marks it connected. Connect on an app that needs a browser opens that tab; Finish marks it connected. Disconnect removes its tools on the next turn. A connected app also puts a chip above Message; click fills `please use {name}` (owner reviews, then Send). That turn shows a `plugin-card` with the app name and the result. Disconnect or Remove hides the chip. The page never receives a previously saved full key.
 
 Copy: Plugins, Plugins key, Save, Replace, Remove, Search apps, Connect, Disconnect, Finish, Connected, Key saved, Paste a key to connect apps.
 

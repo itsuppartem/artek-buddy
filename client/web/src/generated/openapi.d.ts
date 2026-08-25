@@ -1879,6 +1879,10 @@ export interface components {
         ModelCredentialList: {
             /** Credentials */
             credentials: components["schemas"]["ModelCredential"][];
+            /** Default Effort */
+            default_effort?: string | null;
+            /** Default Fast */
+            default_fast?: boolean | null;
             /** Default Model */
             default_model?: string | null;
             /** Default Provider */
@@ -2047,6 +2051,10 @@ export interface components {
         };
         /** SetDefaultModelInput */
         SetDefaultModelInput: {
+            /** Effort */
+            effort?: string | null;
+            /** Fast */
+            fast?: boolean | null;
             /** Model */
             model: string;
             /** Provider */
