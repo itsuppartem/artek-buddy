@@ -329,6 +329,12 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     if "e2e-wake-computer" in hay:
         return [
             scripted_progress("opening the desktop"),
+            scripted_consent(
+                action_class=CLASS_BROWSE,
+                scope_key="https://en.wikipedia.org",
+                summary="Open https://en.wikipedia.org on the remote desktop?",
+                detail="browse: https://en.wikipedia.org",
+            ),
             scripted_tool("open_path", path="https://en.wikipedia.org/wiki/Belgrade"),
             scripted_delay(E2E_HANG_S),
             scripted_finish("The desktop is up."),
