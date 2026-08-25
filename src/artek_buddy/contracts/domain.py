@@ -492,6 +492,7 @@ class SetDefaultModelInput(BaseModel):
     model: str
     effort: str | None = None
     fast: bool | None = None
+    bot_id: Id | None = None
 
 
 class ModelInfo(BaseModel):
