@@ -77,7 +77,7 @@ def test_ask_other_bot_card_opens_them_then_asker_answers(
     create_named_bot(page, knows)
     create_named_bot(page, asker)
     send_message(page, f"please e2e-ask-bot {knows} | what city do you know", asker)
-    card = page.get_by_test_id("child-bot-card").filter(has_text=knows)
+    card = page.get_by_test_id("child-bot-card").filter(has_text=knows).first
     expect(card).to_be_enabled(timeout=15_000)
     expect(page.get_by_text(f"Asked {knows}", exact=False)).to_be_visible()
     card.click()

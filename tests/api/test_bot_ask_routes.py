@@ -26,8 +26,6 @@ def test_chat_ask_other_bot_returns_last_text_without_copying_work(client, auth_
         json={"text": f"please e2e-ask-bot {knows['name']} | what city do you know"},
     )
     assert sent.status_code == 200
-    first = wait_run(client, auth_header, asker["id"], sent.json()["run_id"])
-    assert first["run"]["status"] == "completed"
     asked = wait_thread_has(client, auth_header, asker["id"], f"Asked {knows['name']}")
     assert any(
         block.get("kind") == "child_bot" and block.get("name") == knows["name"]

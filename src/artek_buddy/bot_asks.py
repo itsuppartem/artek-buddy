@@ -84,16 +84,7 @@ def asked_card_blocks(dest: Any, question: str) -> list[dict[str, Any]]:
 
 
 def ready_card_blocks(dest: Any) -> list[dict[str, Any]]:
-    return [
-        {"kind": "meta", "text": ready_visible_text(dest.name)},
-        {
-            "kind": "child_bot",
-            "bot_id": dest.id,
-            "name": dest.name,
-            "title": "Replied",
-            "status": "created",
-        },
-    ]
+    return [{"kind": "meta", "text": ready_visible_text(dest.name)}]
 
 
 def _block_data(block: Any) -> dict[str, Any] | None:
