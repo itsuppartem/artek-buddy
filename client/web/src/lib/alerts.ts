@@ -22,6 +22,8 @@ export type BotAlertSnapshot = {
 };
 
 const busyStatus = new Set(["queued", "leased", "running", "waiting_input", "waiting_takeover"]);
+const watchBackgroundStatus = new Set(["queued", "leased", "running", "waiting_takeover"]);
+const ALERT_KIND_WINDOW_MS = 8_000;
 
 const urgencyByKind: Record<AttentionKind, AttentionAlert["urgency"]> = {
   replied: "normal",
@@ -142,11 +144,12 @@ export function parkedAttentionForView(
   viewingBotId: string | null,
   dismissed: ReadonlySet<string>,
   openedAtMs?: number,
+  freshBotIds?: ReadonlySet<string>,
 ): AttentionAlert | null {
   let best: AttentionAlert | null = null;
   for (const bot of bots) {
     if (bot.id === viewingBotId) continue;
-    if (openedAtMs != null) {
+    if (openedAtMs != null && !freshBotIds?.has(bot.id)) {
       const updated = Date.parse(bot.updatedAt);
       if (Number.isFinite(updated) && updated < openedAtMs) continue;
     }
@@ -205,6 +208,30 @@ export function shouldSendDesktopAlert(input: {
   return input.viewingBotId !== input.alertBotId;
 }
 
+export function shouldWatchBackgroundBot(
+  status: string,
+  botId: string,
+  viewingBotId: string | null | undefined,
+): boolean {
+  return botId !== viewingBotId && watchBackgroundStatus.has(status);
+}
+
+export function rememberShownAlert(
+  seen: Set<string>,
+  recentKindAt: Map<string, number>,
+  key: string,
+  kindKey: string,
+  now: number,
+  windowMs = ALERT_KIND_WINDOW_MS,
+): "show" | "skip" {
+  if (seen.has(key)) return "skip";
+  const last = recentKindAt.get(kindKey) ?? 0;
+  if (now - last < windowMs) return "skip";
+  seen.add(key);
+  recentKindAt.set(kindKey, now);
+  return "show";
+}
+
 const urgencyRank: Record<AttentionAlert["urgency"], number> = {
   low: 0,
   normal: 1,
@@ -216,6 +243,15 @@ export function shouldClearAttentionForView(
   viewingBotId: string | null | undefined,
 ): attention is AttentionAlert {
   return attention != null && viewingBotId === attention.botId;
+}
+
+export function shouldStickDismissOnView(
+  attention: AttentionAlert | null,
+  viewingBotId: string | null | undefined,
+  previousViewingBotId: string | null | undefined,
+): boolean {
+  if (!shouldClearAttentionForView(attention, viewingBotId)) return false;
+  return Boolean(previousViewingBotId && previousViewingBotId !== viewingBotId);
 }
 
 export function shouldReplaceAttention(

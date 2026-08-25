@@ -9,9 +9,12 @@ import {
   type BotAlertSnapshot,
   isHistoricalEvent,
   parkedAttentionForView,
+  rememberShownAlert,
   shouldClearAttentionForView,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
+  shouldStickDismissOnView,
+  shouldWatchBackgroundBot,
 } from "./alerts";
 
 function event(over: Partial<ProductEvent> & Pick<ProductEvent, "type">): ProductEvent {
@@ -236,5 +239,84 @@ describe("parkedAttentionForView", () => {
     expect(parkedAttentionForView([speaker, watcher], "bot-b", new Set(), opened)?.title).toBe(
       "Need needs you",
     );
+  });
+
+  it("still raises a bot created in this window even if its stamp looks older than open", () => {
+    const opened = Date.parse("2026-01-01T00:00:10Z");
+    const createdHere = botSnap({
+      id: "bot-new",
+      name: "AskA",
+      status: "waiting_takeover",
+      updatedAt: "2026-01-01T00:00:01Z",
+    });
+    expect(
+      parkedAttentionForView(
+        [createdHere, watcher],
+        "bot-b",
+        new Set(),
+        opened,
+        new Set(["bot-new"]),
+      )?.title,
+    ).toBe("AskA needs you");
+    expect(parkedAttentionForView([createdHere, watcher], "bot-b", new Set(), opened)).toBeNull();
+  });
+});
+
+describe("shouldStickDismissOnView", () => {
+  const takeover = attentionFromEvent(event({ type: "computer.takeover.requested" }), "Need");
+
+  it("does not stick dismiss when the parked chat was already open", () => {
+    expect(shouldStickDismissOnView(takeover, "bot-a", "bot-a")).toBe(false);
+    expect(shouldStickDismissOnView(takeover, "bot-a", null)).toBe(false);
+  });
+
+  it("sticks dismiss only when switching onto the parked chat", () => {
+    expect(shouldStickDismissOnView(takeover, "bot-a", "bot-b")).toBe(true);
+    expect(shouldStickDismissOnView(takeover, "bot-b", "bot-a")).toBe(false);
+  });
+});
+
+describe("shouldWatchBackgroundBot", () => {
+  it("watches a parked other chat the same way as a running one", () => {
+    expect(shouldWatchBackgroundBot("waiting_takeover", "bot-a", "bot-b")).toBe(true);
+    expect(shouldWatchBackgroundBot("running", "bot-a", "bot-b")).toBe(true);
+    expect(shouldWatchBackgroundBot("queued", "bot-a", "bot-b")).toBe(true);
+    expect(shouldWatchBackgroundBot("leased", "bot-a", "bot-b")).toBe(true);
+  });
+
+  it("does not watch the open chat or an idle row", () => {
+    expect(shouldWatchBackgroundBot("waiting_takeover", "bot-a", "bot-a")).toBe(false);
+    expect(shouldWatchBackgroundBot("idle", "bot-a", "bot-b")).toBe(false);
+    expect(shouldWatchBackgroundBot("waiting_input", "bot-a", "bot-b")).toBe(false);
+  });
+});
+
+describe("rememberShownAlert", () => {
+  it("does not consume the parked key when the same kind is still in the debounce window", () => {
+    const seen = new Set<string>();
+    const recentKindAt = new Map<string, number>([["bot-a:takeover", 1_000]]);
+    expect(
+      rememberShownAlert(seen, recentKindAt, "bot-a:takeover:parked", "bot-a:takeover", 4_000),
+    ).toBe("skip");
+    expect(seen.has("bot-a:takeover:parked")).toBe(false);
+  });
+
+  it("can show the same parked key after the debounce window", () => {
+    const seen = new Set<string>();
+    const recentKindAt = new Map<string, number>([["bot-a:takeover", 1_000]]);
+    expect(
+      rememberShownAlert(seen, recentKindAt, "bot-a:takeover:parked", "bot-a:takeover", 10_000),
+    ).toBe("show");
+    expect(seen.has("bot-a:takeover:parked")).toBe(true);
+    expect(recentKindAt.get("bot-a:takeover")).toBe(10_000);
+  });
+
+  it("skips a key that already showed", () => {
+    const seen = new Set<string>(["bot-a:takeover:parked"]);
+    const recentKindAt = new Map<string, number>();
+    expect(
+      rememberShownAlert(seen, recentKindAt, "bot-a:takeover:parked", "bot-a:takeover", 20_000),
+    ).toBe("skip");
+    expect(recentKindAt.size).toBe(0);
   });
 });

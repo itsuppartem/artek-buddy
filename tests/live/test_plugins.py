@@ -43,3 +43,7 @@ def test_plugins_pane_key_connect_docs_then_chat_answers(
     expect(page.locator('[data-testid="thread-message"][data-role="bot"]')).to_contain_text(
         "Subotica", timeout=8_000
     )
+    page.get_by_test_id("open-plugins").click()
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible()
+    page.get_by_test_id("plugins-remove").click()
+    expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
