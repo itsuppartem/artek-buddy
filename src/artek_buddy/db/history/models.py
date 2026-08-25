@@ -10,6 +10,7 @@ from artek_buddy.model_catalog import (
     last_four,
     provider_label,
 )
+from artek_buddy.model_switch import model_fingerprint
 
 
 class ModelsMixin:
@@ -220,3 +221,20 @@ class ModelsMixin:
             is_default=bool(default and default[0] == provider),
             error=str(row["last_error"]) if row and row.get("last_error") else None,
         )
+
+    def model_fingerprint(self) -> str:
+        effort, fast = self.get_model_params()
+        return model_fingerprint(self.get_default_model(), effort, fast)
+
+    def applied_model(self, bot_id: str) -> str:
+        stamps = getattr(self, "_applied_model", None)
+        if not isinstance(stamps, dict):
+            return ""
+        return str(stamps.get(bot_id) or "")
+
+    def mark_applied_model(self, bot_id: str, fingerprint: str) -> None:
+        stamps = getattr(self, "_applied_model", None)
+        if not isinstance(stamps, dict):
+            stamps = {}
+            self._applied_model = stamps
+        stamps[bot_id] = fingerprint

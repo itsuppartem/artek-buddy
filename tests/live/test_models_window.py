@@ -11,6 +11,7 @@ from tests.live.helpers import (
     open_models,
     pair_fresh,
     restore_host,
+    send_message,
     unique_bot,
 )
 
@@ -103,3 +104,41 @@ def test_models_cursor_save_sets_effort_fast_and_keeps_using(
     expect(page.get_by_test_id("models-fast-cursor")).to_be_checked()
     page.get_by_test_id("models-forget-cursor").click()
     expect(page.get_by_label("Cursor API key")).to_be_visible(timeout=8_000)
+
+
+def test_models_save_reasoning_writes_meta_and_keeps_a_live_turn(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("Reason")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    open_models(page)
+    leftover = page.get_by_test_id("models-forget-cursor")
+    if leftover.count() and leftover.first.is_visible(timeout=0):
+        leftover.click()
+        expect(page.get_by_label("Cursor API key")).to_be_visible()
+    page.get_by_label("Cursor API key").fill("test-secret-cursor")
+    expect(page.get_by_label("Cursor API key")).to_have_value("test-secret-cursor")
+    page.get_by_test_id("models-save-cursor").click()
+    expect(page.get_by_test_id("models-status-cursor")).to_contain_text("Connected", timeout=8_000)
+    expect(page.get_by_test_id("models-using")).to_contain_text("scripted")
+    expect(page.get_by_test_id("models-use-cursor")).to_be_enabled()
+    expect(page.get_by_test_id("models-save-settings-cursor")).to_be_enabled()
+    page.get_by_test_id("models-effort-cursor").select_option("low")
+    page.get_by_test_id("models-save-settings-cursor").click()
+    page.get_by_role("button", name="Close Models").click()
+    expect(page.get_by_test_id("meta-block")).to_contain_text("Using scripted · Low", timeout=8_000)
+    open_models(page)
+    expect(page.get_by_test_id("models-effort-cursor")).to_have_value("low")
+    page.get_by_role("button", name="Close Models").click()
+    send_message(page, "please e2e-hang now", name)
+    expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
+    open_models(page)
+    page.get_by_test_id("models-effort-cursor").select_option("high")
+    page.get_by_test_id("models-save-settings-cursor").click()
+    page.get_by_role("button", name="Close Models").click()
+    expect(
+        page.get_by_test_id("meta-block").filter(has_text="This turn keeps going.")
+    ).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("run-error")).to_have_count(0)
+    expect(page.get_by_test_id("thread-stop")).to_be_visible()
