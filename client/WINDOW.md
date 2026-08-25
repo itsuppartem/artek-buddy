@@ -71,7 +71,7 @@ The open chat uses `/v1/threads/{id}/events` for the thread. Inbox banners use o
 
 Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `open-computer`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
 
-Errors: host Retry, auth re-pair, action Dismiss.
+Errors: host down shows a reconnect banner (`reconnect-banner`, Retry connection) under the thread header, not only a red card. Send while the host is unreachable parks the user bubble and an outbound queue for that chat (survives switch, Stop, and reload; no token in storage). Auth errors still re-pair and do not queue. After health is back the queue flushes in order; that bubble keeps `offline-sent-caption` («Sent while offline ·» local time). A later online send has no caption. Action Dismiss.
 
 If the user is pinned to the bottom, new cards keep the latest in view. Switching chats lands on the latest messages. Stop cancels the lead and workers; a later completed token must not append. The host prompt includes a compact summary of this chat (byte-capped) plus owner lines that never reached the model (inbox kept across Stop). `waiting_takeover` is a pause: no typing dots and no Stop. A new send starts a turn. **Release** resumes the same parked run.
 

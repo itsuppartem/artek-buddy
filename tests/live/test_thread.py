@@ -8,8 +8,11 @@ from tests.live.helpers import (
     bot_row,
     composer,
     create_named_bot,
+    cut_host,
+    ensure_model,
     open_chat,
     pair_fresh,
+    restore_host,
     send_message,
     thread_header,
     unique_bot,
@@ -568,3 +571,68 @@ def test_failed_banner_on_other_chat(page: Page, client_url: str, host_url: str)
     expect(thread_header(page)).to_contain_text(watcher)
     page.get_by_test_id("attention-dismiss").click()
     expect(banner).to_have_count(0)
+
+
+def test_offline_send_queues_then_flushes_with_caption(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Offline")
+    ensure_model(page)
+    expect(thread_header(page)).to_contain_text(name)
+    parked = "hello while the host is down"
+    later = "hello after reconnect"
+    cut_host(page)
+    box = composer(page)
+    box.fill(parked)
+    expect(box).to_have_value(parked)
+    box.press("Enter")
+    expect(page.get_by_test_id("reconnect-banner")).to_be_visible(timeout=8_000)
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+        has_text=parked
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("offline-sent-caption")).to_have_count(0)
+    expect(box).to_have_value("")
+    restore_host(page)
+    page.get_by_test_id("reconnect-banner").get_by_role("button", name="Retry connection").click()
+    expect(page.get_by_test_id("offline-sent-caption")).to_contain_text(
+        "Sent while offline", timeout=20_000
+    )
+    expect(page.get_by_test_id("reconnect-banner")).to_have_count(0)
+    box.fill(later)
+    expect(box).to_have_value(later)
+    box.press("Enter")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=later)
+    ).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("offline-sent-caption")).to_have_count(1)
+
+
+def test_auth_error_send_does_not_queue(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "NoQueue")
+    ensure_model(page)
+    expect(thread_header(page)).to_contain_text(name)
+    page.route(
+        "**/v1/threads/**/messages",
+        lambda route: (
+            route.fulfill(
+                status=401,
+                content_type="application/json",
+                body='{"detail":"invalid token"}',
+            )
+            if route.request.method == "POST"
+            else route.continue_()
+        ),
+    )
+    box = composer(page)
+    box.fill("should not queue")
+    expect(box).to_have_value("should not queue")
+    box.press("Enter")
+    expect(page.get_by_test_id("auth-error")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("reconnect-banner")).to_have_count(0)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="should not queue"
+        )
+    ).to_have_count(0)
+    expect(box).to_have_value("should not queue")
