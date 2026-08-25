@@ -4,6 +4,14 @@ export DISPLAY="${DISPLAY:-:1}"
 export HOME="${HOME:-/home/artek}"
 AGENT_HOME="$HOME"
 mkdir -p "$AGENT_HOME" "$AGENT_HOME/.local/bin" "$AGENT_HOME/.config" /tmp/artek /tmp/.X11-unix /tmp/fluxbox-home
+# Leftover homes may have pcmanfm autorun=1, which pops a window for every mount.
+mkdir -p "$AGENT_HOME/.config/pcmanfm/default"
+conf="$AGENT_HOME/.config/pcmanfm/default/pcmanfm.conf"
+if [ -f "$conf" ]; then
+  sed -i 's/^autorun=.*/autorun=0/;s/^mount_on_startup=.*/mount_on_startup=0/' "$conf"
+else
+  printf '%s\n' '[volume]' 'mount_on_startup=0' 'autorun=0' > "$conf"
+fi
 export PATH="$AGENT_HOME/.local/bin:/usr/local/bin:$PATH"
 export NPM_CONFIG_PREFIX="$AGENT_HOME/.local"
 export PIP_USER=1
