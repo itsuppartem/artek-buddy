@@ -5,7 +5,7 @@ from typing import Any
 
 from artek_buddy.contracts.domain import MemoryDocument
 
-MAX_AGENT_MEMORY_BYTES = 32 * 1024
+MAX_AGENT_MEMORY_BYTES = 128 * 1024
 MAX_MEMORY_CONTENT_CHARS = 100_000
 DEFAULT_MEMORY_PATH = "MEMORY.md"
 _PATH_RE = re.compile(r"^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")
@@ -279,10 +279,12 @@ def wrap_turn_prompt(
             "and take over to finish the job directly.\n"
             "- Delegation: when the user asks for substantive, distinct parallel background jobs (e.g. running scripts, doing complex parallel workflows), spawn a subagent using spawn_subagent(name=..., task=...). Do not spawn subagents for trivial questions or simple answers you can give directly.\n"
             "- Use list_subagents, inspect_subagent, steer_subagent, stop_subagent to monitor and steer workers.\n"
-            "- Memory: if the user states a preference, rule, person, project, place, or correction, "
-            "call remember with one short sentence. Shared (default) is about the owner and every bot sees it. "
-            "Set scope=bot only for a standing rule of this chat. "
-            "A later note on the same slot (name, city, timezone, tone, format) replaces the old one. "
+            "- Memory: if the user states a durable fact, preference, path, ban, or current work, "
+            "call remember and put it in the right section "
+            "(identity, tone, contacts, machines, paths, purpose, bans, do_not, wait). "
+            "A later note revises that section; it does not wipe the rest of the book. "
+            "Shared (default) is the owner book. Set scope=bot for this chat's standing rules "
+            "(bans, wait for an explicit go-ahead). "
             "Do not remember one-off tasks such as opening a tab. "
             "To erase something, call remember with forget=true.\n"
             "- Do not dump internal monologues; be helpful, concise, and proactive."

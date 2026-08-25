@@ -9,6 +9,7 @@
 - A takeover on another chat shows «needs you», not «replied». The bot stays `waiting_takeover` (same idea as `waiting_input`), and the window does not dismiss that banner during the chat switch. If the takeover event arrives while that chat is open, or the thread stream drops it on switch, the other chat still raises the pill from the parked status.
 
 ### Changed
+- Memory is a book the bot revises from chat: owner sections (identity, tone, contacts, machines, paths) and this-chat standing rules always ride in the next turn. Work notes still match the request. The 3+4 card caps and 200-character Settings cut no longer drop a weeks-grown book.
 - Send while the host is down parks the user bubble and flushes it when health returns, with a «sent while offline» caption. A reconnect banner replaces the red host-error card.
 - Take control auto-releases after two minutes with no mouse or key. The 15-minute hard lease stays as a cap. A quiet computer sleeps after 15 minutes; an open pane and the 60s heartbeat do not keep it warm. A parked `waiting_takeover` no longer pins the box.
 - Window identity: Cavalier marks, ink/plate/tan tokens, Atkinson + Fraunces + Azeret Mono, labeled New bot / Computer / Settings / Send / Stop. Plugins stay out of the chrome. Send is disabled when empty.

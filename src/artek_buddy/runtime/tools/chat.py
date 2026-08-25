@@ -45,7 +45,7 @@ class ChatToolsMixin:
                     source="remember",
                     run_id=run_id,
                     thread_id=thread_id,
-                    slot=str(args.get("slot") or "") or None,
+                    slot=str(args.get("section") or args.get("slot") or "") or None,
                 )
                 if entry is None:
                     return {"ok": True, "saved": False}
@@ -55,6 +55,7 @@ class ChatToolsMixin:
                     "document_id": entry.document_id,
                     "scope": entry.scope,
                     "kind": entry.kind,
+                    "section": entry.slot,
                 }
             except Exception as exc:
                 log.exception("failed to save memory in remember tool")
