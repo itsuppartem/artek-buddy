@@ -18,6 +18,8 @@ export function MessageView({
   botId,
   canAnswer,
   message,
+  queued = false,
+  offlineCaption,
   runStatus,
   onAnswer,
   onOpenBot,
@@ -28,6 +30,8 @@ export function MessageView({
   botId: string;
   canAnswer: boolean;
   message: ThreadMessage;
+  queued?: boolean;
+  offlineCaption?: string;
   runStatus?: string;
   onAnswer: (text: string) => Promise<void>;
   onOpenBot: (botId: string) => void;
@@ -41,6 +45,7 @@ export function MessageView({
       data-testid="thread-message"
       data-role={message.role}
       data-message-id={message.id}
+      data-queued={queued ? "true" : undefined}
       className="min-w-0"
       onContextMenu={(event) => {
         if (!onContextMenu) return;
@@ -181,10 +186,18 @@ export function MessageView({
         }
         if (block.kind === "text" && message.role === "user") {
           return (
-            <div key={index} className="flex justify-end">
+            <div key={index} className="flex flex-col items-end gap-1">
               <div className="max-w-[70%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[16px] bg-paper px-[18px] py-3 text-[15.5px] leading-[1.45] text-ink">
                 {block.text}
               </div>
+              {offlineCaption ? (
+                <div
+                  data-testid="offline-sent-caption"
+                  className="max-w-[70%] text-[12.5px] text-mute"
+                >
+                  {offlineCaption}
+                </div>
+              ) : null}
             </div>
           );
         }

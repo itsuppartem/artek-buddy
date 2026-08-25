@@ -37,6 +37,24 @@ import { fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/con
 import { stripMarkdown } from "../lib/markdown";
 import { NEEDS_MODEL_TEXT } from "../lib/models";
 import {
+  captionForMessage,
+  captionTargetId,
+  enqueueSend,
+  formatOfflineCaption,
+  isQueuedMessageId,
+  mergeQueuedIntoMessages,
+  newQueuedId,
+  OFFLINE_CAPTIONS_KEY,
+  OFFLINE_QUEUE_KEY,
+  type OfflineCaption,
+  parseStoredList,
+  type QueuedSend,
+  rememberCaption,
+  removeQueuedSend,
+  shouldQueueSend,
+  writeStoredList,
+} from "../lib/offline-queue";
+import {
   embeddableScreenUrl,
   screenFrameLooksFailed,
   shouldRefreshScreenUrl,
@@ -141,6 +159,20 @@ export function ShellPage() {
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ShellErrorKind>("host");
   const errorKindRef = useRef<ShellErrorKind>("host");
+  const [offlineQueue, setOfflineQueue] = useState<QueuedSend[]>(() =>
+    parseStoredList<QueuedSend>(window.localStorage.getItem(OFFLINE_QUEUE_KEY)),
+  );
+  const [offlineCaptions, setOfflineCaptions] = useState<OfflineCaption[]>(() =>
+    parseStoredList<OfflineCaption>(window.localStorage.getItem(OFFLINE_CAPTIONS_KEY)),
+  );
+  const [hostDown, setHostDown] = useState(() => offlineQueue.length > 0);
+  const offlineQueueRef = useRef(offlineQueue);
+  const offlineCaptionsRef = useRef(offlineCaptions);
+  const hostDownRef = useRef(hostDown);
+  const flushingQueue = useRef(false);
+  offlineQueueRef.current = offlineQueue;
+  offlineCaptionsRef.current = offlineCaptions;
+  hostDownRef.current = hostDown;
   const [later, setLater] = useState<string | null>(null);
   const [attention, setAttention] = useState<AttentionAlert | null>(null);
   const seenAlertKeys = useRef(new Set<string>());
@@ -417,11 +449,33 @@ export function ShellPage() {
     panelAfterModels.current = null;
   }
 
+  function persistQueue(next: QueuedSend[]): QueuedSend[] {
+    try {
+      writeStoredList(window.localStorage, OFFLINE_QUEUE_KEY, next);
+    } catch {
+      // Memory still holds the queue if storage is full.
+    }
+    return next;
+  }
+
+  function persistCaptions(next: OfflineCaption[]): OfflineCaption[] {
+    try {
+      writeStoredList(window.localStorage, OFFLINE_CAPTIONS_KEY, next);
+    } catch {
+      // Caption is optional after a reload.
+    }
+    return next;
+  }
+
   function showError(err: unknown, fallback: string) {
     const classified = classifyError(err);
     const message = classified.message || fallback;
     errorKindRef.current = classified.kind;
     setErrorKind(classified.kind);
+    if (classified.kind === "host") {
+      setHostDown(true);
+      return;
+    }
     setError(message);
   }
 
@@ -432,6 +486,8 @@ export function ShellPage() {
     reconnecting.current = true;
     try {
       await api.health();
+      setHostDown(false);
+      await flushOfflineQueue();
       const recovering = errorKindRef.current === "host";
       if (loadBots || recovering) {
         await refreshBotsRef.current();
@@ -444,6 +500,72 @@ export function ShellPage() {
       showError(err, "Could not reach the host");
     } finally {
       reconnecting.current = false;
+    }
+  }
+
+  function parkSend(
+    botId: string,
+    text: string,
+    replyToId: string | null,
+    attachments: QueuedSend["attachments"],
+  ) {
+    const item: QueuedSend = {
+      id: newQueuedId(),
+      botId,
+      text,
+      replyToId,
+      attachments,
+      queuedAt: Date.now(),
+    };
+    setOfflineQueue((queue) => persistQueue(enqueueSend(queue, item)));
+    setHostDown(true);
+    setReplyTo(null);
+  }
+
+  async function flushOfflineQueue() {
+    if (flushingQueue.current) return;
+    const items = offlineQueueRef.current;
+    if (!items.length) return;
+    flushingQueue.current = true;
+    try {
+      for (const item of items) {
+        try {
+          await api.threads.send(item.botId, item.text, item.replyToId, item.attachments);
+          const snap =
+            activeIdRef.current === item.botId
+              ? await refreshThread(item.botId)
+              : await api.threads.get(item.botId).catch(() => null);
+          const messages = snap?.messages ?? [];
+          setOfflineCaptions((captions) => {
+            const taken = new Set(captions.map((caption) => caption.messageId));
+            const messageId = captionTargetId(item, messages, taken);
+            if (!messageId) return captions;
+            return persistCaptions(
+              rememberCaption(captions, {
+                messageId,
+                botId: item.botId,
+                queuedAt: item.queuedAt,
+              }),
+            );
+          });
+          setOfflineQueue((queue) => persistQueue(removeQueuedSend(queue, item.id)));
+        } catch (err) {
+          const classified = classifyError(err);
+          if (classified.kind === "host") {
+            setHostDown(true);
+            return;
+          }
+          if (classified.kind === "auth") {
+            showError(err, classified.message);
+            return;
+          }
+          showError(err, "Send failed");
+          setOfflineQueue((queue) => persistQueue(removeQueuedSend(queue, item.id)));
+          return;
+        }
+      }
+    } finally {
+      flushingQueue.current = false;
     }
   }
 
@@ -657,6 +779,7 @@ export function ShellPage() {
             showError(err, classified.message);
             break;
           }
+          if (classified.kind === "host") setHostDown(true);
           // Reconnect after a dropped stream. The last event id keeps replay safe.
         }
         if (abort.signal.aborted) break;
@@ -926,8 +1049,9 @@ export function ShellPage() {
     }
     setError(null);
     setSending(true);
+    let attachments: QueuedSend["attachments"];
     try {
-      const attachments = files.length
+      attachments = files.length
         ? await Promise.all(
             files.map(async (item) => ({
               name: item.file.name,
@@ -936,9 +1060,18 @@ export function ShellPage() {
             })),
           )
         : undefined;
+      if (hostDownRef.current) {
+        parkSend(targetId, text, replyId, attachments);
+        return;
+      }
       await api.threads.send(targetId, text, replyId, attachments);
       setReplyTo(null);
     } catch (err) {
+      const classified = classifyError(err);
+      if (shouldQueueSend(classified.kind)) {
+        parkSend(targetId, text, replyId, attachments);
+        return;
+      }
       if (textOverride == null) {
         writeDraft(text);
         setPendingFiles(files);
@@ -1312,6 +1445,23 @@ export function ShellPage() {
             </button>
           </div>
         </div>
+        {hostDown ? (
+          <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
+            <div
+              data-testid="reconnect-banner"
+              className="flex w-full items-center gap-2 border border-hairline border-l-[3px] border-l-tan bg-plate px-3 py-2 text-[13.5px] text-paper"
+            >
+              <p className="min-w-0 flex-1 text-left">Reconnecting to the host</p>
+              <button
+                type="button"
+                onClick={() => void reconnectHost(true)}
+                className="shrink-0 px-2 text-[13px] font-medium text-tan underline underline-offset-2"
+              >
+                Retry connection
+              </button>
+            </div>
+          </div>
+        ) : null}
         {attention || later ? (
           <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
             {attention ? (
@@ -1363,27 +1513,13 @@ export function ShellPage() {
           }}
           className="ab-scroll flex min-w-0 flex-1 flex-col gap-[13px] overflow-x-hidden overflow-y-auto px-7 py-6"
         >
-          {error ? (
+          {error && errorKind !== "host" ? (
             <div
-              data-testid={
-                errorKind === "host"
-                  ? "host-error"
-                  : errorKind === "auth"
-                    ? "auth-error"
-                    : "action-error"
-              }
+              data-testid={errorKind === "auth" ? "auth-error" : "action-error"}
               className="self-center rounded-xl border border-danger/40 bg-danger-bg px-4 py-3 text-center text-[13.5px] text-danger"
             >
               <div>{error}</div>
-              {errorKind === "host" ? (
-                <button
-                  type="button"
-                  onClick={() => void reconnectHost(true)}
-                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
-                >
-                  Retry connection
-                </button>
-              ) : errorKind === "auth" ? (
+              {errorKind === "auth" ? (
                 <button
                   type="button"
                   onClick={() => void forgetDevice()}
@@ -1465,7 +1601,12 @@ export function ShellPage() {
               {loadingOlder ? "Loading…" : "Load earlier messages"}
             </button>
           ) : null}
-          {(thread?.messages ?? [])
+          {mergeQueuedIntoMessages(
+            thread?.messages ?? [],
+            offlineQueue,
+            active?.id ?? "",
+            thread?.threadId ?? "",
+          )
             .filter((message) => !isToolNoise(message) && !isHiddenLiveDraft(message))
             .map((message) => (
               <MessageView
@@ -1473,6 +1614,8 @@ export function ShellPage() {
                 botId={active?.id ?? ""}
                 canAnswer
                 message={message}
+                queued={isQueuedMessageId(message.id)}
+                offlineCaption={offlineCaptionText(offlineCaptions, message.id)}
                 runStatus={thread?.run?.status}
                 onAnswer={(text) => send(text)}
                 onOpenComputer={() => void openOverlay("preview")}
@@ -1848,6 +1991,11 @@ function hasLive(snapshot: ThreadSnapshot): boolean {
       message.id.startsWith("stream:") &&
       message.blocks.some((b) => b.kind === "progress" && Boolean(b.text)),
   );
+}
+
+function offlineCaptionText(captions: OfflineCaption[], messageId: string): string | undefined {
+  const caption = captionForMessage(captions, messageId);
+  return caption ? formatOfflineCaption(caption.queuedAt) : undefined;
 }
 
 function hasActiveWorkers(snapshot: ThreadSnapshot): boolean {

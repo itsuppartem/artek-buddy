@@ -202,6 +202,17 @@ def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":
     )
 
 
+def cut_host(page: Page) -> None:
+    """The throwaway host (or the path to it) is unreachable. Leave /local/* alone."""
+    page.route("**/health", lambda route: route.abort())
+    page.route("**/v1/**", lambda route: route.abort())
+
+
+def restore_host(page: Page) -> None:
+    page.unroute("**/health")
+    page.unroute("**/v1/**")
+
+
 def create_named_bot(
     page: Page,
     name: str,

@@ -132,7 +132,7 @@ def test_host_error_retry_clears_banner(page: Page, client_url: str, host_url: s
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     fulfill_json(page, "**/v1/**", 502, '{"detail":"upstream down"}')
     page.reload()
-    card = page.get_by_test_id("host-error")
+    card = page.get_by_test_id("reconnect-banner")
     expect(card).to_be_visible(timeout=20_000)
     page.unroute("**/v1/**")
     if card.is_visible():
