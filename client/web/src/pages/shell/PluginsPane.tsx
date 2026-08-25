@@ -49,9 +49,12 @@ export function PluginsPane({
     }
   }
 
-  async function save() {
-    const apiKey = draft.trim();
-    if (!apiKey) return;
+  async function save(raw = draft) {
+    const apiKey = raw.trim();
+    if (!apiKey) {
+      setError("Paste a key first.");
+      return;
+    }
     setBusy("save");
     try {
       setStatus(await api.connections.setKey(apiKey));
@@ -146,34 +149,44 @@ export function PluginsPane({
         </p>
       )}
       {showKeyField ? (
-        <label className="block text-[13px] text-mute" htmlFor="plugins-key">
-          Plugins key
-          <input
-            id="plugins-key"
-            data-testid="plugins-key"
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            aria-label="Plugins key"
-            className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-          />
-        </label>
+        <form
+          className="block"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            void save(String(data.get("api_key") || draft));
+          }}
+        >
+          <label className="block text-[13px] text-mute" htmlFor="plugins-key">
+            Plugins key
+            <input
+              id="plugins-key"
+              name="api_key"
+              data-testid="plugins-key"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Plugins key"
+              className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+            />
+          </label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              type="submit"
+              variant="cream"
+              size="sm"
+              data-testid="plugins-save"
+              disabled={busy === "save"}
+            >
+              {busy === "save" ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </form>
       ) : null}
       <div className="mt-2 flex flex-wrap gap-2">
-        {showKeyField ? (
-          <Button
-            type="button"
-            variant="cream"
-            size="sm"
-            data-testid="plugins-save"
-            disabled={!draft.trim() || busy === "save"}
-            onClick={() => void save()}
-          >
-            {busy === "save" ? "Saving…" : "Save"}
-          </Button>
-        ) : (
+        {showKeyField ? null : (
           <>
             <Button
               type="button"

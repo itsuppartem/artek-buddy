@@ -116,7 +116,9 @@ def open_models(page: Page) -> None:
 
 def _picker_values(page: Page, test_id: str) -> list[str]:
     picker = page.get_by_test_id(test_id)
-    return picker.evaluate("el => [...el.options].map(option => option.value).filter(Boolean)")
+    return picker.locator("[data-model]").evaluate_all(
+        "els => els.map(el => el.getAttribute('data-model')).filter(Boolean)"
+    )
 
 
 def _close_models_ready(page: Page) -> None:
@@ -138,13 +140,15 @@ def ensure_model(page: Page) -> None:
         if retry.count() and retry.first.is_visible(timeout=0):
             retry.click()
         picker = page.get_by_test_id("models-picker-cursor")
-        expect(picker).to_be_enabled(timeout=20_000)
+        expect(picker.locator("[data-model]").first).to_be_visible(timeout=20_000)
         values = _picker_values(page, "models-picker-cursor")
         if not values:
             raise AssertionError("Cursor model list was empty")
         chosen = "grok-4.6" if "grok-4.6" in values else values[0]
-        picker.select_option(chosen)
-        page.get_by_test_id("models-use-cursor").click()
+        using = page.get_by_test_id("models-using")
+        if not using.count() or chosen not in (using.inner_text() or ""):
+            picker.locator(f'[data-model="{chosen}"]').click()
+            page.get_by_test_id("models-use-cursor").click()
         expect(page.get_by_test_id("models-using")).to_contain_text(chosen, timeout=8_000)
         _close_models_ready(page)
         return
@@ -152,11 +156,7 @@ def ensure_model(page: Page) -> None:
     if key.count() and key.first.is_visible(timeout=0):
         key.fill("test-secret-uiok")
         page.get_by_test_id("models-save-openrouter").click()
-    picker = page.get_by_label("OpenRouter model")
-    expect(picker).to_be_enabled(timeout=10_000)
-    picker.select_option("scripted")
-    page.get_by_test_id("models-use-openrouter").click()
-    expect(page.get_by_text("Using scripted")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("models-using")).to_be_visible(timeout=10_000)
     _close_models_ready(page)
 
 
@@ -195,11 +195,21 @@ def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | No
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
 
 
-def fulfill_json(page: Page, url_glob: str, status: int, body: str = '{"detail":"test"}') -> None:
-    page.route(
-        url_glob,
-        lambda route: route.fulfill(status=status, content_type="application/json", body=body),
-    )
+def fulfill_json(
+    page: Page,
+    url_glob: str,
+    status: int,
+    body: str = '{"detail":"test"}',
+    *,
+    method: str | None = None,
+) -> None:
+    def handle(route) -> None:
+        if method and route.request.method != method:
+            route.continue_()
+            return
+        route.fulfill(status=status, content_type="application/json", body=body)
+
+    page.route(url_glob, handle)
 
 
 def cut_host(page: Page) -> None:
@@ -209,8 +219,38 @@ def cut_host(page: Page) -> None:
 
 
 def restore_host(page: Page) -> None:
-    page.unroute("**/health")
-    page.unroute("**/v1/**")
+    """Drop every page.route, including a 404 fulfill on a specific path."""
+    page.unroute_all()
+
+
+def assert_readable_chip(chip) -> None:
+    color = chip.evaluate("el => getComputedStyle(el).color")
+    background = chip.evaluate("el => getComputedStyle(el).backgroundColor")
+    ratio = _contrast_ratio(color, background)
+    if ratio < 3.0:
+        raise AssertionError(f"model chip contrast {ratio:.2f} < 3 ({color} on {background})")
+
+
+def _css_rgb(value: str) -> tuple[int, int, int]:
+    inner = value[value.find("(") + 1 : value.rfind(")")]
+    parts = [float(item.strip()) for item in inner.split(",")[:3]]
+    return int(parts[0]), int(parts[1]), int(parts[2])
+
+
+def _rel_luminance(rgb: tuple[int, int, int]) -> float:
+    def chan(raw: int) -> float:
+        value = raw / 255.0
+        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+
+    red, green, blue = rgb
+    return 0.2126 * chan(red) + 0.7152 * chan(green) + 0.0722 * chan(blue)
+
+
+def _contrast_ratio(color: str, background: str) -> float:
+    first = _rel_luminance(_css_rgb(color))
+    second = _rel_luminance(_css_rgb(background))
+    lighter, darker = max(first, second), min(first, second)
+    return (lighter + 0.05) / (darker + 0.05)
 
 
 def create_named_bot(

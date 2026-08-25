@@ -1,0 +1,5 @@
+ALTER TABLE model_defaults
+    ADD COLUMN IF NOT EXISTS effort TEXT;
+
+ALTER TABLE model_defaults
+    ADD COLUMN IF NOT EXISTS fast BOOLEAN;

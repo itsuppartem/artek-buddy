@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../../api";
-import {
-  defaultModelValue,
-  MODEL_PROVIDERS,
-  maskedKey,
-  parseDefaultModelValue,
-} from "../../lib/models";
+import { MODEL_PROVIDERS, maskedKey } from "../../lib/models";
 import type { ModelCredential, ModelCredentialList, ModelInfo } from "../../types";
 import { Button } from "../../ui/button";
 import { IconClose } from "../../ui/icons";
+
+const EFFORTS = [
+  { id: "xhigh", label: "Extra high" },
+  { id: "high", label: "High" },
+  { id: "medium", label: "Medium" },
+  { id: "low", label: "Low" },
+] as const;
 
 export function ModelsPane({
   credentials,
@@ -21,12 +23,35 @@ export function ModelsPane({
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [autoRetried, setAutoRetried] = useState<Record<string, boolean>>({});
+  const [effort, setEffort] = useState(credentials?.defaultEffort || "xhigh");
+  const [fast, setFast] = useState(credentials?.defaultFast !== false);
   const rows = credentials?.credentials ?? [];
 
   useEffect(() => {
     void api.models.list().then((list) => setModels(list.models ?? []));
   }, [credentials]);
+
+  useEffect(() => {
+    for (const row of rows) {
+      if (
+        row.hasKey &&
+        !row.error &&
+        !autoRetried[row.provider] &&
+        !models.some((item) => item.provider === row.provider)
+      ) {
+        setAutoRetried((current) => ({ ...current, [row.provider]: true }));
+        void retry(row.provider);
+      }
+    }
+  }, [autoRetried, credentials, models, rows]);
+
+  useEffect(() => {
+    if (credentials?.defaultEffort) setEffort(credentials.defaultEffort);
+    if (credentials?.defaultFast != null) setFast(credentials.defaultFast);
+  }, [credentials?.defaultEffort, credentials?.defaultFast]);
 
   async function refresh() {
     const next = await api.models.credentials();
@@ -35,14 +60,23 @@ export function ModelsPane({
     setModels(list.models ?? []);
   }
 
-  async function save(provider: string) {
-    const apiKey = (drafts[provider] || "").trim();
-    if (!apiKey) return;
+  async function save(provider: string, apiKey: string) {
+    const trimmed = apiKey.trim();
+    if (!trimmed) {
+      setErrors((current) => ({ ...current, [provider]: "Paste a key first." }));
+      return;
+    }
     setBusy((current) => ({ ...current, [provider]: "save" }));
     try {
-      await api.models.connect(provider, apiKey);
+      await api.models.connect(provider, trimmed);
       setDrafts((current) => ({ ...current, [provider]: "" }));
+      setErrors((current) => ({ ...current, [provider]: "" }));
       await refresh();
+    } catch (err) {
+      setErrors((current) => ({
+        ...current,
+        [provider]: err instanceof Error ? err.message : "Could not save the key.",
+      }));
     } finally {
       setBusy((current) => {
         const next = { ...current };
@@ -56,7 +90,13 @@ export function ModelsPane({
     setBusy((current) => ({ ...current, [provider]: "retry" }));
     try {
       await api.models.connect(provider);
+      setErrors((current) => ({ ...current, [provider]: "" }));
       await refresh();
+    } catch (err) {
+      setErrors((current) => ({
+        ...current,
+        [provider]: err instanceof Error ? err.message : "Could not load models.",
+      }));
     } finally {
       setBusy((current) => {
         const next = { ...current };
@@ -71,6 +111,8 @@ export function ModelsPane({
     try {
       await api.models.forget(provider);
       setDrafts((current) => ({ ...current, [provider]: "" }));
+      setErrors((current) => ({ ...current, [provider]: "" }));
+      setAutoRetried((current) => ({ ...current, [provider]: false }));
       await refresh();
     } finally {
       setBusy((current) => {
@@ -81,17 +123,18 @@ export function ModelsPane({
     }
   }
 
-  async function chooseDefault(value: string) {
-    const parsed = parseDefaultModelValue(value);
-    if (!parsed) return;
-    await api.models.setDefault(parsed.provider, parsed.model);
-    await refresh();
+  async function choose(provider: string, model: string, nextEffort = effort, nextFast = fast) {
+    if (!model) return;
+    try {
+      await api.models.setDefault(provider, model, nextEffort, nextFast);
+      await refresh();
+    } catch (err) {
+      setErrors((current) => ({
+        ...current,
+        [provider]: err instanceof Error ? err.message : "Could not use that model.",
+      }));
+    }
   }
-
-  const defaultValue =
-    credentials?.defaultProvider && credentials.defaultModel
-      ? defaultModelValue(credentials.defaultProvider, credentials.defaultModel)
-      : "";
 
   return (
     <div data-testid="models-pane">
@@ -109,7 +152,7 @@ export function ModelsPane({
         </button>
       </div>
       <p className="mb-4 text-[13px] leading-5 text-mute">
-        Paste an API key, save it, then pick the model this host should use.
+        Paste an API key and Save. That row&apos;s model is what this host uses.
       </p>
       <div className="flex flex-col gap-3">
         {MODEL_PROVIDERS.map((spec) => {
@@ -121,40 +164,36 @@ export function ModelsPane({
               row={row}
               draft={drafts[spec.id] || ""}
               busy={busy[spec.id] || ""}
+              error={errors[spec.id] || row?.error || ""}
               models={models.filter((item) => item.provider === spec.id)}
+              effort={effort}
+              fast={fast}
+              using={
+                credentials?.defaultProvider === spec.id ? (credentials.defaultModel ?? "") : ""
+              }
               onDraft={(value) => setDrafts((current) => ({ ...current, [spec.id]: value }))}
-              onSave={() => void save(spec.id)}
+              onSave={(key) => void save(spec.id, key)}
               onRetry={() => void retry(spec.id)}
               onForget={() => void forget(spec.id)}
-              onUse={(model) => void chooseDefault(defaultModelValue(spec.id, model))}
+              onUse={(model) => void choose(spec.id, model)}
+              onEffort={(value) => {
+                setEffort(value);
+                if (credentials?.defaultModel && credentials.defaultProvider === spec.id) {
+                  void choose(spec.id, credentials.defaultModel, value, fast);
+                }
+              }}
+              onFast={(value) => {
+                setFast(value);
+                if (credentials?.defaultModel && credentials.defaultProvider === spec.id) {
+                  void choose(spec.id, credentials.defaultModel, effort, value);
+                }
+              }}
             />
           );
         })}
       </div>
-      <label className="mt-5 block text-[13px] text-mute" htmlFor="models-default">
-        Default model
-      </label>
-      <select
-        id="models-default"
-        data-testid="models-default"
-        aria-label="Default model"
-        className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper disabled:opacity-40"
-        disabled={models.length === 0}
-        value={defaultValue}
-        onChange={(event) => void chooseDefault(event.target.value)}
-      >
-        <option value="">{models.length ? "Pick a model" : "No models yet"}</option>
-        {models.map((item) => (
-          <option
-            key={defaultModelValue(item.provider, item.id)}
-            value={defaultModelValue(item.provider, item.id)}
-          >
-            {item.id}
-          </option>
-        ))}
-      </select>
       {credentials?.defaultModel ? (
-        <p className="mt-2 text-[13px] text-sage" data-testid="models-using">
+        <p className="mt-3 text-[13px] text-sage" data-testid="models-using">
           Using {credentials.defaultModel}
         </p>
       ) : null}
@@ -167,115 +206,183 @@ function ProviderRow({
   row,
   draft,
   busy,
+  error,
   models,
+  using,
+  effort,
+  fast,
   onDraft,
   onSave,
   onRetry,
   onForget,
   onUse,
+  onEffort,
+  onFast,
 }: {
   spec: { id: string; label: string };
   row: ModelCredential | undefined;
   draft: string;
   busy: string;
+  error: string;
   models: ModelInfo[];
+  using: string;
+  effort: string;
+  fast: boolean;
   onDraft: (value: string) => void;
-  onSave: () => void;
+  onSave: (apiKey: string) => void;
   onRetry: () => void;
   onForget: () => void;
   onUse: (model: string) => void;
+  onEffort: (value: string) => void;
+  onFast: (value: boolean) => void;
 }) {
   const keyId = `models-key-${spec.id}`;
   const saving = busy === "save";
   const loading = busy === "retry" || saving;
   const [picked, setPicked] = useState("");
+  const showKeyField = !(row?.hasKey && !draft);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    onSave(String(data.get("api_key") || draft));
+  }
+
   return (
     <section
       data-testid={`models-row-${spec.id}`}
       className="rounded-[12px] border border-hairline bg-plate px-3 py-3"
     >
       <h3 className="font-display text-[14.5px] text-paper">{spec.label}</h3>
-      <label className="mt-2 block text-[13px] text-mute" htmlFor={keyId}>
-        API key
-      </label>
-      {row?.hasKey && !draft ? (
-        <p className="mt-1 text-[14px] text-paper" data-testid={`models-status-${spec.id}`}>
-          {maskedKey(row.lastFour)} · Connected
-        </p>
-      ) : (
-        <input
-          id={keyId}
-          data-testid={keyId}
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          aria-label={`${spec.label} API key`}
-          className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper"
-          value={draft}
-          onChange={(event) => onDraft(event.target.value)}
-        />
-      )}
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="cream"
-          size="sm"
-          data-testid={`models-save-${spec.id}`}
-          disabled={!draft.trim() || saving}
-          onClick={onSave}
-        >
-          {saving ? "Saving…" : "Save"}
-        </Button>
-        {row?.hasKey ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-testid={`models-forget-${spec.id}`}
-            disabled={busy === "forget"}
-            onClick={onForget}
-          >
-            Forget
-          </Button>
-        ) : null}
-        {row?.error ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-testid={`models-retry-${spec.id}`}
-            disabled={loading}
-            onClick={onRetry}
-          >
-            Retry
-          </Button>
-        ) : null}
-      </div>
+      <form onSubmit={submit}>
+        <label className="mt-2 block text-[13px] text-mute" htmlFor={keyId}>
+          API key
+        </label>
+        {showKeyField ? (
+          <input
+            id={keyId}
+            name="api_key"
+            data-testid={keyId}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            aria-label={`${spec.label} API key`}
+            className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper"
+            value={draft}
+            onChange={(event) => onDraft(event.target.value)}
+          />
+        ) : (
+          <p className="mt-1 text-[14px] text-paper" data-testid={`models-status-${spec.id}`}>
+            {maskedKey(row?.lastFour)} · Connected
+          </p>
+        )}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {showKeyField ? (
+            <Button
+              type="submit"
+              variant="cream"
+              size="sm"
+              data-testid={`models-save-${spec.id}`}
+              disabled={saving}
+            >
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          ) : null}
+          {row?.hasKey ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid={`models-forget-${spec.id}`}
+              disabled={busy === "forget"}
+              onClick={onForget}
+            >
+              Forget
+            </Button>
+          ) : null}
+          {row?.error || error || (row?.hasKey && models.length === 0) ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid={`models-retry-${spec.id}`}
+              disabled={loading}
+              onClick={onRetry}
+            >
+              Retry
+            </Button>
+          ) : null}
+        </div>
+      </form>
       {loading ? <p className="mt-2 text-[13px] text-mute">Loading models…</p> : null}
-      {row?.error ? (
+      {error ? (
         <p className="mt-2 text-[13px] text-danger" data-testid={`models-error-${spec.id}`}>
-          {row.error}
+          {error}
         </p>
       ) : null}
-      <label className="mt-3 block text-[13px] text-mute" htmlFor={`models-picker-${spec.id}`}>
-        Model
-      </label>
-      <select
-        id={`models-picker-${spec.id}`}
+      <p className="mt-3 text-[13px] text-mute">Model</p>
+      <div
         data-testid={`models-picker-${spec.id}`}
+        role="listbox"
         aria-label={`${spec.label} model`}
-        className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper disabled:opacity-40"
-        disabled={!row?.hasKey || models.length === 0}
-        value={picked}
-        onChange={(event) => setPicked(event.target.value)}
+        className="mt-1 flex flex-wrap gap-1.5"
       >
-        <option value="">{row?.hasKey && models.length ? "Pick a model" : "No models yet"}</option>
-        {models.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.id}
-          </option>
-        ))}
-      </select>
+        {models.length ? (
+          models.map((item) => {
+            const active = (picked || using) === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="option"
+                aria-selected={active}
+                data-model={item.id}
+                onClick={() => setPicked(item.id)}
+                className={`rounded-[8px] border px-2.5 py-1 text-[13px] ${
+                  active
+                    ? "border-tan bg-tan text-ink"
+                    : "border-hairline bg-paper text-ink hover:bg-raised hover:text-paper"
+                }`}
+              >
+                {item.id}
+              </button>
+            );
+          })
+        ) : (
+          <span className="text-[13px] text-mute">No models yet</span>
+        )}
+      </div>
+      {spec.id === "cursor" && row?.hasKey ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <label className="text-[13px] text-mute" htmlFor="models-effort-cursor">
+            Reasoning
+            <select
+              id="models-effort-cursor"
+              data-testid="models-effort-cursor"
+              aria-label="Reasoning"
+              className="ml-2 h-9 rounded-[8px] border border-hairline bg-paper px-2 text-[13px] text-ink"
+              value={effort}
+              onChange={(event) => onEffort(event.target.value)}
+            >
+              {EFFORTS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-[13px] text-paper">
+            <input
+              type="checkbox"
+              data-testid="models-fast-cursor"
+              aria-label="Fast"
+              checked={fast}
+              onChange={(event) => onFast(event.target.checked)}
+            />
+            Fast
+          </label>
+        </div>
+      ) : null}
       <Button
         type="button"
         variant="outline"

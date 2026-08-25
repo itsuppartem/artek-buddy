@@ -41,10 +41,13 @@ class ModelsMixin:
         default = self.get_default_model()
         stored = {row["provider"]: row for row in self._credential_rows()}
         rows = [self._credential_view(spec.id, stored.get(spec.id), default) for spec in PROVIDERS]
+        params = self.get_model_params()
         return ModelCredentialList(
             credentials=rows,
             default_provider=default[0] if default else None,
             default_model=default[1] if default else None,
+            default_effort=params[0],
+            default_fast=params[1],
         )
 
     def raw_key(self, provider: str) -> str | None:
@@ -153,17 +156,35 @@ class ModelsMixin:
             return None
         return str(row["provider"]), str(row["model_id"])
 
-    def set_default_model(self, provider: str, model_id: str) -> None:
+    def get_model_params(self) -> tuple[str | None, bool | None]:
+        with self._conn() as conn:
+            row = conn.execute("SELECT effort, fast FROM model_defaults WHERE id = 1").fetchone()
+            conn.commit()
+        if row is None:
+            return None, None
+        effort = str(row["effort"]) if row.get("effort") else None
+        fast = row.get("fast")
+        return effort, None if fast is None else bool(fast)
+
+    def set_default_model(
+        self,
+        provider: str,
+        model_id: str,
+        effort: str | None = None,
+        fast: bool | None = None,
+    ) -> None:
         with self._conn() as conn:
             conn.execute(
                 """
-                INSERT INTO model_defaults (id, provider, model_id)
-                VALUES (1, %s, %s)
+                INSERT INTO model_defaults (id, provider, model_id, effort, fast)
+                VALUES (1, %s, %s, %s, %s)
                 ON CONFLICT (id) DO UPDATE SET
                     provider = EXCLUDED.provider,
-                    model_id = EXCLUDED.model_id
+                    model_id = EXCLUDED.model_id,
+                    effort = COALESCE(EXCLUDED.effort, model_defaults.effort),
+                    fast = COALESCE(EXCLUDED.fast, model_defaults.fast)
                 """,
-                (provider, model_id),
+                (provider, model_id, effort, fast),
             )
             conn.commit()
 
