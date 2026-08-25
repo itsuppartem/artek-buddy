@@ -4,7 +4,13 @@ import type { Connection, ConnectionCatalogItem, ConnectionKeyStatus } from "../
 import { Button } from "../../ui/button";
 import { IconClose } from "../../ui/icons";
 
-export function PluginsPane({ onClose }: { onClose: () => void }) {
+export function PluginsPane({
+  onClose,
+  onAppsChange,
+}: {
+  onClose: () => void;
+  onAppsChange?: () => void;
+}) {
   const [status, setStatus] = useState<ConnectionKeyStatus | null>(null);
   const [draft, setDraft] = useState("");
   const [replace, setReplace] = useState(false);
@@ -52,6 +58,7 @@ export function PluginsPane({ onClose }: { onClose: () => void }) {
       setDraft("");
       setReplace(false);
       await refresh(query);
+      onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the key.");
     } finally {
@@ -68,6 +75,7 @@ export function PluginsPane({ onClose }: { onClose: () => void }) {
       setRows([]);
       setReplace(false);
       setError("");
+      onAppsChange?.();
     } finally {
       setBusy("");
     }
@@ -81,6 +89,7 @@ export function PluginsPane({ onClose }: { onClose: () => void }) {
         window.open(started.authorizationUrl, "_blank", "noopener,noreferrer");
       }
       await refresh(query);
+      onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not connect that app.");
     } finally {
@@ -93,6 +102,7 @@ export function PluginsPane({ onClose }: { onClose: () => void }) {
     try {
       await api.connections.complete(connectionId);
       await refresh(query);
+      onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not finish that app.");
     } finally {
@@ -105,6 +115,7 @@ export function PluginsPane({ onClose }: { onClose: () => void }) {
     try {
       await api.connections.revoke(connectionId);
       await refresh(query);
+      onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not disconnect that app.");
     } finally {

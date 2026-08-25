@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-from tests.live.helpers import create_named_bot, pair_fresh, send_message, unique_bot
+from tests.live.helpers import composer, create_named_bot, ensure_model, pair_fresh, unique_bot
 
 pytestmark = pytest.mark.live
 
@@ -39,11 +39,19 @@ def test_plugins_pane_key_connect_docs_then_chat_answers(
     expect(row.get_by_text("Connected")).to_be_visible()
     page.get_by_role("button", name="Close Plugins").click()
     create_named_bot(page, name)
-    send_message(page, "please e2e-plugin-docs", name)
-    expect(page.locator('[data-testid="thread-message"][data-role="bot"]')).to_contain_text(
-        "Subotica", timeout=8_000
-    )
+    ensure_model(page)
+    chip = page.get_by_test_id("plugin-ask-docs")
+    expect(chip).to_be_visible()
+    chip.click()
+    box = composer(page)
+    expect(box).to_have_value("please use Docs")
+    box.press("Enter")
+    card = page.get_by_test_id("plugin-card")
+    expect(card).to_contain_text("Docs", timeout=8_000)
+    expect(card).to_contain_text("Subotica")
     page.get_by_test_id("open-plugins").click()
     expect(page.get_by_test_id("plugins-pane")).to_be_visible()
     page.get_by_test_id("plugins-remove").click()
     expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
+    page.get_by_role("button", name="Close Plugins").click()
+    expect(page.get_by_test_id("plugin-ask-docs")).to_have_count(0)

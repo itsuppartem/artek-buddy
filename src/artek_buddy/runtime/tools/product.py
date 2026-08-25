@@ -53,7 +53,6 @@ class ProductToolsCore:
     def _run_connected_tool(
         self, name: str, args: dict[str, Any], bound_bot_id: str | None
     ) -> dict[str, Any]:
-        _ = bound_bot_id
         store = getattr(self.runtime, "store", None)
         settings = getattr(self.runtime, "settings", None)
         if store is None or settings is None:
@@ -74,7 +73,16 @@ class ProductToolsCore:
             from artek_buddy.connections.http import HttpBroker
 
             broker = HttpBroker(key)
-        return broker.execute(name, args, provider=row.provider, remote_id=remote_id, key=key)
+        result = broker.execute(name, args, provider=row.provider, remote_id=remote_id, key=key)
+        text = str(result.get("text") or "").strip() if isinstance(result, dict) else ""
+        if isinstance(result, dict) and result.get("ok") and text:
+            self._append_bot_blocks(
+                args or {},
+                bound_bot_id,
+                [{"kind": "plugin", "name": row.display_name, "text": text[:800]}],
+                mark_sent=False,
+            )
+        return result
 
     def names(self, role: str = "lead") -> list[str]:
         return [spec.name for spec in self.specs(role)]

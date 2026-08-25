@@ -102,6 +102,8 @@ class ChatToolsMixin:
         args: dict[str, Any],
         bound_bot_id: str | None,
         blocks: list[dict[str, Any]],
+        *,
+        mark_sent: bool = True,
     ) -> dict[str, Any]:
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if self.runtime.store is None or not bot_id:
@@ -111,7 +113,8 @@ class ChatToolsMixin:
             return {"ok": False, "error": "bot not found"}
         try:
             msg = self.runtime.store.append_bot_message(bot, blocks, run_id=run_id)
-            self.runtime.mark_message_sent(run_id)
+            if mark_sent:
+                self.runtime.mark_message_sent(run_id)
             if self.runtime.events is not None:
                 event = ProductEvent(
                     id=new_id("evt"),
