@@ -1911,6 +1911,18 @@ export interface components {
             /** Expires At */
             expires_at: string;
         };
+        /** PluginBlock */
+        PluginBlock: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "plugin";
+            /** Name */
+            name: string;
+            /** Text */
+            text: string;
+        };
         /** ProgressBlock */
         ProgressBlock: {
             /**
@@ -2164,7 +2176,7 @@ export interface components {
         /** ThreadMessage */
         ThreadMessage: {
             /** Blocks */
-            blocks: (components["schemas"]["TextBlock"] | components["schemas"]["CardBlock"] | components["schemas"]["AskBlock"] | components["schemas"]["ChoiceBlock"] | components["schemas"]["ConnectBlock"] | components["schemas"]["ComputerBlock"] | components["schemas"]["MetaBlock"] | components["schemas"]["ProgressBlock"] | components["schemas"]["SubagentBlock"] | components["schemas"]["ChildBotBlock"] | components["schemas"]["FileBlock"])[];
+            blocks: (components["schemas"]["TextBlock"] | components["schemas"]["CardBlock"] | components["schemas"]["AskBlock"] | components["schemas"]["ChoiceBlock"] | components["schemas"]["ConnectBlock"] | components["schemas"]["ComputerBlock"] | components["schemas"]["PluginBlock"] | components["schemas"]["MetaBlock"] | components["schemas"]["ProgressBlock"] | components["schemas"]["SubagentBlock"] | components["schemas"]["ChildBotBlock"] | components["schemas"]["FileBlock"])[];
             /** Created At */
             created_at: string;
             /** Id */

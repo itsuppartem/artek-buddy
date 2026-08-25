@@ -96,6 +96,8 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
 
     plugin = steps_for_prompt("please e2e-plugin-docs")
     assert plugin[0].tool == "docs_read"
+    asked = steps_for_prompt("please use Docs")
+    assert asked[0].tool == "docs_read"
 
     older = steps_for_prompt("please e2e-load-earlier")
     assert len([step for step in older if step.blocks]) == E2E_OLDER_COUNT

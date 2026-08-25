@@ -2158,6 +2158,30 @@
         "title": "PairingCode",
         "type": "object"
       },
+      "PluginBlock": {
+        "properties": {
+          "kind": {
+            "const": "plugin",
+            "default": "plugin",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "text"
+        ],
+        "title": "PluginBlock",
+        "type": "object"
+      },
       "ProgressBlock": {
         "properties": {
           "kind": {
@@ -2941,6 +2965,7 @@
                   "connect": "#/components/schemas/ConnectBlock",
                   "file": "#/components/schemas/FileBlock",
                   "meta": "#/components/schemas/MetaBlock",
+                  "plugin": "#/components/schemas/PluginBlock",
                   "progress": "#/components/schemas/ProgressBlock",
                   "subagent": "#/components/schemas/SubagentBlock",
                   "text": "#/components/schemas/TextBlock"
@@ -2965,6 +2990,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/ComputerBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/PluginBlock"
                 },
                 {
                   "$ref": "#/components/schemas/MetaBlock"

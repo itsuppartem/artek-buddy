@@ -189,7 +189,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             scripted_tool("message_bot", bot=dest_name, text=question),
             scripted_finish("I asked them."),
         ]
-    if "e2e-plugin-docs" in hay:
+    if "e2e-plugin-docs" in hay or "please use docs" in hay:
         return [scripted_tool("docs_read"), scripted_finish("")]
     if "e2e-hide-draft" in hay:
         return [

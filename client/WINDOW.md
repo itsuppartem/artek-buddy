@@ -18,8 +18,8 @@ flowchart LR
 │ Search inbox   │ Computer · Settings            │ Settings Close  │
 │ New bot        │ attention plate + Dismiss      │ Preview · view  │
 │ bot rows       │ thread / empty / create        │ Open / Take /   │
-│ Archived       │ composer strip  Attach Send    │ Rel             │
-│ Plugins        │ Stop while a run is live       │ Memory Routines │
+│ Archived       │ composer strip  chips Attach   │ Rel             │
+│ Plugins        │ Send · Stop while a run is live│ Memory Routines │
 │ You → Models   │                                │                 │
 └────────────────┴────────────────────────────────┴─────────────────┘
 ```
@@ -63,6 +63,7 @@ SSE. Blocks in a message:
 | consent | Allow once / Always / Deny (browse, page, owner_*) |
 | file | name, media preview, Download |
 | computer | reason + **Open computer** while `waiting_takeover`; after Release the same run resumes |
+| plugin | connected app name + result (`plugin-card`) |
 | subagent | `#n name`, status, Stop while running, Restart after |
 | child_bot | click opens that chat (disabled if deleted/archived). After `message_bot`, one card is the other inbox bot plus the question |
 
@@ -72,7 +73,7 @@ Ask another inbox bot (`message_bot` / `POST /v1/bots/{id}/asks`): this chat sho
 
 The open chat uses `/v1/threads/{id}/events` for the thread. Inbox banners use one `/v1/events` stream for every bot, including the open chat, so a switch cannot drop `run.completed`. Duplicate event ids are ignored. Chrome HTTP/1.1 allows six connections per host; one SSE per leftover chat would starve Create and pair.
 
-Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `open-computer`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`.
+Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `open-computer`, `plugin-card`, `subagent-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`. After an app is connected, a chip (`plugin-ask-{slug}`) sits above Message. Click fills `please use {name}` and does not send. No key or no connected apps: no chip row.
 
 Errors: host down shows a reconnect banner (`reconnect-banner`, Retry connection) under the thread header, not only a red card. Send while the host is unreachable parks the user bubble and an outbound queue for that chat (survives switch, Stop, and reload; no token in storage). Auth errors still re-pair and do not queue. After health is back the queue flushes in order; that bubble keeps `offline-sent-caption` («Sent while offline ·» local time). A later online send has no caption. Action Dismiss.
 
@@ -111,7 +112,7 @@ Host-wide connected apps. Open from **Plugins** (`open-plugins`). Works with an 
 └─────────────┘
 ```
 
-Without a key the pane says to paste one. Save is disabled while the field is empty. After Save the field is gone: Key saved + last four + Replace / Remove. GET never returns the full key. Search filters the catalog. Connect on a no-auth app marks it connected. Connect on an app that needs a browser opens that tab; Finish marks it connected. Disconnect removes its tools on the next turn. The page never receives a previously saved full key.
+Without a key the pane says to paste one. Save is disabled while the field is empty. After Save the field is gone: Key saved + last four + Replace / Remove. GET never returns the full key. Search filters the catalog. Connect on a no-auth app marks it connected. Connect on an app that needs a browser opens that tab; Finish marks it connected. Disconnect removes its tools on the next turn. A connected app also puts a chip above Message; click fills `please use {name}` (owner reviews, then Send). That turn shows a `plugin-card` with the app name and the result. Disconnect or Remove hides the chip. The page never receives a previously saved full key.
 
 Copy: Plugins, Plugins key, Save, Replace, Remove, Search apps, Connect, Disconnect, Finish, Connected, Key saved, Paste a key to connect apps.
 

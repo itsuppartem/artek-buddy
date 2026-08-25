@@ -115,6 +115,7 @@ import { ComputerPane } from "./shell/ComputerPane";
 import { CreateBotForm } from "./shell/CreateBotForm";
 import { MessageView, replyExcerpt } from "./shell/MessageView";
 import { ModelsPane } from "./shell/ModelsPane";
+import { PluginsAsk } from "./shell/PluginsAsk";
 import { PluginsPane } from "./shell/PluginsPane";
 
 type Panel = "computer" | "settings" | "create" | "models" | "plugins" | null;
@@ -136,6 +137,7 @@ export function ShellPage() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
+  const [pluginApps, setPluginApps] = useState<{ slug: string; name: string }[]>([]);
   const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
   const panelAfterSettings = useRef<"computer" | null>(null);
   const panelAfterCreate = useRef<"computer" | null>(null);
@@ -476,6 +478,28 @@ export function ShellPage() {
   function openPlugins() {
     setPanel("plugins");
   }
+
+  async function refreshPlugins() {
+    try {
+      const status = await api.connections.status();
+      if (!status.configured) {
+        setPluginApps([]);
+        return;
+      }
+      const listed = await api.connections.list();
+      setPluginApps(
+        (listed.connections ?? [])
+          .filter((row) => row.status === "connected")
+          .map((row) => ({ slug: row.provider, name: row.displayName })),
+      );
+    } catch {
+      setPluginApps([]);
+    }
+  }
+
+  useEffect(() => {
+    void refreshPlugins();
+  }, []);
 
   function persistQueue(next: QueuedSend[]): QueuedSend[] {
     try {
@@ -1730,6 +1754,11 @@ export function ShellPage() {
               </button>
             </div>
           ) : null}
+          <PluginsAsk
+            apps={pluginApps}
+            disabled={!active}
+            onAsk={(name) => writeDraft(`please use ${name}`)}
+          />
           {pendingFiles.length ? (
             <div className="mb-2 flex flex-wrap items-end gap-2">
               {pendingFiles.map((item) => (
@@ -1823,7 +1852,17 @@ export function ShellPage() {
       >
         {panel && (active || panel === "create" || panel === "models" || panel === "plugins") ? (
           <div className="ab-scroll h-full w-[360px] overflow-y-auto px-4 py-3">
-            {panel === "plugins" ? <PluginsPane onClose={() => setPanel(null)} /> : null}
+            {panel === "plugins" ? (
+              <PluginsPane
+                onClose={() => {
+                  setPanel(null);
+                  void refreshPlugins();
+                }}
+                onAppsChange={() => {
+                  void refreshPlugins();
+                }}
+              />
+            ) : null}
             {panel === "models" ? (
               <ModelsPane credentials={modelState} onChange={setModelState} onClose={closeModels} />
             ) : null}

@@ -65,11 +65,21 @@ def test_save_key_catalog_connect_tool_revoke_never_echoes(client, auth_header) 
     sent = client.post(
         f"/v1/threads/{bot['id']}/messages",
         headers=auth_header,
-        json={"text": "please e2e-plugin-docs"},
+        json={"text": "please use Docs"},
     )
     assert sent.status_code == 200
     answered = wait_thread_has(client, auth_header, bot["id"], "Subotica")
-    assert "please e2e-plugin-docs" in json.dumps(answered)
+    blob = json.dumps(answered)
+    assert "please use Docs" in blob
+    plugin_blocks = [
+        block
+        for message in answered.get("messages") or []
+        for block in message.get("blocks") or []
+        if block.get("kind") == "plugin"
+    ]
+    assert plugin_blocks
+    assert plugin_blocks[0]["name"] == "Docs"
+    assert "Subotica" in plugin_blocks[0]["text"]
 
     revoked = client.post(
         f"/v1/connections/{connection['id']}/revoke",
