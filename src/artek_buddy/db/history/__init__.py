@@ -1,6 +1,7 @@
 from artek_buddy.db.history.asks import AsksMixin
 from artek_buddy.db.history.bots import BotsMixin
 from artek_buddy.db.history.computer import ComputerMixin
+from artek_buddy.db.history.connections import ConnectionsMixin
 from artek_buddy.db.history.consents import ConsentsMixin
 from artek_buddy.db.history.devices import DevicesMixin
 from artek_buddy.db.history.inbox import InboxMixin
@@ -29,5 +30,6 @@ class HistoryStore(
     MemoryMixin,
     ComputerMixin,
     ModelsMixin,
+    ConnectionsMixin,
 ):
     pass

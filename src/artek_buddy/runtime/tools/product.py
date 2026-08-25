@@ -25,9 +25,56 @@ class ProductToolsCore:
         self.runtime = runtime
 
     def specs(self, role: str = "lead") -> list[ToolSpec]:
+        extra = self._connected_specs()
         if role == "subagent":
-            return [spec for spec in TOOL_SPECS if not spec.lead_only]
-        return list(TOOL_SPECS)
+            return [spec for spec in TOOL_SPECS if not spec.lead_only] + extra
+        return list(TOOL_SPECS) + extra
+
+    def _connected_specs(self) -> list[ToolSpec]:
+        store = getattr(self.runtime, "store", None)
+        settings = getattr(self.runtime, "settings", None)
+        if store is None or settings is None or not store.raw_connection_key():
+            return []
+        slugs = list(store.connected_slugs())
+        if not slugs:
+            return []
+        from artek_buddy.runtime.factory import runtime_kind
+
+        if runtime_kind(settings) == "scripted":
+            from artek_buddy.connections.broker import fake_broker
+
+            broker = fake_broker()
+            broker.hydrate(slugs)
+            return broker.tool_specs(slugs)
+        from artek_buddy.connections.http import HttpBroker
+
+        return HttpBroker(store.raw_connection_key() or "").tool_specs(slugs)
+
+    def _run_connected_tool(
+        self, name: str, args: dict[str, Any], bound_bot_id: str | None
+    ) -> dict[str, Any]:
+        _ = bound_bot_id
+        store = getattr(self.runtime, "store", None)
+        settings = getattr(self.runtime, "settings", None)
+        if store is None or settings is None:
+            return {"ok": False, "error": "app is not connected"}
+        row = store.connection_for_tool(name)
+        if row is None:
+            return {"ok": False, "error": "app is not connected"}
+        remote_id = store.connection_remote_id(row.id)
+        key = store.raw_connection_key() or ""
+        from artek_buddy.runtime.factory import runtime_kind
+
+        if runtime_kind(settings) == "scripted":
+            from artek_buddy.connections.broker import fake_broker
+
+            broker = fake_broker()
+            broker.hydrate([row.provider])
+        else:
+            from artek_buddy.connections.http import HttpBroker
+
+            broker = HttpBroker(key)
+        return broker.execute(name, args, provider=row.provider, remote_id=remote_id, key=key)
 
     def names(self, role: str = "lead") -> list[str]:
         return [spec.name for spec in self.specs(role)]
@@ -141,7 +188,7 @@ class ProductToolsCore:
         try:
             handler = getattr(self, f"_exec_{name}", None)
             if handler is None:
-                result = {"ok": False, "error": f"unknown tool: {name}"}
+                result = self._run_connected_tool(name, args or {}, bound_bot_id)
                 return result
             result = handler(args or {}, bound_bot_id)
             if not isinstance(result, dict):

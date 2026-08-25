@@ -112,8 +112,9 @@ import { ComputerPane } from "./shell/ComputerPane";
 import { CreateBotForm } from "./shell/CreateBotForm";
 import { MessageView, replyExcerpt } from "./shell/MessageView";
 import { ModelsPane } from "./shell/ModelsPane";
+import { PluginsPane } from "./shell/PluginsPane";
 
-type Panel = "computer" | "settings" | "create" | "models" | null;
+type Panel = "computer" | "settings" | "create" | "models" | "plugins" | null;
 
 export function ShellPage() {
   const { botId } = useParams();
@@ -447,6 +448,10 @@ export function ShellPage() {
   function closeModels() {
     setPanel(panelAfterModels.current);
     panelAfterModels.current = null;
+  }
+
+  function openPlugins() {
+    setPanel("plugins");
   }
 
   function persistQueue(next: QueuedSend[]): QueuedSend[] {
@@ -1383,6 +1388,22 @@ export function ShellPage() {
         </div>
         <button
           type="button"
+          data-testid="open-plugins"
+          aria-label="Plugins"
+          onClick={() => openPlugins()}
+          className={`flex w-full items-center gap-[11px] border-t px-[14px] py-3.5 text-left ${
+            panel === "plugins" ? "border-tan bg-plate" : "border-hairline hover:bg-raised"
+          }`}
+        >
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-raised text-[12px] text-mute">
+            P
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[14px] text-paper">Plugins</span>
+          </span>
+        </button>
+        <button
+          type="button"
           data-testid="open-models"
           data-models-ready={needsModel ? "false" : "true"}
           aria-label="Models"
@@ -1771,13 +1792,14 @@ export function ShellPage() {
 
       <aside
         className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out ${
-          panel && (active || panel === "create" || panel === "models")
+          panel && (active || panel === "create" || panel === "models" || panel === "plugins")
             ? "w-[360px] border-l border-hairline"
             : "w-0"
         }`}
       >
-        {panel && (active || panel === "create" || panel === "models") ? (
+        {panel && (active || panel === "create" || panel === "models" || panel === "plugins") ? (
           <div className="ab-scroll h-full w-[360px] overflow-y-auto px-4 py-3">
+            {panel === "plugins" ? <PluginsPane onClose={() => setPanel(null)} /> : null}
             {panel === "models" ? (
               <ModelsPane credentials={modelState} onChange={setModelState} onClose={closeModels} />
             ) : null}

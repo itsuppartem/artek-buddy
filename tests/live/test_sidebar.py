@@ -30,8 +30,11 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
     page.get_by_role("button", name="New bot").click()
     expect(page.get_by_placeholder("Name this bot")).to_be_visible()
 
-    expect(page.get_by_text("Plugins", exact=True)).to_have_count(0)
+    page.get_by_test_id("open-plugins").click()
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible()
+    page.get_by_role("button", name="Close Plugins").click()
     page.get_by_text("You", exact=True).click()
+    expect(page.get_by_test_id("models-pane")).to_be_visible()
     expect(page.get_by_text("Bot Settings")).to_have_count(0)
 
     create_named_bot(page, alpha, title=f"notes about cats {token}")

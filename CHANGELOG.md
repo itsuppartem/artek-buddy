@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Plugins pane: paste a host key, search the catalog, connect or disconnect an app. Only connected apps become tools on the next turn. The window never sees a saved full key.
 - A bot can ask another inbox bot by name or id. This chat shows the ask and a card to that chat. The other bot works in its own thread; only its last message comes back so this bot can answer you. Missing, archived, deleted, empty, and self-asks fail closed.
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
@@ -14,7 +15,7 @@
 - After a turn that saved a section, the host rewrites that section (default model when a key is set) so a newer fact replaces a contradiction instead of stacking both. The book block in the model prompt is 256 KiB.
 - Send while the host is down parks the user bubble and flushes it when health returns, with a «sent while offline» caption. A reconnect banner replaces the red host-error card.
 - Take control auto-releases after two minutes with no mouse or key. The 15-minute hard lease stays as a cap. A quiet computer sleeps after 15 minutes; an open pane and the 60s heartbeat do not keep it warm. A parked `waiting_takeover` no longer pins the box.
-- Window identity: Cavalier marks, ink/plate/tan tokens, Atkinson + Fraunces + Azeret Mono, labeled New bot / Computer / Settings / Send / Stop. Plugins stay out of the chrome. Send is disabled when empty.
+- Window identity: Cavalier marks, ink/plate/tan tokens, Atkinson + Fraunces + Azeret Mono, labeled New bot / Computer / Settings / Send / Stop. Send is disabled when empty.
 - Release scans the host image digest (HIGH and CRITICAL) before tagging `latest`, refuses `--clobber` on GitHub Release assets, and does not prune old Releases. Client CycloneDX SBOM is the packaged `.deb`.
 - Host FastAPI/Starlette pins no longer need runtime pip-audit ignores. Remaining ignores require a reason and expiry.
 - Host and worker serialize `apply_migrations` with a Postgres advisory lock and store a sha256 per applied file.

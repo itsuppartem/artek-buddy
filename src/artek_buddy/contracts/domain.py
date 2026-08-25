@@ -224,6 +224,57 @@ class ConnectionCatalogItem(BaseModel):
     no_auth: bool
 
 
+class ConnectionCatalogInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    q: str | None = None
+
+
+class ConnectionCatalog(BaseModel):
+    items: list[ConnectionCatalogItem]
+
+
+class ConnectionList(BaseModel):
+    connections: list[Connection]
+
+
+class BeginConnectionInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    provider: str
+    redirect_url: str
+
+
+class BeginConnectionResult(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    connection: Connection
+    authorization_url: str | None = None
+
+
+class CompleteConnectionInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+
+class ConnectionIdInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    connection_id: Id
+
+
+class ConnectionKeyInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    api_key: str = ""
+
+
+class ConnectionKeyStatus(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    configured: bool
+    last_four: str | None = None
+
+
 class CapabilityInstall(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
