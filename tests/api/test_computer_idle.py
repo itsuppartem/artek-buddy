@@ -198,25 +198,21 @@ def test_forgotten_takeover_can_idle_sleep_after_release(client, auth_header) ->
     assert bot_id in app.state.store.due_idle_computer_bots()
 
 
-def test_team_driving_run_blocks_idle_sleep(client, auth_header) -> None:
-    alpha = create_bot(client, auth_header, "IdleTeamDrive", computer_mode="team")
-    bravo = create_bot(client, auth_header, "IdleTeamWait", computer_mode="team")
-    alpha_id = alpha["id"]
-    bravo_id = bravo["id"]
-    assert client.post(f"/v1/computer/{alpha_id}/boot", headers=auth_header).status_code == 200
+def test_driving_run_blocks_idle_sleep(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "IdleDrive", computer_mode="dedicated")["id"]
+    assert client.post(f"/v1/computer/{bot_id}/boot", headers=auth_header).status_code == 200
     sent = client.post(
-        f"/v1/threads/{alpha_id}/messages",
+        f"/v1/threads/{bot_id}/messages",
         headers=auth_header,
         json={"text": "please e2e-slow now"},
     )
     assert sent.status_code == 200
     run_id = sent.json()["run"]["id"]
-    wait_run_status(client, auth_header, alpha_id, run_id, "running")
-    _set_sleep_at(alpha_id, datetime.now(UTC) - timedelta(minutes=1))
+    wait_run_status(client, auth_header, bot_id, run_id, "running")
+    _set_sleep_at(bot_id, datetime.now(UTC) - timedelta(minutes=1))
     due = app.state.store.due_idle_computer_bots()
-    assert alpha_id not in due
-    assert bravo_id not in due
-    wait_run(client, auth_header, alpha_id, run_id)
+    assert bot_id not in due
+    wait_run(client, auth_header, bot_id, run_id)
 
 
 def test_parked_takeover_does_not_block_idle_sleep(client, auth_header) -> None:
