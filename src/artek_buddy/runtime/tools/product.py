@@ -80,6 +80,7 @@ class ProductToolsCore:
                 args or {},
                 bound_bot_id,
                 [{"kind": "plugin", "name": row.display_name, "text": text[:800]}],
+                mark_sent=False,
             )
         return result
 
