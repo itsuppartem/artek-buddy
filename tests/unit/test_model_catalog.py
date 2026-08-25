@@ -11,6 +11,7 @@ from artek_buddy.model_catalog import (
     fetch_models,
     is_placeholder_key,
     last_four,
+    preferred_model,
     provider_label,
     refused_key_message,
     unknown_provider,
@@ -33,6 +34,9 @@ def test_provider_labels_and_last_four() -> None:
     assert not is_placeholder_key("crsr_live")
     assert unknown_provider("nope")
     assert "Open Models" in NEEDS_MODEL_TEXT
+    assert preferred_model(["composer-2", "grok-4.6", "gpt-5.4"]) == "grok-4.6"
+    assert preferred_model(["scripted"]) == "scripted"
+    assert preferred_model([]) is None
 
 
 @pytest.mark.asyncio
