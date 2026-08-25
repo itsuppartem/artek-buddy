@@ -57,6 +57,16 @@ export function overlayPointerEvents(controlHolder: string | null | undefined): 
   return controlHolder === "user" ? "auto" : "none";
 }
 
+export const OWNER_ACTIVITY_GAP_MS = 5_000;
+
+export function shouldReportOwnerActivity(
+  lastMs: number,
+  nowMs: number,
+  minGapMs = OWNER_ACTIVITY_GAP_MS,
+): boolean {
+  return nowMs - lastMs >= minGapMs;
+}
+
 export function shouldTakeControl(source: "preview" | "button"): boolean {
   return source === "button";
 }

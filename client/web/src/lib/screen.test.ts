@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { embeddableScreenUrl, shouldAutoBoot, shouldTakeControl } from "./screen";
+import {
+  embeddableScreenUrl,
+  shouldAutoBoot,
+  shouldReportOwnerActivity,
+  shouldTakeControl,
+} from "./screen";
 
 describe("embeddableScreenUrl", () => {
   it("only embeds the host /novnc/ path", () => {
@@ -20,5 +25,13 @@ describe("shouldAutoBoot", () => {
   it("does not boot again while already booting or in error", () => {
     expect(shouldAutoBoot("booting", null, false)).toBe(false);
     expect(shouldAutoBoot("error", null, false)).toBe(false);
+  });
+});
+
+describe("shouldReportOwnerActivity", () => {
+  it("throttles overlay motion so a heartbeat-like poll is not implied", () => {
+    expect(shouldReportOwnerActivity(1_000, 1_000)).toBe(false);
+    expect(shouldReportOwnerActivity(1_000, 5_999)).toBe(false);
+    expect(shouldReportOwnerActivity(1_000, 6_000)).toBe(true);
   });
 });

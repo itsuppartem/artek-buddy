@@ -83,6 +83,11 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
             retry = datetime.now(UTC) + timedelta(seconds=RETRY_SECONDS)
             store.reschedule_routine(routine.id, isoformat_utc(retry))
             log.warning("routine wake failed id=%s status=%s", routine.id, status)
+    idle_seconds = int(os.environ.get("COMPUTER_TAKEOVER_IDLE_SECONDS", "120") or "120")
+    try:
+        store.expire_idle_takeovers(idle_seconds)
+    except Exception:
+        log.exception("idle takeover expire failed")
     for bot_id in store.due_idle_computer_bots():
         status = stop_computer(base, token, bot_id)
         if status in {200, 201}:
