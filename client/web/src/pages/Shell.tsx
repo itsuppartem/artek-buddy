@@ -60,6 +60,7 @@ import {
 import {
   embeddableScreenUrl,
   screenFrameLooksFailed,
+  shouldFetchScreenUrl,
   shouldRefreshScreenUrl,
   shouldReplaceScreenUrl,
   shouldTakeControl,
@@ -918,6 +919,12 @@ export function ShellPage() {
     const timer = window.setInterval(ping, ms);
     return () => window.clearInterval(timer);
   }, [panel, computerOpen, active?.id, computer?.state, computer?.controlHolder]);
+
+  useEffect(() => {
+    if (!active) return;
+    if (!shouldFetchScreenUrl(panel === "computer", computerOpen, computer?.state)) return;
+    void ensureScreenUrl(active.id, true);
+  }, [panel, computerOpen, active?.id, computer?.state]);
 
   useEffect(() => {
     if (!active || computer?.state !== "running" || !screenError) return;
