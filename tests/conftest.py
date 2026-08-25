@@ -13,6 +13,7 @@ if os.environ.get("ARTEK_LIVE") != "1":
     os.environ["SANDBOX_PROVIDER"] = "fake"
     os.environ["CONSENT_AUTO"] = "ask"
     os.environ["CURSOR_API_KEY"] = ""
+    os.environ["COMPOSIO_API_KEY"] = ""
     os.environ["CURSOR_MODEL"] = "scripted"
     os.environ["DATABASE_URL"] = os.environ.get(
         "ARTEK_TEST_DATABASE_URL",

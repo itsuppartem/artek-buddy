@@ -46,11 +46,18 @@ async def _cancel_cursor_run(run: Any) -> None:
         return
 
 
-def build_model(settings: Settings, model_id: str | None = None) -> ModelSelection:
+def build_model(
+    settings: Settings,
+    model_id: str | None = None,
+    effort: str | None = None,
+    fast: bool | None = None,
+) -> ModelSelection:
     params: list[ModelParameterValue] = []
-    if settings.cursor_model_effort:
-        params.append(ModelParameterValue(id="effort", value=settings.cursor_model_effort))
-    if settings.cursor_model_fast:
+    effort_value = effort if effort else settings.cursor_model_effort
+    use_fast = settings.cursor_model_fast if fast is None else fast
+    if effort_value:
+        params.append(ModelParameterValue(id="effort", value=effort_value))
+    if use_fast:
         params.append(ModelParameterValue(id="fast", value="true"))
     return ModelSelection(id=model_id or settings.cursor_model, params=params)
 
@@ -71,14 +78,17 @@ class CursorRuntime(RuntimeBase):
 
     def model_selection(self) -> ModelSelection:
         model_id = self.settings.cursor_model
+        effort = None
+        fast = None
         if self.store is not None:
             try:
                 default = self.store.get_default_model()
+                effort, fast = self.store.get_model_params()
             except Exception:
                 default = None
             if default and default[0] == "cursor" and default[1]:
                 model_id = default[1]
-        return build_model(self.settings, model_id)
+        return build_model(self.settings, model_id, effort=effort, fast=fast)
 
     @property
     def model(self) -> ModelSelection:

@@ -2066,6 +2066,28 @@
             "title": "Credentials",
             "type": "array"
           },
+          "default_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Effort"
+          },
+          "default_fast": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Fast"
+          },
           "default_model": {
             "anyOf": [
               {
@@ -2542,6 +2564,28 @@
       },
       "SetDefaultModelInput": {
         "properties": {
+          "effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort"
+          },
+          "fast": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fast"
+          },
           "model": {
             "title": "Model",
             "type": "string"
