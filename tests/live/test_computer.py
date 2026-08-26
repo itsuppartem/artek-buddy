@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import re
+
 import pytest
 from playwright.sync_api import Page, expect
 from tests.live.helpers import (
@@ -255,6 +258,60 @@ def test_settings_stop_shows_sleeping_on_pane(page: Page, client_url: str, host_
     )
     expect(page.get_by_text("Sleeping • Click to start")).to_be_visible()
     expect(page.get_by_text("Offline • Click to start")).to_have_count(0)
+
+
+def test_running_pane_embeds_novnc_without_clicking_start(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("View")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    screen = (
+        "/novnc/YWJj/6080/view/9999999999999."
+        "abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=true"
+    )
+
+    def computer_get(route):
+        if route.request.method != "GET":
+            route.continue_()
+            return
+        parts = route.request.url.split("?", 1)[0].rstrip("/").split("/")
+        if parts[-1] == "screen":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps({"url": screen}),
+            )
+            return
+        if len(parts) >= 2 and parts[-2] == "computer":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(
+                    {
+                        "bot_id": "bot_ui_preview",
+                        "mode": "dedicated",
+                        "kind": "docker",
+                        "state": "running",
+                        "control_holder": "none",
+                        "screen_available": True,
+                        "home_revision": None,
+                        "busy_bot_name": None,
+                    }
+                ),
+            )
+            return
+        route.continue_()
+
+    page.route("**/v1/computer/**", computer_get)
+    open_computer_pane(page)
+    frame = page.locator("iframe[data-testid='computer-preview']")
+    expect(frame).to_be_visible(timeout=8_000)
+    expect(frame).to_have_attribute("src", re.compile(r"^/novnc/"))
+    expect(page.get_by_test_id("computer-running")).to_have_count(0)
+    expect(page.get_by_text("Preview · view only")).to_be_visible()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "running")
+    expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
 
 
 def test_bot_open_path_starts_computer_without_click(

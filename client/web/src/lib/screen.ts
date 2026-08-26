@@ -71,6 +71,15 @@ export function shouldTakeControl(source: "preview" | "button"): boolean {
   return source === "button";
 }
 
+export function shouldFetchScreenUrl(
+  paneOpen: boolean,
+  overlayOpen: boolean,
+  state: string | null | undefined,
+): boolean {
+  if (!paneOpen && !overlayOpen) return false;
+  return state === "running" || state === "booting";
+}
+
 export function shouldAutoBoot(
   state: string | null | undefined,
   screenUrl: string | null | undefined,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   embeddableScreenUrl,
   shouldAutoBoot,
+  shouldFetchScreenUrl,
   shouldReportOwnerActivity,
   shouldTakeControl,
 } from "./screen";
@@ -18,6 +19,15 @@ describe("shouldTakeControl", () => {
   it("boots from the button, not from a preview click", () => {
     expect(shouldTakeControl("button")).toBe(true);
     expect(shouldTakeControl("preview")).toBe(false);
+  });
+});
+
+describe("shouldFetchScreenUrl", () => {
+  it("loads the screen when the pane is open on a running box", () => {
+    expect(shouldFetchScreenUrl(true, false, "running")).toBe(true);
+    expect(shouldFetchScreenUrl(false, true, "booting")).toBe(true);
+    expect(shouldFetchScreenUrl(false, false, "running")).toBe(false);
+    expect(shouldFetchScreenUrl(true, false, "stopped")).toBe(false);
   });
 });
 
