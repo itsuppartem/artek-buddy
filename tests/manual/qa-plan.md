@@ -2,7 +2,7 @@
 
 Issue: [#220](https://github.com/itsuppartem/artek-buddy/issues/220). Daily tracker: [#174](https://github.com/itsuppartem/artek-buddy/issues/174). Pad / keys: [#218](https://github.com/itsuppartem/artek-buddy/issues/218) / [PR #219](https://github.com/itsuppartem/artek-buddy/pull/219).
 
-Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, do **2, 3, 5, 7, 11, 12** first (everything that was not on `main` and is visible).
+Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, do **2, 3, 5, 7, 11, 12, 25, 26, 27, 28, 29** first.
 
 This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packaged `.deb` `--serve`, `ui_web` = host page at 375×812). Do not treat a green check as a substitute for this list.
 
@@ -170,7 +170,31 @@ Team:
 | --- | --- | --- |
 | Second bot on the same desk sees `{name} is using the computer`; Take / Restart / Stop / Reset are grey | [ ] | [ ] |
 
-Phone Take control on the current `develop` page is still a desktop overlay. Pad / keys / Cyrillic are §12 (PR #219 host).
+Phone Take control on the current `develop` page is still a desktop overlay. Pad / keys / Cyrillic are §12. **You still owe §7a on both surfaces.**
+
+
+## 7a. Hands on the guest (do not skip)
+
+A preview is not enough. You must **drive** the box and **read** what opened.
+
+On **Deb**: Take control, real mouse and keyboard.
+
+On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; tap clicks at the dot). Then Keyboard.
+
+| Check | Deb | Phone |
+| --- | :---: | :---: |
+| After Allow on «открой https://example.com», the **guest** shows Example Domain (heading / title), not a black tile and not only a chat card | [ ] | [ ] |
+| You can **read** the address bar or tab title. It is example.com (or the site you allowed), not a leftover Google / Files window | [ ] | [ ] |
+| Take control: pointer moves in the guest. A click lands where you aimed (address bar, a link, a button) | [ ] | [ ] |
+| Phone: drag on the pad moves the beige dot across the 1280×800 picture; it does not jump under the finger | — | [ ] |
+| Type `hello` into a guest field (address bar or input). The letters appear **in the guest**, not only in our Message box | [ ] | [ ] |
+| Phone Keyboard: Esc / Tab / Enter / Bksp work in the guest. Russian layout types Cyrillic into that same field | — | [ ] |
+| Scroll (wheel on Deb, two-finger on Phone) moves the guest page | [ ] | [ ] |
+| Right-click (Deb) or two-finger tap (Phone) opens a guest context menu | [ ] | [ ] |
+| fluxbox **Files** / Browser / Terminal open a real window you can see | [ ] | [ ] |
+| Release: overlay is view-only again; Message and Stop work. Guest stays on the same page | [ ] | [ ] |
+
+If Chrome emulation cannot drag the pad, say **fail / blocked**, not skip. This section is why the phone desk exists.
 
 ---
 
@@ -223,7 +247,7 @@ Home Screen, phone width (375×812). Also confirm the wide Deb window does **not
 | Bottom **Chats / Chat / Desktop**, targets about 44px. Top notch / safe area present; **no** second empty belt under the nav | — | [ ] |
 | Inbox: chats sit between Search and Plugins / Models, not a black hole | — | [ ] |
 | Create / Models / Plugins open the Desktop tab | — | [ ] |
-| Close on the Desktop pane and overlay ✕ → **Chat** tab | — | [ ] |
+| Close on the Desktop pane and overlay ✕ → **Chat** tab (blank Desktop is a fail — §29 / #226) | — | [ ] |
 | Share → Add to Home Screen: hint at the **top**, not over Models / nav. Got it hides it | — | [ ] |
 | Turn on alerts — only from the home-screen icon, and only while the app is open. No background | — | [ ] |
 | Wide window (Deb 1280×720) stays three-column, not «phone» | [ ] | — |
@@ -398,6 +422,100 @@ The computer pane is screen, memory, and routines — not a second file list.
 
 ---
 
+## 25. Generate a file and send it
+
+Owner language, in Demo (model already chosen):
+
+«Сгенерируй текстовый файл notes.txt с тремя строками и пришли его мне.»
+
+Or, on the scripted host: `please e2e-send-file`.
+
+| Check | Deb | Phone |
+| --- | :---: | :---: |
+| Thread shows a **file-card** with the name (e.g. `notes.txt`), not a raw dump of the bytes | [ ] | [ ] |
+| Download works. Deb: system Save dialog, default Downloads / Загрузки; Cancel writes nothing. Phone: browser / share sheet, **not** the Linux home | [ ] | [ ] |
+| Card stays after Download. A second Download does not duplicate the Pi copy | [ ] | [ ] |
+| Deleting **this chat** removes that chat’s inbox copy; other bots and a Team home stay | [ ] | [ ] |
+
+---
+
+## 26. Generate a picture (and media)
+
+«Нарисуй / сгенерируй картинку: лиса за компьютером.» Wait for the turn.
+
+Scripted: `please e2e-send-image`. Also try a video or audio file if you have one.
+
+| Check | Deb | Phone |
+| --- | :---: | :---: |
+| While it works: a **Generating** state, not a hung empty bubble | [ ] | [ ] |
+| Success: **file-card** with a visible **file-preview** (the picture), not only a Download row | [ ] | [ ] |
+| One picture → one card. No second ghost card | [ ] | [ ] |
+| Failure (bad prompt / host error): an error in the thread, not a spinner that never ends | [ ] | [ ] |
+| **Stop** during generate → Stopped, and a late complete does **not** still drop a card | [ ] | [ ] |
+| Same for a short video / audio if you send one: preview in the card | [ ] | [ ] |
+
+---
+
+## 27. Attach: Ctrl+V, Plus, drop
+
+Do this on **both** surfaces. Phone has no Linux file-manager paste.
+
+| Check | Deb | Phone |
+| --- | :---: | :---: |
+| Ctrl+V (Deb) or paste (Phone, if the OS allows) a **screenshot** → chip `screenshot-1.png` (or the file name) + preview. Composer text stays empty | [ ] | [ ] |
+| Paste ordinary text → **no** chip, the text lands in Message | [ ] | [ ] |
+| Plus / Attach picks a file → chip. Image / video / audio show a preview before Send | [ ] | [ ] |
+| Drop a file onto Message attaches it (Deb) | [ ] | — |
+| Copy a **file** in the Linux file manager and paste → the file, not the `file://` path as text (Deb) | [ ] | — |
+| Send → chip gone. A later send does **not** bring the chip back | [ ] | [ ] |
+
+`ui` already covers paste / drop / Plus on the packaged window. `ui_web` does not yet — that is #230.
+
+---
+
+## 28. Save feedback (no silent Save)
+
+After you press Save, the window must show the write landed. Today Settings flashes Saving… and snaps back to the read-only sheet; Memory and Routine stay on Save. Plugins already says Key saved. Models key Save becomes Connected.
+
+| Check | Deb | Phone |
+| --- | :---: | :---: |
+| Settings: change name or instructions → Save. You see **Saved** (or a check) for a moment, not only Saving… then a mute form | [ ] | [ ] |
+| Memory New / Edit → Save. Same Saved mark. The row is in the list | [ ] | [ ] |
+| Routine New → Save. Same Saved mark. Invalid cron still disables Save (no fake success) | [ ] | [ ] |
+| Models Reasoning / Fast → Save still writes the Using line; that line counts as feedback for that row | [ ] | [ ] |
+| A failed Save keeps the button as Save and shows the error under the row | [ ] | [ ] |
+
+Product issue: #229.
+
+---
+
+## 29. Phone Computer must not blank the chat
+
+This is the hole we hit on the 375×812 pass (#226). Deb is three-column; it does not use this tab.
+
+From **inside a chat** on Phone:
+
+| Check | Deb | Phone |
+| --- | :---: | :---: |
+| Computer (thread header) or Desktop tab opens the computer pane. The chat is still there if you go back | — | [ ] |
+| Close on the computer pane → **Chat** tab, thread visible, not a black / empty Desktop | — | [ ] |
+| Overlay ✕ on Models / Plugins / Create → **Chat** tab with the thread, not a blank Desktop | — | [ ] |
+| Open Computer, Close, open again — pane comes back, no stuck empty shell | — | [ ] |
+
+`nextPhoneTab("close-desk")` is already `chat`. If the screen is blank, the window is not using that path.
+
+---
+
+## 30. Ask cards, Reply, Load earlier
+
+| Check | Deb | Phone |
+| --- | :---: | :---: |
+| Ask card (options or free text) waits. Answering continues the turn | [ ] | [ ] |
+| Right-click Reply (Deb) quotes in the next user bubble. Cancel drops the quote | [ ] | — |
+| Load earlier pulls older messages. If you were pinned to the bottom, new cards stay in view | [ ] | [ ] |
+
+---
+
 ## Do not test by hand
 
 Already in `develop`, not visible on screen:
@@ -418,14 +536,18 @@ If time is short, in this order:
 1. **§2 Models**
 2. **§3 Memory book**
 3. **§5 Bot asks bot**
-4. **§7 Desktop**
-5. **§11 Phone chrome**
-6. **§12 Pad and Cyrillic** (PR #219 host only)
+4. **§7 Desktop** + **§7a Hands on the guest**
+5. **§11 Phone chrome** + **§29 Computer must not blank**
+6. **§12 Pad and Cyrillic**
+7. **§25 File + §26 Picture + §27 Ctrl+V**
+8. **§28 Save feedback**
 
-Then come back for 1, 4, 6, 8, 9, 10 and 13–24 when you have a longer sitting.
+Then 1, 4, 6, 8, 9, 10, 13–24, 30.
 
 ---
 
 ## How to log
 
-Tick the box on the surface you used. A fail is a GitHub issue: expected, got, surface (Deb / Phone), host SHA / branch, screenshot if it helps. Do not close #220 from a fail; file a product issue and leave a leftover note on #220.
+Tick the box on the surface you used. A fail is a GitHub issue: expected, got, surface (Deb / Phone), host SHA / branch, screenshot if it helps. Hang new product bugs under [#222](https://github.com/itsuppartem/artek-buddy/issues/222). Plan / `ui_web` leftovers: [#230](https://github.com/itsuppartem/artek-buddy/issues/230). Save feedback: [#229](https://github.com/itsuppartem/artek-buddy/issues/229). Phone blank Computer: [#226](https://github.com/itsuppartem/artek-buddy/issues/226).
+
+`ui` already scripts paste, file-card, and image-card on the `.deb`. `ui_web` at 375×812 does not — that is the hole.
