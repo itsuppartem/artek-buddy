@@ -57,7 +57,7 @@ import {
   shouldQueueSend,
   writeStoredList,
 } from "../lib/offline-queue";
-import { nextPhoneTab, type PhoneTab } from "../lib/phone-shell";
+import { nextPhoneTab, type PhoneTab, shouldUsePhoneShell } from "../lib/phone-shell";
 import {
   embeddableScreenUrl,
   screenFrameLooksFailed,
@@ -142,6 +142,11 @@ export function ShellPage() {
   const [archivedBots, setArchivedBots] = useState<Bot[]>([]);
   const [sidebarView, setSidebarView] = useState<SidebarView>("inbox");
   const [phoneTab, setPhoneTab] = useState<PhoneTab>("chat");
+  const [phoneShell, setPhoneShell] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : shouldUsePhoneShell(window.innerWidth, window.innerHeight),
+  );
   const [alertOffer, setAlertOffer] = useState<"hide" | "ask" | "ready">(() =>
     shouldOfferWebAlerts({
       surface: pageSurface(),
@@ -1431,11 +1436,26 @@ export function ShellPage() {
     return () => window.clearTimeout(timer);
   }, [later]);
 
+  useLayoutEffect(() => {
+    function apply() {
+      setPhoneShell(shouldUsePhoneShell(window.innerWidth, window.innerHeight));
+    }
+    apply();
+    window.addEventListener("resize", apply);
+    window.addEventListener("orientationchange", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      window.removeEventListener("orientationchange", apply);
+    };
+  }, []);
+
   return (
     <div
       className="relative flex h-full min-w-0 flex-col overflow-hidden bg-ink text-paper"
       data-surface={pageSurface()}
       data-phone-tab={phoneTab}
+      data-phone-shell={phoneShell ? "1" : "0"}
+      data-desk-overlay={computerOpen ? "1" : "0"}
     >
       <HostPhoneBanners
         alertOffer={alertOffer}
@@ -1463,7 +1483,7 @@ export function ShellPage() {
         <aside
           data-shell="rack"
           data-phone-show={phoneTab === "chats" ? "1" : "0"}
-          className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613] max-[720px]:w-full"
+          className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613]"
         >
           <div className="app-drag flex items-center justify-between px-3 pb-2 pt-3">
             {pageSurface() === "host" ? (
@@ -2026,16 +2046,20 @@ export function ShellPage() {
         <aside
           data-shell="hatch"
           data-phone-show={phoneTab === "desk" ? "1" : "0"}
-          className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out max-[720px]:max-w-none ${
-            phoneTab === "desk" ? "max-[720px]:w-full" : ""
-          } ${
-            panel && (active || panel === "create" || panel === "models" || panel === "plugins")
-              ? "w-[360px] border-l border-hairline"
-              : "w-0"
+          className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out ${
+            phoneShell
+              ? "w-full max-w-none border-l-0"
+              : panel && (active || panel === "create" || panel === "models" || panel === "plugins")
+                ? "w-[360px] border-l border-hairline"
+                : "w-0"
           }`}
         >
           {panel && (active || panel === "create" || panel === "models" || panel === "plugins") ? (
-            <div className="ab-scroll h-full w-[360px] overflow-y-auto px-4 py-3">
+            <div
+              className={`ab-scroll h-full overflow-y-auto px-4 py-3 ${
+                phoneShell ? "w-full" : "w-[360px]"
+              }`}
+            >
               {panel === "plugins" ? (
                 <PluginsPane
                   onClose={() => {
@@ -2195,11 +2219,7 @@ export function ShellPage() {
         ) : null}
       </div>
 
-      <nav
-        data-testid="phone-nav"
-        className="phone-nav hidden max-[720px]:flex"
-        aria-label="Phone sections"
-      >
+      <nav data-testid="phone-nav" className="phone-nav" aria-label="Phone sections">
         <button
           type="button"
           data-testid="phone-tab-chats"
@@ -2244,6 +2264,7 @@ export function ShellPage() {
         onRetry={retryScreen}
         onScreenFrameLoad={onScreenFrameLoad}
         onScreenError={(message) => setScreenError(message)}
+        phone={phoneShell}
       />
     </div>
   );

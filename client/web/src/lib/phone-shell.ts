@@ -10,6 +10,6 @@ export function nextPhoneTab(
   return "chat";
 }
 
-export function shouldUsePhoneShell(width: number): boolean {
-  return width <= PHONE_BREAKPOINT_PX;
+export function shouldUsePhoneShell(width: number, height = width): boolean {
+  return Math.min(width, height) <= PHONE_BREAKPOINT_PX;
 }

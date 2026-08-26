@@ -14,5 +14,7 @@ describe("phone shell tabs", () => {
     expect(shouldUsePhoneShell(390)).toBe(true);
     expect(shouldUsePhoneShell(720)).toBe(true);
     expect(shouldUsePhoneShell(721)).toBe(false);
+    expect(shouldUsePhoneShell(812, 375)).toBe(true);
+    expect(shouldUsePhoneShell(1280, 800)).toBe(false);
   });
 });
