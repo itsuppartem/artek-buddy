@@ -16,6 +16,7 @@ from artek_buddy.consent import (
     CLASS_OWNER_WRITE,
     CLASS_PAGE,
     OWNER_HOME_SCOPE,
+    browse_origin,
 )
 from artek_buddy.db.shaping import new_id
 from artek_buddy.runtime.base import RuntimeBase
@@ -193,11 +194,16 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     if "e2e-plugin-docs" in hay or "please use docs" in hay:
         return [scripted_tool("docs_read"), scripted_finish("")]
     if "e2e-install-book" in hay:
+        url = E2E_BOOK_URL or "http://127.0.0.1/SKILL.md"
+        origin = browse_origin(url) or "http://127.0.0.1"
         return [
-            scripted_tool(
-                "install_book",
-                url=E2E_BOOK_URL or "http://127.0.0.1/SKILL.md",
+            scripted_consent(
+                action_class=CLASS_BROWSE,
+                scope_key=origin,
+                summary=f"Install a skill from {origin}?",
+                detail=f"browse: {origin}",
             ),
+            scripted_tool("install_book", url=url),
             scripted_finish("I'll keep that skill."),
         ]
     if "e2e-forget-book" in hay:

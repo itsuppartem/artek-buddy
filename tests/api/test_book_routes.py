@@ -37,7 +37,7 @@ def _allow_install(client, auth_header, bot_id: str, run_id: str) -> dict:
     allowed = client.post(
         f"/v1/consents/{consent_id}",
         headers=auth_header,
-        json={"decision": "once"},
+        json={"decision": "always"},
     )
     assert allowed.status_code == 200, allowed.text
     return wait_run(client, auth_header, bot_id, run_id)

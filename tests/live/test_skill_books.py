@@ -24,7 +24,7 @@ def test_install_playbook_in_chat_then_run_from_chip(
     send_message(page, "please e2e-install-book", name)
     consent = page.get_by_test_id("consent-card")
     expect(consent).to_be_visible(timeout=8_000)
-    page.get_by_test_id("ask-option").filter(has_text="Allow once").click()
+    page.get_by_test_id("ask-option").filter(has_text="Always").click()
     card = page.get_by_test_id("book-card")
     expect(card).to_contain_text("Invoice", timeout=8_000)
     expect(card).to_contain_text("please run Invoice")
