@@ -65,11 +65,12 @@ def test_host_page_and_pairing_use_a_cookie_not_a_token_in_json(
     assert payload["paired"] is True
     assert "token" not in payload
     assert "token" not in (payload.get("device") or {})
-    assert "dev_" not in paired.text
     cookie = paired.cookies.get("artek_device")
     assert cookie
     mask_secret(cookie)
     assert cookie.startswith("dev_")
+    assert cookie not in paired.text
+    assert (payload.get("device") or {}).get("id", "").startswith("dev_")
 
     listed = client.get("/v1/bots")
     assert listed.status_code == 200
