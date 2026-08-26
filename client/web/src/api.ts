@@ -22,6 +22,7 @@ import type {
   ProductEvent,
   Routine,
   ScreenUrlResult,
+  SkillBook,
   Subagent,
   TakeoverResult,
   TestRunResult,
@@ -396,6 +397,11 @@ export const api = {
     },
     restart(botId: string, subagentId: string) {
       return request<Subagent>("POST", `/v1/bots/${botId}/subagents/${subagentId}/restart`);
+    },
+  },
+  books: {
+    list(botId: string) {
+      return request<{ books: SkillBook[] }>("GET", `/v1/bots/${botId}/books`);
     },
   },
   connections: {

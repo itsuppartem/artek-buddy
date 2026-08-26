@@ -143,6 +143,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/bots/{bot_id}/books": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Books */
+        get: operations["list_books_v1_bots__bot_id__books_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/bots/{bot_id}/computer": {
         parameters: {
             query?: never;
@@ -1183,6 +1200,23 @@ export interface components {
             authorization_url?: string | null;
             connection: components["schemas"]["Connection"];
         };
+        /** BookBlock */
+        BookBlock: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "saved" | "opened" | "forgotten";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "book";
+            /** Name */
+            name: string;
+            /** Text */
+            text: string;
+        };
         /** Bot */
         Bot: {
             /** Archived At */
@@ -2062,6 +2096,28 @@ export interface components {
             /** Provider */
             provider: string;
         };
+        /** SkillBook */
+        SkillBook: {
+            /** Body */
+            body?: string | null;
+            /** Bot Id */
+            bot_id: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Updated At */
+            updated_at: string;
+            /** When To Use */
+            when_to_use: string;
+        };
+        /** SkillBookList */
+        SkillBookList: {
+            /** Books */
+            books: components["schemas"]["SkillBook"][];
+        };
         /** SteerSubagentInput */
         SteerSubagentInput: {
             /** Text */
@@ -2186,7 +2242,7 @@ export interface components {
         /** ThreadMessage */
         ThreadMessage: {
             /** Blocks */
-            blocks: (components["schemas"]["TextBlock"] | components["schemas"]["CardBlock"] | components["schemas"]["AskBlock"] | components["schemas"]["ChoiceBlock"] | components["schemas"]["ConnectBlock"] | components["schemas"]["ComputerBlock"] | components["schemas"]["PluginBlock"] | components["schemas"]["MetaBlock"] | components["schemas"]["ProgressBlock"] | components["schemas"]["SubagentBlock"] | components["schemas"]["ChildBotBlock"] | components["schemas"]["FileBlock"])[];
+            blocks: (components["schemas"]["TextBlock"] | components["schemas"]["CardBlock"] | components["schemas"]["AskBlock"] | components["schemas"]["ChoiceBlock"] | components["schemas"]["ConnectBlock"] | components["schemas"]["ComputerBlock"] | components["schemas"]["PluginBlock"] | components["schemas"]["BookBlock"] | components["schemas"]["MetaBlock"] | components["schemas"]["ProgressBlock"] | components["schemas"]["SubagentBlock"] | components["schemas"]["ChildBotBlock"] | components["schemas"]["FileBlock"])[];
             /** Created At */
             created_at: string;
             /** Id */
@@ -2683,6 +2739,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BotAskResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_books_v1_bots__bot_id__books_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                bot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillBookList"];
                 };
             };
             /** @description Validation Error */

@@ -35,7 +35,7 @@ def blocks_text(blocks: Iterable[Any] | None) -> str:
         if not isinstance(block, dict):
             continue
         kind = block.get("kind")
-        if kind in {"text", "meta", "progress", "computer", "plugin"}:
+        if kind in {"text", "meta", "progress", "computer", "plugin", "book"}:
             value = block.get("text")
             if value:
                 parts.append(str(value))

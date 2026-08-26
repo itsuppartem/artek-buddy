@@ -242,6 +242,40 @@
         "title": "BeginConnectionResult",
         "type": "object"
       },
+      "BookBlock": {
+        "properties": {
+          "action": {
+            "enum": [
+              "saved",
+              "opened",
+              "forgotten"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "kind": {
+            "const": "book",
+            "default": "book",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "action",
+          "text"
+        ],
+        "title": "BookBlock",
+        "type": "object"
+      },
       "Bot": {
         "properties": {
           "archived_at": {
@@ -2614,6 +2648,73 @@
         "title": "SetDefaultModelInput",
         "type": "object"
       },
+      "SkillBook": {
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "bot_id": {
+            "minLength": 1,
+            "title": "Bot Id",
+            "type": "string"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "when_to_use": {
+            "title": "When To Use",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bot_id",
+          "name",
+          "slug",
+          "when_to_use",
+          "updated_at"
+        ],
+        "title": "SkillBook",
+        "type": "object"
+      },
+      "SkillBookList": {
+        "properties": {
+          "books": {
+            "items": {
+              "$ref": "#/components/schemas/SkillBook"
+            },
+            "title": "Books",
+            "type": "array"
+          }
+        },
+        "required": [
+          "books"
+        ],
+        "title": "SkillBookList",
+        "type": "object"
+      },
       "SteerSubagentInput": {
         "properties": {
           "text": {
@@ -3014,6 +3115,7 @@
               "discriminator": {
                 "mapping": {
                   "ask": "#/components/schemas/AskBlock",
+                  "book": "#/components/schemas/BookBlock",
                   "card": "#/components/schemas/CardBlock",
                   "child_bot": "#/components/schemas/ChildBotBlock",
                   "choice": "#/components/schemas/ChoiceBlock",
@@ -3049,6 +3151,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/PluginBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/BookBlock"
                 },
                 {
                   "$ref": "#/components/schemas/MetaBlock"
@@ -4218,6 +4323,61 @@
           }
         },
         "summary": "Ask Other Bot"
+      }
+    },
+    "/v1/bots/{bot_id}/books": {
+      "get": {
+        "operationId": "list_books_v1_bots__bot_id__books_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bot_id",
+            "required": true,
+            "schema": {
+              "title": "Bot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillBookList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Books"
       }
     },
     "/v1/bots/{bot_id}/computer": {

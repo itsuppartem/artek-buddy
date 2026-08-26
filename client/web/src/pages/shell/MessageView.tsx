@@ -176,6 +176,21 @@ export function MessageView({
             </div>
           );
         }
+        if (block.kind === "book") {
+          return (
+            <div
+              key={index}
+              data-testid="book-card"
+              data-action={block.action}
+              className="max-w-[74%] rounded-[10px] border border-hairline border-l-[3px] border-l-tan bg-plate px-3.5 py-3"
+            >
+              <div className="text-[13px] font-medium text-tan">{block.name}</div>
+              <div className="mt-1.5 text-[14.5px] leading-[1.5] text-paper">
+                <ChatMarkdown>{block.text}</ChatMarkdown>
+              </div>
+            </div>
+          );
+        }
         if (block.kind === "computer") {
           const waiting =
             (block.state === "waiting" || block.state === "waiting_takeover") &&

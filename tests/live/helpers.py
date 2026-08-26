@@ -136,8 +136,12 @@ def ensure_model(page: Page) -> None:
     open_models(page)
     cursor_status = page.get_by_test_id("models-status-cursor")
     if cursor_status.count() and cursor_status.first.is_visible(timeout=0):
+        using = page.get_by_test_id("models-using")
+        if using.count() and (using.inner_text() or "").strip():
+            _close_models_ready(page)
+            return
         retry = page.get_by_test_id("models-retry-cursor")
-        if retry.count() and retry.first.is_visible(timeout=0):
+        if retry.count() and retry.first.is_visible(timeout=0) and retry.first.is_enabled():
             retry.click()
         picker = page.get_by_test_id("models-picker-cursor")
         expect(picker.locator("[data-model]").first).to_be_visible(timeout=20_000)

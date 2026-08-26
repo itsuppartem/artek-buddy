@@ -191,6 +191,26 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "e2e-plugin-docs" in hay or "please use docs" in hay:
         return [scripted_tool("docs_read"), scripted_finish("")]
+    if "e2e-save-book" in hay:
+        return [
+            scripted_tool(
+                "save_book",
+                name="Invoice",
+                when_to_use="When I say invoice",
+                body="Open the invoice site and download the PDF.",
+            ),
+            scripted_finish("I'll remember that playbook."),
+        ]
+    if "e2e-forget-book" in hay:
+        return [
+            scripted_tool("forget_book", name="Invoice"),
+            scripted_finish("Forgotten."),
+        ]
+    if "e2e-run-book" in hay or "please run invoice" in hay:
+        return [
+            scripted_tool("open_book", name="Invoice"),
+            scripted_finish("Following Invoice."),
+        ]
     if "e2e-hide-draft" in hay:
         return [
             scripted_progress("planning the lookup"),
