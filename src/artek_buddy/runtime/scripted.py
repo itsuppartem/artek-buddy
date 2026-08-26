@@ -57,6 +57,7 @@ E2E_PNG = (
     b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
     b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
 )
+E2E_BOOK_URL = ""
 
 
 @dataclass
@@ -191,15 +192,13 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "e2e-plugin-docs" in hay or "please use docs" in hay:
         return [scripted_tool("docs_read"), scripted_finish("")]
-    if "e2e-save-book" in hay:
+    if "e2e-install-book" in hay:
         return [
             scripted_tool(
-                "save_book",
-                name="Invoice",
-                when_to_use="When I say invoice",
-                body="Open the invoice site and download the PDF.",
+                "install_book",
+                url=E2E_BOOK_URL or "http://127.0.0.1/SKILL.md",
             ),
-            scripted_finish("I'll remember that playbook."),
+            scripted_finish("I'll keep that skill."),
         ]
     if "e2e-forget-book" in hay:
         return [
@@ -562,12 +561,19 @@ class ScriptedRuntime(RuntimeBase):
         self._auth_fails = 0
         self.bridge_recycles = 0
         self._pending_recover = False
+        self._skill_fixture: Any | None = None
 
     def queue_turn(self, *steps: ScriptedStep) -> None:
         self._queue.append(list(steps))
 
     async def start(self) -> None:
+        global E2E_BOOK_URL
+        from artek_buddy.book_fetch import start_skill_fixture
+
         self._ensure_dirs()
+        self._skill_fixture = start_skill_fixture()
+        E2E_BOOK_URL = self._skill_fixture.url
+        self.book_fixture_url = self._skill_fixture.url
         saved = self._load_state()
         live = await self.ensure_session(saved, name="artek-buddy")
         self.default_agent_id = live

@@ -14,14 +14,17 @@ from tests.live.helpers import (
 pytestmark = pytest.mark.live
 
 
-def test_teach_playbook_in_chat_then_run_from_chip(
+def test_install_playbook_in_chat_then_run_from_chip(
     page: Page, client_url: str, host_url: str
 ) -> None:
     name = unique_bot("BookWin")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
     ensure_model(page)
-    send_message(page, "please e2e-save-book", name)
+    send_message(page, "please e2e-install-book", name)
+    consent = page.get_by_test_id("consent-card")
+    expect(consent).to_be_visible(timeout=8_000)
+    page.get_by_test_id("ask-option").filter(has_text="Allow once").click()
     card = page.get_by_test_id("book-card")
     expect(card).to_contain_text("Invoice", timeout=8_000)
     expect(card).to_contain_text("please run Invoice")

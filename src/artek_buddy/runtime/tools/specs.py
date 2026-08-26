@@ -145,10 +145,30 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         },
     ),
     ToolSpec(
+        name="install_book",
+        description=(
+            "Install a published skill for this chat from a public http(s) URL. "
+            "The stored body is the fetched markdown, not a summary. "
+            "Use this when the owner asks to find and keep a skill. "
+            "Do not wait for them to dictate the steps. "
+            "Not a memory fact and not a cron routine."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Public http(s) URL of the skill markdown.",
+                },
+            },
+            "required": ["url"],
+        },
+    ),
+    ToolSpec(
         name="save_book",
         description=(
-            "Save or revise a replayable playbook for this chat. "
-            "Use this when the owner teaches a procedure to run again later. "
+            "Revise a skill already kept for this chat. "
+            "Do not use this to add a new skill; call install_book with the document URL. "
             "Not a memory fact and not a cron routine. "
             "name is how they will ask for it. when_to_use is the trigger. "
             "body is the steps."

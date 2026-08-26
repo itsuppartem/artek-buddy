@@ -43,6 +43,7 @@ class RuntimeBase:
         self.owner_file_writer: Any | None = None
         self.owner_dir_lister: Any | None = None
         self.owner_command_runner: Any | None = None
+        self.book_fixture_url: str = ""
         self._agents: dict[str, Any] = {}
         self._state_path = Path(settings.agent_data_dir) / "session.json"
         self._turn_lock = threading.Lock()
