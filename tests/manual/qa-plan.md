@@ -170,7 +170,31 @@ Team:
 | --- | --- | --- |
 | Second bot on the same desk sees `{name} is using the computer`; Take / Restart / Stop / Reset are grey | [ ] | [ ] |
 
-Phone Take control on the current `develop` page is still a desktop overlay. Pad / keys / Cyrillic are §12 (PR #219 host).
+Phone Take control on the current `develop` page is still a desktop overlay. Pad / keys / Cyrillic are §12. **You still owe §7a on both surfaces.**
+
+
+## 7a. Hands on the guest (do not skip)
+
+A preview is not enough. You must **drive** the box and **read** what opened.
+
+On **Deb**: Take control, real mouse and keyboard.
+
+On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; tap clicks at the dot). Then Keyboard.
+
+| Check | Deb | Phone |
+| --- | :---: | :---: |
+| After Allow on «открой https://example.com», the **guest** shows Example Domain (heading / title), not a black tile and not only a chat card | [ ] | [ ] |
+| You can **read** the address bar or tab title. It is example.com (or the site you allowed), not a leftover Google / Files window | [ ] | [ ] |
+| Take control: pointer moves in the guest. A click lands where you aimed (address bar, a link, a button) | [ ] | [ ] |
+| Phone: drag on the pad moves the beige dot across the 1280×800 picture; it does not jump under the finger | — | [ ] |
+| Type `hello` into a guest field (address bar or input). The letters appear **in the guest**, not only in our Message box | [ ] | [ ] |
+| Phone Keyboard: Esc / Tab / Enter / Bksp work in the guest. Russian layout types Cyrillic into that same field | — | [ ] |
+| Scroll (wheel on Deb, two-finger on Phone) moves the guest page | [ ] | [ ] |
+| Right-click (Deb) or two-finger tap (Phone) opens a guest context menu | [ ] | [ ] |
+| fluxbox **Files** / Browser / Terminal open a real window you can see | [ ] | [ ] |
+| Release: overlay is view-only again; Message and Stop work. Guest stays on the same page | [ ] | [ ] |
+
+If Chrome emulation cannot drag the pad, say **fail / blocked**, not skip. This section is why the phone desk exists.
 
 ---
 
@@ -512,7 +536,7 @@ If time is short, in this order:
 1. **§2 Models**
 2. **§3 Memory book**
 3. **§5 Bot asks bot**
-4. **§7 Desktop**
+4. **§7 Desktop** + **§7a Hands on the guest**
 5. **§11 Phone chrome** + **§29 Computer must not blank**
 6. **§12 Pad and Cyrillic**
 7. **§25 File + §26 Picture + §27 Ctrl+V**
