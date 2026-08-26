@@ -8,6 +8,7 @@
 - The owner can keep a published skill for this chat (`install_book` from a public URL after Allow). The stored body is the fetched markdown. The next turn sees names only; `open_book` loads the steps. A chip fills `please run {name}`. No Settings form.
 - Models and Plugins Save name a host error instead of staying silent. A row's model is the host default (no second Default list). Cursor exposes reasoning and Fast; Save prefers grok-4.6 extra-high fast when that id is on the list. A Plugins key already on the host at boot shows as Key saved.
 - After an app is connected, a chip above Message fills `please use {name}`. The thread shows that app's result as a card.
+- The lead can search catalog apps (`list_apps`) and attach them (`connect_app`) from chat. Connected names ride in the turn. Login URLs open in the owner's browser, not the bot desktop.
 - Plugins pane: paste a host key, search the catalog, connect or disconnect an app. Only connected apps become tools on the next turn. The window never sees a saved full key.
 - A bot can ask another inbox bot by name or id. This chat shows the ask and a card to that chat. The other bot works in its own thread; only its last message comes back so this bot can answer you. Missing, archived, deleted, empty, and self-asks fail closed.
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.

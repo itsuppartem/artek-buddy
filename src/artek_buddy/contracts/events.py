@@ -109,6 +109,7 @@ class PluginBlock(BaseModel):
     kind: Literal["plugin"] = "plugin"
     name: str
     text: str
+    url: str | None = None
 
 
 class BookBlock(BaseModel):

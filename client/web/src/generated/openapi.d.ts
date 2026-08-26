@@ -2181,6 +2181,8 @@ export interface components {
             name: string;
             /** Text */
             text: string;
+            /** Url */
+            url?: string | null;
         };
         /** ProgressBlock */
         ProgressBlock: {

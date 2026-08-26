@@ -163,6 +163,16 @@ export function MessageView({
           return <AskCard key={index} block={block} canAnswer={canAnswer} onAnswer={onAnswer} />;
         }
         if (block.kind === "plugin") {
+          const raw = "url" in block && block.url ? String(block.url) : "";
+          let connectHref = "";
+          try {
+            const parsed = new URL(raw);
+            if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+              connectHref = parsed.href;
+            }
+          } catch {
+            connectHref = "";
+          }
           return (
             <div
               key={index}
@@ -173,6 +183,20 @@ export function MessageView({
               <div className="mt-1.5 text-[14.5px] leading-[1.5] text-paper">
                 <ChatMarkdown>{block.text}</ChatMarkdown>
               </div>
+              {connectHref ? (
+                <Button
+                  type="button"
+                  variant="cream"
+                  size="sm"
+                  className="mt-2"
+                  data-testid="plugin-connect-open"
+                  onClick={() => {
+                    window.open(connectHref, "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  Open to connect
+                </Button>
+              ) : null}
             </div>
           );
         }

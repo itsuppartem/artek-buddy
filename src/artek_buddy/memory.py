@@ -240,12 +240,15 @@ def wrap_turn_prompt(
     inbox_context: str | None = None,
     other_bots: str | None = None,
     books_context: str | None = None,
+    apps_context: str | None = None,
 ) -> str:
     parts: list[str] = []
     if memory_context:
         parts.append(memory_context)
     if books_context:
         parts.append(books_context)
+    if apps_context:
+        parts.append(apps_context)
     if role == "lead":
         parts.append(
             "You are the lead agent in this chat. You have a Linux desktop, command-line tools, and subagents. "
@@ -300,6 +303,10 @@ def wrap_turn_prompt(
             "Store the fetched markdown, not a paraphrase. Do not wait for them to teach the steps. "
             "Names sit in <skill_books>. Call open_book before following those steps. "
             "forget_book drops one. save_book only revises a book already kept.\n"
+            "- Host apps: connected apps already have tools this turn. "
+            "To find GitHub or another catalog app, call list_apps(q), then connect_app(slug). "
+            "If a card has a login URL, the owner opens it (not the bot desktop). "
+            "Do not create git, SSH, or tokens on this computer for a catalog app.\n"
             "- Do not dump internal monologues; be helpful, concise, and proactive."
         )
     elif role == "subagent" or parallel:
