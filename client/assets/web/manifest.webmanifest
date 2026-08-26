@@ -1,0 +1,23 @@
+{
+  "name": "Artek Buddy",
+  "short_name": "Artek",
+  "description": "Chat and drive bots on this Pi.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#161310",
+  "theme_color": "#161310",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/pairing-mark.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,5 +1,8 @@
 import { api } from "../api";
 import type { ProductEvent } from "../types";
+import { pageSurface } from "./web-notify";
+
+const HOST_OWNER_CUT = "This-PC files need the Linux app, not the phone browser.";
 
 export function ownerJobHint(block: {
   text: string;
@@ -52,6 +55,18 @@ export async function completeOwnerConsent(consentId: string, decision: string):
     decision === "always" ||
     decision === "Allow once" ||
     decision === "Always";
+  if (pageSurface() === "host" && allow) {
+    try {
+      const job = await api.consents.get(consentId);
+      if (String(job.actionClass || "").startsWith("owner_")) {
+        await reportOwnerJobError(consentId, new Error(HOST_OWNER_CUT));
+        await api.consents.answer(consentId, decision);
+        return;
+      }
+    } catch {
+      /* browse and page cards still answer below */
+    }
+  }
   if (allow) {
     try {
       await fulfillOwnerJob(consentId);
