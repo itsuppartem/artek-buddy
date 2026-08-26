@@ -99,6 +99,15 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     asked = steps_for_prompt("please use Docs")
     assert asked[0].tool == "docs_read"
 
+    taught = steps_for_prompt("please e2e-save-book")
+    assert taught[0].tool == "save_book"
+    assert taught[0].args["name"] == "Invoice"
+    ran = steps_for_prompt("please run Invoice")
+    assert ran[0].tool == "open_book"
+    assert ran[0].args["name"] == "Invoice"
+    dropped = steps_for_prompt("please e2e-forget-book")
+    assert dropped[0].tool == "forget_book"
+
     older = steps_for_prompt("please e2e-load-earlier")
     assert len([step for step in older if step.blocks]) == E2E_OLDER_COUNT
 

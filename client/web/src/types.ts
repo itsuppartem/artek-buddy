@@ -70,6 +70,15 @@ export type BeginConnectionResult = {
   connection: Connection;
   authorizationUrl?: string | null;
 };
+export type SkillBook = {
+  id: string;
+  botId: string;
+  name: string;
+  slug: string;
+  whenToUse: string;
+  body?: string | null;
+  updatedAt: string;
+};
 
 export type ProductEvent = {
   id: string;

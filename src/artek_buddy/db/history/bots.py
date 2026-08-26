@@ -55,6 +55,7 @@ class BotsMixin:
                 )
                 conn.execute("DELETE FROM consent_requests WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM consent_grants WHERE bot_id = %s", (bot_id,))
+                conn.execute("DELETE FROM skill_books WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM routines WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM turn_inbox WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM subagents WHERE bot_id = %s", (bot_id,))

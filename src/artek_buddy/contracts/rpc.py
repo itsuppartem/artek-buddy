@@ -113,6 +113,7 @@ PROCEDURES: list[Procedure] = [
     _p("bots.restore", "POST", "/v1/bots/{bot_id}/restore", "BotIdInput", "OkResponse", True),
     _p("bots.remove", "DELETE", "/v1/bots/{bot_id}", "DeleteBotInput", "OkResponse", True),
     _p("bots.ask", "POST", "/v1/bots/{bot_id}/asks", "BotAskInput", "BotAskResult", True),
+    _p("bots.list_books", "GET", "/v1/bots/{bot_id}/books", "BotIdInput", "SkillBookList", True),
     # Threads
     _p("threads.get", "GET", "/v1/threads/{bot_id}", "BotIdInput", "ThreadSnapshot", True),
     _p(

@@ -145,6 +145,65 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         },
     ),
     ToolSpec(
+        name="save_book",
+        description=(
+            "Save or revise a replayable playbook for this chat. "
+            "Use this when the owner teaches a procedure to run again later. "
+            "Not a memory fact and not a cron routine. "
+            "name is how they will ask for it. when_to_use is the trigger. "
+            "body is the steps."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Short name the owner will say later, e.g. Invoice.",
+                },
+                "when_to_use": {
+                    "type": "string",
+                    "description": "When to open this book, in one line.",
+                },
+                "body": {
+                    "type": "string",
+                    "description": "The steps to follow when this book is opened.",
+                },
+            },
+            "required": ["name", "when_to_use", "body"],
+        },
+    ),
+    ToolSpec(
+        name="open_book",
+        description=(
+            "Load a saved playbook's steps into this turn. "
+            "Call this before following those steps. Names are in <skill_books>."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Exact book name or the same words the owner used.",
+                }
+            },
+            "required": ["name"],
+        },
+    ),
+    ToolSpec(
+        name="forget_book",
+        description="Delete a saved playbook from this chat.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Book name to drop.",
+                }
+            },
+            "required": ["name"],
+        },
+    ),
+    ToolSpec(
         name="read_owner_file",
         description=(
             "Read a file from the owner's paired computer through the desktop client. "

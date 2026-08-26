@@ -111,6 +111,13 @@ class PluginBlock(BaseModel):
     text: str
 
 
+class BookBlock(BaseModel):
+    kind: Literal["book"] = "book"
+    name: str
+    action: Literal["saved", "opened", "forgotten"]
+    text: str
+
+
 class MetaBlock(BaseModel):
     kind: Literal["meta"] = "meta"
     text: str
@@ -158,6 +165,7 @@ MessageBlock = Annotated[
     | ConnectBlock
     | ComputerBlock
     | PluginBlock
+    | BookBlock
     | MetaBlock
     | ProgressBlock
     | SubagentBlock

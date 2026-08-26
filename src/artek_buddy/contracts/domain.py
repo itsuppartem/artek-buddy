@@ -143,6 +143,22 @@ class RoutineList(BaseModel):
     routines: list[Routine]
 
 
+class SkillBook(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: Id
+    bot_id: Id
+    name: str
+    slug: str
+    when_to_use: str
+    body: str | None = None
+    updated_at: str
+
+
+class SkillBookList(BaseModel):
+    books: list[SkillBook]
+
+
 class OkResponse(BaseModel):
     ok: bool = True
 

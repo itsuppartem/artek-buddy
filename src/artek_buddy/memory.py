@@ -239,10 +239,13 @@ def wrap_turn_prompt(
     thread_context: str | None = None,
     inbox_context: str | None = None,
     other_bots: str | None = None,
+    books_context: str | None = None,
 ) -> str:
     parts: list[str] = []
     if memory_context:
         parts.append(memory_context)
+    if books_context:
+        parts.append(books_context)
     if role == "lead":
         parts.append(
             "You are the lead agent in this chat. You have a Linux desktop, command-line tools, and subagents. "
@@ -292,6 +295,10 @@ def wrap_turn_prompt(
             "(bans, wait for an explicit go-ahead). "
             "Do not remember one-off tasks such as opening a tab. "
             "To erase something, call remember with forget=true.\n"
+            "- Playbooks: when the owner teaches a procedure to run again later, "
+            "call save_book(name, when_to_use, body). That is not a memory fact and not a routine. "
+            "Names sit in <skill_books>. Call open_book before following those steps. "
+            "forget_book drops one.\n"
             "- Do not dump internal monologues; be helpful, concise, and proactive."
         )
     elif role == "subagent" or parallel:

@@ -110,6 +110,7 @@ import { WindowChrome } from "../ui/window-chrome";
 import { BotContextMenu, type ContextMenuPosition } from "./BotContextMenu";
 import { MessageContextMenu } from "./MessageContextMenu";
 import { applyThreadEvent } from "./shell/apply-thread-event";
+import { BooksAsk } from "./shell/BooksAsk";
 import { BotSettings } from "./shell/BotSettings";
 import { ComputerOverlay } from "./shell/ComputerOverlay";
 import { ComputerPane } from "./shell/ComputerPane";
@@ -139,6 +140,7 @@ export function ShellPage() {
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [pluginApps, setPluginApps] = useState<{ slug: string; name: string }[]>([]);
+  const [skillBooks, setSkillBooks] = useState<{ slug: string; name: string }[]>([]);
   const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
   const panelAfterSettings = useRef<"computer" | null>(null);
   const panelAfterCreate = useRef<"computer" | null>(null);
@@ -501,6 +503,23 @@ export function ShellPage() {
   useEffect(() => {
     void refreshPlugins();
   }, []);
+
+  async function refreshBooks(botId?: string) {
+    if (!botId) {
+      setSkillBooks([]);
+      return;
+    }
+    try {
+      const listed = await api.books.list(botId);
+      setSkillBooks((listed.books ?? []).map((row) => ({ slug: row.slug, name: row.name })));
+    } catch {
+      setSkillBooks([]);
+    }
+  }
+
+  useEffect(() => {
+    void refreshBooks(active?.id);
+  }, [active?.id, thread?.messages?.length, thread?.run?.status]);
 
   function persistQueue(next: QueuedSend[]): QueuedSend[] {
     try {
@@ -1764,6 +1783,11 @@ export function ShellPage() {
             apps={pluginApps}
             disabled={!active}
             onAsk={(name) => writeDraft(`please use ${name}`)}
+          />
+          <BooksAsk
+            books={skillBooks}
+            disabled={!active}
+            onAsk={(name) => writeDraft(`please run ${name}`)}
           />
           {pendingFiles.length ? (
             <div className="mb-2 flex flex-wrap items-end gap-2">
