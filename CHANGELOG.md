@@ -13,6 +13,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- One standing rule in chat writes one Remembered line and one Memory card. A paraphrase in the same turn, or extract after that turn, does not add a twin.
 - Phone desktop typing reaches the guest as UTF-8, so a Russian keyboard is not dropped.
 - The iPhone home-screen hint sits at the top of the host page so it no longer covers Models, New bot, or the composer.
 - Opening a website on the bot desktop no longer also opens the file manager. `open` treats `HTTPS://` like `https://`, and leftover pcmanfm volume autorun is off.

@@ -306,6 +306,18 @@ def forget_matches(needle: set[str], entry_text: str) -> bool:
     return any(len(word) >= 3 for word in hit)
 
 
+def similar_memory(left: str, right: str) -> bool:
+    """True when two notes are the same fact worded differently."""
+    a = query_tokens(left)
+    b = query_tokens(right)
+    if not a or not b:
+        return False
+    overlap = a & b
+    if len(overlap) < 2:
+        return False
+    return len(overlap) / len(a | b) >= 0.6
+
+
 def rank_entries(entries: list[MemoryEntry], query: str) -> list[MemoryEntry]:
     wanted = query_tokens(query)
     if not wanted:
@@ -377,6 +389,7 @@ class MemoryHub:
         self.rewriter = rewriter
         self._captures: dict[str, int] = {}
         self._slots: dict[str, set[str]] = {}
+        self._bodies: dict[str, list[str]] = {}
 
     def captured_during(self, run_id: str | None) -> bool:
         return bool(run_id and self._captures.get(run_id, 0) > 0)
@@ -422,17 +435,29 @@ class MemoryHub:
             if not ready:
                 return None
             body = ready
+        if run_id:
+            for prior in self._bodies.get(run_id, []):
+                if similar_memory(prior, body):
+                    self._mark_capture(run_id, section, body)
+                    return None
+        for live in self.store.list_live_memory_entries(bot_id=bot_id):
+            if similar_memory(live.text, body):
+                self._mark_capture(run_id, section, body)
+                return None
         if self.store.find_live_memory_entry(body, scope=scope, bot_id=bot_id):
-            self._mark_capture(run_id, section)
+            self._mark_capture(run_id, section, body)
             return None
         previous = self.store.find_live_memory_entry_by_slot(section, scope=scope, bot_id=bot_id)
         if previous is not None:
+            if similar_memory(previous.text, body):
+                self._mark_capture(run_id, section, body)
+                return None
             merged = merge_section(previous.text, body)
             if merged == previous.text:
-                self._mark_capture(run_id, section)
+                self._mark_capture(run_id, section, body)
                 return None
             updated = self._revise(previous, merged, run_id, thread_id)
-            self._mark_capture(run_id, section)
+            self._mark_capture(run_id, section, body)
             if updated is not None:
                 try:
                     self.gateway.capture(updated, self.user_id, bot_id)
@@ -455,7 +480,7 @@ class MemoryHub:
             self.gateway.capture(entry, self.user_id, bot_id)
         except Exception:
             log.exception("memory gateway capture failed")
-        self._mark_capture(run_id, section)
+        self._mark_capture(run_id, section, body)
         return entry
 
     def _revise(
@@ -477,12 +502,14 @@ class MemoryHub:
                 return found
         return self.store.update_entry_text(previous.id, text)
 
-    def _mark_capture(self, run_id: str | None, slot: str | None) -> None:
+    def _mark_capture(self, run_id: str | None, slot: str | None, body: str | None = None) -> None:
         if not run_id:
             return
         self._captures[run_id] = self._captures.get(run_id, 0) + 1
         if slot:
             self._slots.setdefault(run_id, set()).add(slot)
+        if body:
+            self._bodies.setdefault(run_id, []).append(body)
 
     def forget(self, text: str, bot_id: str | None = None) -> int:
         removed = 0
@@ -654,6 +681,7 @@ class MemoryHub:
     async def revise_after_turn(
         self, user_text: str, run_id: str | None, bot_id: str | None
     ) -> list[MemoryEntry]:
+        already = self.slots_during(run_id)
         saved = self.extract_after_turn(user_text, run_id, bot_id)
         sections = self.slots_during(run_id)
         if not sections or self.rewriter is None:
@@ -683,5 +711,8 @@ class MemoryHub:
                 self.gateway.capture(updated, self.user_id, bot_id)
             except Exception:
                 log.exception("memory gateway capture failed")
-            revised.append(updated)
-        return revised or saved
+            if (updated.slot or section) not in already:
+                revised.append(updated)
+        if revised:
+            return revised
+        return [entry for entry in saved if (entry.slot or "") not in already]

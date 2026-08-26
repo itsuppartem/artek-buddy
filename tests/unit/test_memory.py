@@ -24,6 +24,7 @@ def test_wrap_turn_prompt_lead_mentions_takeover_and_slim_observe() -> None:
     assert "request_takeover" in wrapped
     assert "include_image" in wrapped
     assert "message_bot" in wrapped
+    assert "once per fact" in wrapped
 
 
 def test_wrap_turn_prompt_keeps_user_tail() -> None:

@@ -99,6 +99,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             "Call this when the user states a preference, rule, person, path, machine, "
             "project, or correction. Default scope is the shared owner book. "
             "Use scope=bot for standing rules of this chat (bans, wait for go-ahead). "
+            "Call once per fact. A standing rule is this-chat only, not also shared. "
             "Do not store one-off tasks such as opening a tab. "
             "A later note on the same section revises that section; other sections stay. "
             "To erase something, set forget=true with the text to drop."

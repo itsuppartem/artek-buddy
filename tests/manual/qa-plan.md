@@ -101,6 +101,7 @@ Computer → Memory: the identity chapter updated; the old city is not sitting n
 | After (1)+(2)+(3) the next city answer is Novi Sad | [ ] | [ ] |
 | «Привет» does not rewrite identity | [ ] | [ ] |
 | Memory pane identity chapter has the new city only | [ ] | [ ] |
+| One standing rule in chat (`please e2e-remember-twice` on a scripted host, or «не спрашивай разрешения на read») → **one** Remembered line and one Memory card | [ ] | [ ] |
 
 ---
 
