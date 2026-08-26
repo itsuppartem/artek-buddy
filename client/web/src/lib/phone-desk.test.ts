@@ -69,6 +69,9 @@ describe("phone desk pad", () => {
 describe("phone desk keys", () => {
   it("types the added run and sends BackSpace for a delete", () => {
     expect(keysFromField("hel", "hello")).toEqual([{ kind: "clipboard", payload: { text: "lo" } }]);
+    expect(keysFromField("", "привет")).toEqual([
+      { kind: "clipboard", payload: { text: "привет" } },
+    ]);
     expect(keysFromField("hello", "hel")).toEqual([
       { kind: "key", payload: { key: "BackSpace" } },
       { kind: "key", payload: { key: "BackSpace" } },
