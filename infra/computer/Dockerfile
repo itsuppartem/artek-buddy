@@ -38,6 +38,7 @@ COPY fluxbox.init /etc/artek/fluxbox/init
 COPY fluxbox.apps /etc/artek/fluxbox/apps
 COPY fluxbox.menu /etc/artek/fluxbox/menu
 COPY embed.html /usr/share/novnc/embed.html
+COPY mimeapps.list /etc/xdg/mimeapps.list
 RUN chmod +x /usr/local/bin/artek-computer /usr/local/bin/artek-browser \
   && update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/artek-browser 100 \
   && update-alternatives --set x-www-browser /usr/local/bin/artek-browser \

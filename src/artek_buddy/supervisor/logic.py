@@ -40,6 +40,13 @@ _TERMINAL_APPS = frozenset(
 )
 
 _CAPS_KEYS = frozenset({"Caps_Lock", "CapsLock", "capslock", "caps_lock"})
+_WEB_OPEN = re.compile(r"(?i)^(https?://|www\.)")
+_BARE_HOST_OPEN = re.compile(r"(?i)^[a-z0-9.-]+\.[a-z]{2,}(/.*)?$")
+
+
+def is_web_open_target(path: str) -> bool:
+    text = (path or "").strip()
+    return bool(_WEB_OPEN.match(text) or _BARE_HOST_OPEN.match(text))
 
 
 def _is_browser_app(name: str) -> bool:
@@ -214,8 +221,11 @@ def action_command(actions: list[dict]) -> str:
         elif kind == "open":
             path = str(item.get("path") or item.get("url") or "").strip()
             if path:
-                if re.match(r"^(https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/.*)?$)", path):
-                    target = path if path.startswith(("http://", "https://")) else f"https://{path}"
+                if is_web_open_target(path):
+                    if re.match(r"(?i)^https?://", path):
+                        target = path
+                    else:
+                        target = f"https://{path}"
                     parts.append(
                         f"nohup artek-browser {shell_quote(target)} >/tmp/artek/open.log 2>&1 &"
                     )

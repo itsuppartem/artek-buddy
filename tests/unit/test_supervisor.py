@@ -11,6 +11,10 @@ from artek_buddy.supervisor.logic import (
 )
 
 
+def _open(path: str) -> str:
+    return action_command([{"kind": "open", "path": path}])
+
+
 def test_shell_quote_wraps_single_quotes() -> None:
     assert shell_quote("abc") == "'abc'"
     assert "\"'\"'" in shell_quote("it's")
@@ -51,6 +55,25 @@ def test_launch_terminal_is_xterm_once() -> None:
 def test_caps_lock_key_uses_xdotool_caps_lock() -> None:
     cmd = action_command([{"kind": "key", "key": "CapsLock"}])
     assert "Caps_Lock" in cmd
+
+
+def test_open_https_uses_browser_not_file_manager() -> None:
+    for path in (
+        "https://example.com/x",
+        "HTTPS://example.com/x",
+        "www.example.com",
+        "WWW.example.com/path",
+    ):
+        cmd = _open(path)
+        assert "artek-browser" in cmd, path
+        assert "xdg-open" not in cmd, path
+        assert "pcmanfm" not in cmd, path
+
+
+def test_open_local_path_still_uses_xdg_open() -> None:
+    cmd = _open("/home/artek/inbox")
+    assert "xdg-open" in cmd
+    assert "artek-browser" not in cmd
 
 
 def test_desktop_create_spec_capdrop_all_and_pi5_limits() -> None:
