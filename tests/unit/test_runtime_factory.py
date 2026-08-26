@@ -99,9 +99,10 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     asked = steps_for_prompt("please use Docs")
     assert asked[0].tool == "docs_read"
 
-    taught = steps_for_prompt("please e2e-save-book")
-    assert taught[0].tool == "save_book"
-    assert taught[0].args["name"] == "Invoice"
+    taught = steps_for_prompt("please e2e-install-book")
+    assert taught[0].consent is not None
+    assert taught[1].tool == "install_book"
+    assert taught[1].args.get("url")
     ran = steps_for_prompt("please run Invoice")
     assert ran[0].tool == "open_book"
     assert ran[0].args["name"] == "Invoice"

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from tests.api.helpers import create_bot, wait_run
+from tests.api.helpers import consent_id_from_thread, create_bot, wait_run, wait_run_status
 
 from artek_buddy.books import MAX_BOOKS, BookError
 
@@ -31,7 +31,19 @@ def test_books_require_auth_and_missing_bot_is_404(client, auth_header) -> None:
     assert missing.json()["detail"] == "bot not found"
 
 
-def test_teach_run_and_forget_playbook_in_the_thread(client, auth_header) -> None:
+def _allow_install(client, auth_header, bot_id: str, run_id: str) -> dict:
+    snap = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input")
+    consent_id = consent_id_from_thread(snap)
+    allowed = client.post(
+        f"/v1/consents/{consent_id}",
+        headers=auth_header,
+        json={"decision": "always"},
+    )
+    assert allowed.status_code == 200, allowed.text
+    return wait_run(client, auth_header, bot_id, run_id)
+
+
+def test_install_run_and_forget_playbook_in_the_thread(client, auth_header) -> None:
     bot = create_bot(client, auth_header, "BookChat")
     empty = client.get(f"/v1/bots/{bot['id']}/books", headers=auth_header)
     assert empty.status_code == 200
@@ -40,10 +52,10 @@ def test_teach_run_and_forget_playbook_in_the_thread(client, auth_header) -> Non
     saved = client.post(
         f"/v1/threads/{bot['id']}/messages",
         headers=auth_header,
-        json={"text": "please e2e-save-book"},
+        json={"text": "please e2e-install-book"},
     )
     assert saved.status_code == 200
-    after_save = wait_run(client, auth_header, bot["id"], saved.json()["run_id"])
+    after_save = _allow_install(client, auth_header, bot["id"], saved.json()["run_id"])
     books = _book_blocks(after_save)
     assert books
     assert books[0]["name"] == "Invoice"
@@ -87,6 +99,35 @@ def test_teach_run_and_forget_playbook_in_the_thread(client, auth_header) -> Non
     assert dropped[0]["name"] == "Invoice"
     gone = client.get(f"/v1/bots/{bot['id']}/books", headers=auth_header)
     assert gone.json()["books"] == []
+
+
+def test_deny_does_not_store_an_installed_book(client, auth_header) -> None:
+    bot = create_bot(client, auth_header, "BookDeny")
+    sent = client.post(
+        f"/v1/threads/{bot['id']}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-install-book"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    snap = wait_run_status(client, auth_header, bot["id"], run_id, "waiting_input")
+    consent_id = consent_id_from_thread(snap)
+    denied = client.post(
+        f"/v1/consents/{consent_id}",
+        headers=auth_header,
+        json={"decision": "deny"},
+    )
+    assert denied.status_code == 200
+    wait_run(client, auth_header, bot["id"], run_id)
+    listed = client.get(f"/v1/bots/{bot['id']}/books", headers=auth_header)
+    assert listed.json()["books"] == []
+    assert not [
+        block
+        for block in _book_blocks(
+            client.get(f"/v1/threads/{bot['id']}", headers=auth_header).json()
+        )
+        if block.get("action") == "saved"
+    ]
 
 
 def test_save_book_rejects_empty_and_caps_this_chat(client, auth_header) -> None:

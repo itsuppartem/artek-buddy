@@ -5,7 +5,7 @@
 ### Added
 - Phone desktop overlay only: the remote screen is a pad (drag moves the pointer, tap left click, two fingers right click). Keyboard opens the phone keyboard. Chats and Chat stay as they were. The host page clears the iPhone notch (`safe-area-inset-top`) and does not leave a second empty strip under the nav.
 - The same Funnel / tailnet URL serves the window. A phone pairs with a code; the device token stays in an httpOnly cookie. Narrow screens stack Chats / Chat / Desktop (iPhone 11 Pro 375×812). iPhone Add to Home Screen plus Turn on alerts (only while that app is open — no background). This-PC files stay on the Linux `.deb`. CI splits `ui` (`.deb`) from `ui_web` / `live_web` (host page).
-- The owner can teach a playbook in the thread (`save_book`). The next turn sees names only; `open_book` loads the steps. A chip fills `please run {name}`. No Settings form.
+- The owner can keep a published skill for this chat (`install_book` from a public URL after Allow). The stored body is the fetched markdown. The next turn sees names only; `open_book` loads the steps. A chip fills `please run {name}`. No Settings form.
 - Models and Plugins Save name a host error instead of staying silent. A row's model is the host default (no second Default list). Cursor exposes reasoning and Fast; Save prefers grok-4.6 extra-high fast when that id is on the list. A Plugins key already on the host at boot shows as Key saved.
 - After an app is connected, a chip above Message fills `please use {name}`. The thread shows that app's result as a card.
 - Plugins pane: paste a host key, search the catalog, connect or disconnect an app. Only connected apps become tools on the next turn. The window never sees a saved full key.

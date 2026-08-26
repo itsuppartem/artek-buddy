@@ -295,10 +295,11 @@ def wrap_turn_prompt(
             "(bans, wait for an explicit go-ahead). "
             "Do not remember one-off tasks such as opening a tab. "
             "To erase something, call remember with forget=true.\n"
-            "- Playbooks: when the owner teaches a procedure to run again later, "
-            "call save_book(name, when_to_use, body). That is not a memory fact and not a routine. "
+            "- Skills: when the owner asks to find and keep a published skill from the web, "
+            "call install_book(url) with the document URL after they Allow that origin. "
+            "Store the fetched markdown, not a paraphrase. Do not wait for them to teach the steps. "
             "Names sit in <skill_books>. Call open_book before following those steps. "
-            "forget_book drops one.\n"
+            "forget_book drops one. save_book only revises a book already kept.\n"
             "- Do not dump internal monologues; be helpful, concise, and proactive."
         )
     elif role == "subagent" or parallel:

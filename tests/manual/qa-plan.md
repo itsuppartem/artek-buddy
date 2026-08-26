@@ -11,7 +11,7 @@ This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packag
 | | |
 | --- | --- |
 | `main` | Release **0.10.27**. |
-| `develop` | Daily since then: window look, Models / keys, memory book, bot-to-bot, plugins, playbook, phone page. `VERSION` is still **0.10.27** until a bump lands on `main`. |
+| `develop` | Daily since then: window look, Models / keys, memory book, bot-to-bot, plugins, skill from the web, phone page. `VERSION` is still **0.10.27** until a bump lands on `main`. |
 | Pad / keyboard / Cyrillic | **Not** in `develop`. Lives in PR #219. The Pi host for this pass is that tree. |
 | GitHub Release `.deb` | **Old.** Do not use it for this pass. |
 | Linux | Window **built from this tree** (`client/build-deb.sh`, optionally `ARTEK_BAKE_URL=1` for a local URL). Wide shell, about 1280×720, three columns. |
@@ -104,15 +104,17 @@ Computer → Memory: the identity chapter updated; the old city is not sitting n
 
 ---
 
-## 4. Playbook
+## 4. Skill from the web
 
-Same Demo chat, ordinary language: «Запомни playbook Invoice: когда я говорю invoice, открой сайт счёта и скачай PDF.»
+Same Demo chat. Ordinary language: «найди скилл для invoice и сохрани». On a scripted host send `please e2e-install-book` instead of dictating the steps.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Book card **Saved** | [ ] | [ ] |
+| Allow / Deny card for that origin. Deny stores nothing | [ ] | [ ] |
+| After Allow: book card **Saved** | [ ] | [ ] |
 | Chip above Message → click inserts `please run Invoice` and does **not** send | [ ] | [ ] |
-| Send → card with steps / Following, not a form in Settings | [ ] | [ ] |
+| Send → card with the fetched steps, not a form in Settings, not a raw `run failed: run-` id | [ ] | [ ] |
+| Another bot does not see the book | [ ] | [ ] |
 
 ---
 
@@ -535,14 +537,15 @@ If time is short, in this order:
 
 1. **§2 Models**
 2. **§3 Memory book**
-3. **§5 Bot asks bot**
-4. **§7 Desktop** + **§7a Hands on the guest**
-5. **§11 Phone chrome** + **§29 Computer must not blank**
-6. **§12 Pad and Cyrillic**
-7. **§25 File + §26 Picture + §27 Ctrl+V**
-8. **§28 Save feedback**
+3. **§4 Skill from the web**
+4. **§5 Bot asks bot**
+5. **§7 Desktop** + **§7a Hands on the guest**
+6. **§11 Phone chrome** + **§29 Computer must not blank**
+7. **§12 Pad and Cyrillic**
+8. **§25 File + §26 Picture + §27 Ctrl+V**
+9. **§28 Save feedback**
 
-Then 1, 4, 6, 8, 9, 10, 13–24, 30.
+Then 1, 6, 8, 9, 10, 13–24, 30.
 
 ---
 
