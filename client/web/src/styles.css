@@ -141,17 +141,21 @@ a:focus-visible {
 }
 
 [data-phone-shell="1"] {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
   padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-left: env(safe-area-inset-left, 0px);
 }
 
 [data-phone-shell="1"] .phone-nav {
   position: absolute;
-  right: 0;
+  right: env(safe-area-inset-right, 0px);
   bottom: 0;
-  left: 0;
+  left: env(safe-area-inset-left, 0px);
   z-index: 30;
   display: flex;
-  height: calc(56px + env(safe-area-inset-bottom, 0px));
+  height: auto;
+  min-height: 56px;
   padding: 6px 8px env(safe-area-inset-bottom, 0px);
   border-top: 1px solid var(--color-hairline);
   background: var(--color-plate);
@@ -184,6 +188,10 @@ a:focus-visible {
   border-right: 0;
 }
 
+[data-phone-shell="1"] [data-shell="rack"] > .ab-scroll {
+  flex-grow: 0;
+}
+
 [data-phone-shell="1"][data-phone-tab="chats"] [data-testid="thread-pane"],
 [data-phone-shell="1"][data-phone-tab="chats"] [data-shell="hatch"] {
   display: none;
@@ -209,6 +217,13 @@ a:focus-visible {
 [data-phone-shell="1"][data-phone-tab="desk"] aside[data-shell="hatch"] > div {
   width: 100%;
   max-width: none;
+}
+
+[data-phone-desk="1"] {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
 }
 
 @media (orientation: landscape) {

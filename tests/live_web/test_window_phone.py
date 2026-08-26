@@ -17,6 +17,7 @@ def test_host_page_pairs_and_stacks_on_iphone_11_pro(page: Page, host_url: str) 
     box = page.viewport_size
     assert box == {"width": 375, "height": 812}
     pair_host_page(page, host_url)
+    expect(page.get_by_test_id("phone-desk-pad")).to_have_count(0)
     name = unique_bot("PhoneWin")
     create_named_bot_phone(page, name)
     expect(page.get_by_test_id("thread-header")).to_contain_text(name, timeout=8_000)

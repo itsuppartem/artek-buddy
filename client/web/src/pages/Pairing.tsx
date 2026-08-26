@@ -53,7 +53,7 @@ export function PairingPage({
 
   return (
     <div className="flex h-full flex-col bg-ink text-paper">
-      <div className="flex items-center gap-3 px-4 pt-3">
+      <div className="flex items-center gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top,0px))]">
         {hostPage ? null : <WindowChrome />}
         <img src="/favicon.png" alt="" width={18} height={18} className="rounded-[5px]" />
         <span className="text-[13px] text-mute">Artek Buddy</span>
