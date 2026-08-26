@@ -29,6 +29,7 @@ class SubagentService:
         self.events: EventHub | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
         self.tasks: dict[str, asyncio.Task[Any]] = {}
+        self._step_status: dict[str, str] = {}
 
     def bind(self, events: EventHub, loop: asyncio.AbstractEventLoop) -> None:
         self.events = events
@@ -235,17 +236,56 @@ class SubagentService:
         }
 
     def _emit(self, bot: Bot, record: Subagent) -> None:
+        if self.events is not None:
+            event = ProductEvent(
+                id=new_id("evt"),
+                workspace_id=bot.workspace_id,
+                thread_id=bot.thread_id,
+                bot_id=bot.id,
+                seq=self.events.next_seq(bot.id),
+                type=ProductEventType.THREAD_SUBAGENT,
+                created_at=isoformat_utc(),
+                payload=self.payload(record),
+                run_id=record.parent_run_id,
+            )
+            self.events.publish(event)
+        self._emit_step(bot, record)
+
+    def _emit_step(self, bot: Bot, record: Subagent) -> None:
+        if record.status == "running":
+            text = f"Started {record.name}."
+        elif record.status == "completed":
+            text = f"Finished {record.name}."
+        elif record.status == "failed":
+            text = f"{record.name} failed."
+        elif record.status == "cancelled":
+            text = f"Stopped {record.name}."
+        else:
+            return
+        if self._step_status.get(record.id) == record.status:
+            return
+        self._step_status[record.id] = record.status
+        try:
+            msg = self.store.append_bot_message(
+                bot,
+                [{"kind": "text", "text": text}],
+                run_id=record.parent_run_id,
+            )
+        except Exception:
+            log.exception("failed to append subagent step")
+            return
         if self.events is None:
             return
-        event = ProductEvent(
-            id=new_id("evt"),
-            workspace_id=bot.workspace_id,
-            thread_id=bot.thread_id,
-            bot_id=bot.id,
-            seq=self.events.next_seq(bot.id),
-            type=ProductEventType.THREAD_SUBAGENT,
-            created_at=isoformat_utc(),
-            payload=self.payload(record),
-            run_id=record.parent_run_id,
+        self.events.publish(
+            ProductEvent(
+                id=new_id("evt"),
+                workspace_id=bot.workspace_id,
+                thread_id=bot.thread_id,
+                bot_id=bot.id,
+                seq=self.events.next_seq(bot.id),
+                type=ProductEventType.THREAD_MESSAGE_CREATED,
+                created_at=isoformat_utc(),
+                payload={"message": msg.model_dump(mode="json")},
+                run_id=record.parent_run_id,
+            )
         )
-        self.events.publish(event)
