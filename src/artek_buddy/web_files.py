@@ -1,5 +1,3 @@
-"""Serve packaged window files without leaving the web root."""
-
 from __future__ import annotations
 
 import mimetypes
@@ -24,6 +22,25 @@ _KNOWN_TYPES = frozenset(
         "text/javascript",
     }
 )
+
+
+def resolve_web_root(raw: str = "") -> Path | None:
+    candidates: list[Path] = []
+    env = (os.environ.get("ARTEK_WEB_ROOT") or raw or "").strip()
+    if env:
+        candidates.append(Path(env))
+    candidates.append(Path("/app/web"))
+    repo = Path(__file__).resolve().parents[2] / "client" / "web" / "dist"
+    candidates.append(repo)
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        if (path / "index.html").is_file():
+            return path
+    return None
 
 
 def _inside(base: str, target: str) -> bool:

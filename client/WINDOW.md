@@ -1,7 +1,8 @@
 # Client window map
 
 This is the product window: `artek_buddy.py` (GTK/WebKit + loopback proxy) plus `web/`.
-The page never sees `~/.config/artek-buddy/token`. Update this file in the same change as the UI.
+The same page is also served from the host on `:8080` for a phone browser / home-screen app.
+The page never sees `~/.config/artek-buddy/token` or `AGENT_HTTP_TOKEN`. Update this file in the same change as the UI.
 
 ```mermaid
 flowchart LR
@@ -31,8 +32,9 @@ The computer pane, Models, and Settings overlay sit on the right of the same she
 | Screen | When | Controls |
 | --- | --- | --- |
 | Proxy error | loopback `status` failed | Retry (reload) |
-| Pairing | not paired | Lying-pose mark, Host URL (last host from boot status, not refetched), code `XXXX-XXXX`, device name, Pair (disabled until the code is non-empty). Fail text under the form. Visible tan `:focus-visible`. |
+| Pairing | not paired | Lying-pose mark, Host URL (last host from boot status, not refetched; **hidden on the host page**), code `XXXX-XXXX`, device name (`Phone` on the host page), Pair (disabled until the code is non-empty). Fail text under the form. Visible tan `:focus-visible`. Host page title is Pair this phone. |
 | Shell | paired | rack + thread; optional Settings / Create / computer pane / Models / Plugins / fullscreen. Pairing does not open the pane or Models. Create focuses the new chat. Settings opens the pane without booting. Offline boots. A bot that opens a path updates the tile. You opens Models. Plugins opens the apps pane (works with an empty inbox). |
+| Phone (≤720px) | host page or a narrow window | One column. Bottom `phone-nav`: Chats / Chat / Desktop (`phone-tab-*`). Tap targets 44px. `safe-area-inset-bottom`. iPhone Share → Add to Home Screen (`home-screen-hint`). `turn-on-alerts` asks for web notifications after a tap; iOS only exposes that from the home-screen icon. No This-PC Allow on the phone filesystem. |
 
 Auth error in the thread: **Pair this computer again** → `unpair` → pairing.
 
@@ -136,7 +138,11 @@ Routines (same pane): New (name, cron, prompt; invalid cron disables Save), on/o
 
 ## Consent and this PC
 
-Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job marked `auto` runs without a card (`/local/owner-*`). After Allow the client reads, writes, lists, or execs under `$HOME` and posts the result. Paths outside `$HOME` are 403 and stay on the consent card. Composer Stop is `thread-stop` (`aria-label="Stop"`). Settings is the Settings button, not the thread title.
+Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job marked `auto` runs without a card (`/local/owner-*`) on the Linux `.deb`. After Allow the desktop client reads, writes, lists, or execs under `$HOME` and posts the result. Paths outside `$HOME` are 403 and stay on the consent card. The host phone page never runs owner tools (`/local/owner-*` is 403; auto jobs fail closed). Composer Stop is `thread-stop` (`aria-label="Stop"`). Settings is the Settings button, not the thread title.
+
+## Host page / phone
+
+`GET /` and `/app` on `:8080` serve the same `web/` tree. `GET /local/status` returns `surface: host`. Pair sets `artek_device` (httpOnly). `--serve` stays the `.deb` / CI proxy. Manifest + apple-touch-icon for Add to Home Screen. Pair from that icon (Safari and the icon do not share the login). No background sync and no Web Push: alerts fire only while the home-screen app is open or still in memory. iPhone will not wake a killed app.
 
 ## Loopback proxy (`/local/*`)
 

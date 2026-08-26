@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { api } from "./api";
+import { setPageSurface } from "./lib/web-notify";
 import { PairingPage } from "./pages/Pairing";
 import { ShellPage } from "./pages/Shell";
 
@@ -16,6 +17,7 @@ export function App() {
         setBootError(null);
         setPaired(status.paired);
         setSavedHostUrl(status.url || "");
+        setPageSurface(status.surface === "host" ? "host" : "desktop");
       })
       .catch((err: unknown) => {
         setBootError(err instanceof Error ? err.message : "Could not reach the local client");

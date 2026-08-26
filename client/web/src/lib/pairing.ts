@@ -11,6 +11,7 @@ export type LocalStatus = {
   paired: boolean;
   url: string;
   nonce: string;
+  surface?: "desktop" | "host";
 };
 
 export type PairedDevice = {

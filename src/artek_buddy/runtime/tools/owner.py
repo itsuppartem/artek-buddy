@@ -12,18 +12,34 @@ from artek_buddy.consent import (
     OWNER_HOME_SCOPE,
     owner_command_is_readonly,
 )
+from artek_buddy.owner_clients import OWNER_WEB_ERROR, has_desktop_owner_client
 from artek_buddy.runtime.tools.common import (
     _with_consent,
 )
 
 
 class OwnerToolsMixin:
+    def _owner_this_pc_ready(self) -> dict[str, Any] | None:
+        store = getattr(self.runtime, "store", None)
+        if store is None or not hasattr(store, "list_devices"):
+            return None
+        try:
+            devices = store.list_devices()
+        except Exception:
+            return None
+        if has_desktop_owner_client(devices):
+            return None
+        return {"ok": False, "error": OWNER_WEB_ERROR}
+
     def _exec_read_owner_file(
         self, args: dict[str, Any], bound_bot_id: str | None
     ) -> dict[str, Any]:
         path = str(args.get("path") or "").strip()
         if not path:
             return {"ok": False, "error": "path is required"}
+        blocked = self._owner_this_pc_ready()
+        if blocked:
+            return blocked
         bot_id, _run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if not bot_id:
             return {"ok": False, "error": "no active bot"}
@@ -87,6 +103,9 @@ class OwnerToolsMixin:
             return {"ok": False, "error": "path is required"}
         if content is None:
             return {"ok": False, "error": "content is required"}
+        blocked = self._owner_this_pc_ready()
+        if blocked:
+            return blocked
         text = content if isinstance(content, str) else str(content)
         if len(text.encode()) > 1_000_000:
             return {"ok": False, "error": "file is larger than 1 MB"}
@@ -138,6 +157,9 @@ class OwnerToolsMixin:
         self, args: dict[str, Any], bound_bot_id: str | None
     ) -> dict[str, Any]:
         path = str(args.get("path") or "~").strip() or "~"
+        blocked = self._owner_this_pc_ready()
+        if blocked:
+            return blocked
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if not bot_id:
             return {"ok": False, "error": "no active bot"}
@@ -178,6 +200,9 @@ class OwnerToolsMixin:
             return {"ok": False, "error": "command is required"}
         if len(command) > 8000:
             return {"ok": False, "error": "command is too long"}
+        blocked = self._owner_this_pc_ready()
+        if blocked:
+            return blocked
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if not bot_id:
             return {"ok": False, "error": "no active bot"}

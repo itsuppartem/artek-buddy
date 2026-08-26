@@ -283,7 +283,14 @@ is a public credential.
 sudo tailscale funnel --bg 8080
 ```
 
-Put that URL in the client (`client/url` or the pair form). **Never commit the hostname.** Prefer the tailnet URL unless you truly need the public one.
+Put that URL in the Linux `.deb` (`client/url` or the pair form), or open the
+same URL in a phone browser. The host now serves the window there. Pair with a
+code. On iPhone: Share → Add to Home Screen, open that icon, then pair and
+Turn on alerts. Alerts work while that home-screen app is open; iOS will not
+run this page in the background or after you swipe it away. This-PC file tools
+stay on the Linux `.deb` — the phone cannot read the phone's files. **Never
+commit the hostname.** Prefer the tailnet URL unless you truly need the public
+one.
 
 ## Day to day
 

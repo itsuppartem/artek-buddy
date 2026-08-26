@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- The same Funnel / tailnet URL serves the window. A phone pairs with a code; the device token stays in an httpOnly cookie. Narrow screens stack Chats / Chat / Desktop. iPhone Add to Home Screen plus Turn on alerts (only while that app is open — no background). This-PC files stay on the Linux `.deb`.
 - The owner can teach a playbook in the thread (`save_book`). The next turn sees names only; `open_book` loads the steps. A chip fills `please run {name}`. No Settings form.
 - Models and Plugins Save name a host error instead of staying silent. A row's model is the host default (no second Default list). Cursor exposes reasoning and Fast; Save prefers grok-4.6 extra-high fast when that id is on the list. A Plugins key already on the host at boot shows as Key saved.
 - After an app is connected, a chip above Message fills `please use {name}`. The thread shows that app's result as a card.

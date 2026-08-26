@@ -39,6 +39,7 @@ from artek_buddy.http.consents import router as consents_router
 from artek_buddy.http.devices import router as devices_router
 from artek_buddy.http.memory import router as memory_router
 from artek_buddy.http.models import router as models_router
+from artek_buddy.http.page import router as page_router
 from artek_buddy.http.routines import router as routines_router
 from artek_buddy.http.session import router as session_router
 from artek_buddy.http.threads import router as threads_router
@@ -159,3 +160,6 @@ async def health() -> HealthResponse:
         ok=current is not None,
         db=db_ok,
     )
+
+
+app.include_router(page_router)

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     agent_data_dir: str = "/data"
     http_host: str = "0.0.0.0"
     http_port: int = 8080
+    web_root: str = ""
     database_url: str = "postgresql://artek:artek@127.0.0.1:5432/artek_buddy"
     sandbox_supervisor_url: str = "http://127.0.0.1:7091"
     sandbox_supervisor_token: str = ""

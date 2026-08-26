@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, WebSocket
 
 from artek_buddy.auth import host_token_match
 from artek_buddy.bus import EventHub
@@ -77,14 +77,19 @@ def _bearer(authorization: str | None) -> str | None:
 
 async def require_auth(
     authorization: str | None = Header(default=None),
+    device_cookie: str | None = Cookie(default=None, alias="artek_device"),
     cfg: Settings = Depends(settings),
     history: HistoryStore = Depends(store),
 ) -> str:
     token = _bearer(authorization)
+    if token is not None and host_token_match(token, cfg.agent_http_token):
+        return "host"
+    cookie = (device_cookie or "").strip() or None
+    if cookie and host_token_match(cookie, cfg.agent_http_token):
+        cookie = None
+    token = token or cookie
     if token is None:
         raise HTTPException(status_code=401, detail="missing bearer token")
-    if host_token_match(token, cfg.agent_http_token):
-        return "host"
     try:
         device = history.lookup_device_token(token)
     except DatabaseUnavailable as err:

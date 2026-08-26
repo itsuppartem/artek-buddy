@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page Files */
+        get: operations["page_files__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -15,6 +32,193 @@ export interface paths {
         get: operations["health_health_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/attach-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page Owner Cut */
+        post: operations["page_owner_cut_local_attach_files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page Notify */
+        post: operations["page_notify_local_notify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/owner-exec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page Owner Cut */
+        post: operations["page_owner_cut_local_owner_exec_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/owner-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page Owner Cut */
+        post: operations["page_owner_cut_local_owner_list_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/owner-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page Owner Cut */
+        post: operations["page_owner_cut_local_owner_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/owner-write": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page Owner Cut */
+        post: operations["page_owner_cut_local_owner_write_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/pair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page Pair */
+        post: operations["page_pair_local_pair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/save-artifact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page Owner Cut */
+        post: operations["page_owner_cut_local_save_artifact_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/save-home-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page Owner Cut */
+        post: operations["page_owner_cut_local_save_home_file_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page Status */
+        get: operations["page_status_local_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/local/unpair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page Unpair */
+        post: operations["page_unpair_local_unpair_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1118,6 +1322,23 @@ export interface paths {
         put?: never;
         /** Mark Thread Unread */
         post: operations["mark_thread_unread_v1_threads__bot_id__unread_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{full_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page Files */
+        get: operations["page_files__full_path__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2394,6 +2615,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    page_files__get: {
+        parameters: {
+            query?: {
+                full_path?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_health_get: {
         parameters: {
             query?: never;
@@ -2414,6 +2666,338 @@ export interface operations {
             };
         };
     };
+    page_owner_cut_local_attach_files_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Artek-Local-Nonce"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_notify_local_notify_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Artek-Local-Nonce"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_owner_cut_local_owner_exec_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Artek-Local-Nonce"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_owner_cut_local_owner_list_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Artek-Local-Nonce"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_owner_cut_local_owner_read_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Artek-Local-Nonce"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_owner_cut_local_owner_write_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Artek-Local-Nonce"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_pair_local_pair_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Artek-Local-Nonce"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_owner_cut_local_save_artifact_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Artek-Local-Nonce"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_owner_cut_local_save_home_file_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Artek-Local-Nonce"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_status_local_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    page_unpair_local_unpair_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Artek-Local-Nonce"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_artifacts_v1_artifacts_get: {
         parameters: {
             query: {
@@ -2423,7 +3007,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2456,7 +3042,9 @@ export interface operations {
             path: {
                 artifact_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2487,7 +3075,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2518,7 +3108,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -2553,7 +3145,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2586,7 +3180,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2621,7 +3217,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2654,7 +3252,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -2691,7 +3291,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2724,7 +3326,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -2761,7 +3365,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2794,7 +3400,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -2831,7 +3439,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2864,7 +3474,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2897,7 +3509,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2931,7 +3545,9 @@ export interface operations {
                 bot_id: string;
                 subagent_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -2965,7 +3581,9 @@ export interface operations {
                 bot_id: string;
                 subagent_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3003,7 +3621,9 @@ export interface operations {
                 bot_id: string;
                 subagent_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3036,7 +3656,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3069,7 +3691,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3105,7 +3729,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3140,7 +3766,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3175,7 +3803,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3208,7 +3838,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3241,7 +3873,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3278,7 +3912,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3311,7 +3947,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3344,7 +3982,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3377,7 +4017,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3410,7 +4052,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3443,7 +4087,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3474,7 +4120,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3505,7 +4153,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3542,7 +4192,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3573,7 +4225,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3608,7 +4262,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3639,7 +4295,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3672,7 +4330,9 @@ export interface operations {
             path: {
                 connection_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3705,7 +4365,9 @@ export interface operations {
             path: {
                 connection_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3738,7 +4400,9 @@ export interface operations {
             path: {
                 consent_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3771,7 +4435,9 @@ export interface operations {
             path: {
                 consent_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3808,7 +4474,9 @@ export interface operations {
             path: {
                 consent_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3845,7 +4513,9 @@ export interface operations {
             path: {
                 consent_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3880,7 +4550,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -3911,7 +4583,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -3946,7 +4620,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4045,7 +4721,9 @@ export interface operations {
             path: {
                 device_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4076,7 +4754,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4107,7 +4787,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4141,7 +4823,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4172,7 +4856,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4209,7 +4895,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4242,7 +4930,9 @@ export interface operations {
             path: {
                 document_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4275,7 +4965,9 @@ export interface operations {
             path: {
                 document_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4315,7 +5007,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4346,7 +5040,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4377,7 +5073,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4408,7 +5106,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4445,7 +5145,9 @@ export interface operations {
             path: {
                 provider: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4476,7 +5178,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4513,7 +5217,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4544,7 +5250,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4581,7 +5289,9 @@ export interface operations {
             path: {
                 routine_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4614,7 +5324,9 @@ export interface operations {
             path: {
                 routine_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4651,7 +5363,9 @@ export interface operations {
             path: {
                 routine_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4682,7 +5396,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4717,7 +5433,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4748,7 +5466,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4785,7 +5505,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4818,7 +5540,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4857,7 +5581,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4890,7 +5616,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -4930,7 +5658,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4963,7 +5693,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -5000,7 +5732,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5033,7 +5767,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5066,7 +5802,9 @@ export interface operations {
             path: {
                 bot_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5077,6 +5815,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_files__full_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                full_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

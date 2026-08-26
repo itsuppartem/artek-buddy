@@ -57,6 +57,7 @@ import {
   shouldQueueSend,
   writeStoredList,
 } from "../lib/offline-queue";
+import { nextPhoneTab, type PhoneTab } from "../lib/phone-shell";
 import {
   embeddableScreenUrl,
   screenFrameLooksFailed,
@@ -86,6 +87,16 @@ import {
   readFileBase64,
   transferFilePaths,
 } from "../lib/uploads";
+import {
+  isIosDevice,
+  isStandaloneDisplay,
+  pageSurface,
+  shouldHoldHostAlert,
+  shouldOfferWebAlerts,
+  shouldShowHomeScreenHint,
+  shouldShowWebNotification,
+  webNotificationBody,
+} from "../lib/web-notify";
 import type {
   Bot,
   ComputerMode,
@@ -130,6 +141,15 @@ export function ShellPage() {
   const [query, setQuery] = useState("");
   const [archivedBots, setArchivedBots] = useState<Bot[]>([]);
   const [sidebarView, setSidebarView] = useState<SidebarView>("inbox");
+  const [phoneTab, setPhoneTab] = useState<PhoneTab>("chat");
+  const [alertOffer, setAlertOffer] = useState<"hide" | "ask" | "ready">(() =>
+    shouldOfferWebAlerts({
+      surface: pageSurface(),
+      permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+      standalone: isStandaloneDisplay(),
+      ios: isIosDevice(),
+    }),
+  );
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const [draft, setDraft] = useState("");
   const draftHistory = useRef(createComposerHistory(""));
@@ -260,13 +280,18 @@ export function ShellPage() {
     const kindKey = `${next.botId}:${next.kind}`;
     const now = Date.now();
     const viewing = activeIdRef.current || botIdRef.current || null;
-    if (
-      !shouldSendDesktopAlert({
-        windowFocused: true,
-        viewingBotId: viewing,
-        alertBotId: next.botId,
-      })
-    ) {
+    const pageHidden = typeof document !== "undefined" && document.hidden;
+    const showBanner = shouldSendDesktopAlert({
+      windowFocused: true,
+      viewingBotId: viewing,
+      alertBotId: next.botId,
+    });
+    const showWeb = shouldShowWebNotification({
+      pageHidden,
+      viewingBotId: viewing,
+      alertBotId: next.botId,
+    });
+    if (shouldHoldHostAlert({ pageHidden, viewingBotId: viewing, alertBotId: next.botId })) {
       const held = pendingAlerts.current.get(next.botId);
       if (!held || shouldReplaceAttention(held.alert, next)) {
         pendingAlerts.current.set(next.botId, { alert: next, notifyOnFinish, key });
@@ -283,7 +308,56 @@ export function ShellPage() {
       if (oldest) seenAlertKeys.current.delete(oldest);
     }
     pendingAlerts.current.delete(next.botId);
-    setAttention((current) => (shouldReplaceAttention(current, next) ? next : current));
+    if (showBanner) {
+      setAttention((current) => (shouldReplaceAttention(current, next) ? next : current));
+    }
+    if (showWeb) {
+      raiseWebNotification(next);
+    }
+  }
+
+  function raiseWebNotification(next: AttentionAlert) {
+    if (pageSurface() !== "host") return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+      const note = new Notification(next.title, {
+        body: webNotificationBody(next),
+        tag: next.botId,
+      });
+      note.onclick = () => {
+        window.focus();
+        openBot(next.botId);
+        note.close();
+      };
+    } catch {
+      /* iOS ignores Notification if the home-screen app is not allowed */
+    }
+  }
+
+  function flushHeldWebAlerts() {
+    if (typeof document === "undefined" || !document.hidden) return;
+    const viewing = activeIdRef.current || botIdRef.current || null;
+    const now = Date.now();
+    for (const [id, held] of [...pendingAlerts.current.entries()]) {
+      if (
+        !shouldShowWebNotification({
+          pageHidden: true,
+          viewingBotId: viewing,
+          alertBotId: id,
+        })
+      ) {
+        continue;
+      }
+      pendingAlerts.current.delete(id);
+      rememberShownAlert(
+        seenAlertKeys.current,
+        recentKindAt.current,
+        held.key,
+        `${held.alert.botId}:${held.alert.kind}`,
+        now,
+      );
+      raiseWebNotification(held.alert);
+    }
   }
 
   function flushHeldAlerts() {
@@ -320,6 +394,7 @@ export function ShellPage() {
   function openBot(id: string) {
     activeIdRef.current = id;
     botIdRef.current = id;
+    setPhoneTab(nextPhoneTab("select-bot"));
     navigate(`/app/${id}`);
   }
 
@@ -333,6 +408,14 @@ export function ShellPage() {
 
   function startOwnerFulfill(consentId: string) {
     if (!consentId || fulfilledOwnerJobs.current.has(consentId)) return;
+    if (pageSurface() === "host") {
+      fulfilledOwnerJobs.current.add(consentId);
+      void reportOwnerJobError(
+        consentId,
+        new Error("This-PC files need the Linux app, not the phone browser."),
+      );
+      return;
+    }
     fulfilledOwnerJobs.current.add(consentId);
     void fulfillOwnerJob(consentId).catch((err) => {
       fulfilledOwnerJobs.current.delete(consentId);
@@ -404,6 +487,21 @@ export function ShellPage() {
       }
     }, 2_000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (pageSurface() !== "host") return;
+    function onHide() {
+      if (typeof document !== "undefined" && document.hidden) {
+        flushHeldWebAlerts();
+      }
+    }
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onHide);
+    };
   }, []);
 
   useEffect(() => {
@@ -1323,10 +1421,21 @@ export function ShellPage() {
   }, [later]);
 
   return (
-    <div className="relative flex h-full min-w-0 overflow-hidden bg-ink text-paper">
-      <aside className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613]">
+    <div
+      className="relative flex h-full min-w-0 overflow-hidden bg-ink text-paper"
+      data-surface={pageSurface()}
+      data-phone-tab={phoneTab}
+    >
+      <aside
+        data-shell="rack"
+        className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613]"
+      >
         <div className="app-drag flex items-center justify-between px-3 pb-2 pt-3">
-          <WindowChrome />
+          {pageSurface() === "host" ? (
+            <span className="text-[13px] text-mute">Artek Buddy</span>
+          ) : (
+            <WindowChrome />
+          )}
         </div>
         <div className="mb-2 flex items-center gap-2 px-3">
           <label className="flex min-w-0 flex-1 items-center gap-2 rounded-[8px] border border-hairline bg-raised px-2.5 py-1.5 text-[14px] text-mute">
@@ -1515,7 +1624,10 @@ export function ShellPage() {
             <button
               type="button"
               disabled={!active}
-              onClick={() => setPanel((current) => (current === "computer" ? null : "computer"))}
+              onClick={() => {
+                setPhoneTab(nextPhoneTab("open-desk"));
+                setPanel((current) => (current === "computer" ? null : "computer"));
+              }}
               className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
                 panel === "computer"
                   ? "border-tan bg-raised text-paper"
@@ -1529,6 +1641,7 @@ export function ShellPage() {
               type="button"
               disabled={!active}
               onClick={() => {
+                setPhoneTab(nextPhoneTab("open-desk"));
                 panelAfterSettings.current = panel === "computer" ? "computer" : null;
                 setPanel("settings");
               }}
@@ -1874,6 +1987,7 @@ export function ShellPage() {
       </main>
 
       <aside
+        data-shell="hatch"
         className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out ${
           panel && (active || panel === "create" || panel === "models" || panel === "plugins")
             ? "w-[360px] border-l border-hairline"
@@ -2036,6 +2150,82 @@ export function ShellPage() {
           }}
         />
       ) : null}
+
+      {pageSurface() === "host" &&
+      (alertOffer === "ask" ||
+        shouldShowHomeScreenHint({
+          surface: "host",
+          ios: isIosDevice(),
+          standalone: isStandaloneDisplay(),
+        })) ? (
+        <div className="phone-host-banners pointer-events-none absolute inset-x-0 bottom-[72px] z-20 flex flex-col gap-2 px-3">
+          {shouldShowHomeScreenHint({
+            surface: "host",
+            ios: isIosDevice(),
+            standalone: isStandaloneDisplay(),
+          }) ? (
+            <p
+              data-testid="home-screen-hint"
+              className="pointer-events-auto rounded-[10px] border border-hairline bg-plate px-3 py-2 text-[13px] leading-5 text-paper"
+            >
+              Share → Add to Home Screen, then open that icon. iPhone alerts need it and only work
+              while this app is open.
+            </p>
+          ) : null}
+          {alertOffer === "ask" ? (
+            <button
+              type="button"
+              data-testid="turn-on-alerts"
+              className="pointer-events-auto rounded-[10px] border border-tan bg-plate px-3 py-2 text-left text-[13px] font-medium text-paper"
+              onClick={() => {
+                if (typeof Notification === "undefined") return;
+                void Notification.requestPermission().then((permission) => {
+                  setAlertOffer(
+                    shouldOfferWebAlerts({
+                      surface: pageSurface(),
+                      permission,
+                      standalone: isStandaloneDisplay(),
+                      ios: isIosDevice(),
+                    }),
+                  );
+                });
+              }}
+            >
+              Turn on alerts — only while this app is open
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <nav data-testid="phone-nav" className="phone-nav" aria-label="Phone sections">
+        <button
+          type="button"
+          data-testid="phone-tab-chats"
+          aria-current={phoneTab === "chats" ? "page" : undefined}
+          onClick={() => setPhoneTab(nextPhoneTab("open-chats"))}
+        >
+          Chats
+        </button>
+        <button
+          type="button"
+          data-testid="phone-tab-chat"
+          aria-current={phoneTab === "chat" ? "page" : undefined}
+          onClick={() => setPhoneTab(nextPhoneTab("open-chat"))}
+        >
+          Chat
+        </button>
+        <button
+          type="button"
+          data-testid="phone-tab-desk"
+          aria-current={phoneTab === "desk" ? "page" : undefined}
+          onClick={() => {
+            setPhoneTab(nextPhoneTab("open-desk"));
+            if (active) setPanel((current) => current || "computer");
+          }}
+        >
+          Desktop
+        </button>
+      </nav>
 
       <ComputerOverlay
         booting={booting}
