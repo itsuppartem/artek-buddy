@@ -3,13 +3,14 @@ import {
   DESK_SIZE,
   type DeskInput,
   type DeskPoint,
+  deskPointFromPad,
   EXTRA_KEYS,
   gestureFromTouch,
   inputForGesture,
   inputForMove,
   keyFromDomKey,
   keysFromField,
-  moveFromDelta,
+  padStyleFromDesk,
 } from "../../lib/phone-desk";
 
 export function PhoneDeskPad({
@@ -23,8 +24,10 @@ export function PhoneDeskPad({
   onInput: (input: DeskInput) => void;
   onDismissKeys: () => void;
 }) {
+  const padRef = useRef<HTMLDivElement>(null);
   const keysRef = useRef<HTMLInputElement>(null);
   const [field, setField] = useState("");
+  const [padSize, setPadSize] = useState({ width: DESK_SIZE.width, height: DESK_SIZE.height });
   const pos = useRef<DeskPoint>({
     x: Math.round(DESK_SIZE.width / 2),
     y: Math.round(DESK_SIZE.height / 2),
@@ -32,8 +35,29 @@ export function PhoneDeskPad({
   const [dot, setDot] = useState(pos.current);
 
   useEffect(() => {
+    const el = padRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      setPadSize({ width: rect.width, height: rect.height });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = padRef.current;
+    if (!el) return;
+    const stop = (event: TouchEvent) => event.preventDefault();
+    el.addEventListener("touchstart", stop, { passive: false });
+    return () => el.removeEventListener("touchstart", stop);
+  }, []);
+
+  useEffect(() => {
     if (!keysOpen) return;
-    keysRef.current?.focus();
+    keysRef.current?.focus({ preventScroll: true });
   }, [keysOpen]);
 
   const stroke = useRef({
@@ -42,14 +66,30 @@ export function PhoneDeskPad({
     move: 0,
     dy: 0,
     maxFingers: 0,
-    lastX: 0,
-    lastY: 0,
     lastMoveAt: 0,
   });
 
   function send(input: DeskInput | null) {
     if (!input || !enabled) return;
     onInput(input);
+  }
+
+  function pointFromEvent(event: { clientX: number; clientY: number }): DeskPoint {
+    const el = padRef.current;
+    if (!el) return pos.current;
+    const rect = el.getBoundingClientRect();
+    return deskPointFromPad(event.clientX, event.clientY, {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+    });
+  }
+
+  function place(event: { clientX: number; clientY: number }, report: boolean) {
+    pos.current = pointFromEvent(event);
+    setDot(pos.current);
+    if (report) send(inputForMove(pos.current));
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
@@ -63,11 +103,10 @@ export function PhoneDeskPad({
       s.move = 0;
       s.dy = 0;
       s.maxFingers = 0;
-      s.lastX = event.clientX;
-      s.lastY = event.clientY;
     }
     s.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     s.maxFingers = Math.max(s.maxFingers, s.pointers.size);
+    if (s.pointers.size === 1) place(event, true);
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
@@ -85,17 +124,14 @@ export function PhoneDeskPad({
       }
       return;
     }
-    const dx = event.clientX - s.lastX;
-    const dy = event.clientY - s.lastY;
-    s.lastX = event.clientX;
-    s.lastY = event.clientY;
-    s.move += Math.hypot(dx, dy);
-    pos.current = moveFromDelta(pos.current, dx, dy);
-    setDot(pos.current);
+    if (last) s.move += Math.hypot(event.clientX - last.x, event.clientY - last.y);
     const now = Date.now();
-    if (now - s.lastMoveAt < 32) return;
+    if (now - s.lastMoveAt < 32) {
+      place(event, false);
+      return;
+    }
     s.lastMoveAt = now;
-    send(inputForMove(pos.current));
+    place(event, true);
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
@@ -120,9 +156,12 @@ export function PhoneDeskPad({
     s.dy = 0;
   }
 
+  const cursor = padStyleFromDesk(dot, padSize);
+
   return (
-    <div className="pointer-events-none absolute inset-0 z-10">
+    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
       <div
+        ref={padRef}
         data-testid="phone-desk-pad"
         className="absolute inset-0 touch-none"
         style={{ pointerEvents: enabled ? "auto" : "none" }}
@@ -135,23 +174,20 @@ export function PhoneDeskPad({
           <span
             data-testid="phone-desk-cursor"
             className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-ink bg-tan"
-            style={{
-              left: `${(dot.x / DESK_SIZE.width) * 100}%`,
-              top: `${(dot.y / DESK_SIZE.height) * 100}%`,
-            }}
+            style={{ left: cursor.left, top: cursor.top }}
           />
         ) : null}
       </div>
       {keysOpen ? (
         <div
           data-testid="phone-desk-key-row"
-          className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex flex-wrap gap-1 border-t border-hairline bg-plate px-2 py-1.5"
+          className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex flex-nowrap gap-1 border-t border-hairline bg-plate px-1.5 py-1"
         >
           {EXTRA_KEYS.map((item) => (
             <button
               key={item.key}
               type="button"
-              className="min-h-11 min-w-11 flex-1 rounded-[8px] bg-raised text-[13px] font-medium text-paper"
+              className="min-h-11 min-w-0 flex-1 rounded-[8px] bg-raised text-[12px] font-medium text-paper"
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => send(keyFromDomKey(item.key))}
             >
@@ -170,7 +206,7 @@ export function PhoneDeskPad({
           autoCorrect="off"
           autoComplete="off"
           enterKeyHint="done"
-          className="pointer-events-none absolute bottom-0 left-0 h-px w-px overflow-hidden opacity-0"
+          className="pointer-events-none absolute top-0 left-0 h-px w-px overflow-hidden opacity-0"
           onChange={(event) => {
             const next = event.target.value;
             for (const input of keysFromField(field, next)) send(input);

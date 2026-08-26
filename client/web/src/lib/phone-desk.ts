@@ -10,6 +10,55 @@ export type DeskGesture = "left-click" | "right-click" | "scroll-up" | "scroll-d
 
 export type DeskInput = { kind: string; payload: Record<string, unknown> };
 
+export function containBox(
+  frameW: number,
+  frameH: number,
+  contentW = DESK_SIZE.width,
+  contentH = DESK_SIZE.height,
+): { scale: number; width: number; height: number; left: number; top: number } {
+  const scale = Math.min(frameW / contentW, frameH / contentH);
+  const width = contentW * scale;
+  const height = contentH * scale;
+  return {
+    scale,
+    width,
+    height,
+    left: (frameW - width) / 2,
+    top: (frameH - height) / 2,
+  };
+}
+
+export function deskPointFromPad(
+  clientX: number,
+  clientY: number,
+  pad: { left: number; top: number; width: number; height: number },
+): DeskPoint {
+  const box = containBox(pad.width, pad.height);
+  return clampDeskPoint(
+    (clientX - pad.left - box.left) / box.scale,
+    (clientY - pad.top - box.top) / box.scale,
+  );
+}
+
+export function padStyleFromDesk(
+  point: DeskPoint,
+  pad: { width: number; height: number },
+): { left: number; top: number } {
+  const box = containBox(pad.width, pad.height);
+  return {
+    left: box.left + point.x * box.scale,
+    top: box.top + point.y * box.scale,
+  };
+}
+
+export function visualViewportBox(
+  innerHeight: number,
+  view: { height: number; offsetTop: number } | null,
+): { top: number; height: number } {
+  if (!view) return { top: 0, height: innerHeight };
+  return { top: view.offsetTop, height: view.height };
+}
+
 export function clampDeskPoint(x: number, y: number): DeskPoint {
   return {
     x: Math.max(0, Math.min(DESK_SIZE.width - 1, Math.round(x))),

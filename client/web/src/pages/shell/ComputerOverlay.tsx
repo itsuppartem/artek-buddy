@@ -1,6 +1,11 @@
 import { type RefObject, type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
-import { type DeskInput, overlayHolderText, overlayTitle } from "../../lib/phone-desk";
+import {
+  type DeskInput,
+  overlayHolderText,
+  overlayTitle,
+  visualViewportBox,
+} from "../../lib/phone-desk";
 import {
   computerLabel,
   embeddableScreenUrl,
@@ -13,6 +18,30 @@ import type { Bot, ComputerStatus } from "../../types";
 import { BotAvatar } from "../../ui/bot-avatar";
 import { Button } from "../../ui/button";
 import { PhoneDeskPad } from "./PhoneDeskPad";
+
+function useOverlayViewport(enabled: boolean) {
+  const [box, setBox] = useState(() =>
+    typeof window === "undefined"
+      ? { top: 0, height: 0 }
+      : visualViewportBox(window.innerHeight, window.visualViewport),
+  );
+  useEffect(() => {
+    if (!enabled) return;
+    const apply = () => {
+      setBox(visualViewportBox(window.innerHeight, window.visualViewport));
+    };
+    apply();
+    window.visualViewport?.addEventListener("resize", apply);
+    window.visualViewport?.addEventListener("scroll", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", apply);
+      window.visualViewport?.removeEventListener("scroll", apply);
+      window.removeEventListener("resize", apply);
+    };
+  }, [enabled]);
+  return box;
+}
 
 export function ComputerOverlay({
   booting,
@@ -50,6 +79,7 @@ export function ComputerOverlay({
   const lastActivityMs = useRef(0);
   const [frameReady, setFrameReady] = useState(0);
   const [keysOpen, setKeysOpen] = useState(false);
+  const view = useOverlayViewport(phone && open);
 
   function reportOwnerActivity() {
     if (computer?.controlHolder !== "user" || !bot) return;
@@ -102,9 +132,14 @@ export function ComputerOverlay({
 
   return (
     <div
-      className="absolute inset-0 z-30 flex flex-col bg-[#050506]"
+      className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-[#050506]"
       data-testid="computer-overlay"
       data-phone-desk={phone ? "1" : "0"}
+      style={
+        phone && view.height > 0
+          ? { top: view.top, height: view.height, bottom: "auto" }
+          : undefined
+      }
       tabIndex={0}
       onPointerDown={reportOwnerActivity}
       onPointerMove={reportOwnerActivity}

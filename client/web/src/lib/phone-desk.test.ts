@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  containBox,
   DESK_SIZE,
+  deskPointFromPad,
   EXTRA_KEYS,
   gestureFromTouch,
   keyFromDomKey,
@@ -8,6 +10,8 @@ import {
   moveFromDelta,
   overlayHolderText,
   overlayTitle,
+  padStyleFromDesk,
+  visualViewportBox,
 } from "./phone-desk";
 import { shouldUsePhoneShell } from "./phone-shell";
 
@@ -24,6 +28,27 @@ describe("phone desk pad", () => {
     expect(gestureFromTouch({ maxFingers: 1, totalMovePx: 4, durationMs: 90 })).toBe("left-click");
     expect(gestureFromTouch({ maxFingers: 2, totalMovePx: 6, durationMs: 80 })).toBe("right-click");
     expect(gestureFromTouch({ maxFingers: 1, totalMovePx: 40, durationMs: 200 })).toBe("none");
+  });
+
+  it("maps a tap through the letterboxed 1280×800 guest", () => {
+    const fitted = containBox(375, 800);
+    expect(fitted.width).toBe(375);
+    expect(fitted.top).toBeGreaterThan(100);
+    const pad = { left: 0, top: 0, width: 375, height: 800 };
+    const mid = deskPointFromPad(187.5, fitted.top + fitted.height / 2, pad);
+    expect(mid.x).toBeCloseTo(640, 0);
+    expect(mid.y).toBeCloseTo(400, 0);
+    const style = padStyleFromDesk({ x: 640, y: 400 }, { width: 375, height: 800 });
+    expect(style.left).toBeCloseTo(187.5, 0);
+    expect(style.top).toBeCloseTo(fitted.top + fitted.height / 2, 0);
+  });
+
+  it("keeps the overlay on the visible viewport when the phone keyboard is up", () => {
+    expect(visualViewportBox(812, null)).toEqual({ top: 0, height: 812 });
+    expect(visualViewportBox(812, { height: 420, offsetTop: 0 })).toEqual({
+      top: 0,
+      height: 420,
+    });
   });
 
   it("scrolls on a two-finger vertical drag", () => {
