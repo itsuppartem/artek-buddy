@@ -18,8 +18,9 @@ the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 CI is `.github/workflows/test.yml` on PRs into `develop`/`main` and on pushes to those branches: `quality` (Ruff + mypy + pip-audit), `backend`
 (pytest + coverage + `npm audit --audit-level=high`, no Docker desktop), `scan`
-(Trivy filesystem), `ui` (scripted `.deb` window),
-and optional `live` (Grok, needs the Actions secret). CodeQL is
+(Trivy filesystem), `ui` (scripted `.deb` window), `ui_web` (host page
+at iPhone 11 Pro size), and optional `live` / `live_web` (Grok, needs the
+Actions secret). CodeQL is
 `.github/workflows/codeql.yml` (Python + JavaScript). Alerts on a PR are
 work: fix the bug, or name the residual in [THREAT-MODEL.md](THREAT-MODEL.md).
 Do not ignore them as scanner noise. Do not point a runner at the live `:8080` stack or the owner
@@ -81,8 +82,10 @@ New issues can use the GitHub forms (bug, feature, engineering).
 PRs into `develop` or `main` cannot merge while any of these checks is red:
 `quality`, `backend`, `ui`, `scan`, `live_gate`, `analyze (python)`,
 `analyze (javascript-typescript)`, and `CodeQL`. That is rulesets
-**Protect develop** and **Protect main**. `live` is not required (it needs
-the Actions secret; `live_gate` already records skipped vs failed). Review
+**Protect develop** and **Protect main**. `ui_web` runs on the same workflow
+and must be green before we merge even if the ruleset still names only `ui`.
+`live` and `live_web` are not required (they need the Actions secret;
+`live_gate` already records skipped vs failed). Review
 count is 0; do not push `main` or `develop` directly.
 A merge into `main` that changes `VERSION` publishes a GitHub Release only after
 the **push** `test` run on that commit is green (`release.yml` is `workflow_run`

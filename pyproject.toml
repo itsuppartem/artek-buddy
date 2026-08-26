@@ -81,8 +81,8 @@ disable_error_code = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
-    "live: installed .deb against an ephemeral compose stack",
-    "model: Cursor/Grok turn (needs CURSOR_API_KEY; skipped on the ui job)",
+    "live: Playwright against an ephemeral compose stack (.deb --serve or host page)",
+    "model: Cursor/Grok turn (needs CURSOR_API_KEY; skipped on the ui and ui_web jobs)",
     "no_model_seed: do not attach a default model for this API test",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]

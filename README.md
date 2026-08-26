@@ -313,7 +313,7 @@ Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel host
 
 ## CI (GitHub only)
 
-**CI tests the same packaged `.deb` owners install**, not a development server. The `ui` job builds the Debian package, installs it, and drives `--serve` with Playwright.
+**CI tests the packaged `.deb` and the host web page separately.** The `ui` job builds the Debian package, installs it, and drives `--serve`. The `ui_web` job opens the host `:8080` page at iPhone 11 Pro size (375×812) and does not install a `.deb`.
 
 Tests run in Actions on pull requests into `develop` and `main`, and on pushes to those branches (`workflow_dispatch` still works). They do **not** run on this Pi and must not use the live `:8080` stack or owner Postgres.
 
@@ -323,7 +323,9 @@ Tests run in Actions on pull requests into `develop` and `main`, and on pushes t
 | `backend` | same Ruff/mypy, then pytest host + HTTP API (`AGENT_RUNTIME=scripted`) + `.deb` proxy unit tests + coverage + `npm audit` (high) + Biome + Vitest + `tsc` |
 | `scan` | Trivy filesystem (CRITICAL/HIGH, ignore unfixed). Image scan is on `release.yml` after the host image push (CRITICAL, ignore unfixed). |
 | `ui` | always. Built `.deb` + `--serve` against a scripted host (no Cursor key). Pairing, boot/thread errors, sidebar, bots, memory, routines, scripted chat / fail / consent |
+| `ui_web` | always. Host page at iPhone 11 Pro (375×812), no `.deb`. Pair, Chats / Chat / Desktop, scripted send, This-PC cut |
 | `live` | only if `CURSOR_API_KEY` is set. Same `.deb`, real computer image, Grok turns (reply + Allow/Deny browse) |
+| `live_web` | only if `CURSOR_API_KEY` is set. Host page at iPhone 11 Pro, one Grok reply |
 
 `ui` is the merge gate for the window. `live` is a canary: Grok can flake without hiding a broken shell. Fork pull requests do not see the secret, so `live` is skipped there.
 

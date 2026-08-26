@@ -203,4 +203,17 @@ a:focus-visible {
     width: 100%;
     max-width: none;
   }
+
+  [data-surface] [data-phone-show="0"] {
+    display: none;
+    width: 0;
+    min-width: 0;
+    flex-grow: 0;
+    flex-shrink: 0;
+    flex-basis: 0;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+    position: absolute;
+  }
 }

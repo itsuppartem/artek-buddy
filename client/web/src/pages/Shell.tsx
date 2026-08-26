@@ -568,6 +568,7 @@ export function ShellPage() {
 
   function openModels() {
     panelAfterModels.current = panel === "computer" ? "computer" : null;
+    setPhoneTab(nextPhoneTab("open-desk"));
     setPanel("models");
   }
 
@@ -577,6 +578,7 @@ export function ShellPage() {
   }
 
   function openPlugins() {
+    setPhoneTab(nextPhoneTab("open-desk"));
     setPanel("plugins");
   }
 
@@ -1388,6 +1390,7 @@ export function ShellPage() {
       });
       freshBotIds.current.add(bot.id);
       await refreshBots();
+      setPhoneTab(nextPhoneTab("select-bot"));
       navigate(`/app/${bot.id}`);
       setPanel(panelAfterCreate.current);
       panelAfterCreate.current = null;
@@ -1400,6 +1403,7 @@ export function ShellPage() {
 
   function openCreate() {
     panelAfterCreate.current = panel === "computer" ? "computer" : null;
+    setPhoneTab(nextPhoneTab("open-desk"));
     setPanel("create");
   }
 
@@ -1428,7 +1432,8 @@ export function ShellPage() {
     >
       <aside
         data-shell="rack"
-        className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613]"
+        data-phone-show={phoneTab === "chats" ? "1" : "0"}
+        className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613] max-[720px]:w-full"
       >
         <div className="app-drag flex items-center justify-between px-3 pb-2 pt-3">
           {pageSurface() === "host" ? (
@@ -1610,6 +1615,7 @@ export function ShellPage() {
 
       <main
         data-testid="thread-pane"
+        data-phone-show={phoneTab === "chat" ? "1" : "0"}
         className="relative flex min-w-0 flex-1 flex-col bg-ink"
         onPaste={onChatPaste}
       >
@@ -1988,7 +1994,10 @@ export function ShellPage() {
 
       <aside
         data-shell="hatch"
-        className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out ${
+        data-phone-show={phoneTab === "desk" ? "1" : "0"}
+        className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out max-[720px]:max-w-none ${
+          phoneTab === "desk" ? "max-[720px]:w-full" : ""
+        } ${
           panel && (active || panel === "create" || panel === "models" || panel === "plugins")
             ? "w-[360px] border-l border-hairline"
             : "w-0"
@@ -2197,7 +2206,11 @@ export function ShellPage() {
         </div>
       ) : null}
 
-      <nav data-testid="phone-nav" className="phone-nav" aria-label="Phone sections">
+      <nav
+        data-testid="phone-nav"
+        className="phone-nav hidden max-[720px]:flex"
+        aria-label="Phone sections"
+      >
         <button
           type="button"
           data-testid="phone-tab-chats"

@@ -10,6 +10,7 @@ describe("phone shell tabs", () => {
   });
 
   it("uses the stacked shell at phone width only", () => {
+    expect(shouldUsePhoneShell(375)).toBe(true);
     expect(shouldUsePhoneShell(390)).toBe(true);
     expect(shouldUsePhoneShell(720)).toBe(true);
     expect(shouldUsePhoneShell(721)).toBe(false);
