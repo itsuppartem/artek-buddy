@@ -12,6 +12,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- The iPhone home-screen hint sits at the top of the host page so it no longer covers Models, New bot, or the composer.
 - Opening a website on the bot desktop no longer also opens the file manager. `open` treats `HTTPS://` like `https://`, and leftover pcmanfm volume autorun is off.
 - The bot desktop starts fluxbox again. Docker tmpfs `/tmp` is noexec, so the old generated startup script never ran and windows had no toolbar or close buttons.
 - A running desktop opened from the pane shows the live preview. The window fetches the screen URL when the box is already Booting or Running, so a bot-started session is not stuck on the text-only Desktop is running fallback.

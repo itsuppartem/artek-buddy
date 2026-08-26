@@ -150,6 +150,13 @@ export function ShellPage() {
       ios: isIosDevice(),
     }),
   );
+  const [homeHintDismissed, setHomeHintDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("artek-home-screen-hint") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const [draft, setDraft] = useState("");
   const draftHistory = useRef(createComposerHistory(""));
@@ -1426,785 +1433,767 @@ export function ShellPage() {
 
   return (
     <div
-      className="relative flex h-full min-w-0 overflow-hidden bg-ink text-paper"
+      className="relative flex h-full min-w-0 flex-col overflow-hidden bg-ink text-paper"
       data-surface={pageSurface()}
       data-phone-tab={phoneTab}
     >
-      <aside
-        data-shell="rack"
-        data-phone-show={phoneTab === "chats" ? "1" : "0"}
-        className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613] max-[720px]:w-full"
-      >
-        <div className="app-drag flex items-center justify-between px-3 pb-2 pt-3">
-          {pageSurface() === "host" ? (
-            <span className="text-[13px] text-mute">Artek Buddy</span>
-          ) : (
-            <WindowChrome />
-          )}
-        </div>
-        <div className="mb-2 flex items-center gap-2 px-3">
-          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-[8px] border border-hairline bg-raised px-2.5 py-1.5 text-[14px] text-mute">
-            <IconSearch />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search"
-              aria-label="Search inbox"
-              className="w-full bg-transparent"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => openCreate()}
-            className="app-no-drag inline-flex h-[34px] shrink-0 items-center gap-1 rounded-[8px] border border-hairline bg-raised px-2.5 text-[13px] text-paper"
-          >
-            <IconPlus />
-            New bot
-          </button>
-        </div>
-        <div className="ab-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
-          {sidebarView === "archived" ? (
-            <>
-              <button
-                type="button"
-                data-testid="back-inbox"
-                onClick={() => setSidebarView("inbox")}
-                className="mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13.5px] text-mute hover:bg-raised hover:text-paper"
-              >
-                ← Inbox
-              </button>
-              <div data-testid="archived-list" className="flex flex-col gap-0.5">
-                {filteredArchived.map((bot) => (
-                  <div
+      <HostPhoneBanners
+        alertOffer={alertOffer}
+        hintDismissed={homeHintDismissed}
+        onDismissHint={() => {
+          setHomeHintDismissed(true);
+          try {
+            localStorage.setItem("artek-home-screen-hint", "1");
+          } catch {
+            /* private mode */
+          }
+        }}
+        onAlertPermission={(permission) => {
+          setAlertOffer(
+            shouldOfferWebAlerts({
+              surface: pageSurface(),
+              permission,
+              standalone: isStandaloneDisplay(),
+              ios: isIosDevice(),
+            }),
+          );
+        }}
+      />
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <aside
+          data-shell="rack"
+          data-phone-show={phoneTab === "chats" ? "1" : "0"}
+          className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613] max-[720px]:w-full"
+        >
+          <div className="app-drag flex items-center justify-between px-3 pb-2 pt-3">
+            {pageSurface() === "host" ? (
+              <span className="text-[13px] text-mute">Artek Buddy</span>
+            ) : (
+              <WindowChrome />
+            )}
+          </div>
+          <div className="mb-2 flex items-center gap-2 px-3">
+            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-[8px] border border-hairline bg-raised px-2.5 py-1.5 text-[14px] text-mute">
+              <IconSearch />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search"
+                aria-label="Search inbox"
+                className="w-full bg-transparent"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => openCreate()}
+              className="app-no-drag inline-flex h-[34px] shrink-0 items-center gap-1 rounded-[8px] border border-hairline bg-raised px-2.5 text-[13px] text-paper"
+            >
+              <IconPlus />
+              New bot
+            </button>
+          </div>
+          <div className="ab-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
+            {sidebarView === "archived" ? (
+              <>
+                <button
+                  type="button"
+                  data-testid="back-inbox"
+                  onClick={() => setSidebarView("inbox")}
+                  className="mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13.5px] text-mute hover:bg-raised hover:text-paper"
+                >
+                  ← Inbox
+                </button>
+                <div data-testid="archived-list" className="flex flex-col gap-0.5">
+                  {filteredArchived.map((bot) => (
+                    <div
+                      key={bot.id}
+                      data-testid="archived-bot-row"
+                      data-bot-id={bot.id}
+                      className="flex items-center gap-3 rounded-xl px-2.5 py-[11px]"
+                    >
+                      <BotAvatar color={bot.color} size={38} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-display text-[14.5px] text-paper">
+                          {bot.name}
+                        </div>
+                        <div className="mt-0.5 truncate text-[12.5px] text-mute">
+                          {stripMarkdown(bot.preview || bot.title)}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        data-testid="restore-chat"
+                        onClick={() => void restoreBot(bot)}
+                        className="shrink-0 rounded-lg border border-hairline px-2.5 py-1 text-[12.5px] text-paper hover:bg-raised"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                {filtered.map((bot) => (
+                  <button
                     key={bot.id}
-                    data-testid="archived-bot-row"
+                    type="button"
+                    data-testid="bot-row"
                     data-bot-id={bot.id}
-                    className="flex items-center gap-3 rounded-xl px-2.5 py-[11px]"
+                    data-bot-name={bot.name}
+                    aria-label={`Open chat ${bot.name}`}
+                    onClick={() => openBot(bot.id)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setContextMenu({
+                        bot,
+                        position: { x: event.clientX, y: event.clientY },
+                      });
+                    }}
+                    className={`flex gap-2.5 border-l-[3px] px-2.5 py-[11px] text-left ${
+                      active?.id === bot.id
+                        ? "border-tan bg-plate"
+                        : "border-transparent hover:bg-raised"
+                    }`}
                   >
                     <BotAvatar color={bot.color} size={38} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-display text-[14.5px] text-paper">
-                        {bot.name}
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span
+                          className={`flex items-center gap-1.5 font-display text-[14.5px] text-paper ${
+                            bot.unread ? "font-semibold" : "font-normal"
+                          }`}
+                        >
+                          {bot.name}
+                          {bot.pinned ? (
+                            <span title="Pinned" className="text-[11px] text-mute">
+                              📌
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-mute">
+                          {bot.status === "idle" ? "" : bot.status}
+                          {bot.unread ? (
+                            <span
+                              data-testid="unread-dot"
+                              aria-hidden="true"
+                              className="inline-block h-[7px] w-[7px] bg-tan"
+                            />
+                          ) : null}
+                        </span>
                       </div>
-                      <div className="mt-0.5 truncate text-[12.5px] text-mute">
+                      <div
+                        data-testid="bot-preview"
+                        className={`mt-0.5 truncate text-[12.5px] ${
+                          bot.unread ? "font-medium text-paper" : "text-mute"
+                        }`}
+                      >
                         {stripMarkdown(bot.preview || bot.title)}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      data-testid="restore-chat"
-                      onClick={() => void restoreBot(bot)}
-                      className="shrink-0 rounded-lg border border-hairline px-2.5 py-1 text-[12.5px] text-paper hover:bg-raised"
-                    >
-                      Restore
-                    </button>
-                  </div>
+                  </button>
                 ))}
-              </div>
-            </>
-          ) : (
-            <>
-              {filtered.map((bot) => (
-                <button
-                  key={bot.id}
-                  type="button"
-                  data-testid="bot-row"
-                  data-bot-id={bot.id}
-                  data-bot-name={bot.name}
-                  aria-label={`Open chat ${bot.name}`}
-                  onClick={() => openBot(bot.id)}
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    setContextMenu({
-                      bot,
-                      position: { x: event.clientX, y: event.clientY },
-                    });
-                  }}
-                  className={`flex gap-2.5 border-l-[3px] px-2.5 py-[11px] text-left ${
-                    active?.id === bot.id
-                      ? "border-tan bg-plate"
-                      : "border-transparent hover:bg-raised"
-                  }`}
-                >
-                  <BotAvatar color={bot.color} size={38} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span
-                        className={`flex items-center gap-1.5 font-display text-[14.5px] text-paper ${
-                          bot.unread ? "font-semibold" : "font-normal"
-                        }`}
-                      >
-                        {bot.name}
-                        {bot.pinned ? (
-                          <span title="Pinned" className="text-[11px] text-mute">
-                            📌
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-mute">
-                        {bot.status === "idle" ? "" : bot.status}
-                        {bot.unread ? (
-                          <span
-                            data-testid="unread-dot"
-                            aria-hidden="true"
-                            className="inline-block h-[7px] w-[7px] bg-tan"
-                          />
-                        ) : null}
-                      </span>
-                    </div>
-                    <div
-                      data-testid="bot-preview"
-                      className={`mt-0.5 truncate text-[12.5px] ${
-                        bot.unread ? "font-medium text-paper" : "text-mute"
-                      }`}
-                    >
-                      {stripMarkdown(bot.preview || bot.title)}
-                    </div>
-                  </div>
-                </button>
-              ))}
-              {archivedBots.length > 0 ? (
-                <button
-                  type="button"
-                  data-testid="open-archived"
-                  onClick={() => setSidebarView("archived")}
-                  className="mt-1 flex items-center justify-between rounded-xl px-2.5 py-[11px] text-left text-[14px] text-mute hover:bg-raised hover:text-paper"
-                >
-                  <span>Archived</span>
-                  <span data-testid="archived-count">{archivedBots.length}</span>
-                </button>
-              ) : null}
-            </>
-          )}
-        </div>
-        <button
-          type="button"
-          data-testid="open-plugins"
-          aria-label="Plugins"
-          onClick={() => openPlugins()}
-          className={`flex w-full items-center gap-[11px] border-t px-[14px] py-3.5 text-left ${
-            panel === "plugins" ? "border-tan bg-plate" : "border-hairline hover:bg-raised"
-          }`}
-        >
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-raised text-[12px] text-mute">
-            P
-          </span>
-          <span className="min-w-0">
-            <span className="block text-[14px] text-paper">Plugins</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          data-testid="open-models"
-          data-models-ready={needsModel ? "false" : "true"}
-          aria-label="Models"
-          onClick={() => openModels()}
-          className={`flex w-full items-center gap-[11px] border-t px-[14px] py-3.5 text-left ${
-            panel === "models" ? "border-tan bg-plate" : "border-hairline hover:bg-raised"
-          }`}
-        >
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-raised text-[12px] text-mute">
-            Y
-          </span>
-          <span className="min-w-0">
-            <span className="block text-[13px] text-mute">You</span>
-            <span className="block text-[14px] text-paper">Models</span>
-          </span>
-        </button>
-      </aside>
-
-      <main
-        data-testid="thread-pane"
-        data-phone-show={phoneTab === "chat" ? "1" : "0"}
-        className="relative flex min-w-0 flex-1 flex-col bg-ink"
-        onPaste={onChatPaste}
-      >
-        <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
-          <div data-testid="thread-header" className="flex min-w-0 items-center gap-3">
-            {active ? <BotAvatar color={active.color} size={26} /> : null}
-            <span className="min-w-0 truncate font-display text-[16px] font-semibold text-paper">
-              {active?.name ?? "Select a bot"}
+                {archivedBots.length > 0 ? (
+                  <button
+                    type="button"
+                    data-testid="open-archived"
+                    onClick={() => setSidebarView("archived")}
+                    className="mt-1 flex items-center justify-between rounded-xl px-2.5 py-[11px] text-left text-[14px] text-mute hover:bg-raised hover:text-paper"
+                  >
+                    <span>Archived</span>
+                    <span data-testid="archived-count">{archivedBots.length}</span>
+                  </button>
+                ) : null}
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            data-testid="open-plugins"
+            aria-label="Plugins"
+            onClick={() => openPlugins()}
+            className={`flex w-full items-center gap-[11px] border-t px-[14px] py-3.5 text-left ${
+              panel === "plugins" ? "border-tan bg-plate" : "border-hairline hover:bg-raised"
+            }`}
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-raised text-[12px] text-mute">
+              P
             </span>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              disabled={!active}
-              onClick={() => {
-                setPhoneTab(nextPhoneTab("open-desk"));
-                setPanel((current) => (current === "computer" ? null : "computer"));
-              }}
-              className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
-                panel === "computer"
-                  ? "border-tan bg-raised text-paper"
-                  : "border-hairline bg-raised text-paper"
-              }`}
-            >
-              <IconComputer />
-              Computer
-            </button>
-            <button
-              type="button"
-              disabled={!active}
-              onClick={() => {
-                setPhoneTab(nextPhoneTab("open-desk"));
-                panelAfterSettings.current = panel === "computer" ? "computer" : null;
-                setPanel("settings");
-              }}
-              className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
-                panel === "settings"
-                  ? "border-tan bg-raised text-paper"
-                  : "border-hairline bg-raised text-paper"
-              }`}
-            >
-              <IconSettings />
-              Settings
-            </button>
-          </div>
-        </div>
-        {hostDown ? (
-          <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
-            <div
-              data-testid="reconnect-banner"
-              className="flex w-full items-center gap-2 border border-hairline border-l-[3px] border-l-tan bg-plate px-3 py-2 text-[13.5px] text-paper"
-            >
-              <p className="min-w-0 flex-1 text-left">Reconnecting to the host</p>
+            <span className="min-w-0">
+              <span className="block text-[14px] text-paper">Plugins</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            data-testid="open-models"
+            data-models-ready={needsModel ? "false" : "true"}
+            aria-label="Models"
+            onClick={() => openModels()}
+            className={`flex w-full items-center gap-[11px] border-t px-[14px] py-3.5 text-left ${
+              panel === "models" ? "border-tan bg-plate" : "border-hairline hover:bg-raised"
+            }`}
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-raised text-[12px] text-mute">
+              Y
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[13px] text-mute">You</span>
+              <span className="block text-[14px] text-paper">Models</span>
+            </span>
+          </button>
+        </aside>
+
+        <main
+          data-testid="thread-pane"
+          data-phone-show={phoneTab === "chat" ? "1" : "0"}
+          className="relative flex min-w-0 flex-1 flex-col bg-ink"
+          onPaste={onChatPaste}
+        >
+          <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
+            <div data-testid="thread-header" className="flex min-w-0 items-center gap-3">
+              {active ? <BotAvatar color={active.color} size={26} /> : null}
+              <span className="min-w-0 truncate font-display text-[16px] font-semibold text-paper">
+                {active?.name ?? "Select a bot"}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                onClick={() => void reconnectHost(true)}
-                className="shrink-0 px-2 text-[13px] font-medium text-tan underline underline-offset-2"
+                disabled={!active}
+                onClick={() => {
+                  setPhoneTab(nextPhoneTab("open-desk"));
+                  setPanel((current) => (current === "computer" ? null : "computer"));
+                }}
+                className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
+                  panel === "computer"
+                    ? "border-tan bg-raised text-paper"
+                    : "border-hairline bg-raised text-paper"
+                }`}
               >
-                Retry connection
+                <IconComputer />
+                Computer
+              </button>
+              <button
+                type="button"
+                disabled={!active}
+                onClick={() => {
+                  setPhoneTab(nextPhoneTab("open-desk"));
+                  panelAfterSettings.current = panel === "computer" ? "computer" : null;
+                  setPanel("settings");
+                }}
+                className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
+                  panel === "settings"
+                    ? "border-tan bg-raised text-paper"
+                    : "border-hairline bg-raised text-paper"
+                }`}
+              >
+                <IconSettings />
+                Settings
               </button>
             </div>
           </div>
-        ) : null}
-        {attention || later ? (
-          <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
-            {attention ? (
+          {hostDown ? (
+            <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
               <div
-                data-testid="attention-alert"
+                data-testid="reconnect-banner"
                 className="flex w-full items-center gap-2 border border-hairline border-l-[3px] border-l-tan bg-plate px-3 py-2 text-[13.5px] text-paper"
               >
+                <p className="min-w-0 flex-1 text-left">Reconnecting to the host</p>
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left hover:text-tan"
-                  onClick={() => {
-                    dismissedAlerts.current.add(attentionFingerprint(attention));
-                    navigate(`/app/${attention.botId}`);
-                    setAttention(null);
-                  }}
+                  onClick={() => void reconnectHost(true)}
+                  className="shrink-0 px-2 text-[13px] font-medium text-tan underline underline-offset-2"
                 >
-                  <span className="font-medium text-paper">{attention.title}</span>
-                  {attention.body ? (
-                    <span className="mt-0.5 block truncate text-[12.5px] text-mute">
-                      {attention.body}
-                    </span>
-                  ) : null}
-                </button>
-                <button
-                  type="button"
-                  data-testid="attention-dismiss"
-                  onClick={() => dismissAttention()}
-                  className="shrink-0 px-2 text-[13px] text-mute hover:text-paper"
-                >
-                  Dismiss
+                  Retry connection
                 </button>
               </div>
-            ) : null}
-            {later ? (
-              <div className="border border-hairline bg-plate px-4 py-2 text-[13.5px] text-paper">
-                {later}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        <div
-          ref={messageScroll}
-          data-testid="thread"
-          onScroll={() => {
-            const element = messageScroll.current;
-            if (!element) return;
-            stickToLatest.current =
-              element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-          }}
-          className="ab-scroll flex min-w-0 flex-1 flex-col gap-[13px] overflow-x-hidden overflow-y-auto px-7 py-6"
-        >
-          {error && errorKind !== "host" ? (
-            <div
-              data-testid={errorKind === "auth" ? "auth-error" : "action-error"}
-              className="self-center rounded-xl border border-danger/40 bg-danger-bg px-4 py-3 text-center text-[13.5px] text-danger"
-            >
-              <div>{error}</div>
-              {errorKind === "auth" ? (
-                <button
-                  type="button"
-                  onClick={() => void forgetDevice()}
-                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
+            </div>
+          ) : null}
+          {attention || later ? (
+            <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
+              {attention ? (
+                <div
+                  data-testid="attention-alert"
+                  className="flex w-full items-center gap-2 border border-hairline border-l-[3px] border-l-tan bg-plate px-3 py-2 text-[13.5px] text-paper"
                 >
-                  Pair this computer again
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setError(null)}
-                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
-                >
-                  Dismiss
-                </button>
-              )}
-            </div>
-          ) : null}
-          {!active && !error && botsReady && emptyInbox === "archived" ? (
-            <div
-              data-testid="empty-inbox"
-              className="m-auto flex max-w-sm flex-col items-center text-center"
-            >
-              <div className="font-display text-[17px] text-paper">Chats are archived</div>
-              <p className="mt-2 text-[14px] leading-5 text-mute">
-                Restore one from Archived, or create a new bot.
-              </p>
-              <div className="mt-5 flex gap-2">
-                <Button type="button" onClick={() => setSidebarView("archived")}>
-                  Open archived
-                </Button>
-                <Button type="button" variant="outline" onClick={() => openCreate()}>
-                  Create bot
-                </Button>
-              </div>
-            </div>
-          ) : null}
-          {!active && !error && botsReady && emptyInbox === "create" ? (
-            <div
-              data-testid="empty-bots"
-              className="m-auto flex max-w-sm flex-col items-center text-center"
-            >
-              <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-raised text-mute">
-                <IconPlus />
-              </div>
-              <div className="font-display text-[17px] text-paper">Create your first bot</div>
-              <p className="mt-2 text-[14px] leading-5 text-mute">
-                Give it a purpose, then it gets its own chat, memory, routines, and computer.
-              </p>
-              <Button type="button" className="mt-5" onClick={() => openCreate()}>
-                Create bot
-              </Button>
-            </div>
-          ) : null}
-          {active && needsModel && !error ? (
-            <div
-              data-testid="needs-model"
-              className="mx-4 mt-3 rounded-[12px] border border-hairline border-l-[3px] border-l-tan bg-plate px-3.5 py-3"
-            >
-              <p className="text-[14px] leading-5 text-paper">{NEEDS_MODEL_TEXT}</p>
-              <button
-                type="button"
-                data-testid="open-models-thread"
-                className="mt-2 text-[13px] font-medium text-tan underline underline-offset-2"
-                onClick={() => openModels()}
-              >
-                Open Models
-              </button>
-            </div>
-          ) : null}
-          {thread?.olderCursor != null ? (
-            <button
-              type="button"
-              data-testid="load-earlier"
-              disabled={loadingOlder}
-              onClick={() => void loadOlderMessages()}
-              className="self-center rounded-lg px-3 py-1.5 text-[13px] text-mute hover:bg-raised hover:text-paper disabled:opacity-50"
-            >
-              {loadingOlder ? "Loading…" : "Load earlier messages"}
-            </button>
-          ) : null}
-          {mergeQueuedIntoMessages(
-            thread?.messages ?? [],
-            offlineQueue,
-            active?.id ?? "",
-            thread?.threadId ?? "",
-          )
-            .filter((message) => !isToolNoise(message) && !isHiddenLiveDraft(message))
-            .map((message) => (
-              <MessageView
-                key={message.id}
-                canAnswer
-                message={message}
-                queued={isQueuedMessageId(message.id)}
-                offlineCaption={offlineCaptionText(offlineCaptions, message.id)}
-                runStatus={thread?.run?.status}
-                onAnswer={(text) => send(text)}
-                onOpenComputer={() => void openOverlay("preview")}
-                onOpenBot={(id) => {
-                  void refreshBots().then(() => navigate(`/app/${id}`));
-                }}
-                onContextMenu={(event, item) => {
-                  event.preventDefault();
-                  setMessageMenu({
-                    message: item,
-                    position: { x: event.clientX, y: event.clientY },
-                  });
-                }}
-              />
-            ))}
-          {thread?.run && (thread.run.status === "failed" || thread.run.status === "cancelled") ? (
-            <div
-              data-testid="run-error"
-              className="self-start rounded-xl border border-danger/40 bg-danger-bg px-4 py-2 text-[13.5px] text-danger"
-            >
-              {thread.run.error ||
-                (thread.run.status === "cancelled" ? "Stopped." : "The turn failed.")}
-            </div>
-          ) : null}
-          {thread?.run && isLiveTurn(thread.run.status) ? (
-            <div className="flex justify-start">
-              <div
-                data-testid="typing-indicator"
-                className="flex items-center gap-1.5 rounded-[18px] border border-hairline bg-plate px-4 py-3"
-                title="Typing…"
-              >
-                <span className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan" />
-                <span
-                  className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
-                  style={{ animationDelay: "150ms" }}
-                />
-                <span
-                  className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
-                  style={{ animationDelay: "300ms" }}
-                />
-              </div>
-            </div>
-          ) : null}
-        </div>
-        <div className="border-t border-hairline px-3 pb-3 pt-2.5">
-          {replyTo ? (
-            <div
-              data-testid="reply-bar"
-              className="mb-2 flex items-center gap-3 rounded-[10px] border border-hairline bg-raised px-3.5 py-2"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="text-[12px] text-mute">
-                  Replying to {replyTo.role === "bot" ? active?.name || "bot" : "you"}
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left hover:text-tan"
+                    onClick={() => {
+                      dismissedAlerts.current.add(attentionFingerprint(attention));
+                      navigate(`/app/${attention.botId}`);
+                      setAttention(null);
+                    }}
+                  >
+                    <span className="font-medium text-paper">{attention.title}</span>
+                    {attention.body ? (
+                      <span className="mt-0.5 block truncate text-[12.5px] text-mute">
+                        {attention.body}
+                      </span>
+                    ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="attention-dismiss"
+                    onClick={() => dismissAttention()}
+                    className="shrink-0 px-2 text-[13px] text-mute hover:text-paper"
+                  >
+                    Dismiss
+                  </button>
                 </div>
-                <div className="truncate text-[13.5px] text-paper">{replyExcerpt(replyTo)}</div>
-              </div>
-              <button
-                type="button"
-                className="text-mute hover:text-paper"
-                aria-label="Cancel reply"
-                onClick={() => setReplyTo(null)}
-              >
-                <IconClose />
-              </button>
-            </div>
-          ) : null}
-          <PluginsAsk
-            apps={pluginApps}
-            disabled={!active}
-            onAsk={(name) => writeDraft(`please use ${name}`)}
-          />
-          <BooksAsk
-            books={skillBooks}
-            disabled={!active}
-            onAsk={(name) => writeDraft(`please run ${name}`)}
-          />
-          {pendingFiles.length ? (
-            <div className="mb-2 flex flex-wrap items-end gap-2">
-              {pendingFiles.map((item) => (
-                <AttachChip
-                  key={item.id}
-                  item={item}
-                  onRemove={() =>
-                    setPendingFiles((list) => list.filter((entry) => entry.id !== item.id))
-                  }
-                />
-              ))}
+              ) : null}
+              {later ? (
+                <div className="border border-hairline bg-plate px-4 py-2 text-[13.5px] text-paper">
+                  {later}
+                </div>
+              ) : null}
             </div>
           ) : null}
           <div
-            data-testid="thread-composer"
-            className="flex items-end gap-2"
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={onComposerDrop}
-            onPaste={onChatPaste}
+            ref={messageScroll}
+            data-testid="thread"
+            onScroll={() => {
+              const element = messageScroll.current;
+              if (!element) return;
+              stickToLatest.current =
+                element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+            }}
+            className="ab-scroll flex min-w-0 flex-1 flex-col gap-[13px] overflow-x-hidden overflow-y-auto px-7 py-6"
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              data-testid="attach-files"
-              onChange={(event) => {
-                queueFiles(Array.from(event.target.files || []));
-                event.target.value = "";
-              }}
-            />
-            <button
-              type="button"
-              aria-label="Attach files"
-              disabled={!active}
-              onClick={() => fileInputRef.current?.click()}
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-hairline bg-raised text-paper disabled:opacity-40"
-            >
-              <IconPlus />
-            </button>
-            <textarea
-              ref={composerRef}
-              value={draft}
-              rows={1}
-              aria-label="Message"
-              disabled={!active}
-              onChange={(event) => writeDraft(event.target.value)}
-              onPaste={onChatPaste}
-              onKeyDown={(event) => onComposerKeyDown(event)}
-              placeholder={
-                replyTo
-                  ? "Write a reply…"
-                  : active
-                    ? `Message ${active.name}`
-                    : "Create a bot to start"
-              }
-              className="max-h-40 min-h-[44px] flex-1 resize-none rounded-[10px] border border-hairline bg-raised px-3 py-2.5 text-[15px] leading-[22px] text-paper disabled:cursor-not-allowed disabled:opacity-40"
-            />
-            {isBusy ? (
+            {error && errorKind !== "host" ? (
+              <div
+                data-testid={errorKind === "auth" ? "auth-error" : "action-error"}
+                className="self-center rounded-xl border border-danger/40 bg-danger-bg px-4 py-3 text-center text-[13.5px] text-danger"
+              >
+                <div>{error}</div>
+                {errorKind === "auth" ? (
+                  <button
+                    type="button"
+                    onClick={() => void forgetDevice()}
+                    className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
+                  >
+                    Pair this computer again
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setError(null)}
+                    className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
+                  >
+                    Dismiss
+                  </button>
+                )}
+              </div>
+            ) : null}
+            {!active && !error && botsReady && emptyInbox === "archived" ? (
+              <div
+                data-testid="empty-inbox"
+                className="m-auto flex max-w-sm flex-col items-center text-center"
+              >
+                <div className="font-display text-[17px] text-paper">Chats are archived</div>
+                <p className="mt-2 text-[14px] leading-5 text-mute">
+                  Restore one from Archived, or create a new bot.
+                </p>
+                <div className="mt-5 flex gap-2">
+                  <Button type="button" onClick={() => setSidebarView("archived")}>
+                    Open archived
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => openCreate()}>
+                    Create bot
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            {!active && !error && botsReady && emptyInbox === "create" ? (
+              <div
+                data-testid="empty-bots"
+                className="m-auto flex max-w-sm flex-col items-center text-center"
+              >
+                <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-raised text-mute">
+                  <IconPlus />
+                </div>
+                <div className="font-display text-[17px] text-paper">Create your first bot</div>
+                <p className="mt-2 text-[14px] leading-5 text-mute">
+                  Give it a purpose, then it gets its own chat, memory, routines, and computer.
+                </p>
+                <Button type="button" className="mt-5" onClick={() => openCreate()}>
+                  Create bot
+                </Button>
+              </div>
+            ) : null}
+            {active && needsModel && !error ? (
+              <div
+                data-testid="needs-model"
+                className="mx-4 mt-3 rounded-[12px] border border-hairline border-l-[3px] border-l-tan bg-plate px-3.5 py-3"
+              >
+                <p className="text-[14px] leading-5 text-paper">{NEEDS_MODEL_TEXT}</p>
+                <button
+                  type="button"
+                  data-testid="open-models-thread"
+                  className="mt-2 text-[13px] font-medium text-tan underline underline-offset-2"
+                  onClick={() => openModels()}
+                >
+                  Open Models
+                </button>
+              </div>
+            ) : null}
+            {thread?.olderCursor != null ? (
               <button
                 type="button"
-                data-testid="thread-stop"
-                aria-label="Stop"
-                onClick={() => void stop()}
-                className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-tan px-3.5 text-[13px] font-bold text-tan"
+                data-testid="load-earlier"
+                disabled={loadingOlder}
+                onClick={() => void loadOlderMessages()}
+                className="self-center rounded-lg px-3 py-1.5 text-[13px] text-mute hover:bg-raised hover:text-paper disabled:opacity-50"
               >
-                <IconStop />
-                Stop
+                {loadingOlder ? "Loading…" : "Load earlier messages"}
               </button>
             ) : null}
-            <button
-              type="button"
-              aria-label="Send"
-              disabled={!active || sending || !composerCanSend(draft, pendingFiles.length)}
-              onClick={() => void send()}
-              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-tan px-4 text-[13px] font-bold text-ink disabled:opacity-40"
+            {mergeQueuedIntoMessages(
+              thread?.messages ?? [],
+              offlineQueue,
+              active?.id ?? "",
+              thread?.threadId ?? "",
+            )
+              .filter((message) => !isToolNoise(message) && !isHiddenLiveDraft(message))
+              .map((message) => (
+                <MessageView
+                  key={message.id}
+                  canAnswer
+                  message={message}
+                  queued={isQueuedMessageId(message.id)}
+                  offlineCaption={offlineCaptionText(offlineCaptions, message.id)}
+                  runStatus={thread?.run?.status}
+                  onAnswer={(text) => send(text)}
+                  onOpenComputer={() => void openOverlay("preview")}
+                  onOpenBot={(id) => {
+                    void refreshBots().then(() => navigate(`/app/${id}`));
+                  }}
+                  onContextMenu={(event, item) => {
+                    event.preventDefault();
+                    setMessageMenu({
+                      message: item,
+                      position: { x: event.clientX, y: event.clientY },
+                    });
+                  }}
+                />
+              ))}
+            {thread?.run &&
+            (thread.run.status === "failed" || thread.run.status === "cancelled") ? (
+              <div
+                data-testid="run-error"
+                className="self-start rounded-xl border border-danger/40 bg-danger-bg px-4 py-2 text-[13.5px] text-danger"
+              >
+                {thread.run.error ||
+                  (thread.run.status === "cancelled" ? "Stopped." : "The turn failed.")}
+              </div>
+            ) : null}
+            {thread?.run && isLiveTurn(thread.run.status) ? (
+              <div className="flex justify-start">
+                <div
+                  data-testid="typing-indicator"
+                  className="flex items-center gap-1.5 rounded-[18px] border border-hairline bg-plate px-4 py-3"
+                  title="Typing…"
+                >
+                  <span className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan" />
+                  <span
+                    className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
+                    style={{ animationDelay: "150ms" }}
+                  />
+                  <span
+                    className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
+                    style={{ animationDelay: "300ms" }}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <div className="border-t border-hairline px-3 pb-3 pt-2.5">
+            {replyTo ? (
+              <div
+                data-testid="reply-bar"
+                className="mb-2 flex items-center gap-3 rounded-[10px] border border-hairline bg-raised px-3.5 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] text-mute">
+                    Replying to {replyTo.role === "bot" ? active?.name || "bot" : "you"}
+                  </div>
+                  <div className="truncate text-[13.5px] text-paper">{replyExcerpt(replyTo)}</div>
+                </div>
+                <button
+                  type="button"
+                  className="text-mute hover:text-paper"
+                  aria-label="Cancel reply"
+                  onClick={() => setReplyTo(null)}
+                >
+                  <IconClose />
+                </button>
+              </div>
+            ) : null}
+            <PluginsAsk
+              apps={pluginApps}
+              disabled={!active}
+              onAsk={(name) => writeDraft(`please use ${name}`)}
+            />
+            <BooksAsk
+              books={skillBooks}
+              disabled={!active}
+              onAsk={(name) => writeDraft(`please run ${name}`)}
+            />
+            {pendingFiles.length ? (
+              <div className="mb-2 flex flex-wrap items-end gap-2">
+                {pendingFiles.map((item) => (
+                  <AttachChip
+                    key={item.id}
+                    item={item}
+                    onRemove={() =>
+                      setPendingFiles((list) => list.filter((entry) => entry.id !== item.id))
+                    }
+                  />
+                ))}
+              </div>
+            ) : null}
+            <div
+              data-testid="thread-composer"
+              className="flex items-end gap-2"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={onComposerDrop}
+              onPaste={onChatPaste}
             >
-              <IconSend />
-              Send
-            </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                data-testid="attach-files"
+                onChange={(event) => {
+                  queueFiles(Array.from(event.target.files || []));
+                  event.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                aria-label="Attach files"
+                disabled={!active}
+                onClick={() => fileInputRef.current?.click()}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-hairline bg-raised text-paper disabled:opacity-40"
+              >
+                <IconPlus />
+              </button>
+              <textarea
+                ref={composerRef}
+                value={draft}
+                rows={1}
+                aria-label="Message"
+                disabled={!active}
+                onChange={(event) => writeDraft(event.target.value)}
+                onPaste={onChatPaste}
+                onKeyDown={(event) => onComposerKeyDown(event)}
+                placeholder={
+                  replyTo
+                    ? "Write a reply…"
+                    : active
+                      ? `Message ${active.name}`
+                      : "Create a bot to start"
+                }
+                className="max-h-40 min-h-[44px] flex-1 resize-none rounded-[10px] border border-hairline bg-raised px-3 py-2.5 text-[15px] leading-[22px] text-paper disabled:cursor-not-allowed disabled:opacity-40"
+              />
+              {isBusy ? (
+                <button
+                  type="button"
+                  data-testid="thread-stop"
+                  aria-label="Stop"
+                  onClick={() => void stop()}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-tan px-3.5 text-[13px] font-bold text-tan"
+                >
+                  <IconStop />
+                  Stop
+                </button>
+              ) : null}
+              <button
+                type="button"
+                aria-label="Send"
+                disabled={!active || sending || !composerCanSend(draft, pendingFiles.length)}
+                onClick={() => void send()}
+                className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-tan px-4 text-[13px] font-bold text-ink disabled:opacity-40"
+              >
+                <IconSend />
+                Send
+              </button>
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
 
-      <aside
-        data-shell="hatch"
-        data-phone-show={phoneTab === "desk" ? "1" : "0"}
-        className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out max-[720px]:max-w-none ${
-          phoneTab === "desk" ? "max-[720px]:w-full" : ""
-        } ${
-          panel && (active || panel === "create" || panel === "models" || panel === "plugins")
-            ? "w-[360px] border-l border-hairline"
-            : "w-0"
-        }`}
-      >
-        {panel && (active || panel === "create" || panel === "models" || panel === "plugins") ? (
-          <div className="ab-scroll h-full w-[360px] overflow-y-auto px-4 py-3">
-            {panel === "plugins" ? (
-              <PluginsPane
-                onClose={() => {
-                  setPanel(null);
-                  void refreshPlugins();
-                }}
-                onAppsChange={() => {
-                  void refreshPlugins();
-                }}
-              />
-            ) : null}
-            {panel === "models" ? (
-              <ModelsPane
-                botId={active?.id}
-                credentials={modelState}
-                onChange={setModelState}
-                onClose={closeModels}
-              />
-            ) : null}
-            {panel === "create" ? (
-              <CreateBotForm
-                onCancel={() => {
-                  setPanel(panelAfterCreate.current);
-                  panelAfterCreate.current = null;
-                }}
-                onCreate={(input) => void createBot(input)}
-              />
-            ) : null}
-            {panel === "settings" && active ? (
-              <BotSettings
-                bot={active}
-                computer={computer ?? snapshot?.computer ?? null}
-                onClose={() => setPanel(panelAfterSettings.current)}
-                onUpdated={() => void refreshBots()}
-                onDelete={(deleteMemories) => void deleteBot(active, deleteMemories)}
-                onRestart={() => restartComputer()}
-                onStop={() => stopComputer()}
-                onReset={() => resetComputer()}
-                onLater={setLater}
-              />
-            ) : null}
-            {panel === "computer" && active ? (
-              <ComputerPane
-                bot={active}
-                computer={computer ?? snapshot?.computer ?? null}
-                screenUrl={screenUrl}
-                screenError={screenError}
-                screenEpoch={screenEpoch}
-                previewFrameRef={previewFrameRef}
-                booting={booting}
-                onClose={() => setPanel(null)}
-                onSettings={() => {
-                  panelAfterSettings.current = "computer";
-                  setPanel("settings");
-                }}
-                onOpenFullscreen={() => void openOverlay("preview")}
-                onTakeControl={() => void openOverlay("button")}
-                onRelease={() => void releaseComputer()}
-                onRetryScreen={retryScreen}
-                onScreenFrameLoad={onScreenFrameLoad}
-                onLater={setLater}
-              />
-            ) : null}
-          </div>
+        <aside
+          data-shell="hatch"
+          data-phone-show={phoneTab === "desk" ? "1" : "0"}
+          className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out max-[720px]:max-w-none ${
+            phoneTab === "desk" ? "max-[720px]:w-full" : ""
+          } ${
+            panel && (active || panel === "create" || panel === "models" || panel === "plugins")
+              ? "w-[360px] border-l border-hairline"
+              : "w-0"
+          }`}
+        >
+          {panel && (active || panel === "create" || panel === "models" || panel === "plugins") ? (
+            <div className="ab-scroll h-full w-[360px] overflow-y-auto px-4 py-3">
+              {panel === "plugins" ? (
+                <PluginsPane
+                  onClose={() => {
+                    setPanel(null);
+                    void refreshPlugins();
+                  }}
+                  onAppsChange={() => {
+                    void refreshPlugins();
+                  }}
+                />
+              ) : null}
+              {panel === "models" ? (
+                <ModelsPane
+                  botId={active?.id}
+                  credentials={modelState}
+                  onChange={setModelState}
+                  onClose={closeModels}
+                />
+              ) : null}
+              {panel === "create" ? (
+                <CreateBotForm
+                  onCancel={() => {
+                    setPanel(panelAfterCreate.current);
+                    panelAfterCreate.current = null;
+                  }}
+                  onCreate={(input) => void createBot(input)}
+                />
+              ) : null}
+              {panel === "settings" && active ? (
+                <BotSettings
+                  bot={active}
+                  computer={computer ?? snapshot?.computer ?? null}
+                  onClose={() => setPanel(panelAfterSettings.current)}
+                  onUpdated={() => void refreshBots()}
+                  onDelete={(deleteMemories) => void deleteBot(active, deleteMemories)}
+                  onRestart={() => restartComputer()}
+                  onStop={() => stopComputer()}
+                  onReset={() => resetComputer()}
+                  onLater={setLater}
+                />
+              ) : null}
+              {panel === "computer" && active ? (
+                <ComputerPane
+                  bot={active}
+                  computer={computer ?? snapshot?.computer ?? null}
+                  screenUrl={screenUrl}
+                  screenError={screenError}
+                  screenEpoch={screenEpoch}
+                  previewFrameRef={previewFrameRef}
+                  booting={booting}
+                  onClose={() => setPanel(null)}
+                  onSettings={() => {
+                    panelAfterSettings.current = "computer";
+                    setPanel("settings");
+                  }}
+                  onOpenFullscreen={() => void openOverlay("preview")}
+                  onTakeControl={() => void openOverlay("button")}
+                  onRelease={() => void releaseComputer()}
+                  onRetryScreen={retryScreen}
+                  onScreenFrameLoad={onScreenFrameLoad}
+                  onLater={setLater}
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </aside>
+
+        {messageMenu ? (
+          <MessageContextMenu
+            position={messageMenu.position}
+            onClose={() => setMessageMenu(null)}
+            onReply={() => {
+              setReplyTo(messageMenu.message);
+              setMessageMenu(null);
+            }}
+          />
         ) : null}
-      </aside>
 
-      {messageMenu ? (
-        <MessageContextMenu
-          position={messageMenu.position}
-          onClose={() => setMessageMenu(null)}
-          onReply={() => {
-            setReplyTo(messageMenu.message);
-            setMessageMenu(null);
-          }}
-        />
-      ) : null}
-
-      {contextMenu ? (
-        <BotContextMenu
-          bot={contextMenu.bot}
-          position={contextMenu.position}
-          onClose={() => setContextMenu(null)}
-          onTogglePinned={async () => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            try {
-              await api.bots.update(target.id, { pinned: !target.pinned });
-              await refreshBots();
-            } catch (err) {
-              showError(err, "Failed to update pin");
-            }
-          }}
-          onToggleUnread={async () => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            try {
-              if (target.unread) {
-                heldUnreadIds.current.delete(target.id);
-                await api.threads.markRead(target.id);
-                patchBotUnread(target.id, false);
-              } else {
-                heldUnreadIds.current.add(target.id);
-                await api.threads.markUnread(target.id);
-                patchBotUnread(target.id, true);
+        {contextMenu ? (
+          <BotContextMenu
+            bot={contextMenu.bot}
+            position={contextMenu.position}
+            onClose={() => setContextMenu(null)}
+            onTogglePinned={async () => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              try {
+                await api.bots.update(target.id, { pinned: !target.pinned });
+                await refreshBots();
+              } catch (err) {
+                showError(err, "Failed to update pin");
               }
-            } catch (err) {
-              showError(err, "Failed to toggle read status");
-            }
-          }}
-          onEdit={() => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            navigate(`/app/${target.id}`);
-            panelAfterSettings.current = null;
-            setPanel("settings");
-          }}
-          onDuplicate={async () => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            try {
-              const duplicated = await api.bots.duplicate(target.id);
-              freshBotIds.current.add(duplicated.id);
-              await refreshBots();
-              navigate(`/app/${duplicated.id}`);
-            } catch (err) {
-              showError(err, "Duplicate failed");
-            }
-          }}
-          onArchive={async () => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            try {
-              await api.bots.archive(target.id);
-              forgetBot(target.id, active?.id === target.id);
-              setArchivedBots((list) => [target, ...list.filter((item) => item.id !== target.id)]);
-              await refreshBots();
-            } catch (err) {
-              showError(err, "Archive failed");
-            }
-          }}
-          onDelete={async () => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            try {
-              await api.bots.remove(target.id, false);
-              forgetBot(target.id, active?.id === target.id);
-              await refreshBots();
-            } catch (err) {
-              showError(err, "Delete failed");
-            }
-          }}
-        />
-      ) : null}
-
-      {pageSurface() === "host" &&
-      (alertOffer === "ask" ||
-        shouldShowHomeScreenHint({
-          surface: "host",
-          ios: isIosDevice(),
-          standalone: isStandaloneDisplay(),
-        })) ? (
-        <div className="phone-host-banners pointer-events-none absolute inset-x-0 bottom-[72px] z-20 flex flex-col gap-2 px-3">
-          {shouldShowHomeScreenHint({
-            surface: "host",
-            ios: isIosDevice(),
-            standalone: isStandaloneDisplay(),
-          }) ? (
-            <p
-              data-testid="home-screen-hint"
-              className="pointer-events-auto rounded-[10px] border border-hairline bg-plate px-3 py-2 text-[13px] leading-5 text-paper"
-            >
-              Share → Add to Home Screen, then open that icon. iPhone alerts need it and only work
-              while this app is open.
-            </p>
-          ) : null}
-          {alertOffer === "ask" ? (
-            <button
-              type="button"
-              data-testid="turn-on-alerts"
-              className="pointer-events-auto rounded-[10px] border border-tan bg-plate px-3 py-2 text-left text-[13px] font-medium text-paper"
-              onClick={() => {
-                if (typeof Notification === "undefined") return;
-                void Notification.requestPermission().then((permission) => {
-                  setAlertOffer(
-                    shouldOfferWebAlerts({
-                      surface: pageSurface(),
-                      permission,
-                      standalone: isStandaloneDisplay(),
-                      ios: isIosDevice(),
-                    }),
-                  );
-                });
-              }}
-            >
-              Turn on alerts — only while this app is open
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+            }}
+            onToggleUnread={async () => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              try {
+                if (target.unread) {
+                  heldUnreadIds.current.delete(target.id);
+                  await api.threads.markRead(target.id);
+                  patchBotUnread(target.id, false);
+                } else {
+                  heldUnreadIds.current.add(target.id);
+                  await api.threads.markUnread(target.id);
+                  patchBotUnread(target.id, true);
+                }
+              } catch (err) {
+                showError(err, "Failed to toggle read status");
+              }
+            }}
+            onEdit={() => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              navigate(`/app/${target.id}`);
+              panelAfterSettings.current = null;
+              setPanel("settings");
+            }}
+            onDuplicate={async () => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              try {
+                const duplicated = await api.bots.duplicate(target.id);
+                freshBotIds.current.add(duplicated.id);
+                await refreshBots();
+                navigate(`/app/${duplicated.id}`);
+              } catch (err) {
+                showError(err, "Duplicate failed");
+              }
+            }}
+            onArchive={async () => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              try {
+                await api.bots.archive(target.id);
+                forgetBot(target.id, active?.id === target.id);
+                setArchivedBots((list) => [
+                  target,
+                  ...list.filter((item) => item.id !== target.id),
+                ]);
+                await refreshBots();
+              } catch (err) {
+                showError(err, "Archive failed");
+              }
+            }}
+            onDelete={async () => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              try {
+                await api.bots.remove(target.id, false);
+                forgetBot(target.id, active?.id === target.id);
+                await refreshBots();
+              } catch (err) {
+                showError(err, "Delete failed");
+              }
+            }}
+          />
+        ) : null}
+      </div>
 
       <nav
         data-testid="phone-nav"
@@ -2256,6 +2245,65 @@ export function ShellPage() {
         onScreenFrameLoad={onScreenFrameLoad}
         onScreenError={(message) => setScreenError(message)}
       />
+    </div>
+  );
+}
+
+function HostPhoneBanners({
+  alertOffer,
+  hintDismissed,
+  onDismissHint,
+  onAlertPermission,
+}: {
+  alertOffer: "hide" | "ask" | "ready";
+  hintDismissed: boolean;
+  onDismissHint: () => void;
+  onAlertPermission: (permission: NotificationPermission) => void;
+}) {
+  const showHint =
+    !hintDismissed &&
+    shouldShowHomeScreenHint({
+      surface: "host",
+      ios: isIosDevice(),
+      standalone: isStandaloneDisplay(),
+    });
+  if (pageSurface() !== "host" || (!showHint && alertOffer !== "ask")) return null;
+  return (
+    <div
+      data-testid="phone-host-banners"
+      className="flex shrink-0 flex-col gap-2 border-b border-hairline px-3 pb-2 pt-3"
+    >
+      {showHint ? (
+        <div className="flex items-start gap-2 rounded-[10px] border border-hairline bg-plate px-3 py-2">
+          <p
+            data-testid="home-screen-hint"
+            className="min-w-0 flex-1 text-[13px] leading-5 text-paper"
+          >
+            Share → Add to Home Screen, then open that icon. iPhone alerts need it and only work
+            while this app is open.
+          </p>
+          <button
+            type="button"
+            className="shrink-0 pt-0.5 text-[13px] font-medium text-tan"
+            onClick={onDismissHint}
+          >
+            Got it
+          </button>
+        </div>
+      ) : null}
+      {alertOffer === "ask" ? (
+        <button
+          type="button"
+          data-testid="turn-on-alerts"
+          className="rounded-[10px] border border-tan bg-plate px-3 py-2 text-left text-[13px] font-medium text-paper"
+          onClick={() => {
+            if (typeof Notification === "undefined") return;
+            void Notification.requestPermission().then(onAlertPermission);
+          }}
+        >
+          Turn on alerts — only while this app is open
+        </button>
+      ) : null}
     </div>
   );
 }

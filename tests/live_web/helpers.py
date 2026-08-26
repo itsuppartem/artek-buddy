@@ -42,6 +42,7 @@ def create_named_bot_phone(page: Page, name: str) -> None:
 
 
 def send_message_phone(page: Page, text: str) -> None:
+    ensure_model_phone(page)
     open_phone_tab(page, "chat")
     box = composer(page)
     expect(box).to_be_enabled(timeout=8_000)
