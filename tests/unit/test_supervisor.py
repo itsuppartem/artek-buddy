@@ -5,6 +5,7 @@ from artek_buddy.supervisor.docker_engine import published_port
 from artek_buddy.supervisor.logic import (
     _close_app_command,
     action_command,
+    input_command,
     observe_command,
     shell_quote,
     x11vnc_command,
@@ -55,6 +56,20 @@ def test_launch_terminal_is_xterm_once() -> None:
 def test_caps_lock_key_uses_xdotool_caps_lock() -> None:
     cmd = action_command([{"kind": "key", "key": "CapsLock"}])
     assert "Caps_Lock" in cmd
+
+
+def test_clipboard_cyrillic_pastes_utf8_instead_of_us_keys() -> None:
+    cmd = input_command("clipboard", {"text": "привет"})
+    assert "привет" in cmd
+    assert "xclip" in cmd
+    assert "ctrl+v" in cmd
+    assert "xdotool type" not in cmd
+
+
+def test_ascii_type_still_uses_keystrokes() -> None:
+    cmd = input_command("clipboard", {"text": "hello"})
+    assert "xdotool type" in cmd
+    assert "xclip" not in cmd
 
 
 def test_open_https_uses_browser_not_file_manager() -> None:

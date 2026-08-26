@@ -7,6 +7,7 @@ describe("phone shell tabs", () => {
     expect(nextPhoneTab("open-desk")).toBe("desk");
     expect(nextPhoneTab("open-chats")).toBe("chats");
     expect(nextPhoneTab("open-chat")).toBe("chat");
+    expect(nextPhoneTab("close-desk")).toBe("chat");
   });
 
   it("uses the stacked shell at phone width only", () => {
@@ -14,5 +15,8 @@ describe("phone shell tabs", () => {
     expect(shouldUsePhoneShell(390)).toBe(true);
     expect(shouldUsePhoneShell(720)).toBe(true);
     expect(shouldUsePhoneShell(721)).toBe(false);
+    expect(shouldUsePhoneShell(812, 375)).toBe(true);
+    expect(shouldUsePhoneShell(1280, 720)).toBe(false);
+    expect(shouldUsePhoneShell(1280, 800)).toBe(false);
   });
 });

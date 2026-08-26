@@ -31,6 +31,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && ln -sfn /bin/true /usr/bin/xmessage
 ENV DISPLAY=:1
 ENV HOME=/home/artek
+ENV LANG=C.UTF-8
+RUN apt-get update && apt-get install -y --no-install-recommends xclip \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /home/artek
 COPY start.sh /usr/local/bin/artek-computer
 COPY artek-browser /usr/local/bin/artek-browser
