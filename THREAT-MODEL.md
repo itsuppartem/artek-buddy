@@ -80,7 +80,8 @@ the Tailscale interface. A LAN neighbor, a leaked Funnel hostname, or
 This issue does **not** change `HTTP_HOST`. Stronger options, if we take them
 later: bind to the tailnet address, a host firewall that only allows the
 tailnet, or Tailscale **Serve** instead of Funnel. Funnel still publishes the
-**whole** host API (`README` step 6). `/novnc` URLs need a Bearer; every other
+**whole** host API (`README` step 6). `/novnc` HTTP and the screen WebSocket
+need a Bearer or the host-page `artek_device` cookie; every other
 route on that hostname does too, including pairing and tokens.
 
 OpenAPI is off at runtime (`docs_url=None`, `openapi_url=None` in `main.py`).
@@ -98,7 +99,7 @@ that file is not served.
 | Supervisor token / `:7091` | Call create/exec/remove as the supervisor | Loopback HTTP | Listen `127.0.0.1`; separate derived bearer; host token must not work on `:7091` | Compare is string equality, not `compare_digest`. Process on the Pi that can hit loopback and the token owns Docker via the supervisor. |
 | `docker.sock` on the supervisor | Container breakout = root on the Pi | Unix socket mount | Only the supervisor container gets the socket; desktops do not | The supervisor **is** root-equivalent. A bug in that process is a host compromise. |
 | Untrusted desktop | Agent breakout, lateral movement, noisy neighbors | Container + `artek-computers` network | `CapDrop: ALL`; `no-new-privileges`; 1536 MiB / 1 CPU / 512 pids; tmpfs `/tmp` (`noexec`); `enable_icc=false`; noVNC on `127.0.0.1`; capability consent in the thread | **Still root in the box.** Live browse canary (`test_browse_allow_starts_chromium`) saw no `chromium` process after Allow as uid 1000. Chromium stderr is inside the box, not compose logs. Chromium uses `--no-sandbox --disable-setuid-sandbox`. Rootfs is writable. No gVisor. Fluxbox is started from `/usr`, not a script on `/tmp`. |
-| Funnel / public HTTPS | Whole API on the internet | Tailscale Funnel | Documented as optional and dangerous; `/novnc` Bearer | Funnel is not “safe HTTPS for the window”. It is a public bind of `:8080`. |
+| Funnel / public HTTPS | Whole API on the internet | Tailscale Funnel | Documented as optional and dangerous; `/novnc` Bearer or device cookie | Funnel is not “safe HTTPS for the window”. It is a public bind of `:8080`. |
 | Model prompt injection | Recalled notes or page text treated as orders | Host → Cursor Cloud | Owner book and work notes stay data (`<owner_book>`, `<work_notes>`). Bot book (`<bot_book>`) is standing instructions this host saved for that chat. Playbook names sit in `<skill_books>`; the steps enter only after `open_book`. A reply from another inbox bot is that bot's last message only, not their thread. Browse/click/write wait on Allow/Deny | Owner book, a taught playbook, and another bot's last message can still try to jailbreak. Consent is the brake. Charter is trusted because it was written on this host, not scraped from a page. The model is outside the Pi; injection can still request tools. |
 | Desktop breakout | Escape to the Pi or another bot | Engine + network | Isolated compose network, ICC off, CapDrop ALL, host token never in the page | Root in the desktop, `--no-sandbox` Chromium, writable rootfs, Docker socket on the supervisor, shared Team home. |
 | Owner `$HOME` | Read/write/exec outside the home | Paired `.deb` | `inspect_owner_path` jail under the owner home; write/exec consent per bot | Jail is the **logical** path then `resolve()`. Symlinks and bind mounts on the owner PC are a residual. Auto owner-read of files still happens without a card. |

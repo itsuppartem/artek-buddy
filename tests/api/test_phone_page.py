@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+
+import pytest
+from fastapi import HTTPException
+
+from artek_buddy.http.deps import _authorize_websocket
 from tests.support import mask_secret
 
 
@@ -122,6 +128,37 @@ def test_host_local_pair_needs_origin_and_nonce(client, auth_header) -> None:
         json=body,
     )
     assert bad_nonce.status_code == 403
+
+
+def test_novnc_websocket_accepts_pairing_cookie(client, auth_header) -> None:
+    paired = client.post(
+        "/local/pair",
+        headers={**_origin(), "X-Artek-Local-Nonce": _nonce(client)},
+        json={"pairing_code": _mint(client, auth_header), "name": "Phone", "platform": "web"},
+    )
+    assert paired.status_code == 200
+    cookie = paired.cookies.get("artek_device")
+    assert cookie
+    mask_secret(cookie)
+
+    class _Socket:
+        def __init__(self, headers: dict[str, str]) -> None:
+            self.headers = headers
+            self.app = client.app
+
+    missing = pytest.raises(HTTPException)
+    with missing:
+        asyncio.run(_authorize_websocket(_Socket({})))
+    assert missing.value.status_code == 401
+
+    actor = asyncio.run(_authorize_websocket(_Socket({"cookie": f"artek_device={cookie}"})))
+    assert actor.startswith("dev_")
+
+    host_token = client.app.state.settings.agent_http_token
+    host_cookie = pytest.raises(HTTPException)
+    with host_cookie:
+        asyncio.run(_authorize_websocket(_Socket({"cookie": f"artek_device={host_token}"})))
+    assert host_cookie.value.status_code == 401
 
 
 def test_host_notify_is_not_a_desktop_alert(client) -> None:

@@ -141,9 +141,10 @@ a:focus-visible {
 }
 
 [data-phone-shell="1"] {
+  --phone-nav-pad: calc(56px + env(safe-area-inset-bottom, 0px));
   padding-top: env(safe-area-inset-top, 0px);
   padding-right: env(safe-area-inset-right, 0px);
-  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: var(--phone-nav-pad);
   padding-left: env(safe-area-inset-left, 0px);
 }
 
@@ -154,7 +155,7 @@ a:focus-visible {
   left: env(safe-area-inset-left, 0px);
   z-index: 30;
   display: flex;
-  height: auto;
+  height: var(--phone-nav-pad);
   min-height: 56px;
   padding: 6px 8px env(safe-area-inset-bottom, 0px);
   border-top: 1px solid var(--color-hairline);
@@ -186,10 +187,6 @@ a:focus-visible {
 [data-phone-shell="1"][data-phone-tab="chats"] [data-shell="rack"] {
   width: 100%;
   border-right: 0;
-}
-
-[data-phone-shell="1"] [data-shell="rack"] > .ab-scroll {
-  flex-grow: 0;
 }
 
 [data-phone-shell="1"][data-phone-tab="chats"] [data-testid="thread-pane"],

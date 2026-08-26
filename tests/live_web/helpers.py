@@ -57,6 +57,15 @@ def send_message_phone(page: Page, text: str) -> None:
 def expect_bot_in_chats(page: Page, name: str) -> None:
     open_phone_tab(page, "chats")
     expect(bot_row(page, name)).to_be_visible(timeout=8_000)
+    search = page.get_by_label("Search inbox").bounding_box()
+    scroll = page.locator('[data-shell="rack"] > .ab-scroll').bounding_box()
+    plugins = page.get_by_test_id("open-plugins").bounding_box()
+    assert search is not None
+    assert scroll is not None
+    assert plugins is not None
+    assert search["y"] < scroll["y"]
+    assert scroll["height"] >= 40
+    assert scroll["y"] + scroll["height"] <= plugins["y"] + 2
 
 
 def ensure_model_phone(page: Page) -> None:

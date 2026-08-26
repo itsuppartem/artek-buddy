@@ -63,6 +63,7 @@ describe("phone overlay chrome", () => {
   it("keeps the stacked shell in landscape iPhone 11 Pro", () => {
     expect(shouldUsePhoneShell(812, 375)).toBe(true);
     expect(shouldUsePhoneShell(375, 812)).toBe(true);
+    expect(shouldUsePhoneShell(1280, 720)).toBe(false);
     expect(shouldUsePhoneShell(1280, 800)).toBe(false);
   });
 });
