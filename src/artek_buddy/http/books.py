@@ -15,8 +15,6 @@ async def list_books(bot_id: str, history: HistoryStore = Depends(store)) -> Ski
     try:
         _require_bot(history, bot_id)
         books = history.list_skill_books(bot_id)
-        return SkillBookList(
-            books=[book.model_copy(update={"body": None}) for book in books]
-        )
+        return SkillBookList(books=[book.model_copy(update={"body": None}) for book in books])
     except DatabaseUnavailable as err:
         raise _db_error(err) from err

@@ -36,9 +36,7 @@ class BooksMixin:
             conn.commit()
         return self._book_view(row, body=True) if row else None
 
-    def save_skill_book(
-        self, bot_id: str, name: str, when_to_use: str, body: str
-    ) -> SkillBook:
+    def save_skill_book(self, bot_id: str, name: str, when_to_use: str, body: str) -> SkillBook:
         title, when, steps, slug = normalize_book(name, when_to_use, body)
         now = isoformat_utc()
         book_id = new_id("bok")
