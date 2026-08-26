@@ -4,9 +4,9 @@ import asyncio
 
 import pytest
 from fastapi import HTTPException
+from tests.support import mask_secret
 
 from artek_buddy.http.deps import _authorize_websocket
-from tests.support import mask_secret
 
 
 def _origin() -> dict[str, str]:
