@@ -2110,7 +2110,10 @@ export function ShellPage() {
                   screenEpoch={screenEpoch}
                   previewFrameRef={previewFrameRef}
                   booting={booting}
-                  onClose={() => setPanel(null)}
+                  onClose={() => {
+                    setPanel(null);
+                    if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
+                  }}
                   onSettings={() => {
                     panelAfterSettings.current = "computer";
                     setPanel("settings");
@@ -2260,7 +2263,10 @@ export function ShellPage() {
         overlayFrameRef={overlayFrameRef}
         onRelease={() => void releaseComputer()}
         onTakeControl={() => void bootComputer({ takeControl: true, overlay: false })}
-        onClose={() => setComputerOpen(false)}
+        onClose={() => {
+          setComputerOpen(false);
+          if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
+        }}
         onRetry={retryScreen}
         onScreenFrameLoad={onScreenFrameLoad}
         onScreenError={(message) => setScreenError(message)}

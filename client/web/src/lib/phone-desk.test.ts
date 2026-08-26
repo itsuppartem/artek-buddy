@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DESK_SIZE,
+  EXTRA_KEYS,
   gestureFromTouch,
   keyFromDomKey,
   keysFromField,
@@ -46,9 +47,22 @@ describe("phone desk keys", () => {
 
   it("maps the phone keyboard specials to xdotool names", () => {
     expect(keyFromDomKey("Enter")).toEqual({ kind: "key", payload: { key: "Return" } });
+    expect(keyFromDomKey("Backspace")).toEqual({ kind: "key", payload: { key: "BackSpace" } });
+    expect(keyFromDomKey("Delete")).toEqual({ kind: "key", payload: { key: "Delete" } });
     expect(keyFromDomKey("Escape")).toEqual({ kind: "key", payload: { key: "Escape" } });
     expect(keyFromDomKey("ArrowLeft")).toEqual({ kind: "key", payload: { key: "Left" } });
     expect(keyFromDomKey("a")).toBeNull();
+    expect(EXTRA_KEYS.map((item) => item.key)).toEqual([
+      "Escape",
+      "Tab",
+      "Enter",
+      "Backspace",
+      "Delete",
+      "ArrowUp",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowRight",
+    ]);
   });
 });
 

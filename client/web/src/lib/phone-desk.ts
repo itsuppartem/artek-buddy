@@ -75,9 +75,22 @@ export function keysFromField(prev: string, next: string): DeskInput[] {
   return [{ kind: "clipboard", payload: { text: next } }];
 }
 
+export const EXTRA_KEYS = [
+  { label: "Esc", key: "Escape" },
+  { label: "Tab", key: "Tab" },
+  { label: "Enter", key: "Enter" },
+  { label: "Bksp", key: "Backspace" },
+  { label: "Del", key: "Delete" },
+  { label: "↑", key: "ArrowUp" },
+  { label: "↓", key: "ArrowDown" },
+  { label: "←", key: "ArrowLeft" },
+  { label: "→", key: "ArrowRight" },
+] as const;
+
 const DOM_KEYS: Record<string, string> = {
   Enter: "Return",
   Backspace: "BackSpace",
+  Delete: "Delete",
   Escape: "Escape",
   Tab: "Tab",
   ArrowUp: "Up",

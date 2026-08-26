@@ -24,6 +24,9 @@ def test_host_page_pairs_and_stacks_on_iphone_11_pro(page: Page, host_url: str) 
     expect_bot_in_chats(page, name)
     open_phone_tab(page, "desk")
     expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
+    page.get_by_title("Close panel").click()
+    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("thread-header")).to_contain_text(name)
 
 
 def test_host_page_home_screen_hint_leaves_models_tappable(page: Page, host_url: str) -> None:

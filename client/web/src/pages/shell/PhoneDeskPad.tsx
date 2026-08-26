@@ -3,6 +3,7 @@ import {
   DESK_SIZE,
   type DeskInput,
   type DeskPoint,
+  EXTRA_KEYS,
   gestureFromTouch,
   inputForGesture,
   inputForMove,
@@ -11,23 +12,16 @@ import {
   moveFromDelta,
 } from "../../lib/phone-desk";
 
-const EXTRA_KEYS = [
-  { label: "Esc", key: "Escape" },
-  { label: "Tab", key: "Tab" },
-  { label: "↑", key: "ArrowUp" },
-  { label: "↓", key: "ArrowDown" },
-  { label: "←", key: "ArrowLeft" },
-  { label: "→", key: "ArrowRight" },
-] as const;
-
 export function PhoneDeskPad({
   enabled,
   keysOpen,
   onInput,
+  onDismissKeys,
 }: {
   enabled: boolean;
   keysOpen: boolean;
   onInput: (input: DeskInput) => void;
+  onDismissKeys: () => void;
 }) {
   const keysRef = useRef<HTMLInputElement>(null);
   const [field, setField] = useState("");
@@ -127,10 +121,10 @@ export function PhoneDeskPad({
   }
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col">
+    <div className="pointer-events-none absolute inset-0 z-10">
       <div
         data-testid="phone-desk-pad"
-        className="relative min-h-0 flex-1 touch-none"
+        className="absolute inset-0 touch-none"
         style={{ pointerEvents: enabled ? "auto" : "none" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -151,13 +145,14 @@ export function PhoneDeskPad({
       {keysOpen ? (
         <div
           data-testid="phone-desk-key-row"
-          className="pointer-events-auto flex shrink-0 gap-1 border-t border-hairline bg-plate px-2 py-1.5"
+          className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex flex-wrap gap-1 border-t border-hairline bg-plate px-2 py-1.5"
         >
           {EXTRA_KEYS.map((item) => (
             <button
               key={item.key}
               type="button"
-              className="min-h-11 flex-1 rounded-[8px] bg-raised text-[13px] font-medium text-paper"
+              className="min-h-11 min-w-11 flex-1 rounded-[8px] bg-raised text-[13px] font-medium text-paper"
+              onPointerDown={(event) => event.preventDefault()}
               onClick={() => send(keyFromDomKey(item.key))}
             >
               {item.label}
@@ -174,9 +169,8 @@ export function PhoneDeskPad({
           autoCapitalize="off"
           autoCorrect="off"
           autoComplete="off"
-          enterKeyHint="send"
-          placeholder="Type on the desktop"
-          className="pointer-events-auto h-11 w-full shrink-0 border-t border-hairline bg-plate px-3 text-[16px] text-paper"
+          enterKeyHint="done"
+          className="pointer-events-none absolute bottom-0 left-0 h-px w-px overflow-hidden opacity-0"
           onChange={(event) => {
             const next = event.target.value;
             for (const input of keysFromField(field, next)) send(input);
@@ -190,6 +184,7 @@ export function PhoneDeskPad({
               setField("");
             }
           }}
+          onBlur={() => onDismissKeys()}
         />
       ) : null}
     </div>

@@ -117,7 +117,7 @@ export function ComputerOverlay({
       }}
     >
       <div
-        className={`flex items-center justify-between border-b border-[#171719] ${
+        className={`relative z-30 flex items-center justify-between border-b border-[#171719] ${
           phone ? "gap-2 px-3 py-2" : "gap-4 px-[18px] py-3.5"
         }`}
       >
@@ -148,17 +148,30 @@ export function ComputerOverlay({
               variant="outline"
               size="sm"
               data-testid="phone-desk-keyboard"
+              onPointerDown={(event) => event.preventDefault()}
               onClick={() => setKeysOpen((openKeys) => !openKeys)}
             >
               Keyboard
             </Button>
           ) : null}
           {inControl ? (
-            <Button type="button" variant="outline" size="sm" onClick={onRelease}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={onRelease}
+            >
               Release
             </Button>
           ) : (
-            <Button type="button" variant="outline" size="sm" onClick={onTakeControl}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={onTakeControl}
+            >
               Take control
             </Button>
           )}
@@ -166,7 +179,10 @@ export function ComputerOverlay({
             type="button"
             className="min-h-11 min-w-11 text-[16px] text-[#85858A] hover:text-[#ECECEE]"
             aria-label="Close computer"
-            onClick={onClose}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              onClose();
+            }}
           >
             ✕
           </button>
@@ -178,7 +194,7 @@ export function ComputerOverlay({
           fingers is right click.
         </p>
       ) : null}
-      <div className="relative min-h-0 flex-1 bg-[#0E0E10]">
+      <div className="relative min-h-0 flex-1 bg-[#0E0E10]" data-testid="computer-overlay-screen">
         {embeddableScreenUrl(screenUrl) ? (
           <>
             <iframe
@@ -228,7 +244,12 @@ export function ComputerOverlay({
           </div>
         )}
         {phone ? (
-          <PhoneDeskPad enabled={inControl} keysOpen={keysOpen} onInput={sendDeskInput} />
+          <PhoneDeskPad
+            enabled={inControl}
+            keysOpen={keysOpen}
+            onInput={sendDeskInput}
+            onDismissKeys={() => setKeysOpen(false)}
+          />
         ) : null}
       </div>
     </div>
