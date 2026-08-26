@@ -7,6 +7,7 @@ import {
   gestureFromTouch,
   keyFromDomKey,
   keysFromField,
+  MOVE_SENSITIVITY,
   moveFromDelta,
   overlayHolderText,
   overlayTitle,
@@ -18,6 +19,10 @@ import { shouldUsePhoneShell } from "./phone-shell";
 describe("phone desk pad", () => {
   it("keeps the pointer on the 1280×800 box", () => {
     expect(moveFromDelta({ x: 10, y: 10 }, -40, -40)).toEqual({ x: 0, y: 0 });
+    expect(moveFromDelta({ x: 640, y: 400 }, 20, -10)).toEqual({
+      x: Math.round(640 + 20 * MOVE_SENSITIVITY),
+      y: Math.round(400 - 10 * MOVE_SENSITIVITY),
+    });
     expect(moveFromDelta({ x: 1270, y: 790 }, 80, 80)).toEqual({
       x: DESK_SIZE.width - 1,
       y: DESK_SIZE.height - 1,

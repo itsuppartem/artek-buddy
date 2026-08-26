@@ -3,13 +3,13 @@ import {
   DESK_SIZE,
   type DeskInput,
   type DeskPoint,
-  deskPointFromPad,
   EXTRA_KEYS,
   gestureFromTouch,
   inputForGesture,
   inputForMove,
   keyFromDomKey,
   keysFromField,
+  moveFromDelta,
   padStyleFromDesk,
 } from "../../lib/phone-desk";
 
@@ -66,30 +66,14 @@ export function PhoneDeskPad({
     move: 0,
     dy: 0,
     maxFingers: 0,
+    lastX: 0,
+    lastY: 0,
     lastMoveAt: 0,
   });
 
   function send(input: DeskInput | null) {
     if (!input || !enabled) return;
     onInput(input);
-  }
-
-  function pointFromEvent(event: { clientX: number; clientY: number }): DeskPoint {
-    const el = padRef.current;
-    if (!el) return pos.current;
-    const rect = el.getBoundingClientRect();
-    return deskPointFromPad(event.clientX, event.clientY, {
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
-    });
-  }
-
-  function place(event: { clientX: number; clientY: number }, report: boolean) {
-    pos.current = pointFromEvent(event);
-    setDot(pos.current);
-    if (report) send(inputForMove(pos.current));
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
@@ -103,10 +87,11 @@ export function PhoneDeskPad({
       s.move = 0;
       s.dy = 0;
       s.maxFingers = 0;
+      s.lastX = event.clientX;
+      s.lastY = event.clientY;
     }
     s.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     s.maxFingers = Math.max(s.maxFingers, s.pointers.size);
-    if (s.pointers.size === 1) place(event, true);
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
@@ -124,14 +109,17 @@ export function PhoneDeskPad({
       }
       return;
     }
-    if (last) s.move += Math.hypot(event.clientX - last.x, event.clientY - last.y);
+    const dx = event.clientX - s.lastX;
+    const dy = event.clientY - s.lastY;
+    s.lastX = event.clientX;
+    s.lastY = event.clientY;
+    s.move += Math.hypot(dx, dy);
+    pos.current = moveFromDelta(pos.current, dx, dy);
+    setDot(pos.current);
     const now = Date.now();
-    if (now - s.lastMoveAt < 32) {
-      place(event, false);
-      return;
-    }
+    if (now - s.lastMoveAt < 32) return;
     s.lastMoveAt = now;
-    place(event, true);
+    send(inputForMove(pos.current));
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
