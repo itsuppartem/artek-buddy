@@ -146,8 +146,7 @@ def test_novnc_websocket_accepts_pairing_cookie(client, auth_header) -> None:
             self.headers = headers
             self.app = client.app
 
-    missing = pytest.raises(HTTPException)
-    with missing:
+    with pytest.raises(HTTPException) as missing:
         asyncio.run(_authorize_websocket(_Socket({})))
     assert missing.value.status_code == 401
 
@@ -155,8 +154,7 @@ def test_novnc_websocket_accepts_pairing_cookie(client, auth_header) -> None:
     assert actor.startswith("dev_")
 
     host_token = client.app.state.settings.agent_http_token
-    host_cookie = pytest.raises(HTTPException)
-    with host_cookie:
+    with pytest.raises(HTTPException) as host_cookie:
         asyncio.run(_authorize_websocket(_Socket({"cookie": f"artek_device={host_token}"})))
     assert host_cookie.value.status_code == 401
 
