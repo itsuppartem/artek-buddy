@@ -144,7 +144,7 @@ Allow once / Always / Deny for browse, page, and owner_*. A read-only owner job 
 
 ## Host page / phone
 
-`GET /` and `/app` on `:8080` serve the same `web/` tree. `GET /local/status` returns `surface: host`. Pair sets `artek_device` (httpOnly). `--serve` stays the `.deb` / CI proxy. Manifest + apple-touch-icon for Add to Home Screen. Pair from that icon (Safari and the icon do not share the login). No background sync and no Web Push: alerts fire only while the home-screen app is open or still in memory. iPhone will not wake a killed app.
+`GET /` and `/app` on `:8080` serve the same `web/` tree. `GET /local/status` returns `surface: host`. Pair sets `artek_device` (httpOnly). `--serve` stays the `.deb` / CI proxy. Manifest + apple-touch-icon for Add to Home Screen. Pair from that icon (Safari and the icon do not share the login). No background sync and no Web Push: alerts fire only while the home-screen app is open or still in memory. iPhone will not wake a killed app. File-card **Download** uses the browser (not `/local/save-artifact` or a Linux home path).
 
 ## Loopback proxy (`/local/*`)
 

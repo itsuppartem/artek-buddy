@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { artifactUrl, DownloadCancelled, downloadArtifact, formatBytes } from "../../lib/files";
+import {
+  artifactUrl,
+  DownloadCancelled,
+  downloadArtifact,
+  formatBytes,
+  startBrowserDownload,
+  usesBrowserDownload,
+} from "../../lib/files";
 import { previewKind } from "../../lib/uploads";
 import type { ThreadMessage } from "../../types";
 
@@ -14,9 +21,17 @@ export function FileCard({ block }: { block: FileBlock }) {
 
   async function download() {
     if (busy) return;
-    setBusy(true);
     setError("");
     setSaved("");
+    if (usesBrowserDownload()) {
+      try {
+        startBrowserDownload(block.artifactId, block.name);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not download that file");
+      }
+      return;
+    }
+    setBusy(true);
     try {
       const result = await downloadArtifact(block.artifactId, block.name);
       setSaved(result.path);
