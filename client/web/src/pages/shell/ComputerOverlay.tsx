@@ -1,6 +1,7 @@
 import { type RefObject, type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import {
+  createDeskInputGate,
   type DeskInput,
   overlayHolderText,
   overlayTitle,
@@ -77,6 +78,14 @@ export function ComputerOverlay({
   phone: boolean;
 }) {
   const lastActivityMs = useRef(0);
+  const deskBotIdRef = useRef(bot?.id ?? "");
+  deskBotIdRef.current = bot?.id ?? "";
+  const deskGateRef = useRef<((input: DeskInput) => void) | null>(null);
+  if (deskGateRef.current === null) {
+    deskGateRef.current = createDeskInputGate((input) =>
+      api.computer.input(deskBotIdRef.current, input),
+    );
+  }
   const [frameReady, setFrameReady] = useState(0);
   const [keysOpen, setKeysOpen] = useState(false);
   const view = useOverlayViewport(phone && open);
@@ -120,11 +129,10 @@ export function ComputerOverlay({
     );
   }
   if (!open || !bot) return null;
-  const deskBot = bot;
 
   function sendDeskInput(input: DeskInput) {
     reportOwnerActivity();
-    void api.computer.input(deskBot.id, input);
+    deskGateRef.current?.(input);
   }
 
   const inControl = computer?.controlHolder === "user";
@@ -148,7 +156,7 @@ export function ComputerOverlay({
         reportOwnerActivity();
         if (event.key !== "CapsLock" || !inControl) return;
         event.preventDefault();
-        void api.computer.input(deskBot.id, { kind: "key", payload: { key: "Caps_Lock" } });
+        sendDeskInput({ kind: "key", payload: { key: "Caps_Lock" } });
       }}
     >
       <div

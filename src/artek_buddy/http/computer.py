@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import Depends, HTTPException, Query, Request, WebSocket
@@ -223,7 +224,9 @@ async def computer_input(
     boxes: ComputerService = Depends(computers),
 ) -> OkResponse:
     try:
-        boxes.send_input(_require_bot(history, bot_id), body.kind, body.payload)
+        await asyncio.to_thread(
+            boxes.send_input, _require_bot(history, bot_id), body.kind, body.payload
+        )
     except (ComputerBusy, ComputerError) as err:
         raise _computer_http(err) from err
     except DatabaseUnavailable as err:
