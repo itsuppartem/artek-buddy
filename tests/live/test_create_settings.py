@@ -89,6 +89,6 @@ def test_settings_title_keeps_value_after_blur_and_save(
     page.get_by_test_id("settings-save").click()
     expect(page.get_by_role("button", name="Saved")).to_be_visible(timeout=8_000)
     expect(page.get_by_role("button", name="Edit profile")).to_be_visible(timeout=8_000)
-    expect(page.get_by_text("QA Helper", exact=True)).to_be_visible()
+    expect(page.get_by_test_id("bot-settings-role")).to_have_text("QA Helper")
     page.get_by_role("button", name="Edit profile").click()
     expect(page.get_by_test_id("bot-title-input")).to_have_value("QA Helper")
