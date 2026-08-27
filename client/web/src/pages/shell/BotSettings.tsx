@@ -51,13 +51,14 @@ export function BotSettings({
   const [deleteMemories, setDeleteMemories] = useState(false);
 
   useEffect(() => {
+    if (editing) return;
     setName(bot.name);
-    setTitle(bot.title);
+    setTitle(bot.title ?? "");
     setDescription(bot.description);
     setInstructions(bot.instructions);
     setComputerMode(bot.computerMode);
     setNotifyOnFinish(bot.notifyOnFinish);
-  }, [bot]);
+  }, [bot, editing]);
 
   async function save() {
     if (!name.trim()) return;
@@ -107,6 +108,8 @@ export function BotSettings({
           <label className="text-[12px] text-mute">
             Title
             <input
+              data-testid="bot-title-input"
+              autoComplete="off"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Code Reviewer"
@@ -184,6 +187,12 @@ export function BotSettings({
               size="sm"
               onClick={() => {
                 saveAck.cancel();
+                setName(bot.name);
+                setTitle(bot.title ?? "");
+                setDescription(bot.description);
+                setInstructions(bot.instructions);
+                setComputerMode(bot.computerMode);
+                setNotifyOnFinish(bot.notifyOnFinish);
                 setEditing(true);
               }}
             >

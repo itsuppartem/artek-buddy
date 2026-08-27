@@ -394,6 +394,7 @@ Computer → Routines.
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Settings: Name, Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team \| Private, notifyOnFinish, Restart / Stop / Reset, Delete | [ ] | [ ] |
+| Title keeps what you typed through blur / Tab and Save (the field must not empty). Save flashes Saved. Reopen Edit profile shows the same title | [ ] | [ ] |
 | Settings opened from the computer pane returns to that pane. Create / Models Close do the same if the pane was open | [ ] | [ ] |
 | Changing Team ↔ Private rebinds the desktop; the old home is **not** copied | [ ] | [ ] |
 | Settings Stop leaves the box **Sleeping**, not a dead Offline preview | [ ] | [ ] |
