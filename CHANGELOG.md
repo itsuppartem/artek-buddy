@@ -15,6 +15,8 @@
 
 ### Fixed
 - A failed playbook run shows a steps card on success, or one human **The turn failed.** line — not a raw `run failed: run-` id, and not that same line as a bubble plus a red box.
+- Create and Settings ask three different questions: Title is a short role, Description is what the bot is for, and Instructions are standing orders (not labelled Prompt).
+- Auth recovery on the host page says **Pair this phone again**, matching the pairing title. The `.deb` still says **Pair this computer again**.
 - Pairing tells the owner where to get a code and what Pair does. The phone page has no token or host-module command. The `.deb` footer is the README Compose exec.
 - Chat that writes the identity book lists that chapter in Computer → Memory. Owner place/person rows are labeled identity, and a later city replaces the old one on the same card.
 - Phone Close on Computer / Models / Plugins returns to the Chat tab with the thread, not a blank Desktop tab.

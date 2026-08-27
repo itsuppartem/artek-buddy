@@ -13,6 +13,10 @@ export function pageSurface(): PageSurface {
   return surface;
 }
 
+export function pairAgainLabel(surface: PageSurface = pageSurface()): string {
+  return surface === "host" ? "Pair this phone again" : "Pair this computer again";
+}
+
 export function isStandaloneDisplay(): boolean {
   if (typeof window === "undefined") return false;
   const nav = window.navigator as Navigator & { standalone?: boolean };

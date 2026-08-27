@@ -284,7 +284,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Fresh pair with a 15-minute one-use code works. A second use of the same code fails under the form | [ ] | [ ] |
 | Pairing body: create a code on the Pi, type it here, Pair. Phone has **no** token / mint / `python -m`. Deb shows `docker exec artek-buddy python -m artek_buddy pair` | [ ] | [ ] |
 | After pair, the credential is not visible in the page (Deb: `~/.config/artek-buddy/token` mode 600; Phone: httpOnly cookie) | [ ] | [ ] |
-| Auth error in the thread: **Pair this computer again** / re-pair. Does not queue as an offline send | [ ] | [ ] |
+| Auth error: **Pair this computer again** (Deb) / **Pair this phone again** (Phone). Click unpairs to the matching pair screen. Does not queue as an offline send | [ ] | [ ] |
 | Unpair returns to the pair screen. Re-pair with a new code restores the inbox | [ ] | [ ] |
 | Pairing does **not** open the computer pane or Models and does **not** boot a desktop | [ ] | [ ] |
 
@@ -300,7 +300,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Opening a chat marks it read. A reply while that chat is open does not leave the unread dot | [ ] | [ ] |
 | Right-click (Deb) / long-press if offered (Phone): Pin / Unpin, Mark as unread (sticks until you leave and open again), Edit profile, Duplicate, Archive, Delete | [ ] | [ ] |
 | Empty inbox: Restore from Archived, or create a first bot | [ ] | [ ] |
-| Create: name + Team / Private. Focusing Name does not mint a bot; only Create does | [ ] | [ ] |
+| Create: Name (inbox), Title (role), Description (what it is for), Team / Private. Focusing Name does not mint a bot; only Create does | [ ] | [ ] |
 | Duplicate makes a second bot. Delete removes that bot; optional purge memories | [ ] | [ ] |
 | Inbox order is pinned first, then created. A later message does not jump a row | [ ] | [ ] |
 
@@ -389,7 +389,7 @@ Computer → Routines.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Settings: name, title, description, instructions, Team \| Private, notifyOnFinish, Restart / Stop / Reset, Delete | [ ] | [ ] |
+| Settings: Name, Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team \| Private, notifyOnFinish, Restart / Stop / Reset, Delete | [ ] | [ ] |
 | Settings opened from the computer pane returns to that pane. Create / Models Close do the same if the pane was open | [ ] | [ ] |
 | Changing Team ↔ Private rebinds the desktop; the old home is **not** copied | [ ] | [ ] |
 | Settings Stop leaves the box **Sleeping**, not a dead Offline preview | [ ] | [ ] |
