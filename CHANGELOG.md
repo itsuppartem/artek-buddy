@@ -15,7 +15,7 @@
 
 ### Fixed
 - Phone file-card Download uses the browser, not a Linux `/local/save-artifact` path.
-- Phone pad and keyboard input no longer freeze the guest picture for tens of seconds. Moves are coalesced, and the host keeps pumping the screen while input runs.
+- A skill chip above Message has ×, and Send consumes it so it does not stick next to screenshot chips.
 - Settings, Memory, and Routine Save flash **Saved** for about a second, then the form closes. A host error stays under the row.
 - A failed playbook run shows a steps card on success, or one human **The turn failed.** line — not a raw `run failed: run-` id, and not that same line as a bubble plus a red box.
 - Settings, Memory, Routines, ask/file cards, and the computer overlay use the same `@theme` tokens as pairing and the thread. Traffic lights and guest noVNC pixels stay as they were.
