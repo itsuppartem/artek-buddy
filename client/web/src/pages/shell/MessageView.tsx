@@ -93,16 +93,16 @@ export function MessageView({
               data-status={block.status}
               disabled={removed}
               onClick={() => onOpenBot(block.botId)}
-              className="w-[min(340px,90%)] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4 text-left disabled:opacity-60"
+              className="w-[min(340px,90%)] rounded-[18px] border border-hairline bg-plate px-[18px] py-4 text-left disabled:opacity-60"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[15px] font-medium text-[#ECECEE]">{block.name}</span>
-                <span className="rounded-full bg-[rgba(48,162,75,.14)] px-[11px] py-1 text-[13px] text-[#4ECB71]">
+                <span className="text-[15px] font-medium text-paper">{block.name}</span>
+                <span className="rounded-full bg-sage-bg px-[11px] py-1 text-[13px] text-sage">
                   {block.status}
                 </span>
               </div>
               {block.title ? (
-                <div className="mt-2 text-[14.5px] leading-[1.5] text-[#A8A8AD]">{block.title}</div>
+                <div className="mt-2 text-[14.5px] leading-[1.5] text-mute">{block.title}</div>
               ) : null}
             </button>
           );
@@ -136,12 +136,12 @@ export function MessageView({
         if (block.kind === "card") {
           return (
             <div key={index} className="flex justify-start" data-testid="check-card">
-              <div className="flex flex-col gap-2 rounded-[20px] bg-[#1A1A1D] px-5 py-4">
+              <div className="flex flex-col gap-2 rounded-[20px] bg-plate px-5 py-4">
                 {block.lines.map((line) => (
                   <div key={line.k} className="flex items-baseline gap-2.5 text-[15px]">
-                    <span className="text-[#30A24B]">✓</span>
+                    <span className="text-sage">✓</span>
                     <span className="font-semibold text-white">{line.k}</span>
-                    <span className="text-[#85858A]">→</span>
+                    <span className="text-mute">→</span>
                     <span>{line.v}</span>
                   </div>
                 ))}
@@ -223,15 +223,15 @@ export function MessageView({
             <div
               key={index}
               data-testid="computer-card"
-              className="w-[340px] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4"
+              className="w-[340px] rounded-[18px] border border-hairline bg-plate px-[18px] py-4"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[15px] font-medium text-[#ECECEE]">Computer</span>
-                <span className="rounded-full bg-[rgba(48,162,75,.14)] px-[11px] py-1 text-[13px] text-[#4ECB71]">
+                <span className="text-[15px] font-medium text-paper">Computer</span>
+                <span className="rounded-full bg-sage-bg px-[11px] py-1 text-[13px] text-sage">
                   {waiting ? "waiting" : "done"}
                 </span>
               </div>
-              <div className="my-2.5 text-[14.5px] leading-[1.5] text-[#A8A8AD]">
+              <div className="my-2.5 text-[14.5px] leading-[1.5] text-mute">
                 <ChatMarkdown>{block.text}</ChatMarkdown>
               </div>
               {waiting ? (

@@ -130,7 +130,7 @@ export function ComputerPane({
         </div>
       </div>
 
-      <div className="group relative aspect-[16/10] w-full overflow-hidden rounded-[8px] border border-hairline bg-[#0e0c0b] shadow-[inset_0_0_0_2px_var(--color-tan)]">
+      <div className="group relative aspect-[16/10] w-full overflow-hidden rounded-[8px] border border-hairline bg-ink shadow-[inset_0_0_0_2px_var(--color-tan)]">
         {!heldByOther && preview ? (
           <>
             <iframe
@@ -149,7 +149,7 @@ export function ComputerPane({
               Preview · view only
             </p>
             {screenError ? (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#0e0c0b] px-6 text-center">
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-ink px-6 text-center">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-hairline border-t-sage" />
                 <span className="text-[13px] font-medium text-paper">{screenError}</span>
                 <Button type="button" variant="outline" size="sm" onClick={onRetryScreen}>
