@@ -23,12 +23,14 @@ def test_host_page_playbook_run_shows_steps_card(page: Page, host_url: str) -> N
     expect(card).to_contain_text("Invoice", timeout=8_000)
     chip = page.get_by_test_id("book-ask-invoice")
     expect(chip).to_be_visible(timeout=8_000)
+    expect(page.get_by_role("button", name="Remove Invoice")).to_be_visible()
     chip.click()
     box = composer(page)
     expect(box).to_have_value("please run Invoice")
     box.press("Enter")
     opened = page.get_by_test_id("book-card").filter(has_text="Open the invoice site")
     expect(opened).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("book-ask-invoice")).to_have_count(0)
     expect(page.get_by_text("run failed: run-")).to_have_count(0)
 
 

@@ -27,6 +27,7 @@ import {
   shouldStickDismissOnView,
   shouldWatchBackgroundBot,
 } from "../lib/alerts";
+import { hideBookSlug, slugsConsumedByRunPrompt, visibleSkillBooks } from "../lib/books-ask";
 import { composerCanSend } from "../lib/composer";
 import {
   composerRedo,
@@ -183,6 +184,7 @@ export function ShellPage() {
   const [panel, setPanel] = useState<Panel>(null);
   const [pluginApps, setPluginApps] = useState<{ slug: string; name: string }[]>([]);
   const [skillBooks, setSkillBooks] = useState<{ slug: string; name: string }[]>([]);
+  const [hiddenBookSlugs, setHiddenBookSlugs] = useState<Record<string, string[]>>({});
   const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
   const panelAfterSettings = useRef<"computer" | null>(null);
   const panelAfterCreate = useRef<"computer" | null>(null);
@@ -1269,10 +1271,24 @@ export function ShellPage() {
         : undefined;
       if (hostDownRef.current) {
         parkSend(targetId, text, replyId, attachments);
+        setHiddenBookSlugs((map) => {
+          let next = map;
+          for (const slug of slugsConsumedByRunPrompt(text, skillBooks)) {
+            next = hideBookSlug(next, targetId, slug);
+          }
+          return next;
+        });
         return;
       }
       await api.threads.send(targetId, text, replyId, attachments);
       setReplyTo(null);
+      setHiddenBookSlugs((map) => {
+        let next = map;
+        for (const slug of slugsConsumedByRunPrompt(text, skillBooks)) {
+          next = hideBookSlug(next, targetId, slug);
+        }
+        return next;
+      });
     } catch (err) {
       const classified = classifyError(err);
       if (shouldQueueSend(classified.kind)) {
@@ -1983,9 +1999,13 @@ export function ShellPage() {
               onAsk={(name) => writeDraft(`please use ${name}`)}
             />
             <BooksAsk
-              books={skillBooks}
+              books={visibleSkillBooks(skillBooks, hiddenBookSlugs, active?.id)}
               disabled={!active}
               onAsk={(name) => writeDraft(`please run ${name}`)}
+              onDismiss={(slug) => {
+                if (!active) return;
+                setHiddenBookSlugs((map) => hideBookSlug(map, active.id, slug));
+              }}
             />
             {pendingFiles.length ? (
               <div className="mb-2 flex flex-wrap items-end gap-2">

@@ -14,9 +14,7 @@ from tests.live.helpers import (
 pytestmark = pytest.mark.live
 
 
-def test_install_playbook_in_chat_then_run_from_chip(
-    page: Page, client_url: str, host_url: str
-) -> None:
+def test_skill_chip_clears_after_send(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("BookWin")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
@@ -30,12 +28,14 @@ def test_install_playbook_in_chat_then_run_from_chip(
     expect(card).to_contain_text("please run Invoice")
     chip = page.get_by_test_id("book-ask-invoice")
     expect(chip).to_be_visible(timeout=8_000)
+    expect(page.get_by_role("button", name="Remove Invoice")).to_be_visible()
     chip.click()
     box = composer(page)
     expect(box).to_have_value("please run Invoice")
     box.press("Enter")
     opened = page.get_by_test_id("book-card").filter(has_text="Open the invoice site")
     expect(opened).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("book-ask-invoice")).to_have_count(0)
     expect(page.get_by_text("run failed: run-")).to_have_count(0)
     send_message(page, "please e2e-forget-book", name)
     expect(page.get_by_test_id("book-card").filter(has_text="Forgotten")).to_be_visible(
