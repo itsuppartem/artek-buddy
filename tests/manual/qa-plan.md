@@ -60,6 +60,7 @@ Mint three bots for the run. Names can differ; they must be distinct:
 | **Plugins** opens even with an empty inbox | [ ] | [ ] |
 | Create a bot → focus lands in the new chat | [ ] | [ ] |
 | **Settings** from the gear does **not** boot the desktop | [ ] | [ ] |
+| Settings, Memory, Routines, ask/file cards, and the overlay share the same warm tokens as pairing and the thread (ink / paper / mute / tan / sage). Not a cool gray hatch | [ ] | [ ] |
 
 Phone: Create / Models / Plugins open the **Desktop** tab (also in §11).
 
@@ -550,7 +551,7 @@ If time is short, in this order:
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
 
-Then 1, 6, 8, 9, 10, 13–24, 30.
+Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 
 ---
 

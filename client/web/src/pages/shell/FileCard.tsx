@@ -31,18 +31,18 @@ export function FileCard({ block }: { block: FileBlock }) {
   return (
     <div
       data-testid="file-card"
-      className="min-w-0 max-w-[74%] rounded-[20px] border border-[#242428] bg-[#141417] px-5 py-[17px]"
+      className="min-w-0 max-w-[74%] rounded-[20px] border border-hairline bg-raised px-5 py-[17px]"
     >
-      <div className="break-words [overflow-wrap:anywhere] text-[15.5px] font-medium leading-[1.4] text-[#ECECEE]">
+      <div className="break-words [overflow-wrap:anywhere] text-[15.5px] font-medium leading-[1.4] text-paper">
         {block.name}
       </div>
-      <div className="mt-1 text-[13px] text-[#85858A]">{formatBytes(block.size)}</div>
+      <div className="mt-1 text-[13px] text-mute">{formatBytes(block.size)}</div>
       {kind === "image" && preview ? (
         <img
           data-testid="file-preview"
           src={preview}
           alt={block.name}
-          className="mt-3 max-h-64 w-full rounded-xl object-contain bg-[#0D0D0E]"
+          className="mt-3 max-h-64 w-full rounded-xl object-contain bg-ink"
         />
       ) : null}
       {kind === "video" && preview ? (
@@ -59,7 +59,7 @@ export function FileCard({ block }: { block: FileBlock }) {
       ) : null}
       <button
         type="button"
-        className="mt-3 rounded-full bg-[#1B1B1E] px-3.5 py-1.5 text-[13.5px] text-[#C9C9CE] hover:bg-[#242428] disabled:opacity-60"
+        className="mt-3 rounded-full bg-raised px-3.5 py-1.5 text-[13.5px] text-paper hover:bg-hairline disabled:opacity-60"
         disabled={busy}
         onClick={() => void download()}
       >
@@ -68,12 +68,12 @@ export function FileCard({ block }: { block: FileBlock }) {
       {saved ? (
         <div
           data-testid="file-saved"
-          className="mt-2 break-words [overflow-wrap:anywhere] text-[13px] text-[#4ECB71]"
+          className="mt-2 break-words [overflow-wrap:anywhere] text-[13px] text-sage"
         >
           Saved to {saved}
         </div>
       ) : null}
-      {error ? <div className="mt-2 text-[13px] text-[#E65707]">{error}</div> : null}
+      {error ? <div className="mt-2 text-[13px] text-danger">{error}</div> : null}
     </div>
   );
 }

@@ -110,15 +110,15 @@ export function MemoryPanel({
     <div>
       <div className="mt-[30px] mb-3 flex items-center justify-between">
         <div>
-          <span className="text-[14px] text-[#85858A]">Memory</span>
-          <div className="mt-0.5 text-[12px] text-[#6C6C70]">
+          <span className="text-[14px] text-mute">Memory</span>
+          <div className="mt-0.5 text-[12px] text-mute">
             Owner, work, and this bot — written from chat
           </div>
         </div>
         <button
           type="button"
           onClick={() => void exportMarkdown()}
-          className="text-[12.5px] text-[#85858A]"
+          className="text-[12.5px] text-mute"
         >
           Export
         </button>
@@ -129,14 +129,12 @@ export function MemoryPanel({
             key={document.id}
             data-testid="memory-doc"
             data-chapter={memoryChapter(document.path) ?? undefined}
-            className="rounded-xl border border-[#202023] bg-[#0D0D0E] px-3 py-2.5"
+            className="rounded-xl border border-hairline bg-ink px-3 py-2.5"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="line-clamp-2 text-[14.5px] text-[#ECECEE]">
-                  {memoryTitle(document)}
-                </div>
-                <div className="mt-0.5 text-[12px] text-[#6C6C70]">
+                <div className="line-clamp-2 text-[14.5px] text-paper">{memoryTitle(document)}</div>
+                <div className="mt-0.5 text-[12px] text-mute">
                   {memoryShelf(document.path)}
                   {` · ${document.scope === "user" ? "shared" : "this bot"}`}
                   {memoryChapter(document.path) ? ` · ${memoryChapter(document.path)}` : ""}
@@ -150,9 +148,9 @@ export function MemoryPanel({
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   rows={4}
-                  className="w-full resize-none rounded-lg border border-[#202023] bg-[#141416] px-2.5 py-2 text-[13px] text-[#ECECEE] outline-none"
+                  className="w-full resize-none rounded-lg border border-hairline bg-raised px-2.5 py-2 text-[13px] text-paper outline-none"
                 />
-                <div className="mt-2 flex gap-3 text-[12.5px] text-[#85858A]">
+                <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
                   <button type="button" disabled={busy} onClick={() => void save(document)}>
                     Save
                   </button>
@@ -164,11 +162,11 @@ export function MemoryPanel({
             ) : (
               <div className="mt-2">
                 {document.content.includes("\n") ? (
-                  <div className="line-clamp-3 whitespace-pre-wrap text-[12.5px] text-[#9A9AA0]">
+                  <div className="line-clamp-3 whitespace-pre-wrap text-[12.5px] text-mute">
                     {document.content}
                   </div>
                 ) : null}
-                <div className="mt-2 flex gap-3 text-[12.5px] text-[#85858A]">
+                <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
                   <button
                     type="button"
                     onClick={() => {
@@ -188,19 +186,19 @@ export function MemoryPanel({
         ))}
       </div>
       {creating ? (
-        <div className="mt-3 rounded-xl border border-[#202023] bg-[#0D0D0E] p-3">
-          <div className="mb-2 flex gap-2 text-[12.5px] text-[#85858A]">
+        <div className="mt-3 rounded-xl border border-hairline bg-ink p-3">
+          <div className="mb-2 flex gap-2 text-[12.5px] text-mute">
             <button
               type="button"
               onClick={() => setScope("bot")}
-              className={scope === "bot" ? "text-[#ECECEE]" : ""}
+              className={scope === "bot" ? "text-paper" : ""}
             >
               This bot
             </button>
             <button
               type="button"
               onClick={() => setScope("user")}
-              className={scope === "user" ? "text-[#ECECEE]" : ""}
+              className={scope === "user" ? "text-paper" : ""}
             >
               Shared
             </button>
@@ -211,7 +209,7 @@ export function MemoryPanel({
             onChange={(event) => setContent(event.target.value)}
             placeholder="Facts to remember"
             rows={3}
-            className="mt-2 w-full resize-none rounded-lg border border-[#202023] bg-[#141416] px-2.5 py-2 text-[13px] text-[#ECECEE] outline-none"
+            className="mt-2 w-full resize-none rounded-lg border border-hairline bg-raised px-2.5 py-2 text-[13px] text-paper outline-none"
           />
           <div className="mt-2 flex gap-2">
             <Button
@@ -234,7 +232,7 @@ export function MemoryPanel({
           type="button"
           data-testid="new-memory"
           onClick={() => setCreating(true)}
-          className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-[#7A7A80]"
+          className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-mute"
         >
           + New memory
         </button>

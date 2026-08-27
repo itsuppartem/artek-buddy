@@ -27,6 +27,8 @@ flowchart LR
 
 The computer pane, Models, and Settings overlay sit on the right of the same shell. Settings on the pane opens Settings; closing Settings returns to the pane. Create opened while the pane is up returns to the pane after Create or Cancel. Models opened while the computer pane is up returns to the pane on Close. Release does not close the pane. Fullscreen screen is a separate overlay. Settings does **not** boot. Offline • Click to start boots to a view-only Running preview. Take control is a separate grant. A bot that opens a path updates the tile without a click. Pairing does not open Models.
 
+Chrome colors come from `@theme` (`ink`, `plate`, `raised`, `hairline`, `paper`, `mute`, `tan`, `sage`, `danger`). Settings, Memory, Routines, ask/file cards, and the computer overlay use those names — not a second cool gray palette. Traffic lights stay `close` / `min` / `full`. Guest noVNC pixels are not restyled.
+
 ## Screens
 
 | Screen | When | Controls |
