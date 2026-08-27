@@ -477,7 +477,7 @@ Do this on **both** surfaces. Phone has no Linux file-manager paste.
 | Copy a **file** in the Linux file manager and paste → the file, not the `file://` path as text (Deb) | [ ] | — |
 | Send → chip gone. A later send does **not** bring the chip back | [ ] | [ ] |
 
-`ui` already covers paste / drop / Plus on the packaged window. `ui_web` does not yet — that is #230.
+`ui` scripts paste / drop / Plus, file-card, and image preview on the packaged window. `ui_web` at 375×812 covers paste screenshot, scripted file-card + image preview, and phone Computer / hatch Close.
 
 ---
 
@@ -510,7 +510,7 @@ From **inside a chat** on Phone:
 | Overlay ✕ on Models / Plugins / Create → **Chat** tab with the thread, not a blank Desktop | — | [ ] |
 | Open Computer, Close, open again — pane comes back, no stuck empty shell | — | [ ] |
 
-`nextPhoneTab("close-desk")` is already `chat`. If the screen is blank, the window is not using that path.
+`nextPhoneTab("close-desk")` is already `chat`. Scripted: `test_phone_computer_open_close_returns_to_chat` and `test_phone_models_plugins_close_returns_to_chat`.
 
 ---
 
@@ -558,6 +558,4 @@ Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 1
 
 ## How to log
 
-Tick the box on the surface you used. A fail is a GitHub issue: expected, got, surface (Deb / Phone), host SHA / branch, screenshot if it helps. Hang new product bugs under [#222](https://github.com/itsuppartem/artek-buddy/issues/222). Plan / `ui_web` leftovers: [#230](https://github.com/itsuppartem/artek-buddy/issues/230). Save feedback: [#229](https://github.com/itsuppartem/artek-buddy/issues/229). Phone blank Computer: [#226](https://github.com/itsuppartem/artek-buddy/issues/226).
-
-`ui` already scripts paste, file-card, and image-card on the `.deb`. `ui_web` at 375×812 does not — that is the hole.
+Tick the box on the surface you used. A fail is a GitHub issue: expected, got, surface (Deb / Phone), host SHA / branch, screenshot if it helps. Hang new product bugs under [#222](https://github.com/itsuppartem/artek-buddy/issues/222). Phone desk stall: [#238](https://github.com/itsuppartem/artek-buddy/issues/238).
