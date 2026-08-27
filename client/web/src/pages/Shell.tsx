@@ -64,6 +64,7 @@ import {
   phoneTabAfterPanel,
   shouldUsePhoneShell,
 } from "../lib/phone-shell";
+import { ownerRunError } from "../lib/run-error";
 import {
   embeddableScreenUrl,
   screenFrameLooksFailed,
@@ -76,6 +77,7 @@ import {
 import { filterBots, inboxEmptyState, type SidebarView, sortInboxBots } from "../lib/sidebar";
 import {
   isHiddenLiveDraft,
+  isRawRunFailedMessage,
   isToolNoise,
   mergeThreadSnapshot,
   prependThreadMessagePage,
@@ -1895,7 +1897,12 @@ export function ShellPage() {
               active?.id ?? "",
               thread?.threadId ?? "",
             )
-              .filter((message) => !isToolNoise(message) && !isHiddenLiveDraft(message))
+              .filter(
+                (message) =>
+                  !isToolNoise(message) &&
+                  !isHiddenLiveDraft(message) &&
+                  !isRawRunFailedMessage(message),
+              )
               .map((message) => (
                 <MessageView
                   key={message.id}
@@ -1924,8 +1931,7 @@ export function ShellPage() {
                 data-testid="run-error"
                 className="self-start rounded-xl border border-danger/40 bg-danger-bg px-4 py-2 text-[13.5px] text-danger"
               >
-                {thread.run.error ||
-                  (thread.run.status === "cancelled" ? "Stopped." : "The turn failed.")}
+                {ownerRunError(thread.run.error ?? undefined, thread.run.status)}
               </div>
             ) : null}
             {thread?.run && isLiveTurn(thread.run.status) ? (

@@ -121,6 +121,26 @@ def product_run_status(sdk_status: str | None) -> str:
     return "failed"
 
 
+TURN_FAILED = "The turn failed."
+_RAW_RUN_FAILED = re.compile(r"^run failed: run-[0-9a-f-]+$", re.IGNORECASE)
+
+
+def is_raw_run_failed(text: str | None) -> bool:
+    return bool(_RAW_RUN_FAILED.match((text or "").strip()))
+
+
+def owner_visible_error(raw: str | None, run_id: str = "") -> str:
+    """Owner-facing run error. Never a raw `run failed: run-<uuid>` line."""
+    text = (raw or "").strip()
+    if not text:
+        return TURN_FAILED
+    if run_id and text == f"run failed: {run_id}":
+        return TURN_FAILED
+    if is_raw_run_failed(text) or text.startswith("run failed: run-"):
+        return TURN_FAILED
+    return text
+
+
 def isoformat_utc(value: datetime | None = None) -> str:
     moment = value or datetime.now(UTC)
     if moment.tzinfo is None:

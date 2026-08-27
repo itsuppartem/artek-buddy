@@ -53,6 +53,9 @@ def test_scripted_fail_and_default_steps() -> None:
     fail = steps_for_prompt("please e2e-fail now")
     assert fail[-1].status == "failed"
     assert fail[-1].error == E2E_FAIL_ERROR
+    raw = steps_for_prompt("please e2e-fail-raw now")
+    assert raw[-1].status == "failed"
+    assert raw[-1].error == "run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a"
     ok = steps_for_prompt("plain hello")
     assert ok[-1].status == "completed" or ok[-1].result == "ok"
 

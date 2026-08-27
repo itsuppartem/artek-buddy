@@ -13,6 +13,7 @@ from artek_buddy.contracts.domain import (
 from artek_buddy.contracts.events import MessageRole
 from artek_buddy.contracts.ids import RunStatus
 from artek_buddy.db.shaping import (
+    is_raw_run_failed,
     isoformat_utc,
     new_id,
     parse_iso,
@@ -307,8 +308,9 @@ class TurnsMixin:
                 ):
                     now = isoformat_utc()
                     body = (text or "").strip() if text else ""
-                    if not body and error and status != RunStatus.cancelled.value:
-                        body = error
+                    err = (error or "").strip()
+                    if body and (body == err or is_raw_run_failed(body)):
+                        body = ""
                     if body:
                         seq = self._lock_next_seq(conn, bot.thread_id)
                         msg_id = new_id("msg")

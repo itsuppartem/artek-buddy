@@ -114,7 +114,7 @@ Same Demo chat. Ordinary language: «найди скилл для invoice и с�
 | Allow / Deny card for that origin. Deny stores nothing | [ ] | [ ] |
 | After Allow: book card **Saved** | [ ] | [ ] |
 | Chip above Message → click inserts `please run Invoice` and does **not** send | [ ] | [ ] |
-| Send → card with the fetched steps, not a form in Settings, not a raw `run failed: run-` id | [ ] | [ ] |
+| Send → card with the fetched steps, not a form in Settings. A fail is one human **run-error** line (`The turn failed.` or the real reason), not `run failed: run-` plus a uuid, and not a second bubble with the same line | [ ] | [ ] |
 | Another bot does not see the book | [ ] | [ ] |
 
 ---

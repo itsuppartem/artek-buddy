@@ -34,7 +34,29 @@ def test_scripted_turn_fail(client, auth_header) -> None:
     assert payload.get("queued") is not True
     snap = wait_run(client, auth_header, bot_id, payload["run_id"])
     assert snap["run"]["status"] == "failed"
-    assert snap["run"].get("error")
+    assert snap["run"].get("error") == "scripted fail"
+    assert "run failed: run-" not in (snap["run"].get("error") or "")
+    assert "scripted fail" not in message_texts(snap)
+
+
+def test_scripted_turn_fail_raw_id_is_human(client, auth_header) -> None:
+    from artek_buddy.db.shaping import TURN_FAILED
+    from artek_buddy.runtime.scripted import E2E_FAIL_RAW_ERROR
+
+    bot_id = create_bot(client, auth_header, "ScriptedFailRaw")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-fail-raw now"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "failed"
+    assert snap["run"].get("error") == TURN_FAILED
+    assert E2E_FAIL_RAW_ERROR not in (snap["run"].get("error") or "")
+    blob = "\n".join(message_texts(snap))
+    assert "run failed: run-" not in blob
+    assert E2E_FAIL_RAW_ERROR not in blob
 
 
 def test_send_without_auth_is_401(client) -> None:

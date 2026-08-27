@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from artek_buddy.db.shaping import product_run_status
+from artek_buddy.db.shaping import owner_visible_error, product_run_status
 
 log = logging.getLogger("artek_buddy")
 
@@ -41,7 +41,7 @@ def describe_cursor_wait(result: Any, run: Any) -> tuple[str, str | None, str | 
         return mapped, text or None, None
     code = store_error_code(result, run)
     run_id = getattr(run, "id", "") if run is not None else ""
-    error = code or f"run failed: {run_id}"
+    error = owner_visible_error(code, str(run_id or ""))
     return mapped, text or None, error
 
 
