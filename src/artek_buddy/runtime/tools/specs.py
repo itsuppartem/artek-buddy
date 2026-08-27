@@ -211,6 +211,46 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         },
     ),
     ToolSpec(
+        name="list_apps",
+        description=(
+            "Search host catalog apps (GitHub, Mail, Docs, and others). "
+            "Returns slug, name, and whether it is already connected. "
+            "Call this when the owner asks to connect or use an app that is not "
+            "already a tool this turn. Then connect_app(slug). "
+            "Do not set up git or SSH on this computer for a catalog app."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "q": {
+                    "type": "string",
+                    "description": "Search text, e.g. github or mail.",
+                },
+            },
+        },
+        lead_only=True,
+    ),
+    ToolSpec(
+        name="connect_app",
+        description=(
+            "Attach a catalog app to this host so its tools load on the next turn. "
+            "Pass the slug from list_apps. No-auth apps connect immediately. "
+            "Apps that need a login put a card with a URL the owner opens "
+            "(not the bot desktop). Do not mint tokens on this machine."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "slug": {
+                    "type": "string",
+                    "description": "Catalog slug from list_apps, e.g. github or docs.",
+                },
+            },
+            "required": ["slug"],
+        },
+        lead_only=True,
+    ),
+    ToolSpec(
         name="forget_book",
         description="Delete a saved playbook from this chat.",
         input_schema={

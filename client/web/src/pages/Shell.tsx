@@ -954,6 +954,7 @@ export function ShellPage() {
             if (event.type === "run.completed" || event.type === "run.failed") {
               void refreshBotsRef.current().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
+              void refreshPlugins();
             }
           }
         } catch (err) {

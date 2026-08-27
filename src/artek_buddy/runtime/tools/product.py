@@ -9,6 +9,7 @@ from artek_buddy.consent import (
     browse_origin,
 )
 from artek_buddy.observe import log_tool
+from artek_buddy.runtime.tools.apps import AppsToolsMixin
 from artek_buddy.runtime.tools.books import BooksToolsMixin
 from artek_buddy.runtime.tools.chat import ChatToolsMixin
 from artek_buddy.runtime.tools.common import (
@@ -238,6 +239,7 @@ class ProductToolsCore:
 class ProductTools(
     ChatToolsMixin,
     BooksToolsMixin,
+    AppsToolsMixin,
     OwnerToolsMixin,
     ComputerToolsMixin,
     SubagentToolsMixin,

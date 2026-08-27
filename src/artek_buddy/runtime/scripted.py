@@ -193,6 +193,26 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "e2e-plugin-docs" in hay or "please use docs" in hay:
         return [scripted_tool("docs_read"), scripted_finish("")]
+    if "e2e-list-apps" in hay:
+        return [
+            scripted_tool("list_apps", q="docs"),
+            scripted_finish("I'll search apps."),
+        ]
+    if "e2e-connect-docs" in hay:
+        return [
+            scripted_tool("connect_app", slug="docs"),
+            scripted_finish("I'll attach Docs."),
+        ]
+    if "e2e-connect-mail" in hay:
+        return [
+            scripted_tool("connect_app", slug="mail"),
+            scripted_finish("I'll attach Mail."),
+        ]
+    if "e2e-connect-nope" in hay:
+        return [
+            scripted_tool("connect_app", slug="nope"),
+            scripted_finish("I could not attach that."),
+        ]
     if "e2e-install-book" in hay:
         url = E2E_BOOK_URL or "http://127.0.0.1/SKILL.md"
         origin = browse_origin(url) or "http://127.0.0.1"

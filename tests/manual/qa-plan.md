@@ -139,6 +139,7 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 | --- | --- | --- |
 | Plugins → key → Save → **Key saved** + last four. Key field gone. Full key never on the page | [ ] | [ ] |
 | Search → Connect a simple app (no browser) → Connected | [ ] | [ ] |
+| Or chat `please e2e-connect-docs` (scripted host) / «подключи Docs» — **plugin-card**, not git setup | [ ] | [ ] |
 | Chip above Message. Click = `please use {name}`, no auto-Send | [ ] | [ ] |
 | Send → thread **plugin-card** (name + result) | [ ] | [ ] |
 | Disconnect / Remove → chip gone; next turn has no that tool | [ ] | [ ] |
@@ -540,11 +541,12 @@ If time is short, in this order:
 2. **§3 Memory book**
 3. **§4 Skill from the web**
 4. **§5 Bot asks bot**
-5. **§7 Desktop** + **§7a Hands on the guest**
-6. **§11 Phone chrome** + **§29 Computer must not blank**
-7. **§12 Pad and Cyrillic**
-8. **§25 File + §26 Picture + §27 Ctrl+V**
-9. **§28 Save feedback**
+5. **§6 Plugins** (pane Connect or chat attach)
+6. **§7 Desktop** + **§7a Hands on the guest**
+7. **§11 Phone chrome** + **§29 Computer must not blank**
+8. **§12 Pad and Cyrillic**
+9. **§25 File + §26 Picture + §27 Ctrl+V**
+10. **§28 Save feedback**
 
 Then 1, 6, 8, 9, 10, 13–24, 30.
 

@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from artek_buddy.apps import format_apps_context
 from artek_buddy.books import format_book_catalog
 from artek_buddy.bot_asks import (
     ASKED_YOU_MARK,
@@ -776,6 +777,7 @@ async def _run_turn(
             inbox_context=inbox_context,
             other_bots=format_other_bots(history.list_bots(), bot.id),
             books_context=format_book_catalog(history.list_skill_books(bot.id)),
+            apps_context=format_apps_context(history),
         )
         async for item in _turn_stream(history, rt, memory_prompt, agent_id, bot):
             if isinstance(item, RunRecord):
