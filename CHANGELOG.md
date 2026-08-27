@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Offline and Sleeping **Click to start** boot to a view-only Running preview. Take control stays a separate grant.
 - One standing rule in chat writes one Remembered line and one Memory card. A paraphrase in the same turn, or extract after that turn, does not add a twin.
 - Phone desktop typing reaches the guest as UTF-8, so a Russian keyboard is not dropped.
 - The iPhone home-screen hint sits at the top of the host page so it no longer covers Models, New bot, or the composer.

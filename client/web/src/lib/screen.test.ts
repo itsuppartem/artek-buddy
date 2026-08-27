@@ -16,9 +16,10 @@ describe("embeddableScreenUrl", () => {
 });
 
 describe("shouldTakeControl", () => {
-  it("boots from the button, not from a preview click", () => {
+  it("only Take control grants control; start and preview stay view-only", () => {
     expect(shouldTakeControl("button")).toBe(true);
     expect(shouldTakeControl("preview")).toBe(false);
+    expect(shouldTakeControl("start")).toBe(false);
   });
 });
 

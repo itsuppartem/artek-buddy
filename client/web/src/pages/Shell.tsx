@@ -1290,17 +1290,15 @@ export function ShellPage() {
 
   async function bootComputer({
     takeControl,
-    overlay,
     force = false,
   }: {
     takeControl: boolean;
-    overlay: boolean;
     force?: boolean;
   }): Promise<boolean> {
     if (!active) return false;
     sleepHeld.current = false;
     const needsBoot = force || computer?.state !== "running" || !screenUrlRef.current;
-    if (overlay && needsBoot) setBooting(true);
+    if (needsBoot) setBooting(true);
     try {
       if (needsBoot) {
         const status = await api.computer.boot(active.id);
@@ -1370,7 +1368,6 @@ export function ShellPage() {
     if (!active) return;
     const ok = await bootComputer({
       takeControl: shouldTakeControl(source),
-      overlay: computer?.state !== "running",
       force: computer?.state !== "running",
     });
     if (ok) setComputerOpen(true);
@@ -2120,6 +2117,11 @@ export function ShellPage() {
                     setPanel("settings");
                   }}
                   onOpenFullscreen={() => void openOverlay("preview")}
+                  onStart={() =>
+                    void bootComputer({
+                      takeControl: shouldTakeControl("start"),
+                    })
+                  }
                   onTakeControl={() => void openOverlay("button")}
                   onRelease={() => void releaseComputer()}
                   onRetryScreen={retryScreen}
@@ -2263,7 +2265,7 @@ export function ShellPage() {
         screenEpoch={screenEpoch}
         overlayFrameRef={overlayFrameRef}
         onRelease={() => void releaseComputer()}
-        onTakeControl={() => void bootComputer({ takeControl: true, overlay: false })}
+        onTakeControl={() => void bootComputer({ takeControl: true })}
         onClose={() => {
           setComputerOpen(false);
           if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));

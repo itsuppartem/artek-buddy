@@ -24,6 +24,7 @@ export function ComputerPane({
   onClose,
   onSettings,
   onOpenFullscreen,
+  onStart,
   onTakeControl,
   onRelease,
   onRetryScreen,
@@ -40,6 +41,7 @@ export function ComputerPane({
   onClose: () => void;
   onSettings: () => void;
   onOpenFullscreen: () => void;
+  onStart: () => void;
   onTakeControl: () => void;
   onRelease: () => void;
   onRetryScreen: () => void;
@@ -209,8 +211,7 @@ export function ComputerPane({
             onClick={() => {
               if (computer?.busyBotName) return;
               if (isRunning) onOpenFullscreen();
-              else if (isSleeping) onTakeControl();
-              else onTakeControl();
+              else onStart();
             }}
           >
             {isBooting ? (

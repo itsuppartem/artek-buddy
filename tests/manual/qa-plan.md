@@ -153,7 +153,7 @@ Computer pane on **Demo** (Private) or Team.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| **Offline • Click to start** → Booting → Running. Settings still does not boot | [ ] | [ ] |
+| **Offline • Click to start** → Booting → Running **view-only** (Preview · view only / fake: Running tile). Not the fullscreen control overlay. **Take control** is a separate grant. Settings still does not boot | [ ] | [ ] |
 | Preview is a live screen, caption **Preview · view only**. Not black text «Desktop is running». Click on the preview does **not** take control | [ ] | [ ] |
 | fluxbox panel: window title, close, menu. Not a bare X | [ ] | [ ] |
 | **Take control** → mouse / keys go to the guest. Caps Lock arrives. **Release** → the same turn continues; typing dots and Stop work again | [ ] | [ ] |
@@ -166,7 +166,7 @@ Optional evening:
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Quiet box **15 minutes** with no input → **Sleeping** (sage). Open pane and pulse do not keep it warm. Click Sleeping wakes | [ ] | [ ] |
+| Quiet box **15 minutes** with no input → **Sleeping** (sage). Open pane and pulse do not keep it warm. Click Sleeping wakes view-only; Take control is separate | [ ] | [ ] |
 
 Team:
 
