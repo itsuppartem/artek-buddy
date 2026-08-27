@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Phone Close on Computer / Models / Plugins returns to the Chat tab with the thread, not a blank Desktop tab.
 - Phone Take control stays held after a pad drag or tap. The overlay caption is not selectable host text, and **Type on the desktop** is a tappable field in the keyboard strip.
 - Release leaves a live view-only preview (not a black overlay) and the Computer pane matches: Take control, not You have control.
 - Offline and Sleeping **Click to start** boot to a view-only Running preview. Take control stays a separate grant.
