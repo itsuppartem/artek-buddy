@@ -18,8 +18,8 @@ from artek_buddy.memory_book import (
     format_recalled_memory,
     infer_book_shelf,
     infer_section,
-    merge_section,
     owner_book_entries,
+    scripted_rewrite,
     section_line,
 )
 
@@ -485,7 +485,7 @@ class MemoryHub:
             if similar_memory(previous.text, body):
                 self._mark_capture(run_id, section, body)
                 return None
-            merged = merge_section(previous.text, body)
+            merged = scripted_rewrite(section, previous.text, "", body)
             if merged == previous.text:
                 self._mark_capture(run_id, section, body)
                 return None

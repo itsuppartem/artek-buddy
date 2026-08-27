@@ -89,17 +89,17 @@ Also (visible, easy):
 
 In **Demo**:
 
-1. «Я живу в Белграде.» → wait for the turn to finish.
-2. «Я живу в Нови-Саде.» → another turn.
+1. «Я живу в Белграде.» → wait for the turn to finish. On a scripted host: `please e2e-identity-city Belgrade`.
+2. «Я живу в Нови-Саде.» → another turn. Scripted: `please e2e-identity-city NoviSad`.
 3. New chat / new question about the city: the answer is **Нови-Сад**, not Belgrade.
-4. «Привет» alone must not rewrite the book.
+4. «Привет» alone must not rewrite the book (`hello` on a scripted host).
 
-Computer → Memory: the identity chapter updated; the old city is not sitting next to it.
+Computer → Memory: the **identity** chapter updated while that pane is open (no need to close and reopen); the old city is not sitting next to it. Owner place/person rows are labeled identity, not place.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
 | After (1)+(2)+(3) the next city answer is Novi Sad | [ ] | [ ] |
-| «Привет» does not rewrite identity | [ ] | [ ] |
+| «Привет» / `hello` does not rewrite identity | [ ] | [ ] |
 | Memory pane identity chapter has the new city only | [ ] | [ ] |
 | One standing rule in chat (`please e2e-remember-twice` on a scripted host, or «не спрашивай разрешения на read») → **one** Remembered line and one Memory card | [ ] | [ ] |
 

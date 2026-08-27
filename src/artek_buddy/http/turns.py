@@ -111,9 +111,24 @@ def _emit_remembered(
     bot: Bot,
     text: str,
     run_id: str | None,
+    entry: Any | None = None,
 ) -> None:
     label = f"Remembered: {text}".strip() if text else "Remembered a note"
     _emit(events, bot, ProductEventType.THREAD_META, {"text": label[:160]}, run_id=run_id)
+    payload: dict[str, Any] = {"text": (text or "")[:160]}
+    document_id = getattr(entry, "document_id", None) if entry is not None else None
+    if document_id:
+        payload["document_id"] = document_id
+    scope = getattr(entry, "scope", None) if entry is not None else None
+    if scope:
+        payload["scope"] = scope
+    kind = getattr(entry, "kind", None) if entry is not None else None
+    if kind:
+        payload["kind"] = kind
+    slot = getattr(entry, "slot", None) if entry is not None else None
+    if slot:
+        payload["section"] = slot
+    _emit(events, bot, ProductEventType.MEMORY_REVISED, payload, run_id=run_id)
 
 
 def _emit_computer(events: EventHub, bot: Bot, status: ComputerStatus) -> None:
@@ -178,7 +193,7 @@ def _emit_answered_asks(
                 question=question,
             )
             if entry is not None:
-                _emit_remembered(events, bot, entry.text, run_id)
+                _emit_remembered(events, bot, entry.text, run_id, entry=entry)
         except Exception:
             log.exception("failed to capture ask answer in memory")
 
@@ -887,7 +902,7 @@ async def _run_turn(
         if hub is not None:
             try:
                 for entry in await hub.revise_after_turn(text, run.id, bot.id):
-                    _emit_remembered(events, bot, entry.text, run.id)
+                    _emit_remembered(events, bot, entry.text, run.id, entry=entry)
             except Exception:
                 log.exception("failed to extract memory after turn")
     try:

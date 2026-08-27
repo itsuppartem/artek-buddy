@@ -195,8 +195,10 @@ def _fact_clash(old: str, incoming: str) -> bool:
     return any(pattern.search(old) and pattern.search(incoming) for pattern in _FACT_KIND)
 
 
-def scripted_rewrite(_section: str, current: str, turn_text: str, extracted: str) -> str:
-    incoming = _lines(extracted) or _lines(turn_text)
+def scripted_rewrite(_section: str, current: str, _turn_text: str, extracted: str) -> str:
+    incoming = _lines(extracted)
+    if not incoming:
+        return (current or "")[:MAX_SECTION_CHARS]
     kept = [
         line for line in _lines(current) if not any(_fact_clash(line, newer) for newer in incoming)
     ]

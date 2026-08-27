@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -424,3 +425,47 @@ def test_bot_open_path_starts_computer_without_click(
     expect(page.get_by_test_id("computer-running")).to_be_visible()
     expect(page.get_by_text("The desktop is up.")).to_have_count(0)
     expect(page.get_by_text("Offline • Click to start")).to_have_count(0)
+
+
+def test_chat_identity_city_shows_in_memory_pane(
+    page: Page,
+    client_url: str,
+    host_url: str,
+) -> None:
+    name = unique_bot("Idn")
+    stem = uuid.uuid4().hex[:8]
+    first, second = f"Cid{stem}a", f"Cid{stem}b"
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    open_computer_pane(page)
+    expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("memory-doc").filter(has_text=first)).to_have_count(0)
+
+    send_message(page, f"please e2e-identity-city {first}")
+    expect(page.get_by_text("I'll remember that.")).to_be_visible(timeout=8_000)
+    card = page.get_by_test_id("memory-doc").filter(has_text=first)
+    expect(card).to_be_visible(timeout=8_000)
+    expect(card).to_have_attribute("data-chapter", "identity")
+    expect(card).to_contain_text("identity")
+
+    send_message(page, f"please e2e-identity-city {second}")
+    expect(page.get_by_test_id("memory-doc").filter(has_text=second)).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("memory-doc").filter(has_text=first)).to_have_count(0)
+
+
+def test_hello_does_not_add_identity_city_card(
+    page: Page,
+    client_url: str,
+    host_url: str,
+) -> None:
+    name = unique_bot("Idl")
+    token = f"Cid{uuid.uuid4().hex[:8]}z"
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    send_message(page, "hello")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")
+    ).to_be_visible(timeout=8_000)
+    open_computer_pane(page)
+    expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("memory-doc").filter(has_text=token)).to_have_count(0)

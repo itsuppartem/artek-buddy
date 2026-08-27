@@ -6,7 +6,12 @@ import pytest
 
 from artek_buddy.memory import MAX_AGENT_MEMORY_BYTES, wrap_turn_prompt
 from artek_buddy.memory_book import HostBookRewriter, format_recalled_memory
-from artek_buddy.memory_hub import MemoryEntry, MemoryHub, similar_memory
+from artek_buddy.memory_hub import (
+    MemoryEntry,
+    MemoryHub,
+    extract_unwritten_memories,
+    similar_memory,
+)
 
 
 class _BookStore:
@@ -177,6 +182,39 @@ def test_hub_writes_and_revises_sections_from_a_turn() -> None:
     assert "Artek" in identity.text
     assert "Belgrade" in identity.text
     assert "Europe/Belgrade" in identity.text
+
+
+def test_extract_russian_city_sentences() -> None:
+    belgrade = extract_unwritten_memories("Я живу в Белграде.")
+    assert any("Белград" in item.text for item in belgrade)
+    assert any(item.slot == "identity" for item in belgrade)
+    novi = extract_unwritten_memories("Я живу в Нови-Саде.")
+    assert any("Нови" in item.text for item in novi)
+
+
+def test_remember_city_replaces_the_previous_city() -> None:
+    hub, store = _hub()
+    first = hub.capture(
+        "Lives in Belgrade",
+        kind="place",
+        bot_id="bot_book",
+        source="remember",
+        slot="identity",
+    )
+    second = hub.capture(
+        "Lives in Subotica",
+        kind="place",
+        bot_id="bot_book",
+        source="remember",
+        slot="identity",
+    )
+    assert first is not None
+    assert second is not None
+    identity = store.find_live_memory_entry_by_slot("identity", bot_id="bot_book")
+    assert identity is not None
+    assert "Subotica" in identity.text
+    assert "Belgrade" not in identity.text
+    assert len(store.list_live_memory_entries("bot_book")) == 1
 
 
 def test_next_turn_prompt_keeps_owner_and_bot_book() -> None:
