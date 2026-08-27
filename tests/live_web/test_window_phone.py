@@ -36,3 +36,42 @@ def test_host_page_home_screen_hint_leaves_models_tappable(page: Page, host_url:
     expect(page.get_by_test_id("home-screen-hint")).to_be_visible()
     page.get_by_test_id("open-models").click()
     expect(page.get_by_test_id("models-pane")).to_be_visible(timeout=8_000)
+
+
+def test_phone_computer_open_close_returns_to_chat(page: Page, host_url: str) -> None:
+    pair_host_page(page, host_url)
+    name = unique_bot("DeskBack")
+    create_named_bot_phone(page, name)
+    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
+    page.get_by_role("button", name="Computer").click()
+    expect(page.get_by_test_id("phone-tab-desk")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("computer-state")).to_be_visible(timeout=8_000)
+    page.get_by_title("Close panel").click()
+    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("thread-header")).to_contain_text(name)
+    expect(page.get_by_test_id("thread-pane")).to_be_visible()
+    expect(page.get_by_test_id("computer-state")).to_have_count(0)
+
+
+def test_phone_models_plugins_close_returns_to_chat(page: Page, host_url: str) -> None:
+    pair_host_page(page, host_url)
+    name = unique_bot("HatchBack")
+    create_named_bot_phone(page, name)
+    open_phone_tab(page, "chats")
+    page.get_by_test_id("open-models").click()
+    expect(page.get_by_test_id("models-pane")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("phone-tab-desk")).to_have_attribute("aria-current", "page")
+    page.get_by_role("button", name="Close Models").click()
+    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("thread-header")).to_contain_text(name)
+    expect(page.get_by_test_id("models-pane")).to_have_count(0)
+
+    open_phone_tab(page, "chats")
+    page.get_by_test_id("open-plugins").click()
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("phone-tab-desk")).to_have_attribute("aria-current", "page")
+    page.get_by_role("button", name="Close Plugins").click()
+    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("thread-header")).to_contain_text(name)
+    expect(page.get_by_test_id("plugins-pane")).to_have_count(0)
+    expect(page.get_by_test_id("thread-pane")).to_be_visible()

@@ -251,7 +251,7 @@ Home Screen, phone width (375×812). Also confirm the wide Deb window does **not
 | Bottom **Chats / Chat / Desktop**, targets about 44px. Top notch / safe area present; **no** second empty belt under the nav | — | [ ] |
 | Inbox: chats sit between Search and Plugins / Models, not a black hole | — | [ ] |
 | Create / Models / Plugins open the Desktop tab | — | [ ] |
-| Close on the Desktop pane and overlay ✕ → **Chat** tab (blank Desktop is a fail — §29 / #226) | — | [ ] |
+| Close on Computer / Models / Plugins, the Desktop pane, and overlay ✕ → **Chat** tab with the thread (blank Desktop is a fail) | — | [ ] |
 | Share → Add to Home Screen: hint at the **top**, not over Models / nav. Got it hides it | — | [ ] |
 | Turn on alerts — only from the home-screen icon, and only while the app is open. No background | — | [ ] |
 | Wide window (Deb 1280×720) stays three-column, not «phone» | [ ] | — |

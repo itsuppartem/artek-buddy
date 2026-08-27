@@ -12,6 +12,12 @@ export function nextPhoneTab(
   return "chat";
 }
 
+const DESK_PANELS = new Set(["computer", "models", "plugins", "settings", "create"]);
+
+export function phoneTabAfterPanel(panel: string | null | undefined): PhoneTab {
+  return panel && DESK_PANELS.has(panel) ? "desk" : "chat";
+}
+
 export function shouldUsePhoneShell(width: number, height = width): boolean {
   if (width <= PHONE_BREAKPOINT_PX) {
     return true;

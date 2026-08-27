@@ -57,7 +57,12 @@ import {
   shouldQueueSend,
   writeStoredList,
 } from "../lib/offline-queue";
-import { nextPhoneTab, type PhoneTab, shouldUsePhoneShell } from "../lib/phone-shell";
+import {
+  nextPhoneTab,
+  type PhoneTab,
+  phoneTabAfterPanel,
+  shouldUsePhoneShell,
+} from "../lib/phone-shell";
 import {
   embeddableScreenUrl,
   screenFrameLooksFailed,
@@ -586,8 +591,10 @@ export function ShellPage() {
   }
 
   function closeModels() {
-    setPanel(panelAfterModels.current);
+    const restore = panelAfterModels.current;
     panelAfterModels.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
   }
 
   function openPlugins() {
@@ -1688,8 +1695,13 @@ export function ShellPage() {
                 type="button"
                 disabled={!active}
                 onClick={() => {
+                  if (panel === "computer") {
+                    setPanel(null);
+                    if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
+                    return;
+                  }
                   setPhoneTab(nextPhoneTab("open-desk"));
-                  setPanel((current) => (current === "computer" ? null : "computer"));
+                  setPanel("computer");
                 }}
                 className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
                   panel === "computer"
@@ -2071,6 +2083,7 @@ export function ShellPage() {
                 <PluginsPane
                   onClose={() => {
                     setPanel(null);
+                    if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
                     void refreshPlugins();
                   }}
                   onAppsChange={() => {
@@ -2089,8 +2102,10 @@ export function ShellPage() {
               {panel === "create" ? (
                 <CreateBotForm
                   onCancel={() => {
-                    setPanel(panelAfterCreate.current);
+                    const restore = panelAfterCreate.current;
                     panelAfterCreate.current = null;
+                    setPanel(restore);
+                    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
                   }}
                   onCreate={(input) => void createBot(input)}
                 />
@@ -2099,7 +2114,12 @@ export function ShellPage() {
                 <BotSettings
                   bot={active}
                   computer={computer ?? snapshot?.computer ?? null}
-                  onClose={() => setPanel(panelAfterSettings.current)}
+                  onClose={() => {
+                    const restore = panelAfterSettings.current;
+                    panelAfterSettings.current = null;
+                    setPanel(restore);
+                    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+                  }}
                   onUpdated={() => void refreshBots()}
                   onDelete={(deleteMemories) => void deleteBot(active, deleteMemories)}
                   onRestart={() => restartComputer()}
