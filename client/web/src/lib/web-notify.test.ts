@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  pairAgainLabel,
   shouldHoldHostAlert,
   shouldOfferWebAlerts,
   shouldShowHomeScreenHint,
@@ -7,6 +8,10 @@ import {
 } from "./web-notify";
 
 describe("home screen and web alerts", () => {
+  it("names the paired surface on auth recovery", () => {
+    expect(pairAgainLabel("host")).toBe("Pair this phone again");
+    expect(pairAgainLabel("desktop")).toBe("Pair this computer again");
+  });
   it("asks iPhone users to add the page to the home screen", () => {
     expect(shouldShowHomeScreenHint({ surface: "host", ios: true, standalone: false })).toBe(true);
     expect(shouldShowHomeScreenHint({ surface: "host", ios: true, standalone: true })).toBe(false);
