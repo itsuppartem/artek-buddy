@@ -442,7 +442,9 @@ def test_chat_identity_city_shows_in_memory_pane(
     expect(page.get_by_test_id("memory-doc").filter(has_text=first)).to_have_count(0)
 
     send_message(page, f"please e2e-identity-city {first}")
-    expect(page.get_by_text("I'll remember that.")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("thread").get_by_text("I'll remember that.")).to_be_visible(
+        timeout=8_000
+    )
     card = page.get_by_test_id("memory-doc").filter(has_text=first)
     expect(card).to_be_visible(timeout=8_000)
     expect(card).to_have_attribute("data-chapter", "identity")
