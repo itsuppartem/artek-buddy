@@ -35,6 +35,7 @@ E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C"
 E2E_ASK_QUESTION = "Which city?"
 E2E_ASK_FREE_QUESTION = "What should I call you?"
 E2E_FAIL_ERROR = "scripted fail"
+E2E_FAIL_RAW_ERROR = "run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a"
 E2E_META_TEXT = "Remembered: Prefers short answers without emoji"
 E2E_PROGRESS_TEXT = "Checking the desktop"
 E2E_CARD_KEY = "City"
@@ -601,6 +602,8 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         return [scripted_delay(2.5), scripted_finish(E2E_SLOW_ANSWER)]
     if "e2e-markdown-preview" in hay:
         return [scripted_finish(E2E_MARKDOWN_ANSWER)]
+    if "e2e-fail-raw" in hay:
+        return [scripted_finish("", status="failed", error=E2E_FAIL_RAW_ERROR)]
     if "e2e-fail-slow" in hay:
         return [
             scripted_delay(2.5),

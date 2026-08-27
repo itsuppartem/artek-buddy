@@ -34,6 +34,16 @@ def test_describe_cursor_wait_completed_has_no_error() -> None:
     assert error is None
 
 
+def test_describe_cursor_wait_without_code_omits_run_id() -> None:
+    from artek_buddy.db.shaping import TURN_FAILED
+
+    result = SimpleNamespace(status="error", result="", store=None, error=None)
+    status, text, error = describe_cursor_wait(result, SimpleNamespace(id="run-dead"))
+    assert status == "failed"
+    assert error == TURN_FAILED
+    assert "run-dead" not in (error or "")
+
+
 def test_auth_recycle_after_n_instant_failures() -> None:
     n = 0
     recycle = False

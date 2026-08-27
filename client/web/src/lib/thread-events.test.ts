@@ -4,6 +4,7 @@ import {
   isComputerStatusEvent,
   isHiddenLiveDraft,
   isLiveMessageId,
+  isRawRunFailedMessage,
   isToolNoise,
   liveMessageId,
   reduceComputerStatus,
@@ -128,6 +129,33 @@ describe("isToolNoise", () => {
         createdAt: "2026-01-01T00:00:00Z",
       }),
     ).toBe(true);
+  });
+});
+
+describe("isRawRunFailedMessage", () => {
+  it("hides a bot bubble that is only a raw run id", () => {
+    expect(
+      isRawRunFailedMessage({
+        id: "m-fail",
+        threadId: "t",
+        seq: 1,
+        role: "bot",
+        blocks: [{ kind: "text", text: "run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a" }],
+        runId: "run1",
+        createdAt: "2026-01-01T00:00:00Z",
+      }),
+    ).toBe(true);
+    expect(
+      isRawRunFailedMessage({
+        id: "m-ok",
+        threadId: "t",
+        seq: 1,
+        role: "bot",
+        blocks: [{ kind: "text", text: "scripted fail" }],
+        runId: "run1",
+        createdAt: "2026-01-01T00:00:00Z",
+      }),
+    ).toBe(false);
   });
 });
 

@@ -36,6 +36,7 @@ def test_install_playbook_in_chat_then_run_from_chip(
     box.press("Enter")
     opened = page.get_by_test_id("book-card").filter(has_text="Open the invoice site")
     expect(opened).to_be_visible(timeout=8_000)
+    expect(page.get_by_text("run failed: run-")).to_have_count(0)
     send_message(page, "please e2e-forget-book", name)
     expect(page.get_by_test_id("book-card").filter(has_text="Forgotten")).to_be_visible(
         timeout=8_000

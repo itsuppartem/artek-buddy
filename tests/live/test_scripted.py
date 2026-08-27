@@ -28,6 +28,19 @@ def test_scripted_fail_shows_run_error(page: Page, client_url: str, host_url: st
     send_message(page, "please e2e-fail now", name)
     expect(page.get_by_test_id("run-error")).to_be_visible(timeout=20_000)
     expect(page.get_by_test_id("run-error")).to_contain_text("scripted fail")
+    expect(page.get_by_test_id("run-error")).not_to_contain_text("run failed: run-")
+    expect(page.get_by_text("run failed: run-", exact=False)).to_have_count(0)
+
+
+def test_scripted_fail_raw_id_is_human(page: Page, client_url: str, host_url: str) -> None:
+    name = _open_named(page, client_url, host_url, "FailRaw")
+    send_message(page, "please e2e-fail-raw now", name)
+    expect(page.get_by_test_id("run-error")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("run-error")).to_contain_text("The turn failed.")
+    expect(page.get_by_text("run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a")).to_have_count(
+        0
+    )
+    expect(page.get_by_test_id("run-error")).not_to_contain_text("run failed: run-")
 
 
 def test_scripted_consent_deny(page: Page, client_url: str, host_url: str) -> None:

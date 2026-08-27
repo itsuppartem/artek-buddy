@@ -40,6 +40,7 @@ from artek_buddy.db.shaping import (
     blocks_text,
     isoformat_utc,
     new_id,
+    owner_visible_error,
     preview_snippet,
     text_blocks,
 )
@@ -804,9 +805,9 @@ async def _run_turn(
                 status = product_run_status(item.status)
                 reply_text = item.result or draft or ""
                 if status != "completed":
-                    error = item.error or f"run failed: {item.id}"
-                    if not reply_text:
-                        reply_text = error
+                    error = owner_visible_error(item.error, item.id)
+                    if not reply_text or reply_text.strip() == error:
+                        reply_text = ""
                 continue
             if not isinstance(item, ProductStreamEvent):
                 continue
@@ -859,10 +860,14 @@ async def _run_turn(
 
     if status == "cancelled":
         reply_text = ""
+    elif status != "completed":
+        error = owner_visible_error(error, run.id)
+        if has_sent or not reply_text or reply_text.strip() == error:
+            reply_text = ""
     elif has_sent:
-        reply_text = error if status != "completed" else ""
+        reply_text = ""
     elif not reply_text:
-        reply_text = draft or error or ""
+        reply_text = draft or ""
 
     try:
         bot_msg, finished = history.finish_turn(bot, run, reply_text, status, error=error)
