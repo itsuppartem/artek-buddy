@@ -165,7 +165,9 @@ export function BotSettings({
         </div>
       ) : (
         <>
-          <div className="mt-6 text-[20px] font-medium text-paper">{bot.name}</div>
+          <div data-testid="bot-settings-name" className="mt-6 text-[20px] font-medium text-paper">
+            {bot.name}
+          </div>
           <div className="mt-2 text-[14px] leading-6 text-mute">
             {stripMarkdown(bot.title || bot.description || "No description")}
           </div>
