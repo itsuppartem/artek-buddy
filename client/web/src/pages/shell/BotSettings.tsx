@@ -120,15 +120,17 @@ export function BotSettings({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              placeholder="What this bot is for"
               rows={2}
               className="mt-1 w-full resize-none rounded-lg border border-hairline bg-raised px-3 py-1.5 text-[14px] text-paper outline-none"
             />
           </label>
           <label className="text-[12px] text-mute">
-            Instructions (Prompt)
+            Instructions
             <textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
+              placeholder="Standing orders for this bot"
               rows={4}
               className="mt-1 w-full resize-none rounded-lg border border-hairline bg-raised px-3 py-1.5 text-[14px] text-paper outline-none"
             />

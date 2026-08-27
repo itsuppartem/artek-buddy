@@ -272,7 +272,7 @@ def create_named_bot(
     expect(box).to_be_visible(timeout=10_000)
     box.fill(name)
     if title is not None:
-        page.get_by_placeholder("Describe what this bot does").fill(title)
+        page.get_by_placeholder("e.g. Code Reviewer").fill(title)
     if description is not None:
         page.get_by_placeholder("What this bot is for").fill(description)
     if private is True:

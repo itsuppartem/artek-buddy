@@ -98,6 +98,7 @@ import {
   isIosDevice,
   isStandaloneDisplay,
   pageSurface,
+  pairAgainLabel,
   shouldHoldHostAlert,
   shouldOfferWebAlerts,
   shouldShowHomeScreenHint,
@@ -1813,7 +1814,7 @@ export function ShellPage() {
                     onClick={() => void forgetDevice()}
                     className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
                   >
-                    Pair this computer again
+                    {pairAgainLabel()}
                   </button>
                 ) : (
                   <button
