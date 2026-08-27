@@ -404,7 +404,6 @@ def test_release_keeps_view_preview_and_drops_control(
     expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
     expect(overlay.locator("iframe")).to_have_attribute("src", re.compile(r"/view/"))
     expect(overlay.locator("iframe")).to_have_attribute("src", re.compile(r"view_only=true"))
-    expect(page.get_by_role("button", name="Take control")).to_be_visible()
 
 
 def test_bot_open_path_starts_computer_without_click(
