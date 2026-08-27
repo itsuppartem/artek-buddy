@@ -17,6 +17,7 @@
 - Phone file-card Download uses the browser, not a Linux `/local/save-artifact` path.
 - A skill chip above Message has ×, and Send consumes it so it does not stick next to screenshot chips.
 - Plugins Connect on a no-browser catalog app either connects or names the next setup step. It no longer dies on `could not start that connection` with nothing to do.
+- Settings Title keeps the typed role through blur and Save. A host refresh while Edit profile is open no longer empties the field.
 - Settings, Memory, and Routine Save flash **Saved** for about a second, then the form closes. A host error stays under the row.
 - A failed playbook run shows a steps card on success, or one human **The turn failed.** line — not a raw `run failed: run-` id, and not that same line as a bubble plus a red box.
 - Settings, Memory, Routines, ask/file cards, and the computer overlay use the same `@theme` tokens as pairing and the thread. Traffic lights and guest noVNC pixels stay as they were.
