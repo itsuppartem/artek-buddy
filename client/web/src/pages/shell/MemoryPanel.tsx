@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { MEMORY_CHANGED_EVENT, memoryChapter, memoryShelf, memoryTitle } from "../../lib/memory";
+import { useSaveAck } from "../../lib/save-ack";
 import type { MemoryDocument } from "../../types";
 import { Button } from "../../ui/button";
 
@@ -17,7 +18,8 @@ export function MemoryPanel({
   const [scope, setScope] = useState<"bot" | "user">("user");
   const [content, setContent] = useState("");
   const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
+  const createAck = useSaveAck();
+  const editAck = useSaveAck();
   const factsRef = useRef<HTMLTextAreaElement>(null);
 
   async function refresh() {
@@ -50,35 +52,31 @@ export function MemoryPanel({
   async function create() {
     const text = (factsRef.current?.value ?? content).trim();
     if (!text) return;
-    setBusy(true);
-    try {
-      await api.memory.create({
-        scope,
-        botId: scope === "bot" ? botId : undefined,
-        path: `entries/owner/note-${Date.now()}.md`,
-        content: text,
-      });
-      setContent("");
-      setCreating(false);
-      await refresh();
-    } catch (err) {
-      onLater(err instanceof Error ? err.message : "Could not save memory");
-    } finally {
-      setBusy(false);
-    }
+    await createAck.run(
+      async () => {
+        await api.memory.create({
+          scope,
+          botId: scope === "bot" ? botId : undefined,
+          path: `entries/owner/note-${Date.now()}.md`,
+          content: text,
+        });
+        await refresh();
+      },
+      () => {
+        setContent("");
+        setCreating(false);
+      },
+    );
   }
 
   async function save(document: MemoryDocument) {
-    setBusy(true);
-    try {
-      await api.memory.update(document.id, draft);
-      setEditingId(null);
-      await refresh();
-    } catch (err) {
-      onLater(err instanceof Error ? err.message : "Could not update memory");
-    } finally {
-      setBusy(false);
-    }
+    await editAck.run(
+      async () => {
+        await api.memory.update(document.id, draft);
+        await refresh();
+      },
+      () => setEditingId(null),
+    );
   }
 
   async function remove(document: MemoryDocument) {
@@ -151,13 +149,30 @@ export function MemoryPanel({
                   className="w-full resize-none rounded-lg border border-hairline bg-raised px-2.5 py-2 text-[13px] text-paper outline-none"
                 />
                 <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
-                  <button type="button" disabled={busy} onClick={() => void save(document)}>
-                    Save
+                  <button
+                    type="button"
+                    data-testid="memory-edit-save"
+                    aria-live="polite"
+                    disabled={editAck.state !== "idle"}
+                    onClick={() => void save(document)}
+                  >
+                    {editAck.label}
                   </button>
-                  <button type="button" onClick={() => setEditingId(null)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      editAck.cancel();
+                      setEditingId(null);
+                    }}
+                  >
                     Cancel
                   </button>
                 </div>
+                {editAck.error ? (
+                  <p data-testid="memory-save-error" className="mt-2 text-[13px] text-danger">
+                    {editAck.error}
+                  </p>
+                ) : null}
               </div>
             ) : (
               <div className="mt-2">
@@ -170,6 +185,7 @@ export function MemoryPanel({
                   <button
                     type="button"
                     onClick={() => {
+                      createAck.cancel();
                       setEditingId(document.id);
                       setDraft(document.content);
                     }}
@@ -217,21 +233,38 @@ export function MemoryPanel({
               variant="cream"
               size="sm"
               data-testid="memory-save"
-              disabled={busy}
+              aria-live="polite"
+              disabled={createAck.state !== "idle"}
               onClick={() => void create()}
             >
-              Save
+              {createAck.label}
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setCreating(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                createAck.cancel();
+                setCreating(false);
+              }}
+            >
               Cancel
             </Button>
           </div>
+          {createAck.error ? (
+            <p data-testid="memory-save-error" className="mt-2 text-[13px] text-danger">
+              {createAck.error}
+            </p>
+          ) : null}
         </div>
       ) : (
         <button
           type="button"
           data-testid="new-memory"
-          onClick={() => setCreating(true)}
+          onClick={() => {
+            createAck.cancel();
+            setCreating(true);
+          }}
           className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-mute"
         >
           + New memory

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api";
 import { isCronShape } from "../../lib/cron";
+import { useSaveAck } from "../../lib/save-ack";
 import type { Routine } from "../../types";
 import { Button } from "../../ui/button";
 
@@ -16,7 +17,7 @@ export function RoutinesPanel({
   const [name, setName] = useState("");
   const [cron, setCron] = useState("0 9 * * *");
   const [prompt, setPrompt] = useState("");
-  const [busy, setBusy] = useState(false);
+  const saveAck = useSaveAck();
 
   async function refresh() {
     setRoutines(await api.routines.list(botId));
@@ -32,26 +33,25 @@ export function RoutinesPanel({
 
   async function create() {
     if (!name.trim() || !prompt.trim() || !isCronShape(cron)) return;
-    setBusy(true);
-    try {
-      await api.routines.create({
-        botId,
-        name: name.trim(),
-        prompt: prompt.trim(),
-        cron: cron.trim(),
-        timezone: "UTC",
-        active: true,
-      });
-      setName("");
-      setPrompt("");
-      setCron("0 9 * * *");
-      setCreating(false);
-      await refresh();
-    } catch (err) {
-      onLater(err instanceof Error ? err.message : "Could not create routine");
-    } finally {
-      setBusy(false);
-    }
+    await saveAck.run(
+      async () => {
+        await api.routines.create({
+          botId,
+          name: name.trim(),
+          prompt: prompt.trim(),
+          cron: cron.trim(),
+          timezone: "UTC",
+          active: true,
+        });
+        await refresh();
+      },
+      () => {
+        setName("");
+        setPrompt("");
+        setCron("0 9 * * *");
+        setCreating(false);
+      },
+    );
   }
 
   async function toggle(routine: Routine) {
@@ -150,21 +150,41 @@ export function RoutinesPanel({
               type="button"
               variant="cream"
               size="sm"
-              disabled={busy || !name.trim() || !prompt.trim() || !isCronShape(cron)}
+              data-testid="routine-save"
+              aria-live="polite"
+              disabled={
+                saveAck.state !== "idle" || !name.trim() || !prompt.trim() || !isCronShape(cron)
+              }
               onClick={() => void create()}
             >
-              Save
+              {saveAck.label}
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setCreating(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                saveAck.cancel();
+                setCreating(false);
+              }}
+            >
               Cancel
             </Button>
           </div>
+          {saveAck.error ? (
+            <p data-testid="routine-save-error" className="mt-2 text-[13px] text-danger">
+              {saveAck.error}
+            </p>
+          ) : null}
         </div>
       ) : (
         <button
           type="button"
           data-testid="new-routine"
-          onClick={() => setCreating(true)}
+          onClick={() => {
+            saveAck.cancel();
+            setCreating(true);
+          }}
           className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-mute"
         >
           + New routine

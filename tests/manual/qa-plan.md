@@ -483,7 +483,7 @@ Do this on **both** surfaces. Phone has no Linux file-manager paste.
 
 ## 28. Save feedback (no silent Save)
 
-After you press Save, the window must show the write landed. Today Settings flashes Saving… and snaps back to the read-only sheet; Memory and Routine stay on Save. Plugins already says Key saved. Models key Save becomes Connected.
+After you press Save, the button reads **Saved** for about a second, then the form closes. A host error keeps Save and shows the line under that row. Plugins already says Key saved. Models key Save becomes Connected. Reasoning / Fast Save is the Using line in the thread.
 
 | Check | Deb | Phone |
 | --- | :---: | :---: |

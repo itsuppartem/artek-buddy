@@ -40,10 +40,12 @@ def test_create_memory_routine_and_settings(
     expect(facts).to_be_visible(timeout=8_000)
     facts.fill("CI prefers short answers")
     page.get_by_test_id("memory-save").click()
+    expect(page.get_by_role("button", name="Saved")).to_be_visible(timeout=8_000)
     doc = page.get_by_test_id("memory-doc").filter(has_text="CI prefers short answers")
     expect(doc).to_be_visible(timeout=8_000)
     expect(doc).to_contain_text("this bot")
 
+    expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
     doc.get_by_role("button", name="Edit").click()
     doc.locator("textarea").fill("CI prefers terse answers")
     doc.get_by_role("button", name="Save").click()
@@ -55,9 +57,12 @@ def test_create_memory_routine_and_settings(
     page.get_by_role("button", name="Shared").click()
     page.get_by_placeholder("Facts to remember").fill("Shared house rule")
     page.get_by_test_id("memory-save").click()
+    expect(page.get_by_role("button", name="Saved")).to_be_visible(timeout=8_000)
     shared = page.get_by_test_id("memory-doc").filter(has_text="Shared house rule")
     expect(shared).to_be_visible(timeout=8_000)
     expect(shared).to_contain_text("shared")
+
+    expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
 
     with page.expect_download() as download:
         page.get_by_role("button", name="Export").click()
