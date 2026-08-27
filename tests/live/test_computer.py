@@ -108,6 +108,30 @@ def test_routine_survives_reload(page: Page, client_url: str, host_url: str) -> 
     expect(page.get_by_test_id("routine-row")).to_have_count(0)
 
 
+def test_offline_click_to_start_is_view_only(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Glance")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    open_computer_pane(page)
+    expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "offline")
+    page.get_by_role("button", name="Settings").last.click()
+    expect(page.get_by_text("Bot Settings")).to_be_visible()
+    expect(page.get_by_test_id("computer-power-state")).to_contain_text("Offline")
+    page.get_by_label("Close settings").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "offline")
+    expect(page.get_by_text("Offline • Click to start")).to_be_visible()
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=15_000
+    )
+    expect(page.get_by_test_id("computer-running")).to_be_visible()
+    expect(page.get_by_test_id("computer-overlay")).to_have_count(0)
+    expect(page.get_by_label("Close computer")).to_have_count(0)
+    expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
+    expect(page.get_by_role("button", name="Take control")).to_be_enabled()
+    expect(page.get_by_text("Offline • Click to start")).to_have_count(0)
+
+
 def test_computer_pane_start_and_close(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("Box")
     pair_fresh(page, client_url, host_url)
@@ -118,12 +142,10 @@ def test_computer_pane_start_and_close(page: Page, client_url: str, host_url: st
     expect(label).to_contain_text(name)
     expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "offline")
     page.get_by_test_id("computer-start").click()
-    expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
-    page.get_by_label("Close computer").click()
-    expect(page.get_by_label("Close computer")).to_have_count(0)
     expect(page.get_by_test_id("computer-state")).to_have_attribute(
-        "data-state", "running", timeout=8_000
+        "data-state", "running", timeout=15_000
     )
+    expect(page.get_by_label("Close computer")).to_have_count(0)
     expect(page.get_by_test_id("computer-running")).to_be_visible()
     page.get_by_role("button", name="Settings").last.click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
@@ -146,8 +168,10 @@ def test_team_busy_shows_other_bot(page: Page, client_url: str, host_url: str) -
     open_chat(page, alpha)
     open_computer_pane(page)
     page.get_by_test_id("computer-start").click()
-    expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
-    page.get_by_label("Close computer").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=15_000
+    )
+    expect(page.get_by_label("Close computer")).to_have_count(0)
     page.get_by_title("Close panel").click()
     open_chat(page, bravo)
     open_computer_pane(page)
@@ -177,6 +201,11 @@ def test_computer_pane_stays_open_after_settings_release_and_create(
     page.get_by_label("Close settings").click()
     expect(page.get_by_test_id("new-memory")).to_be_visible()
     page.get_by_test_id("computer-start").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=15_000
+    )
+    expect(page.get_by_label("Close computer")).to_have_count(0)
+    page.get_by_role("button", name="Take control").click()
     expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
     page.get_by_label("Close computer").click()
     page.get_by_role("button", name="Release").click()
@@ -211,9 +240,10 @@ def test_preview_click_opens_screen_without_control(
     create_named_bot(page, name, private=True)
     open_computer_pane(page)
     page.get_by_test_id("computer-start").click()
-    expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
-    page.get_by_label("Close computer").click()
-    page.get_by_role("button", name="Release").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=15_000
+    )
+    expect(page.get_by_label("Close computer")).to_have_count(0)
     expect(page.get_by_test_id("computer-running")).to_be_visible()
     expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
     page.get_by_test_id("computer-preview").click()
@@ -242,11 +272,10 @@ def test_settings_stop_shows_sleeping_on_pane(page: Page, client_url: str, host_
     create_named_bot(page, name, private=True)
     open_computer_pane(page)
     page.get_by_test_id("computer-start").click()
-    expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
-    page.get_by_label("Close computer").click()
     expect(page.get_by_test_id("computer-state")).to_have_attribute(
-        "data-state", "running", timeout=8_000
+        "data-state", "running", timeout=15_000
     )
+    expect(page.get_by_label("Close computer")).to_have_count(0)
     expect(page.get_by_test_id("computer-running")).to_be_visible()
     page.get_by_role("button", name="Settings").last.click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
@@ -258,6 +287,13 @@ def test_settings_stop_shows_sleeping_on_pane(page: Page, client_url: str, host_
     )
     expect(page.get_by_text("Sleeping • Click to start")).to_be_visible()
     expect(page.get_by_text("Offline • Click to start")).to_have_count(0)
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=15_000
+    )
+    expect(page.get_by_test_id("computer-overlay")).to_have_count(0)
+    expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
+    expect(page.get_by_role("button", name="Take control")).to_be_enabled()
 
 
 def test_running_pane_embeds_novnc_without_clicking_start(

@@ -13,6 +13,11 @@ def test_host_page_desktop_overlay_is_a_phone_pad(page: Page, host_url: str) -> 
     create_named_bot_phone(page, unique_bot("PadWeb"))
     open_phone_tab(page, "desk")
     page.get_by_test_id("computer-start").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=20_000
+    )
+    expect(page.get_by_test_id("computer-overlay")).to_have_count(0)
+    page.get_by_role("button", name="Take control").click()
     overlay = page.get_by_test_id("computer-overlay")
     expect(overlay).to_be_visible(timeout=20_000)
     expect(overlay).to_have_attribute("data-phone-desk", "1")

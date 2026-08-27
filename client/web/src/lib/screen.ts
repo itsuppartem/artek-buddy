@@ -67,7 +67,7 @@ export function shouldReportOwnerActivity(
   return nowMs - lastMs >= minGapMs;
 }
 
-export function shouldTakeControl(source: "preview" | "button"): boolean {
+export function shouldTakeControl(source: "preview" | "button" | "start"): boolean {
   return source === "button";
 }
 
