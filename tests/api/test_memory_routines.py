@@ -242,7 +242,7 @@ def test_remember_twice_writes_one_meta_and_one_row(client, auth_header) -> None
 def test_scripted_identity_city_lists_and_replaces(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "IdCity")["id"]
     stem = uuid.uuid4().hex[:8]
-    first, second = f"Cid{stem}a", f"Cid{stem}b"
+    first, second = f"Osijek{stem}", f"Split{stem}"
     sent = client.post(
         f"/v1/threads/{bot_id}/messages",
         headers=auth_header,

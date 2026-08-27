@@ -217,6 +217,30 @@ def test_remember_city_replaces_the_previous_city() -> None:
     assert len(store.list_live_memory_entries("bot_book")) == 1
 
 
+def test_remember_replaces_near_matching_city_tokens() -> None:
+    hub, store = _hub()
+    first = hub.capture(
+        "Lives in Cid28f7cdfda",
+        kind="place",
+        bot_id="bot_book",
+        source="remember",
+        slot="identity",
+    )
+    second = hub.capture(
+        "Lives in Cid28f7cdfdb",
+        kind="place",
+        bot_id="bot_book",
+        source="remember",
+        slot="identity",
+    )
+    assert first is not None
+    assert second is not None
+    identity = store.find_live_memory_entry_by_slot("identity", bot_id="bot_book")
+    assert identity is not None
+    assert "Cid28f7cdfdb" in identity.text
+    assert "Cid28f7cdfda" not in identity.text
+
+
 def test_next_turn_prompt_keeps_owner_and_bot_book() -> None:
     hub, _store = _hub()
     hub.capture(
@@ -316,6 +340,7 @@ def test_similar_memory_paraphrase_not_a_different_ban() -> None:
     assert similar_memory("не спрашивай разрешения на read", "не спрашивай разрешение на read")
     assert not similar_memory("Never open Gmail", "Never open Outlook")
     assert not similar_memory("Never open site-0.example", "Never open site-4.example")
+    assert similar_memory("Lives in Cid28f7cdfda", "Lives in Cid28f7cdfdb")
 
 
 def test_one_run_does_not_store_paraphrased_read_permission_twice() -> None:

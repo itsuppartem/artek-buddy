@@ -434,7 +434,7 @@ def test_chat_identity_city_shows_in_memory_pane(
 ) -> None:
     name = unique_bot("Idn")
     stem = uuid.uuid4().hex[:8]
-    first, second = f"Cid{stem}a", f"Cid{stem}b"
+    first, second = f"Osijek{stem}", f"Split{stem}"
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
     open_computer_pane(page)
