@@ -61,6 +61,7 @@ import { nextPhoneTab, type PhoneTab, shouldUsePhoneShell } from "../lib/phone-s
 import {
   embeddableScreenUrl,
   screenFrameLooksFailed,
+  screenPolicy,
   shouldFetchScreenUrl,
   shouldRefreshScreenUrl,
   shouldReplaceScreenUrl,
@@ -1375,10 +1376,18 @@ export function ShellPage() {
 
   async function releaseComputer() {
     if (!active) return;
+    if (screenPolicy(screenUrlRef.current) === "control") {
+      adoptScreenUrl(null);
+      setScreenEpoch((value) => value + 1);
+    }
     await api.computer.release(active.id).catch(() => undefined);
     const status = await api.computer.status(active.id).catch(() => null);
-    if (status) setComputer(status);
+    if (status) {
+      setComputer(status);
+      setSnapshot((prev) => (prev ? { ...prev, computer: status } : prev));
+    }
     await ensureScreenUrl(active.id, true, true);
+    setScreenEpoch((value) => value + 1);
   }
 
   async function createBot(input: {
@@ -2259,7 +2268,7 @@ export function ShellPage() {
         booting={booting}
         open={computerOpen}
         bot={active}
-        computer={computer}
+        computer={computer ?? snapshot?.computer ?? null}
         screenUrl={screenUrl}
         screenError={screenError}
         screenEpoch={screenEpoch}
