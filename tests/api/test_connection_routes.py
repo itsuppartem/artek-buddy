@@ -292,3 +292,18 @@ def test_connect_unknown_app_fails_closed(client, auth_header) -> None:
     )
     assert sent.status_code == 200
     wait_thread_has(client, auth_header, bot["id"], "app not found")
+
+
+def test_connect_start_fail_explains_the_next_step(client, auth_header) -> None:
+    client.post("/v1/connections/key", headers=auth_header, json={"api_key": SECRET})
+    failed = client.post(
+        "/v1/connections",
+        headers=auth_header,
+        json={"provider": "needssetup", "redirect_url": "https://window.example/app"},
+    )
+    assert failed.status_code == 502
+    detail = failed.json()["detail"]
+    assert "could not start that connection" in detail
+    assert "finish that setup" in detail
+    assert "try Connect again" in detail
+    assert detail != "could not start that connection"

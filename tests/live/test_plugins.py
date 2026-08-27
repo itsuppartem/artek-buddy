@@ -104,3 +104,30 @@ def test_chat_connects_docs_without_pane_click(page: Page, client_url: str, host
     expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
     page.get_by_role("button", name="Close Plugins").click()
     expect(page.get_by_test_id("plugin-ask-docs")).to_have_count(0)
+
+
+def test_plugins_connect_explains_when_start_fails(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    pair_fresh(page, client_url, host_url)
+    page.get_by_test_id("open-plugins").click()
+    pane = page.get_by_test_id("plugins-pane")
+    expect(pane).to_be_visible()
+    leftover = page.get_by_test_id("plugins-remove")
+    if leftover.count() and leftover.first.is_visible():
+        leftover.click()
+        expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
+    key = page.get_by_label("Plugins key")
+    key.fill("ak-test-secret-setup")
+    expect(key).to_have_value("ak-test-secret-setup")
+    page.get_by_test_id("plugins-save").click()
+    expect(page.get_by_test_id("plugins-key-saved")).to_contain_text("Key saved")
+    page.get_by_label("Search apps").fill("needssetup")
+    row = page.get_by_test_id("plugin-row-needssetup")
+    expect(row).to_be_visible()
+    row.get_by_role("button", name="Connect").click()
+    error = page.get_by_test_id("plugins-error")
+    expect(error).to_contain_text("could not start that connection")
+    expect(error).to_contain_text("finish that setup")
+    expect(error).to_contain_text("try Connect again")
+    expect(row.get_by_role("button", name="Connect")).to_be_visible()
