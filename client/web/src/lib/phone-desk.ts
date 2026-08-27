@@ -170,3 +170,48 @@ export function overlayHolderText(compact: boolean): string {
     ? "You have control"
     : "You have control · returns to the bot after two idle minutes";
 }
+
+export function isDeskPointerMove(input: DeskInput): boolean {
+  return input.kind === "click" && input.payload.type === "move";
+}
+
+export function enqueueDeskInput(queue: DeskInput[], incoming: DeskInput): DeskInput[] {
+  if (isDeskPointerMove(incoming)) {
+    const last = queue[queue.length - 1];
+    if (last && isDeskPointerMove(last)) {
+      return [...queue.slice(0, -1), incoming];
+    }
+  }
+  return [...queue, incoming];
+}
+
+export function createDeskInputGate(
+  send: (input: DeskInput) => Promise<unknown>,
+): (input: DeskInput) => void {
+  let queue: DeskInput[] = [];
+  let busy = false;
+
+  async function drain(): Promise<void> {
+    if (busy) return;
+    busy = true;
+    try {
+      while (queue.length > 0) {
+        const next = queue.shift();
+        if (!next) break;
+        try {
+          await send(next);
+        } catch {
+          // A failed move must not stall later clicks or typed keys.
+        }
+      }
+    } finally {
+      busy = false;
+    }
+    if (queue.length > 0) await drain();
+  }
+
+  return (input: DeskInput) => {
+    queue = enqueueDeskInput(queue, input);
+    void drain();
+  };
+}

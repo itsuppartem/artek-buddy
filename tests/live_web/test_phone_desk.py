@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 from playwright.sync_api import Page, expect
 from tests.live.helpers import unique_bot
@@ -116,3 +118,45 @@ def test_phone_pad_drag_keeps_control_and_keys_are_tappable(page: Page, host_url
     expect(field).to_be_focused()
     expect(overlay.get_by_role("button", name="Release")).to_be_visible()
     expect(overlay.get_by_role("button", name="Take control")).to_have_count(0)
+
+
+def test_phone_desk_input_updates_within_seconds(page: Page, host_url: str) -> None:
+    overlay = _controlled_phone_overlay(page, host_url, "DeskFast")
+    overlay.get_by_test_id("phone-desk-keyboard").click()
+    field = overlay.get_by_role("textbox", name="Type on the desktop")
+    field.click()
+    hello_at: list[float] = []
+    input_at: list[float] = []
+
+    def on_response(response) -> None:
+        if "/input" not in response.url or response.request.method != "POST" or not response.ok:
+            return
+        now = time.monotonic()
+        input_at.append(now)
+        body = response.request.post_data or ""
+        if "hello" in body:
+            hello_at.append(now)
+
+    page.on("response", on_response)
+    started = time.monotonic()
+    field.fill("hello")
+    expect(field).to_have_value("hello")
+    deadline = started + 5.0
+    while time.monotonic() < deadline and not hello_at:
+        page.wait_for_timeout(50)
+    assert hello_at, "typed hello never reached POST /v1/computer/.../input"
+    assert hello_at[-1] - started < 5.0, (
+        f"desk input took {hello_at[-1] - started:.1f}s; stall over ~5s is a fail"
+    )
+    expect(overlay.get_by_role("button", name="Release")).to_be_visible(timeout=5_000)
+    expect(overlay.get_by_test_id("phone-desk-pad")).to_be_visible()
+    pad_box = overlay.get_by_test_id("phone-desk-pad").bounding_box()
+    assert pad_box is not None
+    before_drag = len(input_at)
+    drag_started = time.monotonic()
+    _drag(page, pad_box, 40, 24)
+    while time.monotonic() < drag_started + 5.0 and len(input_at) == before_drag:
+        page.wait_for_timeout(50)
+    drag_elapsed = time.monotonic() - drag_started
+    expect(overlay.get_by_role("button", name="Release")).to_be_visible(timeout=5_000)
+    assert drag_elapsed < 5.0, f"pad drag input took {drag_elapsed:.1f}s; stall over ~5s is a fail"

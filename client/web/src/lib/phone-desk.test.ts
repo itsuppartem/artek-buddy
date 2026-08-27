@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   containBox,
+  createDeskInputGate,
   DESK_SIZE,
   deskPointFromPad,
   EXTRA_KEYS,
+  enqueueDeskInput,
   gestureFromTouch,
+  inputForMove,
   keyFromDomKey,
   keysFromField,
   MOVE_SENSITIVITY,
@@ -96,6 +99,59 @@ describe("phone desk keys", () => {
       "ArrowLeft",
       "ArrowRight",
     ]);
+  });
+});
+
+describe("phone desk input gate", () => {
+  const click = {
+    kind: "click",
+    payload: { type: "click", x: 40, y: 40, button: 1 },
+  };
+  const typeHello = { kind: "clipboard", payload: { text: "hello" } };
+
+  it("keeps only the latest pointer move in the queue", () => {
+    expect(enqueueDeskInput([inputForMove({ x: 1, y: 1 })], inputForMove({ x: 9, y: 9 }))).toEqual([
+      inputForMove({ x: 9, y: 9 }),
+    ]);
+  });
+
+  it("does not drop a click or typed keys behind a move", () => {
+    expect(enqueueDeskInput([inputForMove({ x: 1, y: 1 })], click)).toEqual([
+      inputForMove({ x: 1, y: 1 }),
+      click,
+    ]);
+    expect(enqueueDeskInput([click], inputForMove({ x: 2, y: 2 }))).toEqual([
+      click,
+      inputForMove({ x: 2, y: 2 }),
+    ]);
+    expect(enqueueDeskInput([inputForMove({ x: 1, y: 1 })], typeHello)).toEqual([
+      inputForMove({ x: 1, y: 1 }),
+      typeHello,
+    ]);
+  });
+
+  it("sends the latest move after an in-flight send, not every pad sample", async () => {
+    const sent: { x: unknown }[] = [];
+    let releaseFirst!: () => void;
+    const first = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let started = 0;
+    const push = createDeskInputGate(async (input) => {
+      started += 1;
+      sent.push({ x: input.payload.x });
+      if (started === 1) await first;
+    });
+    push(inputForMove({ x: 1, y: 1 }));
+    push(inputForMove({ x: 2, y: 2 }));
+    push(inputForMove({ x: 3, y: 3 }));
+    await Promise.resolve();
+    expect(sent).toEqual([{ x: 1 }]);
+    releaseFirst();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(sent).toEqual([{ x: 1 }, { x: 3 }]);
   });
 });
 

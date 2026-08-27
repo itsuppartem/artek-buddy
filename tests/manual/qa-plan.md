@@ -12,7 +12,7 @@ This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packag
 | --- | --- |
 | `main` | Release **0.10.27**. |
 | `develop` | Daily since then: window look, Models / keys, memory book, bot-to-bot, plugins, skill from the web, phone page. `VERSION` is still **0.10.27** until a bump lands on `main`. |
-| Pad / keyboard / Cyrillic | In `develop` (phone overlay). Drag/tap must keep control until Release; the Type on the desktop field is tappable. |
+| Pad / keyboard / Cyrillic | In `develop` (phone overlay). Drag/tap must keep control until Release; the Type on the desktop field is tappable. After pad or typing, the guest picture must update within a couple of seconds. |
 | GitHub Release `.deb` | **Old.** Do not use it for this pass. |
 | Linux | Window **built from this tree** (`client/build-deb.sh`, optionally `ARTEK_BAKE_URL=1` for a local URL). Wide shell, about 1280×720, three columns. |
 | Phone | Home Screen on the **same host URL**. After a UI change, fully kill the icon and open it again. Viewport is iPhone 11 Pro: **375×812** CSS pixels (notch + home indicator). |
@@ -193,6 +193,7 @@ On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; t
 | Take control: pointer moves in the guest. A click lands where you aimed (address bar, a link, a button) | [ ] | [ ] |
 | Phone: drag on the pad moves the beige dot across the 1280×800 picture; it does not jump under the finger. After a drag or tap the overlay still shows **Release**, not Take control | — | [ ] |
 | Type `hello` into a guest field (address bar or input). The letters appear **in the guest**, not only in our Message box | [ ] | [ ] |
+| After pad or keyboard input, the guest picture updates within a couple of seconds. A freeze over ~5s is a fail | [ ] | [ ] |
 | Phone Keyboard: Esc / Tab / Enter / Bksp work in the guest. Russian layout types Cyrillic into that same field | — | [ ] |
 | Scroll (wheel on Deb, two-finger on Phone) moves the guest page | [ ] | [ ] |
 | Right-click (Deb) or two-finger tap (Phone) opens a guest context menu | [ ] | [ ] |
@@ -274,6 +275,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Keyboard → **Type on the desktop** field accepts a tap, then the system keyboard + row Esc / Tab / Enter / Bksp / Del / arrows | — | [ ] |
 | iOS Done check **dismisses** the keyboard. Tap on the desk does not | — | [ ] |
 | Russian layout types into the guest field (address bar / input). Latin still works | — | [ ] |
+| After pad drag or typing, the guest picture updates within a couple of seconds (a freeze over ~5s is a fail) | — | [ ] |
 | Overlay ✕ works on the first tap → Chat | — | [ ] |
 
 ---
@@ -558,4 +560,4 @@ Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 1
 
 ## How to log
 
-Tick the box on the surface you used. A fail is a GitHub issue: expected, got, surface (Deb / Phone), host SHA / branch, screenshot if it helps. Hang new product bugs under [#222](https://github.com/itsuppartem/artek-buddy/issues/222). Phone desk stall: [#238](https://github.com/itsuppartem/artek-buddy/issues/238).
+Tick the box on the surface you used. A fail is a GitHub issue: expected, got, surface (Deb / Phone), host SHA / branch, screenshot if it helps. Hang new product bugs under [#222](https://github.com/itsuppartem/artek-buddy/issues/222).
