@@ -51,7 +51,7 @@ export function CreateBotForm({
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="Describe what this bot does"
+          placeholder="e.g. Code Reviewer"
           className="mt-2 w-full rounded-[10px] border border-hairline bg-raised px-3.5 py-3 text-paper"
         />
       </label>
