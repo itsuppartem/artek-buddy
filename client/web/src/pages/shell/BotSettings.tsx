@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api";
 import { stripMarkdown } from "../../lib/markdown";
+import { useSaveAck } from "../../lib/save-ack";
 import { computerModeHint } from "../../lib/screen";
 import type { Bot, ComputerMode, ComputerStatus } from "../../types";
 import { BotAvatar } from "../../ui/bot-avatar";
@@ -43,7 +44,7 @@ export function BotSettings({
   const [instructions, setInstructions] = useState(bot.instructions);
   const [computerMode, setComputerMode] = useState<ComputerMode>(bot.computerMode);
   const [notifyOnFinish, setNotifyOnFinish] = useState(bot.notifyOnFinish);
-  const [saving, setSaving] = useState(false);
+  const saveAck = useSaveAck();
   const [confirming, setConfirming] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [powerBusy, setPowerBusy] = useState(false);
@@ -60,22 +61,19 @@ export function BotSettings({
 
   async function save() {
     if (!name.trim()) return;
-    setSaving(true);
-    try {
-      await api.bots.update(bot.id, {
-        name: name.trim(),
-        title: title.trim(),
-        description: description.trim(),
-        instructions: instructions.trim(),
-        computerMode,
-      });
-      setEditing(false);
-      onUpdated();
-    } catch (err) {
-      onLater(err instanceof Error ? err.message : "Failed to update bot");
-    } finally {
-      setSaving(false);
-    }
+    await saveAck.run(
+      async () => {
+        await api.bots.update(bot.id, {
+          name: name.trim(),
+          title: title.trim(),
+          description: description.trim(),
+          instructions: instructions.trim(),
+          computerMode,
+        });
+        onUpdated();
+      },
+      () => setEditing(false),
+    );
   }
 
   return (
@@ -140,19 +138,36 @@ export function BotSettings({
             <Button
               type="button"
               size="sm"
-              disabled={saving || !name.trim()}
+              data-testid="settings-save"
+              aria-live="polite"
+              disabled={saveAck.state !== "idle" || !name.trim()}
               onClick={() => void save()}
             >
-              {saving ? "Saving…" : "Save"}
+              {saveAck.label}
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                saveAck.cancel();
+                setEditing(false);
+              }}
+            >
               Cancel
             </Button>
           </div>
+          {saveAck.error ? (
+            <p data-testid="settings-save-error" className="text-[13px] text-danger">
+              {saveAck.error}
+            </p>
+          ) : null}
         </div>
       ) : (
         <>
-          <div className="mt-6 text-[20px] font-medium text-paper">{bot.name}</div>
+          <div data-testid="bot-settings-name" className="mt-6 text-[20px] font-medium text-paper">
+            {bot.name}
+          </div>
           <div className="mt-2 text-[14px] leading-6 text-mute">
             {stripMarkdown(bot.title || bot.description || "No description")}
           </div>
@@ -163,7 +178,15 @@ export function BotSettings({
             {computerModeHint(bot.computerMode)}
           </p>
           <div className="mt-3">
-            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                saveAck.cancel();
+                setEditing(true);
+              }}
+            >
               Edit profile
             </Button>
           </div>
