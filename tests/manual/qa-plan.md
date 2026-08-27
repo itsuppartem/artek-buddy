@@ -140,6 +140,7 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 | --- | --- | --- |
 | Plugins → key → Save → **Key saved** + last four. Key field gone. Full key never on the page | [ ] | [ ] |
 | Search → Connect a simple app (no browser) → Connected | [ ] | [ ] |
+| If Connect cannot start, a human line under the pane says what to do next (not a dead Connect and not only `could not start that connection`) | [ ] | [ ] |
 | Or chat `please e2e-connect-docs` (scripted host) / «подключи Docs» — **plugin-card**, not git setup | [ ] | [ ] |
 | Chip above Message. Click = `please use {name}`, no auto-Send | [ ] | [ ] |
 | Send → thread **plugin-card** (name + result) | [ ] | [ ] |

@@ -11,6 +11,10 @@ DOCS_TEXT = "The notes app has one page: Subotica."
 MAX_KEY_CHARS = 512
 MAX_SEARCH_CHARS = 80
 OWNER_USER_ID = "usr_owner"
+CONNECT_START_ERROR = (
+    "could not start that connection. "
+    "this app needs its own login or key — finish that setup, then try Connect again."
+)
 
 
 @dataclass(frozen=True)
@@ -21,6 +25,7 @@ class FakeApp:
     tool: str
     text: str
     description: str
+    start_error: str | None = None
 
 
 FAKE_APPS: tuple[FakeApp, ...] = (
@@ -36,6 +41,15 @@ FAKE_APPS: tuple[FakeApp, ...] = (
         "Read today's calendar.",
     ),
     FakeApp("docs", "Docs", True, "docs_read", DOCS_TEXT, "Read the connected docs page."),
+    FakeApp(
+        "needssetup",
+        "Needs Setup",
+        True,
+        "setup_ping",
+        "ok",
+        "An app that cannot start until setup is finished.",
+        CONNECT_START_ERROR,
+    ),
 )
 APPS_BY_SLUG = {item.slug: item for item in FAKE_APPS}
 
@@ -78,6 +92,53 @@ def hide_secret(message: str, key: str) -> str:
     if secret and secret in text:
         return text.replace(secret, "[redacted]")
     return text
+
+
+def toolkit_record(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    inner = payload.get("toolkit")
+    if isinstance(inner, dict) and (
+        "slug" in inner or "no_auth" in inner or "auth_schemes" in inner
+    ):
+        return inner
+    return payload
+
+
+def _is_no_auth_name(name: str) -> bool:
+    compact = name.upper().replace("-", "_").replace(" ", "")
+    return compact in {"NO_AUTH", "NOAUTH"}
+
+
+def toolkit_no_auth(payload: Any) -> bool:
+    row = toolkit_record(payload)
+    if bool(row.get("no_auth")):
+        return True
+    meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+    if bool(meta.get("no_auth")):
+        return True
+    buckets = [
+        row.get("auth_schemes"),
+        row.get("composio_managed_auth_schemes"),
+        meta.get("auth_schemes"),
+    ]
+    for bucket in buckets:
+        if not isinstance(bucket, list):
+            continue
+        for item in bucket:
+            if isinstance(item, str) and _is_no_auth_name(item):
+                return True
+            if isinstance(item, dict) and _is_no_auth_name(
+                str(
+                    item.get("mode")
+                    or item.get("scheme")
+                    or item.get("auth_scheme")
+                    or item.get("type")
+                    or ""
+                )
+            ):
+                return True
+    return False
 
 
 class Broker(Protocol):
@@ -132,6 +193,8 @@ class FakeBroker:
         app = self.describe(slug)
         if app is None:
             raise KeyError(slug)
+        if app.start_error:
+            raise RuntimeError(app.start_error)
         validate_redirect(redirect_url)
         remote_id = f"fake_{app.slug}"
         if app.no_auth:

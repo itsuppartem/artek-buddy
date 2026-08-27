@@ -5,11 +5,14 @@ from typing import Any
 import httpx
 
 from artek_buddy.connections.broker import (
+    CONNECT_START_ERROR,
     OWNER_USER_ID,
     BeginRemote,
     FakeApp,
     filter_catalog,
     hide_secret,
+    toolkit_no_auth,
+    toolkit_record,
     validate_redirect,
 )
 from artek_buddy.contracts.domain import ConnectionCatalogItem
@@ -57,7 +60,7 @@ class HttpBroker:
                     name=name,
                     logo=str(logo) if logo else None,
                     connected=slug in connected,
-                    no_auth=bool(row.get("no_auth")),
+                    no_auth=toolkit_no_auth(row),
                 )
             )
         return filter_catalog(items, q)
@@ -75,11 +78,11 @@ class HttpBroker:
                     return str(row["id"])
         created = self._request("POST", "/auth_configs", json={"toolkit": {"slug": slug}})
         if created.status_code >= 400:
-            raise RuntimeError(hide_secret("could not start that connection", self._key))
+            raise RuntimeError(hide_secret(CONNECT_START_ERROR, self._key))
         body = created.json()
         auth_id = body.get("id") or (body.get("auth_config") or {}).get("id")
         if not auth_id:
-            raise RuntimeError(hide_secret("could not start that connection", self._key))
+            raise RuntimeError(hide_secret(CONNECT_START_ERROR, self._key))
         return str(auth_id)
 
     def begin(self, slug: str, redirect_url: str) -> BeginRemote:
@@ -88,9 +91,15 @@ class HttpBroker:
         no_auth = False
         display = slug
         if toolkit.status_code < 400:
-            body = toolkit.json()
-            no_auth = bool(body.get("no_auth"))
+            body = toolkit_record(toolkit.json())
+            no_auth = toolkit_no_auth(body)
             display = str(body.get("name") or slug)
+        if not no_auth:
+            listed = self.catalog(slug, set())
+            match = next((item for item in listed if item.slug == slug), None)
+            if match is not None:
+                no_auth = match.no_auth
+                display = match.name or display
         if no_auth:
             return BeginRemote(
                 status="connected",
@@ -111,12 +120,12 @@ class HttpBroker:
             },
         )
         if linked.status_code >= 400:
-            raise RuntimeError(hide_secret("could not start that connection", self._key))
+            raise RuntimeError(hide_secret(CONNECT_START_ERROR, self._key))
         payload = linked.json()
         remote_id = str(payload.get("id") or payload.get("connected_account_id") or "")
         url = payload.get("redirect_url") or payload.get("redirectUrl")
         if not remote_id:
-            raise RuntimeError(hide_secret("could not start that connection", self._key))
+            raise RuntimeError(hide_secret(CONNECT_START_ERROR, self._key))
         return BeginRemote(
             status="pending",
             remote_id=remote_id,
