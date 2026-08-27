@@ -107,6 +107,10 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     mail = steps_for_prompt("please e2e-connect-mail")
     assert mail[0].tool == "connect_app"
     assert mail[0].args.get("slug") == "mail"
+    twice = steps_for_prompt("please e2e-remember-twice")
+    assert twice[0].tool == "remember"
+    assert twice[1].tool == "remember"
+    assert twice[0].args.get("content") != twice[1].args.get("content")
 
     taught = steps_for_prompt("please e2e-install-book")
     assert taught[0].consent is not None

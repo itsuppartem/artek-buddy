@@ -6,7 +6,7 @@ import pytest
 
 from artek_buddy.memory import MAX_AGENT_MEMORY_BYTES, wrap_turn_prompt
 from artek_buddy.memory_book import HostBookRewriter, format_recalled_memory
-from artek_buddy.memory_hub import MemoryEntry, MemoryHub
+from artek_buddy.memory_hub import MemoryEntry, MemoryHub, similar_memory
 
 
 class _BookStore:
@@ -269,6 +269,67 @@ def test_wrap_turn_prompt_tells_lead_to_revise_book_sections() -> None:
     assert "remember" in wrapped
     assert "section" in wrapped
     assert "one short sentence" not in wrapped
+    assert "once per fact" in wrapped
+    assert "this-chat only" in wrapped
+
+
+def test_similar_memory_paraphrase_not_a_different_ban() -> None:
+    assert similar_memory("Do not ask permission for read", "Don't ask for read permission")
+    assert similar_memory("не спрашивай разрешения на read", "не спрашивай разрешение на read")
+    assert not similar_memory("Never open Gmail", "Never open Outlook")
+    assert not similar_memory("Never open site-0.example", "Never open site-4.example")
+
+
+def test_one_run_does_not_store_paraphrased_read_permission_twice() -> None:
+    hub, store = _hub()
+    first = hub.capture(
+        "Do not ask permission for read",
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_dup",
+        slot="bans",
+    )
+    second = hub.capture(
+        "Don't ask for read permission",
+        kind="preference",
+        scope="user",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_dup",
+    )
+    assert first is not None
+    assert second is None
+    live = store.list_live_memory_entries("bot_book")
+    assert len(live) == 1
+    extra = hub.extract_after_turn(
+        "Do not ask permission for read. Don't ask for read permission.",
+        "run_dup",
+        "bot_book",
+    )
+    assert extra == []
+    assert len(store.list_live_memory_entries("bot_book")) == 1
+
+
+@pytest.mark.asyncio
+async def test_revise_after_remember_does_not_add_another_row() -> None:
+    hub, store = _hub(rewrite=True)
+    saved = hub.capture(
+        "Do not ask permission for read",
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_dup",
+        slot="bans",
+    )
+    assert saved is not None
+    changed = await hub.revise_after_turn(
+        "Do not ask permission for read",
+        "run_dup",
+        "bot_book",
+    )
+    assert changed == []
+    assert len(store.list_live_memory_entries("bot_book")) == 1
 
 
 @pytest.mark.asyncio

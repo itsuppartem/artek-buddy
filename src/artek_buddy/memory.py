@@ -296,6 +296,8 @@ def wrap_turn_prompt(
             "A later note revises that section; it does not wipe the rest of the book. "
             "Shared (default) is the owner book. Set scope=bot for this chat's standing rules "
             "(bans, wait for an explicit go-ahead). "
+            "Call remember once per fact. A standing rule is this-chat only; "
+            "do not also write it as a shared preference. "
             "Do not remember one-off tasks such as opening a tab. "
             "To erase something, call remember with forget=true.\n"
             "- Skills: when the owner asks to find and keep a published skill from the web, "
