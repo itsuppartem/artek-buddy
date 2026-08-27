@@ -80,9 +80,9 @@ def test_settings_title_keeps_value_after_blur_and_save(
     expect(title).to_have_value("QA Helper")
     title.blur()
     with page.expect_response(
-        lambda response: response.request.method == "GET"
-        and "/v1/bots" in response.url
-        and response.ok
+        lambda response: (
+            response.request.method == "GET" and "/v1/bots" in response.url and response.ok
+        )
     ):
         page.get_by_test_id("notify-on-finish").uncheck()
     expect(title).to_have_value("QA Helper")
