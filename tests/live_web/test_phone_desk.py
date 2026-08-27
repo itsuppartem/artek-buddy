@@ -10,7 +10,7 @@ pytestmark = pytest.mark.live
 
 def test_host_page_desktop_overlay_is_a_phone_pad(page: Page, host_url: str) -> None:
     pair_host_page(page, host_url)
-    create_named_bot_phone(page, unique_bot("PadWeb"))
+    create_named_bot_phone(page, unique_bot("PadWeb"), private=True)
     open_phone_tab(page, "desk")
     page.get_by_test_id("computer-start").click()
     expect(page.get_by_test_id("computer-state")).to_have_attribute(
@@ -59,7 +59,7 @@ def test_host_page_desktop_overlay_is_a_phone_pad(page: Page, host_url: str) -> 
 
 def _controlled_phone_overlay(page: Page, host_url: str, bot: str):
     pair_host_page(page, host_url)
-    create_named_bot_phone(page, unique_bot(bot))
+    create_named_bot_phone(page, unique_bot(bot), private=True)
     open_phone_tab(page, "desk")
     page.get_by_test_id("computer-start").click()
     expect(page.get_by_test_id("computer-state")).to_have_attribute(
