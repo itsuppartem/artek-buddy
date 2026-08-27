@@ -196,7 +196,7 @@ On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; t
 | Scroll (wheel on Deb, two-finger on Phone) moves the guest page | [ ] | [ ] |
 | Right-click (Deb) or two-finger tap (Phone) opens a guest context menu | [ ] | [ ] |
 | fluxbox **Files** / Browser / Terminal open a real window you can see | [ ] | [ ] |
-| Release: overlay is view-only again; Message and Stop work. Guest stays on the same page | [ ] | [ ] |
+| Release: overlay is view-only again (same guest page, **not a black tile**). Pane says **Take control**, not You have control. Message and Stop work | [ ] | [ ] |
 
 If Chrome emulation cannot drag the pad, say **fail / blocked**, not skip. This section is why the phone desk exists.
 

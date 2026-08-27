@@ -13,6 +13,12 @@ export function screenTargetKey(url: string | null | undefined): string | null {
   return `${match[1]}/${match[2]}/${match[3]}`;
 }
 
+export function screenPolicy(url: string | null | undefined): "view" | "control" | null {
+  const match = embeddableScreenUrl(url)?.match(NOVNC_RE);
+  if (!match) return null;
+  return match[3] === "control" ? "control" : "view";
+}
+
 export function screenExpiresAt(url: string | null | undefined): number | null {
   const match = embeddableScreenUrl(url)?.match(NOVNC_RE);
   if (!match || match[4] == null) return null;
@@ -41,7 +47,10 @@ export function shouldReplaceScreenUrl(
   if (cur === nxt) return false;
   if (!nxt) return Boolean(cur);
   if (!cur) return true;
-  if (screenTargetKey(cur) !== screenTargetKey(nxt)) return true;
+  const curKey = screenTargetKey(cur);
+  const nxtKey = screenTargetKey(nxt);
+  if (!curKey || !nxtKey) return true;
+  if (curKey !== nxtKey) return true;
   return shouldRefreshScreenUrl(cur, nowMs);
 }
 

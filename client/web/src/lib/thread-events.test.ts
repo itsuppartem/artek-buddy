@@ -168,4 +168,11 @@ describe("reduceComputerStatus", () => {
   it("does not treat thread.computer as a pane update", () => {
     expect(isComputerStatusEvent(event({ type: "thread.computer" }))).toBe(false);
   });
+
+  it("Release drops user control so the pane cannot keep You have control", () => {
+    const held = reduceComputerStatus(computer(), event({ type: "computer.takeover.granted" }));
+    expect(held?.controlHolder).toBe("user");
+    const released = reduceComputerStatus(held, event({ type: "computer.takeover.released" }));
+    expect(released?.controlHolder).toBe("bot");
+  });
 });

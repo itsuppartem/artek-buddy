@@ -350,6 +350,62 @@ def test_running_pane_embeds_novnc_without_clicking_start(
     expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
 
 
+def test_release_keeps_view_preview_and_drops_control(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("RelView")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    view = (
+        "/novnc/YWJj/6080/view/9999999999999."
+        "abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=true"
+    )
+    control = (
+        "/novnc/YWJj/6081/control/9999999999999."
+        "abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=false"
+    )
+    holder = {"value": "bot"}
+
+    def computer_route(route):
+        url = route.request.url.split("?", 1)[0]
+        parts = url.rstrip("/").split("/")
+        method = route.request.method
+        if method == "POST" and parts[-1] == "takeover":
+            holder["value"] = "user"
+            route.continue_()
+            return
+        if method == "POST" and parts[-1] == "release":
+            holder["value"] = "bot"
+            route.continue_()
+            return
+        if method == "GET" and parts[-1] == "screen":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps({"url": control if holder["value"] == "user" else view}),
+            )
+            return
+        route.continue_()
+
+    page.route("**/v1/computer/**", computer_route)
+    open_computer_pane(page)
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=15_000
+    )
+    page.get_by_role("button", name="Take control").click()
+    overlay = page.get_by_test_id("computer-overlay")
+    expect(overlay).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("computer-overlay-holder")).to_contain_text("You have control")
+    expect(overlay.locator("iframe")).to_have_attribute("src", re.compile(r"/control/"))
+    overlay.get_by_role("button", name="Release").click()
+    expect(page.get_by_test_id("computer-overlay-holder")).to_have_count(0)
+    expect(overlay.get_by_role("button", name="Take control")).to_be_visible()
+    expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
+    expect(overlay.locator("iframe")).to_have_attribute("src", re.compile(r"/view/"))
+    expect(overlay.locator("iframe")).to_have_attribute("src", re.compile(r"view_only=true"))
+
+
 def test_bot_open_path_starts_computer_without_click(
     page: Page, client_url: str, host_url: str
 ) -> None:
