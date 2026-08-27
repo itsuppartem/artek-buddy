@@ -37,6 +37,13 @@ def test_pairing_form_fields_and_rejected_url(page: Page, client_url: str) -> No
     expect(page.get_by_label("Pairing code")).to_be_visible()
     expect(page.get_by_label("Device name")).to_have_value("This computer")
     expect(page.get_by_role("button", name="Pair")).to_be_disabled()
+    expect(form.get_by_text("Pair this computer")).to_be_visible()
+    expect(form).to_contain_text("On the Pi, create a pairing code. Type it here, then Pair.")
+    expect(form).not_to_contain_text("token")
+    expect(form).not_to_contain_text("mint")
+    expect(page.get_by_test_id("pairing-host-command")).to_contain_text(
+        "docker exec artek-buddy python -m artek_buddy pair"
+    )
 
     page.get_by_placeholder("https://host.example").fill("https://evil.example")
     page.get_by_placeholder("XXXX-XXXX").fill("ABCD-EFGH")

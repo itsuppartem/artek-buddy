@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Pairing tells the owner where to get a code and what Pair does. The phone page has no token or host-module command. The `.deb` footer is the README Compose exec.
 - Chat that writes the identity book lists that chapter in Computer → Memory. Owner place/person rows are labeled identity, and a later city replaces the old one on the same card.
 - Phone Close on Computer / Models / Plugins returns to the Chat tab with the thread, not a blank Desktop tab.
 - Phone Take control stays held after a pad drag or tap. The overlay caption is not selectable host text, and **Type on the desktop** is a tappable field in the keyboard strip.
