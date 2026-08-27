@@ -52,7 +52,11 @@ export function PhoneDeskPad({
     if (!el) return;
     const stop = (event: TouchEvent) => event.preventDefault();
     el.addEventListener("touchstart", stop, { passive: false });
-    return () => el.removeEventListener("touchstart", stop);
+    el.addEventListener("touchmove", stop, { passive: false });
+    return () => {
+      el.removeEventListener("touchstart", stop);
+      el.removeEventListener("touchmove", stop);
+    };
   }, []);
 
   useEffect(() => {
@@ -122,26 +126,39 @@ export function PhoneDeskPad({
     send(inputForMove(pos.current));
   }
 
-  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!enabled) return;
-    event.preventDefault();
+  function endStroke(sendGesture: boolean) {
     const s = stroke.current;
-    s.pointers.delete(event.pointerId);
     if (s.pointers.size > 0) return;
-    send(
-      inputForGesture(
-        gestureFromTouch({
-          maxFingers: s.maxFingers,
-          totalMovePx: s.move,
-          durationMs: Date.now() - s.start,
-          dy: s.dy,
-        }),
-        pos.current,
-      ),
-    );
+    if (sendGesture) {
+      send(
+        inputForGesture(
+          gestureFromTouch({
+            maxFingers: s.maxFingers,
+            totalMovePx: s.move,
+            durationMs: Date.now() - s.start,
+            dy: s.dy,
+          }),
+          pos.current,
+        ),
+      );
+    }
     s.maxFingers = 0;
     s.move = 0;
     s.dy = 0;
+  }
+
+  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!enabled) return;
+    event.preventDefault();
+    stroke.current.pointers.delete(event.pointerId);
+    endStroke(true);
+  }
+
+  function onPointerCancel(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!enabled) return;
+    event.preventDefault();
+    stroke.current.pointers.delete(event.pointerId);
+    endStroke(false);
   }
 
   const cursor = padStyleFromDesk(dot, padSize);
@@ -151,12 +168,12 @@ export function PhoneDeskPad({
       <div
         ref={padRef}
         data-testid="phone-desk-pad"
-        className="absolute inset-0 touch-none"
+        className="absolute inset-0 touch-none select-none"
         style={{ pointerEvents: enabled ? "auto" : "none" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onPointerCancel={onPointerCancel}
       >
         {enabled ? (
           <span
@@ -169,47 +186,48 @@ export function PhoneDeskPad({
       {keysOpen ? (
         <div
           data-testid="phone-desk-key-row"
-          className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex flex-nowrap gap-1 border-t border-hairline bg-plate px-1.5 py-1"
+          className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex flex-col gap-1 border-t border-hairline bg-plate px-1.5 py-1"
         >
-          {EXTRA_KEYS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className="min-h-11 min-w-0 flex-1 rounded-[8px] bg-raised text-[12px] font-medium text-paper"
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => send(keyFromDomKey(item.key))}
-            >
-              {item.label}
-            </button>
-          ))}
+          <input
+            ref={keysRef}
+            data-testid="phone-desk-keys"
+            aria-label="Type on the desktop"
+            placeholder="Type on the desktop"
+            value={field}
+            autoCapitalize="off"
+            autoCorrect="off"
+            autoComplete="off"
+            enterKeyHint="done"
+            className="select-text min-h-11 w-full rounded-[8px] border border-hairline bg-raised px-2 text-[14px] text-paper"
+            onChange={(event) => {
+              const next = event.target.value;
+              for (const input of keysFromField(field, next)) send(input);
+              setField(next);
+            }}
+            onKeyDown={(event) => {
+              const mapped = keyFromDomKey(event.key);
+              if (event.key === "Enter" && mapped) {
+                event.preventDefault();
+                send(mapped);
+                setField("");
+              }
+            }}
+            onBlur={() => onDismissKeys()}
+          />
+          <div className="flex flex-nowrap gap-1">
+            {EXTRA_KEYS.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className="min-h-11 min-w-0 flex-1 rounded-[8px] bg-raised text-[12px] font-medium text-paper"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => send(keyFromDomKey(item.key))}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
-      ) : null}
-      {keysOpen ? (
-        <input
-          ref={keysRef}
-          data-testid="phone-desk-keys"
-          aria-label="Type on the desktop"
-          value={field}
-          autoCapitalize="off"
-          autoCorrect="off"
-          autoComplete="off"
-          enterKeyHint="done"
-          className="pointer-events-none absolute top-0 left-0 h-px w-px overflow-hidden opacity-0"
-          onChange={(event) => {
-            const next = event.target.value;
-            for (const input of keysFromField(field, next)) send(input);
-            setField(next);
-          }}
-          onKeyDown={(event) => {
-            const mapped = keyFromDomKey(event.key);
-            if (event.key === "Enter" && mapped) {
-              event.preventDefault();
-              send(mapped);
-              setField("");
-            }
-          }}
-          onBlur={() => onDismissKeys()}
-        />
       ) : null}
     </div>
   );

@@ -132,7 +132,7 @@ export function ComputerOverlay({
 
   return (
     <div
-      className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-[#050506]"
+      className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-[#050506] select-none"
       data-testid="computer-overlay"
       data-phone-desk={phone ? "1" : "0"}
       style={
@@ -224,7 +224,7 @@ export function ComputerOverlay({
         </div>
       </div>
       {phone && !keysOpen ? (
-        <p className="phone-desk-hint shrink-0 px-3 py-1 text-[12px] text-[#85858A]">
+        <p className="phone-desk-hint shrink-0 select-none touch-none px-3 py-1 text-[12px] text-[#85858A]">
           Turn the phone sideways to see more. Drag to move the pointer. Tap is left click; two
           fingers is right click.
         </p>
