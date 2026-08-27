@@ -98,6 +98,15 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert plugin[0].tool == "docs_read"
     asked = steps_for_prompt("please use Docs")
     assert asked[0].tool == "docs_read"
+    listed = steps_for_prompt("please e2e-list-apps")
+    assert listed[0].tool == "list_apps"
+    assert listed[0].args.get("q") == "docs"
+    attached = steps_for_prompt("please e2e-connect-docs")
+    assert attached[0].tool == "connect_app"
+    assert attached[0].args.get("slug") == "docs"
+    mail = steps_for_prompt("please e2e-connect-mail")
+    assert mail[0].tool == "connect_app"
+    assert mail[0].args.get("slug") == "mail"
 
     taught = steps_for_prompt("please e2e-install-book")
     assert taught[0].consent is not None
