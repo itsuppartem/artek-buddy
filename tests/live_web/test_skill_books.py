@@ -38,5 +38,7 @@ def test_host_page_fail_raw_id_is_human(page: Page, host_url: str) -> None:
     send_message_phone(page, "please e2e-fail-raw now")
     expect(page.get_by_test_id("run-error")).to_be_visible(timeout=20_000)
     expect(page.get_by_test_id("run-error")).to_contain_text("The turn failed.")
-    expect(page.get_by_text("run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a")).to_have_count(0)
+    expect(page.get_by_text("run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a")).to_have_count(
+        0
+    )
     expect(page.get_by_test_id("run-error")).not_to_contain_text("run failed: run-")

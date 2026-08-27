@@ -37,7 +37,9 @@ def test_scripted_fail_raw_id_is_human(page: Page, client_url: str, host_url: st
     send_message(page, "please e2e-fail-raw now", name)
     expect(page.get_by_test_id("run-error")).to_be_visible(timeout=20_000)
     expect(page.get_by_test_id("run-error")).to_contain_text("The turn failed.")
-    expect(page.get_by_text("run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a")).to_have_count(0)
+    expect(page.get_by_text("run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a")).to_have_count(
+        0
+    )
     expect(page.get_by_test_id("run-error")).not_to_contain_text("run failed: run-")
 
 
