@@ -109,12 +109,12 @@ export function ComputerOverlay({
   if (booting) {
     return (
       <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-[rgba(4,4,5,.96)]">
-        <div className="text-[19px] font-medium text-[#F1F1F2]">
+        <div className="text-[19px] font-medium text-paper">
           Booting up{" "}
           {bot ? computerLabel(computer?.mode || bot.computerMode, bot.name) : "computer"}
         </div>
-        <div className="h-[5px] w-[min(420px,70%)] overflow-hidden rounded-full bg-[#232327]">
-          <div className="h-full w-2/3 rounded-full bg-[#F1F1EF]" />
+        <div className="h-[5px] w-[min(420px,70%)] overflow-hidden rounded-full bg-raised">
+          <div className="h-full w-2/3 rounded-full bg-paper" />
         </div>
       </div>
     );
@@ -132,7 +132,7 @@ export function ComputerOverlay({
 
   return (
     <div
-      className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-[#050506] select-none"
+      className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-ink select-none"
       data-testid="computer-overlay"
       data-phone-desk={phone ? "1" : "0"}
       style={
@@ -152,14 +152,14 @@ export function ComputerOverlay({
       }}
     >
       <div
-        className={`relative z-30 flex items-center justify-between border-b border-[#171719] ${
+        className={`relative z-30 flex items-center justify-between border-b border-hairline ${
           phone ? "gap-2 px-3 py-2" : "gap-4 px-[18px] py-3.5"
         }`}
       >
         <div className="flex min-w-0 items-center gap-2">
           <BotAvatar color={bot.color} size={phone ? 24 : 28} />
           <span
-            className={`min-w-0 truncate font-medium text-[#ECECEE] ${
+            className={`min-w-0 truncate font-medium text-paper ${
               phone ? "text-[14px]" : "text-[15.5px]"
             }`}
           >
@@ -168,7 +168,7 @@ export function ComputerOverlay({
           {inControl ? (
             <span
               data-testid="computer-overlay-holder"
-              className={`shrink-0 rounded-full bg-[rgba(48,162,75,.14)] text-[#4ECB71] ${
+              className={`shrink-0 rounded-full bg-sage-bg text-sage ${
                 phone ? "px-2 py-0.5 text-[12px]" : "px-[11px] py-1 text-[13px]"
               }`}
             >
@@ -212,7 +212,7 @@ export function ComputerOverlay({
           )}
           <button
             type="button"
-            className="min-h-11 min-w-11 text-[16px] text-[#85858A] hover:text-[#ECECEE]"
+            className="min-h-11 min-w-11 text-[16px] text-mute hover:text-paper"
             aria-label="Close computer"
             onPointerDown={(event) => {
               event.preventDefault();
@@ -224,12 +224,12 @@ export function ComputerOverlay({
         </div>
       </div>
       {phone && !keysOpen ? (
-        <p className="phone-desk-hint shrink-0 select-none touch-none px-3 py-1 text-[12px] text-[#85858A]">
+        <p className="phone-desk-hint shrink-0 select-none touch-none px-3 py-1 text-[12px] text-mute">
           Turn the phone sideways to see more. Drag to move the pointer. Tap is left click; two
           fingers is right click.
         </p>
       ) : null}
-      <div className="relative min-h-0 flex-1 bg-[#0E0E10]" data-testid="computer-overlay-screen">
+      <div className="relative min-h-0 flex-1 bg-ink" data-testid="computer-overlay-screen">
         {embeddableScreenUrl(screenUrl) ? (
           <>
             <iframe
@@ -250,7 +250,7 @@ export function ComputerOverlay({
               onError={() => onScreenError("Screen preview failed to load")}
             />
             {screenError ? (
-              <div className="absolute inset-0 z-10 grid place-items-center gap-3 bg-[#0E0E10] text-sm text-[#6C6C70]">
+              <div className="absolute inset-0 z-10 grid place-items-center gap-3 bg-ink text-sm text-mute">
                 <div>{screenError}</div>
                 <Button type="button" variant="outline" size="sm" onClick={onRetry}>
                   Retry
@@ -259,7 +259,7 @@ export function ComputerOverlay({
             ) : null}
           </>
         ) : (
-          <div className="absolute inset-0 grid place-items-center gap-3 px-6 text-center text-sm text-[#6C6C70]">
+          <div className="absolute inset-0 grid place-items-center gap-3 px-6 text-center text-sm text-mute">
             <div>
               {screenError
                 ? screenError

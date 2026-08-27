@@ -81,12 +81,12 @@ export function BotSettings({
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <span className="text-[13.5px] text-[#85858A]">Bot Settings</span>
+        <span className="text-[13.5px] text-mute">Bot Settings</span>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close settings"
-          className="text-[#85858A] hover:text-[#ECECEE]"
+          className="text-mute hover:text-paper"
         >
           ✕
         </button>
@@ -97,7 +97,7 @@ export function BotSettings({
 
       {editing ? (
         <div className="mt-4 flex flex-col gap-3">
-          <label className="text-[12px] text-[#85858A]">
+          <label className="text-[12px] text-mute">
             Name
             <input
               data-testid="bot-name-input"
@@ -106,7 +106,7 @@ export function BotSettings({
               className="mt-1 w-full rounded-lg border border-hairline bg-raised px-3 py-1.5 text-[14px] text-paper"
             />
           </label>
-          <label className="text-[12px] text-[#85858A]">
+          <label className="text-[12px] text-mute">
             Title
             <input
               value={title}
@@ -115,24 +115,24 @@ export function BotSettings({
               className="mt-1 w-full rounded-lg border border-hairline bg-raised px-3 py-1.5 text-[14px] text-paper"
             />
           </label>
-          <label className="text-[12px] text-[#85858A]">
+          <label className="text-[12px] text-mute">
             Description
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What this bot is for"
               rows={2}
-              className="mt-1 w-full resize-none rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
+              className="mt-1 w-full resize-none rounded-lg border border-hairline bg-raised px-3 py-1.5 text-[14px] text-paper outline-none"
             />
           </label>
-          <label className="text-[12px] text-[#85858A]">
+          <label className="text-[12px] text-mute">
             Instructions
             <textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               placeholder="Standing orders for this bot"
               rows={4}
-              className="mt-1 w-full resize-none rounded-lg border border-[#26262A] bg-[#141416] px-3 py-1.5 text-[14px] text-[#ECECEE] outline-none"
+              className="mt-1 w-full resize-none rounded-lg border border-hairline bg-raised px-3 py-1.5 text-[14px] text-paper outline-none"
             />
           </label>
           <ComputerModePicker value={computerMode} onChange={setComputerMode} />
@@ -152,14 +152,14 @@ export function BotSettings({
         </div>
       ) : (
         <>
-          <div className="mt-6 text-[20px] font-medium text-[#ECECEE]">{bot.name}</div>
-          <div className="mt-2 text-[14px] leading-6 text-[#85858A]">
+          <div className="mt-6 text-[20px] font-medium text-paper">{bot.name}</div>
+          <div className="mt-2 text-[14px] leading-6 text-mute">
             {stripMarkdown(bot.title || bot.description || "No description")}
           </div>
-          <div className="mt-4 text-[14px] text-[#A8A8AD]">
+          <div className="mt-4 text-[14px] text-mute">
             Computer: {bot.computerMode === "dedicated" ? "Private" : "Team"}
           </div>
-          <p className="mt-1 text-[12.5px] leading-5 text-[#6C6C70]">
+          <p className="mt-1 text-[12.5px] leading-5 text-mute">
             {computerModeHint(bot.computerMode)}
           </p>
           <div className="mt-3">
@@ -170,24 +170,24 @@ export function BotSettings({
         </>
       )}
 
-      <div className="mt-6 rounded-xl border border-[#232326] bg-[#101012] p-3.5">
+      <div className="mt-6 rounded-xl border border-hairline bg-ink p-3.5">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[13.5px] text-[#C9C9CE]">Computer</span>
-          <span data-testid="computer-power-state" className="text-[12px] text-[#85858A]">
+          <span className="text-[13.5px] text-paper">Computer</span>
+          <span data-testid="computer-power-state" className="text-[12px] text-mute">
             {computerPowerLabel(computer?.state)}
           </span>
         </div>
-        <p className="mt-2 text-[12.5px] leading-5 text-[#6C6C70]">
+        <p className="mt-2 text-[12.5px] leading-5 text-mute">
           Rebooting the Pi, Stop, or Restart keeps Chromium logins and downloads on disk. Reset
           destroys the box and deletes that home.
         </p>
         {bot.computerMode === "team" ? (
-          <p className="mt-1.5 text-[12.5px] leading-5 text-[#8A7A5C]">
+          <p className="mt-1.5 text-[12.5px] leading-5 text-tan">
             Reset wipes the shared Team desktop for every Team bot.
           </p>
         ) : null}
         {computer?.busyBotName ? (
-          <p className="mt-1.5 text-[12.5px] leading-5 text-[#8A7A5C]">
+          <p className="mt-1.5 text-[12.5px] leading-5 text-tan">
             {computer.busyBotName} is using this computer.
           </p>
         ) : null}
@@ -226,15 +226,15 @@ export function BotSettings({
               data-testid="computer-reset"
               disabled={powerBusy || Boolean(computer?.busyBotName)}
               onClick={() => setResetting(true)}
-              className="border-[#FF5364] text-[#FF5364] hover:bg-[#FF5364]/10"
+              className="border-danger text-danger hover:bg-danger/10"
             >
               Reset…
             </Button>
           )}
         </div>
         {resetting ? (
-          <div className="mt-3 rounded-lg border border-[#3A2222] bg-[#1A1212] p-3">
-            <div className="text-[13px] leading-5 text-[#E8A0A0]">
+          <div className="mt-3 rounded-lg border border-danger-bg bg-danger-bg p-3">
+            <div className="text-[13px] leading-5 text-danger">
               Erase this computer’s home? Browser logins and downloads will be gone.
             </div>
             <div className="mt-3 flex gap-2">
@@ -250,7 +250,7 @@ export function BotSettings({
                     .then(() => setResetting(false))
                     .finally(() => setPowerBusy(false));
                 }}
-                className="border-[#FF5364] text-[#FF5364] hover:bg-[#FF5364]/10"
+                className="border-danger text-danger hover:bg-danger/10"
               >
                 Reset computer
               </Button>
@@ -262,7 +262,7 @@ export function BotSettings({
         ) : null}
       </div>
 
-      <label className="mt-5 flex items-start gap-2.5 text-[13.5px] leading-5 text-[#C9C9CE]">
+      <label className="mt-5 flex items-start gap-2.5 text-[13.5px] leading-5 text-paper">
         <input
           type="checkbox"
           data-testid="notify-on-finish"
@@ -284,11 +284,11 @@ export function BotSettings({
       </label>
 
       {confirming ? (
-        <div className="mt-8 rounded-xl border border-[#3A2222] bg-[#1A1212] p-3.5">
-          <div className="text-[13.5px] leading-5 text-[#E8A0A0]">
+        <div className="mt-8 rounded-xl border border-danger-bg bg-danger-bg p-3.5">
+          <div className="text-[13.5px] leading-5 text-danger">
             Delete this chat and its history?
           </div>
-          <label className="mt-2.5 flex items-center gap-2 text-[12.5px] text-[#C9C9CE]">
+          <label className="mt-2.5 flex items-center gap-2 text-[12.5px] text-paper">
             <input
               type="checkbox"
               checked={deleteMemories}
@@ -303,7 +303,7 @@ export function BotSettings({
               variant="outline"
               size="sm"
               onClick={() => onDelete(deleteMemories)}
-              className="border-[#FF5364] text-[#FF5364] hover:bg-[#FF5364]/10"
+              className="border-danger text-danger hover:bg-danger/10"
             >
               Delete
             </Button>
@@ -316,7 +316,7 @@ export function BotSettings({
         <button
           type="button"
           onClick={() => setConfirming(true)}
-          className="mt-8 text-[13.5px] text-[#E38A8A] hover:underline"
+          className="mt-8 text-[13.5px] text-danger hover:underline"
         >
           Delete chat…
         </button>

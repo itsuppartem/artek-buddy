@@ -45,25 +45,25 @@ export function AskCard({
     <div
       data-testid={consentId ? "consent-card" : "ask-card"}
       data-status={block.status ?? "pending"}
-      className="min-w-0 max-w-[74%] rounded-[20px] border border-[#242428] bg-[#141417] px-5 py-[17px]"
+      className="min-w-0 max-w-[74%] rounded-[20px] border border-hairline bg-raised px-5 py-[17px]"
     >
-      <div className="min-w-0 text-[15.5px] leading-[1.5] break-words [overflow-wrap:anywhere] text-[#ECECEE]">
+      <div className="min-w-0 text-[15.5px] leading-[1.5] break-words [overflow-wrap:anywhere] text-paper">
         <ChatMarkdown>{block.text}</ChatMarkdown>
       </div>
       {block.detail ? (
         <pre
           data-testid="ask-detail"
-          className="mt-3 max-w-full min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-xl bg-[#0E0E10] px-3.5 py-3 font-mono text-[12.5px] leading-[1.7] text-[#85858A]"
+          className="mt-3 max-w-full min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-xl bg-ink px-3.5 py-3 font-mono text-[12.5px] leading-[1.7] text-mute"
         >
           {block.detail}
         </pre>
       ) : null}
       {block.status === "answered" ? (
-        <div className="mt-3.5 text-[13.5px] font-medium text-[#4ECB71]">
+        <div className="mt-3.5 text-[13.5px] font-medium text-sage">
           {block.answer ? `Answered: ${block.answer}` : "Answered"}
         </div>
       ) : !canAnswer ? (
-        <div className="mt-3.5 text-[13.5px] font-medium text-[#85858A]">No longer active</div>
+        <div className="mt-3.5 text-[13.5px] font-medium text-mute">No longer active</div>
       ) : editing ? (
         <form
           className="mt-3.5 flex flex-col gap-2"
@@ -77,13 +77,13 @@ export function AskCard({
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
             placeholder="Type your answer"
-            className="rounded-[11px] border border-[#303035] bg-[#0E0E10] px-3.5 py-2.5 text-[14.5px] text-[#ECECEE] outline-none focus:border-[#66666D]"
+            className="rounded-[11px] border border-hairline bg-ink px-3.5 py-2.5 text-[14.5px] text-paper outline-none focus:border-tan"
           />
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={!answer.trim() || submitting}
-              className="rounded-[11px] bg-[#F1F1EF] px-[17px] py-2 text-[14.5px] font-medium text-[#17171A] disabled:opacity-50"
+              className="rounded-[11px] bg-paper px-[17px] py-2 text-[14.5px] font-medium text-ink disabled:opacity-50"
             >
               {submitting ? "Sending…" : "Send answer"}
             </button>
@@ -94,7 +94,7 @@ export function AskCard({
                 setAnswer("");
                 setEditing(false);
               }}
-              className="rounded-[11px] border border-[#26262A] px-[17px] py-2 text-[14.5px] text-[#C9C9CE] disabled:opacity-50"
+              className="rounded-[11px] border border-hairline px-[17px] py-2 text-[14.5px] text-paper disabled:opacity-50"
             >
               Cancel
             </button>
@@ -113,12 +113,12 @@ export function AskCard({
                     data-testid="ask-option"
                     disabled={submitting}
                     onClick={() => void submitAnswer(act.label, act.id)}
-                    className="group flex w-full items-center rounded-[12px] border border-[#242429] bg-[#17171B] px-3.5 py-2.5 text-left transition hover:border-[#383842] hover:bg-[#1E1E23] disabled:opacity-50"
+                    className="group flex w-full items-center rounded-[12px] border border-hairline bg-plate px-3.5 py-2.5 text-left transition hover:border-hairline hover:bg-raised disabled:opacity-50"
                   >
-                    <span className="mr-3 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#232328] text-[12px] font-semibold text-[#8E8E94] group-hover:bg-[#2A2A30] group-hover:text-[#DFDFE2]">
+                    <span className="mr-3 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-raised text-[12px] font-semibold text-mute group-hover:bg-hairline group-hover:text-paper">
                       {letter}
                     </span>
-                    <span className="min-w-0 break-words [overflow-wrap:anywhere] text-[14px] leading-[1.4] text-[#DFDFE2] group-hover:text-white">
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere] text-[14px] leading-[1.4] text-paper group-hover:text-paper">
                       {act.label}
                     </span>
                   </button>
@@ -129,7 +129,7 @@ export function AskCard({
                   type="button"
                   disabled={submitting}
                   onClick={() => setEditing(true)}
-                  className="mt-1 self-start text-[13px] text-[#85858A] hover:text-[#C9C9CE] disabled:opacity-50"
+                  className="mt-1 self-start text-[13px] text-mute hover:text-paper disabled:opacity-50"
                 >
                   Type custom reply…
                 </button>
@@ -141,7 +141,7 @@ export function AskCard({
                 type="button"
                 disabled={submitting}
                 onClick={() => void submitAnswer("approved")}
-                className="rounded-[11px] bg-[#F1F1EF] px-[17px] py-2 text-[14.5px] font-medium text-[#17171A] disabled:opacity-50"
+                className="rounded-[11px] bg-paper px-[17px] py-2 text-[14.5px] font-medium text-ink disabled:opacity-50"
               >
                 {submitting ? "Sending…" : "Send it"}
               </button>
@@ -149,7 +149,7 @@ export function AskCard({
                 type="button"
                 disabled={submitting}
                 onClick={() => setEditing(true)}
-                className="rounded-[11px] border border-[#26262A] px-[17px] py-2 text-[14.5px] text-[#C9C9CE] disabled:opacity-50"
+                className="rounded-[11px] border border-hairline px-[17px] py-2 text-[14.5px] text-paper disabled:opacity-50"
               >
                 Edit first
               </button>
@@ -157,7 +157,7 @@ export function AskCard({
           )}
         </div>
       )}
-      {fileError ? <div className="mt-2 text-[13px] text-[#E25D5D]">{fileError}</div> : null}
+      {fileError ? <div className="mt-2 text-[13px] text-danger">{fileError}</div> : null}
     </div>
   );
 }

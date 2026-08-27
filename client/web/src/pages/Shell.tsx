@@ -1502,7 +1502,7 @@ export function ShellPage() {
         <aside
           data-shell="rack"
           data-phone-show={phoneTab === "chats" ? "1" : "0"}
-          className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613]"
+          className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-ink"
         >
           <div className="app-drag flex items-center justify-between px-3 pb-2 pt-3">
             {pageSurface() === "host" ? (
@@ -2074,7 +2074,7 @@ export function ShellPage() {
         <aside
           data-shell="hatch"
           data-phone-show={phoneTab === "desk" ? "1" : "0"}
-          className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out ${
+          className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-ink transition-[width] duration-200 ease-out ${
             phoneShell
               ? "w-full max-w-none border-l-0"
               : panel && (active || panel === "create" || panel === "models" || panel === "plugins")

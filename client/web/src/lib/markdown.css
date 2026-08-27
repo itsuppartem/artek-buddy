@@ -29,7 +29,7 @@
 .ab-chat-markdown h5,
 .ab-chat-markdown h6 {
   margin: 0.9em 0 0.35em;
-  color: #f3f3f4;
+  color: var(--color-paper);
   font-weight: 650;
   line-height: 1.25;
 }
@@ -87,9 +87,9 @@
 }
 
 .ab-chat-markdown code {
-  border: 1px solid #34343a;
+  border: 1px solid var(--color-hairline);
   border-radius: 0.35em;
-  background: #101012;
+  background: var(--color-ink);
   padding: 0.08em 0.32em;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.88em;
@@ -100,9 +100,9 @@
 .ab-chat-markdown pre {
   max-width: 100%;
   overflow-x: auto;
-  border: 1px solid #2d2d32;
+  border: 1px solid var(--color-hairline);
   border-radius: 0.75em;
-  background: #0e0e10;
+  background: var(--color-ink);
   padding: 0.8em 0.9em;
 }
 
@@ -116,9 +116,9 @@
 }
 
 .ab-chat-markdown blockquote {
-  border-left: 3px solid #55555c;
+  border-left: 3px solid var(--color-mute);
   padding-left: 0.85em;
-  color: #aaaab0;
+  color: var(--color-mute);
 }
 
 .ab-chat-markdown table {
@@ -131,7 +131,7 @@
 
 .ab-chat-markdown th,
 .ab-chat-markdown td {
-  border: 1px solid #34343a;
+  border: 1px solid var(--color-hairline);
   padding: 0.4em 0.6em;
   text-align: left;
   overflow-wrap: break-word;
@@ -139,15 +139,15 @@
 }
 
 .ab-chat-markdown th {
-  background: #232327;
-  color: #f3f3f4;
+  background: var(--color-raised);
+  color: var(--color-paper);
   font-weight: 600;
 }
 
 .ab-chat-markdown hr {
   margin: 0.9em 0;
   border: 0;
-  border-top: 1px solid #34343a;
+  border-top: 1px solid var(--color-hairline);
 }
 
 .ab-chat-markdown img {
@@ -160,7 +160,7 @@
 
 .ab-chat-markdown input[type="checkbox"] {
   margin-right: 0.4em;
-  accent-color: #6ea8fe;
+  accent-color: var(--color-tan);
 }
 
 .ab-chat-markdown-streaming {

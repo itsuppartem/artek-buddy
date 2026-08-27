@@ -83,19 +83,19 @@ export function RoutinesPanel({
 
   return (
     <div>
-      <div className="mt-[30px] mb-3 text-[14px] text-[#85858A]">Routines</div>
+      <div className="mt-[30px] mb-3 text-[14px] text-mute">Routines</div>
       <div className="flex flex-col gap-2">
         {routines.map((routine) => (
           <div
             key={routine.id}
             data-testid="routine-row"
-            className="rounded-xl border border-[#202023] bg-[#0D0D0E] px-3 py-2.5"
+            className="rounded-xl border border-hairline bg-ink px-3 py-2.5"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="truncate text-[14.5px] text-[#ECECEE]">{routine.name}</div>
-                <div className="mt-0.5 font-mono text-[12px] text-[#6C6C70]">{routine.cron}</div>
-                <div className="mt-0.5 text-[12px] text-[#6C6C70]">
+                <div className="truncate text-[14.5px] text-paper">{routine.name}</div>
+                <div className="mt-0.5 font-mono text-[12px] text-mute">{routine.cron}</div>
+                <div className="mt-0.5 text-[12px] text-mute">
                   {routine.active
                     ? routine.nextRunAt
                       ? `next ${routine.nextRunAt.replace("T", " ").replace("Z", " UTC")}`
@@ -107,13 +107,13 @@ export function RoutinesPanel({
                 type="button"
                 onClick={() => void toggle(routine)}
                 className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${
-                  routine.active ? "bg-[#1D3B2A] text-[#8FCB9B]" : "bg-[#1A1A1D] text-[#85858A]"
+                  routine.active ? "bg-sage-bg text-sage" : "bg-plate text-mute"
                 }`}
               >
                 {routine.active ? "on" : "off"}
               </button>
             </div>
-            <div className="mt-2 flex gap-3 text-[12.5px] text-[#85858A]">
+            <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
               <button type="button" onClick={() => void runNow(routine)}>
                 Run
               </button>
@@ -125,25 +125,25 @@ export function RoutinesPanel({
         ))}
       </div>
       {creating ? (
-        <div className="mt-3 rounded-xl border border-[#202023] bg-[#0D0D0E] p-3">
+        <div className="mt-3 rounded-xl border border-hairline bg-ink p-3">
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Name"
-            className="h-9 w-full rounded-lg border border-[#202023] bg-[#141416] px-2.5 text-[13px] text-[#ECECEE] outline-none"
+            className="h-9 w-full rounded-lg border border-hairline bg-raised px-2.5 text-[13px] text-paper outline-none"
           />
           <input
             value={cron}
             onChange={(event) => setCron(event.target.value)}
             placeholder="0 9 * * *"
-            className="mt-2 h-9 w-full rounded-lg border border-[#202023] bg-[#141416] px-2.5 font-mono text-[13px] text-[#ECECEE] outline-none"
+            className="mt-2 h-9 w-full rounded-lg border border-hairline bg-raised px-2.5 font-mono text-[13px] text-paper outline-none"
           />
           <textarea
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             placeholder="Prompt to send"
             rows={3}
-            className="mt-2 w-full resize-none rounded-lg border border-[#202023] bg-[#141416] px-2.5 py-2 text-[13px] text-[#ECECEE] outline-none"
+            className="mt-2 w-full resize-none rounded-lg border border-hairline bg-raised px-2.5 py-2 text-[13px] text-paper outline-none"
           />
           <div className="mt-2 flex gap-2">
             <Button
@@ -165,7 +165,7 @@ export function RoutinesPanel({
           type="button"
           data-testid="new-routine"
           onClick={() => setCreating(true)}
-          className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-[#7A7A80]"
+          className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-mute"
         >
           + New routine
         </button>
