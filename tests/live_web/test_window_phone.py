@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-from tests.live.helpers import unique_bot
+from tests.live.helpers import arm_page, fulfill_json, unique_bot
 from tests.live_web.helpers import (
     create_named_bot_phone,
     expect_bot_in_chats,
@@ -11,6 +11,21 @@ from tests.live_web.helpers import (
 )
 
 pytestmark = pytest.mark.live
+
+
+def test_host_page_pairing_copy_has_no_token_or_module(page: Page, host_url: str) -> None:
+    arm_page(page)
+    page.goto(host_url, timeout=20_000, wait_until="domcontentloaded")
+    form = page.get_by_test_id("pairing")
+    expect(form).to_be_visible(timeout=20_000)
+    expect(form.get_by_text("Pair this phone")).to_be_visible()
+    expect(form).to_contain_text("On the Pi, create a pairing code. Type it here, then Pair.")
+    expect(form).not_to_contain_text("token")
+    expect(form).not_to_contain_text("mint")
+    expect(form).not_to_contain_text("python -m")
+    expect(page.get_by_test_id("pairing-host-command")).to_have_count(0)
+    expect(page.get_by_placeholder("https://host.example")).to_have_count(0)
+    expect(page.get_by_role("button", name="Pair")).to_be_disabled()
 
 
 def test_host_page_pairs_and_stacks_on_iphone_11_pro(page: Page, host_url: str) -> None:
@@ -75,3 +90,17 @@ def test_phone_models_plugins_close_returns_to_chat(page: Page, host_url: str) -
     expect(page.get_by_test_id("thread-header")).to_contain_text(name)
     expect(page.get_by_test_id("plugins-pane")).to_have_count(0)
     expect(page.get_by_test_id("thread-pane")).to_be_visible()
+
+
+def test_host_page_auth_error_says_pair_this_phone_again(page: Page, host_url: str) -> None:
+    pair_host_page(page, host_url)
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    fulfill_json(page, "**/v1/**", 401, '{"detail":"invalid token"}')
+    page.reload()
+    card = page.get_by_test_id("auth-error")
+    expect(card).to_be_visible(timeout=20_000)
+    expect(card.get_by_role("button", name="Pair this computer again")).to_have_count(0)
+    card.get_by_role("button", name="Pair this phone again").click()
+    expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)
+    expect(page.get_by_text("Pair this phone")).to_be_visible()
+    expect(page.get_by_placeholder("https://host.example")).to_have_count(0)
