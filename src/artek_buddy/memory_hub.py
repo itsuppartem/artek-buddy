@@ -40,6 +40,7 @@ SHELVES = ("owner", "work", "charter")
 PROFILE_SLOTS = ("name", "city", "tz", "tone", "format", "language")
 MAX_RECALL = 8
 _TOKEN = re.compile(r"[a-zа-яё0-9]{2,}", re.IGNORECASE)
+_PIECE = re.compile(r"[a-zа-яё]+|\d+", re.IGNORECASE)
 _INBOX = "The user sent these messages"
 _FORGET = re.compile(r"(?i)\b(forget|забудь|не помни|stop remembering)\b")
 _ONE_OFF = re.compile(r"(?i)\b(open|открой|вкладк|tab|gmail|url|http|сейчас|this time|once)\b")
@@ -307,15 +308,47 @@ def forget_matches(needle: set[str], entry_text: str) -> bool:
 
 
 def similar_memory(left: str, right: str) -> bool:
-    """True when two notes are the same fact worded differently."""
-    a = query_tokens(left)
-    b = query_tokens(right)
+    """True when two notes are the same fact worded differently.
+
+    Distinct objects in the same template (site-0 vs site-4, Gmail vs Outlook)
+    stay different. Short function words and stems (don't / do not, разрешения /
+    разрешение) do not count as a new fact.
+    """
+    a = {
+        w
+        for w in (m.group(0).lower() for m in _PIECE.finditer(left or ""))
+        if w not in _STOPWORDS and (w.isdigit() or len(w) >= 2)
+    }
+    b = {
+        w
+        for w in (m.group(0).lower() for m in _PIECE.finditer(right or ""))
+        if w not in _STOPWORDS and (w.isdigit() or len(w) >= 2)
+    }
     if not a or not b:
         return False
     overlap = a & b
     if len(overlap) < 2:
         return False
-    return len(overlap) / len(a | b) >= 0.6
+    if len(overlap) / len(a | b) < 0.6:
+        return False
+    leftover = a ^ b
+    for word in leftover:
+        if word.isdigit():
+            return False
+        if len(word) < 4:
+            continue
+        others = (a | b) - {word}
+        if not any(_same_stem(word, other) for other in others):
+            return False
+    return True
+
+
+def _same_stem(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    if min(len(left), len(right)) < 4:
+        return False
+    return left.startswith(right[:4]) or right.startswith(left[:4])
 
 
 def rank_entries(entries: list[MemoryEntry], query: str) -> list[MemoryEntry]:

@@ -275,7 +275,9 @@ def test_wrap_turn_prompt_tells_lead_to_revise_book_sections() -> None:
 
 def test_similar_memory_paraphrase_not_a_different_ban() -> None:
     assert similar_memory("Do not ask permission for read", "Don't ask for read permission")
+    assert similar_memory("не спрашивай разрешения на read", "не спрашивай разрешение на read")
     assert not similar_memory("Never open Gmail", "Never open Outlook")
+    assert not similar_memory("Never open site-0.example", "Never open site-4.example")
 
 
 def test_one_run_does_not_store_paraphrased_read_permission_twice() -> None:
