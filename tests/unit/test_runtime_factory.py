@@ -112,6 +112,12 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert twice[1].tool == "remember"
     assert twice[0].args.get("content") != twice[1].args.get("content")
 
+    city = steps_for_prompt("please e2e-identity-city NoviSadTok")
+    assert city[0].tool == "remember"
+    assert city[0].args.get("content") == "Lives in NoviSadTok"
+    assert city[0].args.get("kind") == "place"
+    assert city[0].args.get("section") == "identity"
+
     taught = steps_for_prompt("please e2e-install-book")
     assert taught[0].consent is not None
     assert taught[1].tool == "install_book"

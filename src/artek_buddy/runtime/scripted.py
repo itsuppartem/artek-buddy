@@ -174,6 +174,18 @@ def _parse_ask_bot(user: str) -> tuple[str, str] | None:
     return name, question
 
 
+def _parse_identity_city(user: str) -> str | None:
+    key = "e2e-identity-city "
+    idx = user.lower().find(key)
+    if idx < 0:
+        return None
+    rest = user[idx + len(key) :].strip()
+    if not rest:
+        return None
+    token = rest.split()[0].strip(".,;:!?")
+    return token or None
+
+
 def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     user = _user_tail(prompt or "")
     hay = user.lower()
@@ -248,6 +260,17 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             scripted_tool("send_message", text=E2E_CLOSE_STATUS),
             scripted_tool("close_app", application="chromium"),
             scripted_finish("browser closed"),
+        ]
+    city = _parse_identity_city(user)
+    if city is not None:
+        return [
+            scripted_tool(
+                "remember",
+                content=f"Lives in {city}",
+                kind="place",
+                section="identity",
+            ),
+            scripted_finish("I'll remember that."),
         ]
     if "e2e-remember-twice" in hay:
         return [

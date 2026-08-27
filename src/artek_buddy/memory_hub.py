@@ -15,11 +15,12 @@ from artek_buddy.memory_book import (
     MAX_WORK,
     charter_book_entries,
     clean_rewrite,
+    facts_contradict,
     format_recalled_memory,
     infer_book_shelf,
     infer_section,
-    merge_section,
     owner_book_entries,
+    scripted_rewrite,
     section_line,
 )
 
@@ -474,18 +475,30 @@ class MemoryHub:
                     self._mark_capture(run_id, section, body)
                     return None
         for live in self.store.list_live_memory_entries(bot_id=bot_id):
-            if similar_memory(live.text, body):
-                self._mark_capture(run_id, section, body)
-                return None
+            if not similar_memory(live.text, body):
+                continue
+            if facts_contradict(live.text, body):
+                merged = scripted_rewrite(section, live.text, "", body)
+                if merged != live.text:
+                    updated = self._revise(live, merged, run_id, thread_id)
+                    self._mark_capture(run_id, section, body)
+                    if updated is not None:
+                        try:
+                            self.gateway.capture(updated, self.user_id, bot_id)
+                        except Exception:
+                            log.exception("memory gateway capture failed")
+                    return updated
+            self._mark_capture(run_id, section, body)
+            return None
         if self.store.find_live_memory_entry(body, scope=scope, bot_id=bot_id):
             self._mark_capture(run_id, section, body)
             return None
         previous = self.store.find_live_memory_entry_by_slot(section, scope=scope, bot_id=bot_id)
         if previous is not None:
-            if similar_memory(previous.text, body):
+            if similar_memory(previous.text, body) and not facts_contradict(previous.text, body):
                 self._mark_capture(run_id, section, body)
                 return None
-            merged = merge_section(previous.text, body)
+            merged = scripted_rewrite(section, previous.text, "", body)
             if merged == previous.text:
                 self._mark_capture(run_id, section, body)
                 return None

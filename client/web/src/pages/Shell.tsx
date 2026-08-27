@@ -38,6 +38,7 @@ import {
 } from "../lib/composer-undo";
 import { fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/consent";
 import { stripMarkdown } from "../lib/markdown";
+import { dispatchMemoryChanged } from "../lib/memory";
 import { NEEDS_MODEL_TEXT } from "../lib/models";
 import {
   captionForMessage,
@@ -444,6 +445,7 @@ export function ShellPage() {
   function considerEvent(incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) {
     const granted = isAutoOwnerJob(incoming);
     if (granted) startOwnerFulfill(granted.consentId);
+    dispatchMemoryChanged(incoming.type);
     if (!opts?.live && isHistoricalEvent(incoming, shellOpenedAt.current)) return;
     const next = attentionFromEvent(incoming, bot.name);
     const answered = answeredAskBody(incoming);

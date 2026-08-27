@@ -1,20 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
+import { MEMORY_CHANGED_EVENT, memoryChapter, memoryShelf, memoryTitle } from "../../lib/memory";
 import type { MemoryDocument } from "../../types";
 import { Button } from "../../ui/button";
-
-export function memoryShelf(path: string): string {
-  return path.match(/^entries\/(owner|work|charter)\//)?.[1] ?? "owner";
-}
-
-export function memoryKind(path: string): string | null {
-  return path.match(/^entries\/(?:(?:owner|work|charter)\/)?([a-z]+)-/)?.[1] ?? null;
-}
-
-export function memoryTitle(document: MemoryDocument): string {
-  const line = document.content.trim().split("\n")[0];
-  return line || memoryKind(document.path) || document.path;
-}
 
 export function MemoryPanel({
   botId,
@@ -51,11 +39,11 @@ export function MemoryPanel({
     void reload();
     const poll = window.setInterval(() => void reload(), 10000);
     const onChanged = () => void reload();
-    window.addEventListener("artek-memory-changed", onChanged);
+    window.addEventListener(MEMORY_CHANGED_EVENT, onChanged);
     return () => {
       cancelled = true;
       window.clearInterval(poll);
-      window.removeEventListener("artek-memory-changed", onChanged);
+      window.removeEventListener(MEMORY_CHANGED_EVENT, onChanged);
     };
   }, [botId, onLater]);
 
@@ -140,6 +128,7 @@ export function MemoryPanel({
           <div
             key={document.id}
             data-testid="memory-doc"
+            data-chapter={memoryChapter(document.path) ?? undefined}
             className="rounded-xl border border-[#202023] bg-[#0D0D0E] px-3 py-2.5"
           >
             <div className="flex items-start justify-between gap-2">
@@ -150,7 +139,7 @@ export function MemoryPanel({
                 <div className="mt-0.5 text-[12px] text-[#6C6C70]">
                   {memoryShelf(document.path)}
                   {` · ${document.scope === "user" ? "shared" : "this bot"}`}
-                  {memoryKind(document.path) ? ` · ${memoryKind(document.path)}` : ""}
+                  {memoryChapter(document.path) ? ` · ${memoryChapter(document.path)}` : ""}
                   {document.updatedAt ? ` · ${document.updatedAt.slice(0, 10)}` : ""}
                 </div>
               </div>

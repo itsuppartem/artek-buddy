@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from tests.api.helpers import create_bot, message_metas, message_texts, wait_run, wait_thread_has
 
 
@@ -235,3 +237,37 @@ def test_remember_twice_writes_one_meta_and_one_row(client, auth_header) -> None
         and "read" in str(item.get("content") or "").lower()
     ]
     assert len(hits) == 1
+
+
+def test_scripted_identity_city_lists_and_replaces(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "IdCity")["id"]
+    stem = uuid.uuid4().hex[:8]
+    first, second = f"Osijek{stem}", f"Split{stem}"
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": f"please e2e-identity-city {first}"},
+    )
+    assert sent.status_code == 200
+    assert wait_run(client, auth_header, bot_id, sent.json()["run_id"])["run"]["status"] == (
+        "completed"
+    )
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    blob = "\n".join(str(item.get("content") or "") for item in listed.json()["documents"])
+    assert first in blob
+    assert second not in blob
+    later = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": f"please e2e-identity-city {second}"},
+    )
+    assert later.status_code == 200
+    assert wait_run(client, auth_header, bot_id, later.json()["run_id"])["run"]["status"] == (
+        "completed"
+    )
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    blob = "\n".join(str(item.get("content") or "") for item in listed.json()["documents"])
+    assert second in blob
+    assert first not in blob
