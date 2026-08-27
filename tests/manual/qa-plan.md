@@ -12,7 +12,7 @@ This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packag
 | --- | --- |
 | `main` | Release **0.10.27**. |
 | `develop` | Daily since then: window look, Models / keys, memory book, bot-to-bot, plugins, skill from the web, phone page. `VERSION` is still **0.10.27** until a bump lands on `main`. |
-| Pad / keyboard / Cyrillic | **Not** in `develop`. Lives in PR #219. The Pi host for this pass is that tree. |
+| Pad / keyboard / Cyrillic | In `develop` (phone overlay). Drag/tap must keep control until Release; the Type on the desktop field is tappable. |
 | GitHub Release `.deb` | **Old.** Do not use it for this pass. |
 | Linux | Window **built from this tree** (`client/build-deb.sh`, optionally `ARTEK_BAKE_URL=1` for a local URL). Wide shell, about 1280×720, three columns. |
 | Phone | Home Screen on the **same host URL**. After a UI change, fully kill the icon and open it again. Viewport is iPhone 11 Pro: **375×812** CSS pixels (notch + home indicator). |
@@ -190,7 +190,7 @@ On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; t
 | After Allow on «открой https://example.com», the **guest** shows Example Domain (heading / title), not a black tile and not only a chat card | [ ] | [ ] |
 | You can **read** the address bar or tab title. It is example.com (or the site you allowed), not a leftover Google / Files window | [ ] | [ ] |
 | Take control: pointer moves in the guest. A click lands where you aimed (address bar, a link, a button) | [ ] | [ ] |
-| Phone: drag on the pad moves the beige dot across the 1280×800 picture; it does not jump under the finger | — | [ ] |
+| Phone: drag on the pad moves the beige dot across the 1280×800 picture; it does not jump under the finger. After a drag or tap the overlay still shows **Release**, not Take control | — | [ ] |
 | Type `hello` into a guest field (address bar or input). The letters appear **in the guest**, not only in our Message box | [ ] | [ ] |
 | Phone Keyboard: Esc / Tab / Enter / Bksp work in the guest. Russian layout types Cyrillic into that same field | — | [ ] |
 | Scroll (wheel on Deb, two-finger on Phone) moves the guest page | [ ] | [ ] |
@@ -258,17 +258,19 @@ Home Screen, phone width (375×812). Also confirm the wide Deb window does **not
 
 ---
 
-## 12. Pad and Cyrillic (on the Pi now, not in `develop`)
+## 12. Pad and Cyrillic
 
 Fully kill the Home Screen icon and open it again. Desktop → desk overlay.
 
-This section is **Phone on the PR #219 host**. Deb uses a real mouse and keyboard; skip pad gestures there.
+Deb uses a real mouse and keyboard; skip pad gestures there.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Finger is a trackpad: drag moves the cursor, it does not jump under the finger. Tap = left click **at the dot**. Two fingers = right click or scroll | — | [ ] |
 | Beige dot sits on the 1280×800 picture, not on the black letterbox | — | [ ] |
-| Keyboard → system keyboard + row Esc / Tab / Enter / Bksp / Del / arrows. No on-screen input field | — | [ ] |
+| After a pad drag or tap, overlay still shows **Release** / You have control, not Preview · view only / Take control | — | [ ] |
+| Drag does not select host copy (the “Turn the phone sideways…” line stays unhighlighted) | — | [ ] |
+| Keyboard → **Type on the desktop** field accepts a tap, then the system keyboard + row Esc / Tab / Enter / Bksp / Del / arrows | — | [ ] |
 | iOS Done check **dismisses** the keyboard. Tap on the desk does not | — | [ ] |
 | Russian layout types into the guest field (address bar / input). Latin still works | — | [ ] |
 | Overlay ✕ works on the first tap → Chat | — | [ ] |

@@ -29,13 +29,17 @@ def open_phone_tab(page: Page, tab: str) -> None:
     page.get_by_test_id(f"phone-tab-{tab}").click()
 
 
-def create_named_bot_phone(page: Page, name: str) -> None:
+def create_named_bot_phone(page: Page, name: str, *, private: bool | None = None) -> None:
     open_phone_tab(page, "chats")
     expect(page.get_by_role("button", name="New bot")).to_be_visible(timeout=8_000)
     page.get_by_role("button", name="New bot").click()
     box = page.get_by_placeholder("Name this bot")
     expect(box).to_be_visible(timeout=10_000)
     box.fill(name)
+    if private is True:
+        page.get_by_test_id("computer-mode-private").click()
+    elif private is False:
+        page.get_by_test_id("computer-mode-team").click()
     page.get_by_role("button", name="Create", exact=True).click()
     expect(page.get_by_placeholder("Name this bot")).to_have_count(0, timeout=20_000)
     expect(page.get_by_test_id("thread-header")).to_contain_text(name, timeout=8_000)
