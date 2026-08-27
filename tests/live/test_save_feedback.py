@@ -27,7 +27,7 @@ def test_settings_save_shows_saved(page: Page, client_url: str, host_url: str) -
     page.reload(wait_until="domcontentloaded")
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     open_settings(page, renamed)
-    expect(page.get_by_text(renamed, exact=True)).to_be_visible()
+    expect(page.get_by_role("complementary").get_by_text(renamed, exact=True)).to_be_visible()
 
 
 def test_memory_save_shows_saved(page: Page, client_url: str, host_url: str) -> None:
