@@ -118,7 +118,11 @@ export function MessageView({
               >
                 {block.text}
               </div>
-              {offlineCaption ? (
+              {queued ? (
+                <div data-testid="queued-pending" className="max-w-[70%] text-[12.5px] text-mute">
+                  Waiting for the host
+                </div>
+              ) : offlineCaption ? (
                 <div
                   data-testid="offline-sent-caption"
                   className="max-w-[70%] text-[12.5px] text-mute"

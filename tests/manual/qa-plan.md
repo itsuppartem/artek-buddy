@@ -228,7 +228,7 @@ On **Deb**: stop the `artek-buddy` container for about 30 seconds (or pull the n
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Reconnect banner, not only a red card | [ ] | [ ] |
-| Type and Send → bubble stays; after the host returns it keeps **Sent while offline ·** plus the time | [ ] | [ ] |
+| Type and Send → pending mark on the bubble (not a delivered line). After the host returns it keeps **Sent while offline ·** plus the **local** time (with zone), not a bare UTC clock | [ ] | [ ] |
 | The next ordinary Send has no that caption | [ ] | [ ] |
 | A pairing error (need to pair again) does **not** enter the queue | [ ] | [ ] |
 
@@ -566,6 +566,7 @@ If time is short, in this order:
 12. **§14 Inbox Search** no-match empty copy + Clear
 13. **§15 Composer** Ctrl+A selects, does not Send
 14. **§8 / §15 Dismiss** on needs-you keeps the current chat
+15. **§9 Queue** pending mark, then local Sent while offline
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 
