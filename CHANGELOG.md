@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Plugins Search apps filters the catalog as you type. Enter is not required.
 - Phone file-card Download uses the browser, not a Linux `/local/save-artifact` path.
 - A skill chip above Message has ×, and Send consumes it so it does not stick next to screenshot chips.
 - Clicking a skill book card shows a dismissed chip again. There is no need to re-install the skill.
