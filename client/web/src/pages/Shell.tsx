@@ -86,6 +86,7 @@ import {
 import {
   filterBots,
   inboxEmptyState,
+  inboxSearchEmpty,
   type SidebarView,
   sortInboxBots,
   splitQueryMatch,
@@ -1605,8 +1606,19 @@ export function ShellPage() {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search"
                 aria-label="Search inbox"
-                className="w-full bg-transparent"
+                className="w-full min-w-0 bg-transparent"
               />
+              {query.trim() ? (
+                <button
+                  type="button"
+                  data-testid="inbox-search-clear"
+                  aria-label="Clear Search"
+                  onClick={() => setQuery("")}
+                  className="shrink-0 text-[13px] text-mute hover:text-paper"
+                >
+                  ×
+                </button>
+              ) : null}
             </label>
             <button
               type="button"
@@ -1655,6 +1667,14 @@ export function ShellPage() {
                       </button>
                     </div>
                   ))}
+                  {inboxSearchEmpty(query, filteredArchived.length) ? (
+                    <p
+                      data-testid="inbox-search-empty"
+                      className="px-2.5 py-3 text-[13px] leading-5 text-mute"
+                    >
+                      No chats match. Clear Search or try another name.
+                    </p>
+                  ) : null}
                 </div>
               </>
             ) : (
@@ -1721,6 +1741,14 @@ export function ShellPage() {
                     </div>
                   </button>
                 ))}
+                {inboxSearchEmpty(query, filtered.length) ? (
+                  <p
+                    data-testid="inbox-search-empty"
+                    className="px-2.5 py-3 text-[13px] leading-5 text-mute"
+                  >
+                    No chats match. Clear Search or try another name.
+                  </p>
+                ) : null}
                 {archivedBots.length > 0 ? (
                   <button
                     type="button"

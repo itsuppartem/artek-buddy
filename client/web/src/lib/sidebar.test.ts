@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { filterBots, inboxEmptyState, sortInboxBots, splitQueryMatch } from "./sidebar";
+import {
+  filterBots,
+  inboxEmptyState,
+  inboxSearchEmpty,
+  sortInboxBots,
+  splitQueryMatch,
+} from "./sidebar";
 
 describe("inboxEmptyState", () => {
   it("is create when both lists are empty", () => {
@@ -23,6 +29,16 @@ describe("sortInboxBots", () => {
       { id: "z", pinned: true, createdAt: "2026-01-03" },
     ];
     expect(sortInboxBots(bots).map((bot) => bot.id)).toEqual(["z", "a", "b"]);
+  });
+});
+
+describe("inboxSearchEmpty", () => {
+  it("is true only when a query is set and nothing matched", () => {
+    expect(inboxSearchEmpty("zzz-no-match", 0)).toBe(true);
+    expect(inboxSearchEmpty("  reszzqq  ", 0)).toBe(true);
+    expect(inboxSearchEmpty("Alpha", 1)).toBe(false);
+    expect(inboxSearchEmpty("", 0)).toBe(false);
+    expect(inboxSearchEmpty("   ", 0)).toBe(false);
   });
 });
 
