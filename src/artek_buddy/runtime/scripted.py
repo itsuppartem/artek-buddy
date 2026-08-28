@@ -31,6 +31,7 @@ E2E_DRAFT_LEAK = "grade's current weather from a public API"
 E2E_DRAFT_ANSWER = "Belgrade is 22°C and clear."
 E2E_CLOSE_STATUS = "Closing Chromium"
 E2E_SLOW_ANSWER = "slow done"
+E2E_LATE_COMPLETE = "pong"
 E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C"
 E2E_ASK_QUESTION = "Which city?"
 E2E_ASK_FREE_QUESTION = "What should I call you?"
@@ -74,6 +75,7 @@ class ScriptedStep:
     error: str | None = None
     raise_error: str | None = None
     delay_s: float | None = None
+    ignore_cancel: bool = False
     write_home: tuple[str, bytes] | None = None
     owner_auto_path: str | None = None
 
@@ -113,8 +115,8 @@ def scripted_tool(tool: str, **args: Any) -> ScriptedStep:
     return ScriptedStep(tool=tool, args=dict(args))
 
 
-def scripted_delay(seconds: float) -> ScriptedStep:
-    return ScriptedStep(delay_s=seconds)
+def scripted_delay(seconds: float, *, ignore_cancel: bool = False) -> ScriptedStep:
+    return ScriptedStep(delay_s=seconds, ignore_cancel=ignore_cancel)
 
 
 def scripted_finish(
@@ -598,6 +600,12 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(""),
         ]
+    if "e2e-late-complete" in hay:
+        return [
+            scripted_delay(2.5, ignore_cancel=True),
+            scripted_text(E2E_LATE_COMPLETE),
+            scripted_finish(E2E_LATE_COMPLETE),
+        ]
     if "e2e-slow" in hay:
         return [scripted_delay(2.5), scripted_finish(E2E_SLOW_ANSWER)]
     if "e2e-markdown-preview" in hay:
@@ -756,7 +764,11 @@ class ScriptedRuntime(RuntimeBase):
         run_id = new_id("run")
         for step in steps:
             if step.delay_s:
-                await asyncio.sleep(step.delay_s)
+                try:
+                    await asyncio.sleep(step.delay_s)
+                except asyncio.CancelledError:
+                    if not step.ignore_cancel:
+                        raise
                 continue
             if step.write_home:
                 name, data = step.write_home

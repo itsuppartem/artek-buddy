@@ -451,6 +451,22 @@ def test_stop_does_not_append_completed_essay(page: Page, client_url: str, host_
     expect(bot_row(page, name)).not_to_contain_text("slow done")
 
 
+def test_stop_late_complete_shows_stopped_and_drops_model_text(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "LateStop")
+    box = composer(page)
+    box.fill("please e2e-late-complete")
+    expect(box).to_have_value("please e2e-late-complete")
+    box.press("Enter")
+    expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("thread-stop").click()
+    expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
+    page.wait_for_timeout(3_000)
+    expect(page.get_by_test_id("thread").get_by_text("pong")).to_have_count(0)
+    expect(bot_row(page, name)).not_to_contain_text("pong")
+
+
 def test_streaming_turn_keeps_last_card_in_view(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Pin")
     send_message(page, "please e2e-load-earlier", name)

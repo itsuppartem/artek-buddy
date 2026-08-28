@@ -133,6 +133,31 @@ def test_stop_does_not_complete_cancelled_body(client, auth_header) -> None:
     assert E2E_SLOW_ANSWER not in message_texts(later.json())
 
 
+def test_stop_late_complete_shows_stopped_and_drops_model_text(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_LATE_COMPLETE
+
+    bot_id = create_bot(client, auth_header, "StopLate")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-late-complete"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    stopped = client.post(f"/v1/threads/{bot_id}/stop", headers=auth_header)
+    assert stopped.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, run_id)
+    assert snap["run"]["status"] == "cancelled"
+    assert snap["run"]["error"] == "Stopped."
+    assert E2E_LATE_COMPLETE not in message_texts(snap)
+    time.sleep(3)
+    later = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert later.status_code == 200
+    assert later.json()["run"]["status"] == "cancelled"
+    assert later.json()["run"]["error"] == "Stopped."
+    assert E2E_LATE_COMPLETE not in message_texts(later.json())
+
+
 def test_e2e_takeover_parks_waiting_takeover(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "TakeoverPark")["id"]
     parked = client.post(
