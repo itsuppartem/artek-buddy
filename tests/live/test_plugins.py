@@ -173,7 +173,9 @@ def test_plugin_chip_remove_does_not_send(page: Page, client_url: str, host_url:
     page.get_by_role("button", name="Close Plugins").click()
 
 
-def test_plugin_connect_does_not_send_please_use(page: Page, client_url: str, host_url: str) -> None:
+def test_plugin_connect_does_not_send_please_use(
+    page: Page, client_url: str, host_url: str
+) -> None:
     name = unique_bot("PlugNoSend")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
