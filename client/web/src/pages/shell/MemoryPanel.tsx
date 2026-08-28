@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../../api";
-import { MEMORY_CHANGED_EVENT, memoryChapter, memoryShelf, memoryTitle } from "../../lib/memory";
+import {
+  defaultMemoryScope,
+  MEMORY_CHANGED_EVENT,
+  memoryChapter,
+  memoryDeleteName,
+  memoryShelf,
+  memoryTitle,
+} from "../../lib/memory";
 import { useSaveAck } from "../../lib/save-ack";
 import type { MemoryDocument } from "../../types";
 import { Button } from "../../ui/button";
@@ -15,12 +22,14 @@ export function MemoryPanel({
   const [documents, setDocuments] = useState<MemoryDocument[]>([]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [scope, setScope] = useState<"bot" | "user">("user");
+  const [scope, setScope] = useState<"bot" | "user">(defaultMemoryScope);
   const [content, setContent] = useState("");
   const [draft, setDraft] = useState("");
   const createAck = useSaveAck();
   const editAck = useSaveAck();
   const factsRef = useRef<HTMLTextAreaElement>(null);
+  const createdCardRef = useRef<HTMLDivElement>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
   async function refresh() {
     setDocuments(await api.memory.list(botId));
@@ -49,22 +58,29 @@ export function MemoryPanel({
     };
   }, [botId, onLater]);
 
+  useLayoutEffect(() => {
+    if (!createdId) return;
+    createdCardRef.current?.scrollIntoView({ block: "nearest" });
+  }, [createdId, documents]);
+
   async function create() {
     const text = (factsRef.current?.value ?? content).trim();
     if (!text) return;
     await createAck.run(
       async () => {
-        await api.memory.create({
+        const created = await api.memory.create({
           scope,
           botId: scope === "bot" ? botId : undefined,
           path: `entries/owner/note-${Date.now()}.md`,
           content: text,
         });
+        setCreatedId(created.id);
         await refresh();
       },
       () => {
         setContent("");
         setCreating(false);
+        setScope(defaultMemoryScope());
       },
     );
   }
@@ -125,6 +141,7 @@ export function MemoryPanel({
         {documents.map((document) => (
           <div
             key={document.id}
+            ref={document.id === createdId ? createdCardRef : undefined}
             data-testid="memory-doc"
             data-chapter={memoryChapter(document.path) ?? undefined}
             className="rounded-xl border border-hairline bg-ink px-3 py-2.5"
@@ -192,8 +209,13 @@ export function MemoryPanel({
                   >
                     Edit
                   </button>
-                  <button type="button" onClick={() => void remove(document)}>
-                    Outdated
+                  <button
+                    type="button"
+                    data-testid="memory-remove"
+                    aria-label={memoryDeleteName()}
+                    onClick={() => void remove(document)}
+                  >
+                    {memoryDeleteName()}
                   </button>
                 </div>
               </div>
@@ -203,18 +225,30 @@ export function MemoryPanel({
       </div>
       {creating ? (
         <div className="mt-3 rounded-xl border border-hairline bg-ink p-3">
-          <div className="mb-2 flex gap-2 text-[12.5px] text-mute">
+          <div
+            className="mb-2 inline-flex rounded-[10px] border border-hairline p-0.5"
+            role="group"
+            aria-label="Memory scope"
+          >
             <button
               type="button"
+              data-testid="memory-scope-bot"
+              aria-pressed={scope === "bot"}
               onClick={() => setScope("bot")}
-              className={scope === "bot" ? "text-paper" : ""}
+              className={`rounded-[8px] px-2.5 py-1 text-[12.5px] ${
+                scope === "bot" ? "bg-tan font-medium text-ink" : "text-mute"
+              }`}
             >
               This bot
             </button>
             <button
               type="button"
+              data-testid="memory-scope-shared"
+              aria-pressed={scope === "user"}
               onClick={() => setScope("user")}
-              className={scope === "user" ? "text-paper" : ""}
+              className={`rounded-[8px] px-2.5 py-1 text-[12.5px] ${
+                scope === "user" ? "bg-tan font-medium text-ink" : "text-mute"
+              }`}
             >
               Shared
             </button>
@@ -263,6 +297,9 @@ export function MemoryPanel({
           data-testid="new-memory"
           onClick={() => {
             createAck.cancel();
+            editAck.cancel();
+            setEditingId(null);
+            setScope(defaultMemoryScope());
             setCreating(true);
           }}
           className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-mute"
