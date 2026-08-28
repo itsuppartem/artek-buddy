@@ -317,7 +317,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Enter sends. Shift+Enter inserts a newline (Deb). Phone return key follows the on-screen keyboard | [ ] | [ ] |
+| Enter sends. Shift+Enter inserts a newline (Deb) and that break stays in the sent bubble. Phone return key follows the on-screen keyboard | [ ] | [ ] |
 | Message placeholder stays readable: full name, or `Message …` with an ellipsis — not a clipped mid-word (`Message Resea`) | [ ] | [ ] |
 | Deb: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo) | [ ] | — |
 | Load earlier pulls older messages without jumping off the latest if you were pinned to the bottom | [ ] | [ ] |
