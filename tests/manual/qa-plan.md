@@ -164,7 +164,7 @@ Computer pane on **Demo** (Private) or Team.
 | **Offline • Click to start** → Booting → Running **view-only** (Preview · view only / fake: Running tile). Not the fullscreen control overlay. **Take control** is a separate grant. Settings still does not boot | [ ] | [ ] |
 | Preview is a live screen, caption **Preview · view only**. Not black text «Desktop is running». Click on the preview does **not** take control | [ ] | [ ] |
 | fluxbox panel: window title, close, menu. Not a bare X | [ ] | [ ] |
-| **Take control** → mouse / keys go to the guest. Caps Lock arrives. **Release** → the same turn continues; typing dots and Stop work again | [ ] | [ ] |
+| **Take control** → mouse / keys go to the guest. Caps Lock raises case (`abc` → `ABC`). **Release** → the same turn continues; typing dots and Stop work again | [ ] | [ ] |
 | Take control from Sleeping (or Open screen before pixels): overlay says **Waking the desktop…** until the guest is on the glass, not a black void | [ ] | [ ] |
 | No pointer for **2 minutes** on the overlay → host Releases itself (holder is bot again) | [ ] | [ ] |
 | In chat, **without** pressing start: «Открой https://example.com» (or `HTTPS://…`). Card Allow once / Always / Deny | [ ] | [ ] |

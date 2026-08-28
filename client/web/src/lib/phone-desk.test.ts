@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  capsLockDeskInput,
   containBox,
   createDeskInputGate,
   DESK_SIZE,
@@ -99,6 +100,16 @@ describe("phone desk keys", () => {
       "ArrowLeft",
       "ArrowRight",
     ]);
+  });
+
+  it("does not forward Caps Lock when the control frame has the keyboard", () => {
+    expect(capsLockDeskInput("CapsLock", true, true)).toBeNull();
+    expect(capsLockDeskInput("CapsLock", true, false)).toEqual({
+      kind: "key",
+      payload: { key: "Caps_Lock" },
+    });
+    expect(capsLockDeskInput("CapsLock", false, false)).toBeNull();
+    expect(capsLockDeskInput("a", true, false)).toBeNull();
   });
 });
 
