@@ -304,7 +304,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Search filters inbox (and Archived) by name / preview. A name or preview hit is marked. No matches: empty copy plus Clear Search; clear restores the list | [ ] | [ ] |
-| Click a row opens that chat. Selected row, header, composer, and computer pane name the **same** bot | [ ] | [ ] |
+| Click a row opens **that** chat on the first click (not the previous one). After Research, one click Lead → header and composer are Lead. Same after a third bot | [ ] | [ ] |
 | Switching chats does not blank the thread or jump inbox order under the pointer | [ ] | [ ] |
 | Opening a chat marks it read. A reply while that chat is open does not leave the unread pin | [ ] | [ ] |
 | Unread pin is a tan circle named Unread (not a hidden 7px square). The name is bold | [ ] | [ ] |
@@ -565,7 +565,7 @@ If time is short, in this order:
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
 11. **§1 / §21 Escape** on Settings and New bot
-12. **§14 Inbox Search** no-match empty copy + Clear
+12. **§14 Inbox** Search empty + one click opens that row
 13. **§15 Composer** Ctrl+A selects, does not Send
 14. **§8 / §15 Dismiss** on needs-you keeps the current chat
 15. **§9 Queue** pending mark, then local Sent while offline

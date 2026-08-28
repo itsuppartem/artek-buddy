@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- One click on an inbox row opens that chat. A leftover mouse-up or a late inbox fallback does not land on the previous thread.
 - The closed Plugins hatch does not steal the thread wheel or open from the right edge. One Close dismisses.
 - Plugins Search apps stays open on Enter and keeps catalog scroll where the owner left it.
 - Plugins Connect only marks Connected. The chip fills `please use {name}` on a real click; leftover mouse-up after Connect does not Send.
