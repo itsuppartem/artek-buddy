@@ -142,7 +142,8 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 | --- | --- | --- |
 | Plugins → key → Save → **Key saved** + last four. Key field gone. Full key never on the page | [ ] | [ ] |
 | Search apps filters as you type (no Enter). Empty query restores the list | [ ] | [ ] |
-| Search → Connect a simple app (no browser) → Connected | [ ] | [ ] |
+| Search → Connect a simple app (no browser) → Connected. No new user bubble. Composer stays empty | [ ] | [ ] |
+| Chip click fills `please use {name}` and still does not Send | [ ] | [ ] |
 | If Connect cannot start, a human line under the pane says what to do next (not a dead Connect and not only `could not start that connection`) | [ ] | [ ] |
 | Or chat `please e2e-connect-docs` (scripted host) / «подключи Docs» — **plugin-card**, not git setup | [ ] | [ ] |
 | Chip above Message has **×**. Click = `please use {name}`, no auto-Send. × hides the chip and does not send | [ ] | [ ] |

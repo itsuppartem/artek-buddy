@@ -1,3 +1,6 @@
+import { useRef } from "react";
+import { pluginChipClickShouldFill } from "../../lib/plugins-ask";
+
 export function PluginsAsk({
   apps,
   disabled,
@@ -9,6 +12,7 @@ export function PluginsAsk({
   onAsk: (name: string) => void;
   onDismiss: (slug: string) => void;
 }) {
+  const pointerDown = useRef(new Set<string>());
   if (!apps.length) return null;
   return (
     <div data-testid="plugins-ask" className="mb-2 flex flex-wrap gap-2">
@@ -22,7 +26,16 @@ export function PluginsAsk({
             data-testid={`plugin-ask-${app.slug}`}
             aria-label={`Ask ${app.name}`}
             disabled={disabled}
-            onClick={() => onAsk(app.name)}
+            onPointerDown={() => {
+              pointerDown.current.add(app.slug);
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!pluginChipClickShouldFill(pointerDown.current.has(app.slug))) return;
+              pointerDown.current.delete(app.slug);
+              onAsk(app.name);
+            }}
             className="py-0.5 text-paper hover:text-tan disabled:opacity-40"
           >
             {app.name}
@@ -32,7 +45,11 @@ export function PluginsAsk({
             data-testid={`plugin-ask-${app.slug}-remove`}
             aria-label={`Remove ${app.name}`}
             disabled={disabled}
-            onClick={() => onDismiss(app.slug)}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onDismiss(app.slug);
+            }}
             className="px-1.5 py-0.5 text-mute hover:text-paper disabled:opacity-40"
           >
             ✕

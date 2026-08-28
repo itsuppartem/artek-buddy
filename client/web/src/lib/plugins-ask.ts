@@ -19,3 +19,11 @@ export function visiblePluginApps(
   const skipped = new Set(hidden[botId] ?? []);
   return apps.filter((app) => !skipped.has(app.slug));
 }
+
+export function pluginAskDraft(name: string): string {
+  return `please use ${name}`;
+}
+
+export function pluginChipClickShouldFill(hadPointerDown: boolean): boolean {
+  return hadPointerDown;
+}

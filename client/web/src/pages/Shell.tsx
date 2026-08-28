@@ -72,7 +72,7 @@ import {
   phoneTabAfterPanel,
   shouldUsePhoneShell,
 } from "../lib/phone-shell";
-import { hidePluginSlug, visiblePluginApps } from "../lib/plugins-ask";
+import { hidePluginSlug, pluginAskDraft, visiblePluginApps } from "../lib/plugins-ask";
 import { ownerRunError } from "../lib/run-error";
 import {
   embeddableScreenUrl,
@@ -2116,7 +2116,7 @@ export function ShellPage() {
             <PluginsAsk
               apps={visiblePluginApps(pluginApps, hiddenPluginSlugs, active?.id)}
               disabled={!active}
-              onAsk={(name) => writeDraft(`please use ${name}`)}
+              onAsk={(name) => writeDraft(pluginAskDraft(name))}
               onDismiss={(slug) => {
                 if (!active) return;
                 setHiddenPluginSlugs((map) => hidePluginSlug(map, active.id, slug));
