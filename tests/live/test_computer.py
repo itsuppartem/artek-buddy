@@ -175,8 +175,10 @@ def test_computer_pane_start_and_close(page: Page, client_url: str, host_url: st
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
     page.get_by_test_id("computer-stop").click()
+    page.get_by_test_id("computer-stop-confirm").click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Sleeping", timeout=8_000)
     page.get_by_test_id("computer-restart").click()
+    page.get_by_test_id("computer-restart-confirm").click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running", timeout=15_000)
     page.get_by_label("Close settings").click()
     page.get_by_title("Close panel").click()
@@ -304,6 +306,7 @@ def test_settings_stop_shows_sleeping_on_pane(page: Page, client_url: str, host_
     page.get_by_role("button", name="Settings").last.click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
     page.get_by_test_id("computer-stop").click()
+    page.get_by_test_id("computer-stop-confirm").click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Sleeping", timeout=8_000)
     page.get_by_label("Close settings").click()
     expect(page.get_by_test_id("computer-state")).to_have_attribute(
@@ -318,6 +321,37 @@ def test_settings_stop_shows_sleeping_on_pane(page: Page, client_url: str, host_
     expect(page.get_by_test_id("computer-overlay")).to_have_count(0)
     expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
     expect(page.get_by_role("button", name="Take control")).to_be_enabled()
+
+
+def test_settings_stop_and_restart_confirm_before_acting(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("Gate")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    open_computer_pane(page)
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=15_000
+    )
+    page.get_by_role("button", name="Settings").last.click()
+    expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
+    page.get_by_test_id("computer-stop").click()
+    expect(page.get_by_test_id("computer-stop-confirm")).to_be_visible()
+    expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
+    page.get_by_role("button", name="Cancel").click()
+    expect(page.get_by_test_id("computer-stop-confirm")).to_have_count(0)
+    expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
+    page.get_by_test_id("computer-restart").click()
+    expect(page.get_by_test_id("computer-restart-confirm")).to_be_visible()
+    page.get_by_role("button", name="Cancel").click()
+    expect(page.get_by_test_id("computer-restart-confirm")).to_have_count(0)
+    page.get_by_test_id("computer-reset").click()
+    expect(page.get_by_text("Erase this computer’s home?")).to_be_visible()
+    page.get_by_role("button", name="Cancel").click()
+    expect(page.get_by_text("Erase this computer’s home?")).to_have_count(0)
+    page.get_by_role("button", name="Delete chat…").click()
+    expect(page.get_by_text("Delete this chat and its history?")).to_be_visible()
 
 
 def test_running_pane_embeds_novnc_without_clicking_start(
