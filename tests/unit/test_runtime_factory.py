@@ -58,6 +58,10 @@ def test_scripted_fail_and_default_steps() -> None:
     assert raw[-1].error == "run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a"
     ok = steps_for_prompt("plain hello")
     assert ok[-1].status == "completed" or ok[-1].result == "ok"
+    late = steps_for_prompt("please e2e-late-complete")
+    assert late[0].delay_s == 2.5
+    assert late[0].ignore_cancel is True
+    assert late[-1].result == "pong"
 
 
 def test_scripted_thread_prompts_force_window_blocks() -> None:

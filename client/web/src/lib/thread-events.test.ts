@@ -179,6 +179,22 @@ describe("reduceThreadSnapshot", () => {
     expect(next?.run?.status).toBe("cancelled");
     expect(next?.messages.map((message) => message.id)).toEqual(["stream:run1"]);
   });
+
+  it("drops a late stream token after Stop", () => {
+    const prev = snap({
+      run: run({ status: "cancelled", error: "Stopped." }),
+      messages: [],
+    });
+    const next = reduceThreadSnapshot(
+      prev,
+      event({
+        type: "thread.message.updated",
+        payload: { text: "pong", kind: "text", replace: true },
+      }),
+    );
+    expect(next?.run?.status).toBe("cancelled");
+    expect(next?.messages).toEqual([]);
+  });
 });
 
 describe("reduceComputerStatus", () => {

@@ -206,12 +206,12 @@ class BotsMixin:
                 rows = conn.execute(
                     """
                     UPDATE runs
-                    SET status = %s, completed_at = %s
+                    SET status = %s, error = %s, completed_at = %s
                     WHERE bot_id = %s
                       AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
                     RETURNING id
                     """,
-                    (RunStatus.cancelled.value, now, bot_id),
+                    (RunStatus.cancelled.value, "Stopped.", now, bot_id),
                 ).fetchall()
                 conn.execute(
                     "UPDATE bots SET status = 'idle', updated_at = %s WHERE id = %s",

@@ -334,7 +334,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
 | Failed / cancelled run shows a run-error, not a silent hole | [ ] | [ ] |
 | A follow-up while `waiting_takeover` starts a turn (does not only enqueue) | [ ] | [ ] |
-| Stop keeps the run cancelled: a late complete does not append the essay. Queued owner lines survive Stop and prepend to the next send | [ ] | [ ] |
+| Stop keeps the run cancelled: a late complete does not append the essay (scripted `please e2e-late-complete` or a live Cursor turn). **Stopped.** is one `run-error` line. Queued owner lines survive Stop and prepend to the next send | [ ] | [ ] |
 
 ---
 
@@ -571,6 +571,7 @@ If time is short, in this order:
 13. **§15 Composer** Ctrl+A selects, does not Send
 14. **§8 / §15 Dismiss** on needs-you keeps the current chat
 15. **§9 Queue** pending mark, then local Sent while offline
+16. **§15 Stop** on a live turn shows Stopped. A late complete does not land
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 

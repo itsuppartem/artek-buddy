@@ -143,6 +143,9 @@ export function reduceThreadSnapshot(
     return { ...prev, cursor: event.seq, messages: replaceLive(prev.messages, streaming) };
   }
   if (event.type === "thread.message.updated") {
+    if (prev.run?.status === "cancelled") {
+      return { ...prev, cursor: event.seq };
+    }
     const liveId = liveMessageId("stream", event.runId);
     const text = progressText(event.payload, liveText(prev.messages, liveId));
     const streaming: ThreadMessage = {
@@ -158,6 +161,15 @@ export function reduceThreadSnapshot(
   }
   if (event.type === "thread.message.created") {
     const raw = asRecord(event.payload.message) ?? event.payload;
+    const createdRunId = str(raw.runId) || event.runId;
+    if (
+      prev.run?.status === "cancelled" &&
+      createdRunId === prev.run.id &&
+      raw.role !== "user" &&
+      raw.role !== "system"
+    ) {
+      return { ...prev, cursor: event.seq };
+    }
     const blocks = normalizeBlocks(raw.blocks) ?? textBlocks(raw);
     if (!blocks.length) return { ...prev, cursor: event.seq };
     const replyTo = asReply(raw.replyTo ?? raw.reply_to);

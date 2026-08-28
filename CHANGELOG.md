@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Stop on a live turn writes Stopped. A late model complete from that run does not land as a bot bubble.
 - Release keeps the last guest frame on the overlay until the view-only picture loads. Take control from Sleeping names Waking the desktop… instead of a black void.
 - One click on an inbox row opens that chat. A leftover mouse-up or a late inbox fallback does not land on the previous thread.
 - New memory defaults to This bot with a filled scope control. Delete is Remove. Save acknowledgement uses the create/edit buttons, not a shared Saved name.

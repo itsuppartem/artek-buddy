@@ -882,6 +882,12 @@ async def _run_turn(
         )
         return
 
+    persist_status = getattr(finished.status, "value", None) or str(finished.status)
+    if persist_status == "cancelled":
+        status = "cancelled"
+        error = finished.error or "Stopped."
+        bot_msg = None
+
     if bot_msg is not None:
         _emit(
             events,
