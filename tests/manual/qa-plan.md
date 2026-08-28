@@ -74,7 +74,7 @@ Phone: Create / Models / Plugins open the **Desktop** tab (also in §11).
 | Save on an empty key → error under that row, not silence | [ ] | [ ] |
 | Change Reasoning (e.g. Low) — no second Save — open chat shows `Using … · Low · Fast` (if Fast is on) | [ ] | [ ] |
 | While a reply is streaming, change Reasoning again → the turn does **not** break; the line ends `This turn keeps going.` | [ ] | [ ] |
-| Cursor has one commit (**Use this model**). Empty providers say to paste a key; no dead Use this model | [ ] | [ ] |
+| Click a model chip — that id is **Using** (tan). **Use this model** is the same commit. Empty providers say to paste a key; no dead Use this model | [ ] | [ ] |
 | The next Send uses the new settings | [ ] | [ ] |
 
 Also (visible, easy):

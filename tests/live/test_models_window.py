@@ -166,3 +166,32 @@ def test_models_one_commit_and_empty_provider_next_step(
     expect(page.get_by_test_id("models-use-openrouter")).to_have_count(0)
     page.get_by_test_id("models-forget-cursor").click()
     expect(page.get_by_label("Cursor API key")).to_be_visible(timeout=8_000)
+
+
+def test_models_chip_click_uses_that_model(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, unique_bot("ChipUse"))
+    open_models(page)
+    leftover = page.get_by_test_id("models-forget-cursor")
+    if leftover.count() and leftover.first.is_visible(timeout=0):
+        leftover.click()
+        expect(page.get_by_label("Cursor API key")).to_be_visible()
+    page.get_by_label("Cursor API key").fill("test-secret-cursor")
+    expect(page.get_by_label("Cursor API key")).to_have_value("test-secret-cursor")
+    page.get_by_test_id("models-save-cursor").click()
+    expect(page.get_by_test_id("models-status-cursor")).to_contain_text("Connected", timeout=8_000)
+    expect(page.get_by_test_id("models-using")).to_contain_text("scripted")
+    chip = page.get_by_test_id("models-picker-cursor").locator("[data-model]").first
+    expect(chip).to_be_visible()
+    model_id = chip.get_attribute("data-model")
+    assert model_id
+    with page.expect_request(
+        lambda request: request.method == "POST" and "/v1/models/default" in request.url,
+        timeout=8_000,
+    ) as posted:
+        chip.click()
+    assert model_id in (posted.value.post_data or "")
+    expect(page.get_by_test_id("models-using")).to_contain_text(model_id, timeout=8_000)
+    expect(chip).to_have_attribute("aria-selected", "true")
