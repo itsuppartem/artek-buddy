@@ -71,6 +71,7 @@ import {
   phoneTabAfterPanel,
   shouldUsePhoneShell,
 } from "../lib/phone-shell";
+import { hidePluginSlug, visiblePluginApps } from "../lib/plugins-ask";
 import { ownerRunError } from "../lib/run-error";
 import {
   embeddableScreenUrl,
@@ -189,6 +190,7 @@ export function ShellPage() {
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [pluginApps, setPluginApps] = useState<{ slug: string; name: string }[]>([]);
+  const [hiddenPluginSlugs, setHiddenPluginSlugs] = useState<Record<string, string[]>>({});
   const [skillBooks, setSkillBooks] = useState<{ slug: string; name: string }[]>([]);
   const [hiddenBookSlugs, setHiddenBookSlugs] = useState<Record<string, string[]>>({});
   const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
@@ -2006,9 +2008,13 @@ export function ShellPage() {
               </div>
             ) : null}
             <PluginsAsk
-              apps={pluginApps}
+              apps={visiblePluginApps(pluginApps, hiddenPluginSlugs, active?.id)}
               disabled={!active}
               onAsk={(name) => writeDraft(`please use ${name}`)}
+              onDismiss={(slug) => {
+                if (!active) return;
+                setHiddenPluginSlugs((map) => hidePluginSlug(map, active.id, slug));
+              }}
             />
             <BooksAsk
               books={visibleSkillBooks(skillBooks, hiddenBookSlugs, active?.id)}

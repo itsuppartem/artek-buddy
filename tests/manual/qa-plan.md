@@ -143,7 +143,7 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 | Search → Connect a simple app (no browser) → Connected | [ ] | [ ] |
 | If Connect cannot start, a human line under the pane says what to do next (not a dead Connect and not only `could not start that connection`) | [ ] | [ ] |
 | Or chat `please e2e-connect-docs` (scripted host) / «подключи Docs» — **plugin-card**, not git setup | [ ] | [ ] |
-| Chip above Message. Click = `please use {name}`, no auto-Send | [ ] | [ ] |
+| Chip above Message has **×**. Click = `please use {name}`, no auto-Send. × hides the chip and does not send | [ ] | [ ] |
 | Send → thread **plugin-card** (name + result) | [ ] | [ ] |
 | Disconnect / Remove → chip gone; next turn has no that tool | [ ] | [ ] |
 | If Connect opens a browser tab, Finish after login marks Connected | [ ] | [ ] |

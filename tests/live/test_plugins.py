@@ -15,6 +15,17 @@ from tests.live.helpers import (
 pytestmark = pytest.mark.live
 
 
+def _plugins_key_form(page: Page) -> None:
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible()
+    saved = page.get_by_test_id("plugins-key-saved")
+    save = page.get_by_test_id("plugins-save")
+    expect(saved.or_(save)).to_be_visible(timeout=8_000)
+    if saved.is_visible():
+        page.get_by_test_id("plugins-remove").click()
+        expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
+    expect(save).to_be_visible()
+
+
 def test_plugins_pane_key_connect_docs_then_chat_answers(
     page: Page, client_url: str, host_url: str
 ) -> None:
@@ -111,12 +122,7 @@ def test_plugins_connect_explains_when_start_fails(
 ) -> None:
     pair_fresh(page, client_url, host_url)
     page.get_by_test_id("open-plugins").click()
-    pane = page.get_by_test_id("plugins-pane")
-    expect(pane).to_be_visible()
-    leftover = page.get_by_test_id("plugins-remove")
-    if leftover.count() and leftover.first.is_visible():
-        leftover.click()
-        expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
+    _plugins_key_form(page)
     key = page.get_by_label("Plugins key")
     key.fill("ak-test-secret-setup")
     expect(key).to_have_value("ak-test-secret-setup")
@@ -127,7 +133,38 @@ def test_plugins_connect_explains_when_start_fails(
     expect(row).to_be_visible()
     row.get_by_role("button", name="Connect").click()
     error = page.get_by_test_id("plugins-error")
-    expect(error).to_contain_text("could not start that connection")
+    expect(error).to_contain_text("could not start that connection", timeout=8_000)
     expect(error).to_contain_text("finish that setup")
     expect(error).to_contain_text("try Connect again")
     expect(row.get_by_role("button", name="Connect")).to_be_visible()
+
+
+def test_plugin_chip_remove_does_not_send(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("PlugChip")
+    pair_fresh(page, client_url, host_url)
+    page.get_by_test_id("open-plugins").click()
+    _plugins_key_form(page)
+    page.get_by_label("Plugins key").fill("ak-test-secret-chip")
+    page.get_by_test_id("plugins-save").click()
+    expect(page.get_by_test_id("plugins-key-saved")).to_contain_text("Key saved")
+    search = page.get_by_label("Search apps")
+    search.fill("docs")
+    row = page.get_by_test_id("plugin-row-docs")
+    expect(row).to_be_visible()
+    row.get_by_role("button", name="Connect").click()
+    expect(row.get_by_text("Connected")).to_be_visible()
+    page.get_by_role("button", name="Close Plugins").click()
+    create_named_bot(page, name)
+    ensure_model(page)
+    chip = page.get_by_test_id("plugin-ask-docs")
+    expect(chip).to_be_visible()
+    expect(page.get_by_role("button", name="Remove Docs")).to_be_visible()
+    page.get_by_role("button", name="Remove Docs").click()
+    expect(chip).to_have_count(0)
+    expect(composer(page)).to_have_value("")
+    expect(page.get_by_test_id("plugin-card")).to_have_count(0)
+    page.get_by_test_id("open-plugins").click()
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible()
+    page.get_by_test_id("plugins-remove").click()
+    expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
+    page.get_by_role("button", name="Close Plugins").click()
