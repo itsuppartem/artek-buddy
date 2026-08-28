@@ -34,7 +34,7 @@ import {
   slugsConsumedByRunPrompt,
   visibleSkillBooks,
 } from "../lib/books-ask";
-import { composerCanSend, composerPlaceholder } from "../lib/composer";
+import { composerCanSend, composerPlaceholder, composerShouldSend } from "../lib/composer";
 import {
   composerRedo,
   composerUndo,
@@ -1228,7 +1228,7 @@ export function ShellPage() {
       }
       return;
     }
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (composerShouldSend(event)) {
       event.preventDefault();
       const typed = event.currentTarget.value;
       if (composerRef.current) composerRef.current.value = typed;

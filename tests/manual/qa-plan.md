@@ -318,7 +318,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Enter sends. Shift+Enter inserts a newline (Deb) and that break stays in the sent bubble. Phone return key follows the on-screen keyboard | [ ] | [ ] |
+| Enter sends. Shift+Enter inserts a newline (Deb) and that break stays in the sent bubble. Phone return key follows the on-screen keyboard. Ctrl+A selects the draft and does not Send; Enter then sends one copy | [ ] | [ ] |
 | Message placeholder stays readable: full name, or `Message …` with an ellipsis — not a clipped mid-word (`Message Resea`) | [ ] | [ ] |
 | Deb: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo) | [ ] | — |
 | Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays | [ ] | [ ] |
@@ -564,6 +564,7 @@ If time is short, in this order:
 10. **§28 Save feedback**
 11. **§1 / §21 Escape** on Settings and New bot
 12. **§14 Inbox Search** no-match empty copy + Clear
+13. **§15 Composer** Ctrl+A selects, does not Send
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 

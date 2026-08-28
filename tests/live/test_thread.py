@@ -243,6 +243,26 @@ def test_composer_shift_enter_and_undo(page: Page, client_url: str, host_url: st
     expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
 
 
+def test_composer_ctrl_a_does_not_send(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Select")
+    box = composer(page)
+    draft = "keep this draft"
+    box.fill(draft)
+    expect(box).to_have_value(draft)
+    box.press("Control+a")
+    expect(box).to_have_value(draft)
+    selected = box.evaluate("el => el.selectionEnd - el.selectionStart")
+    assert selected == len(draft)
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
+    box.press("Enter")
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').get_by_test_id(
+        "user-text"
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(bubble).to_have_js_property("textContent", draft)
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(1)
+
+
 def test_composer_placeholder_does_not_clip_mid_word(
     page: Page, client_url: str, host_url: str
 ) -> None:
