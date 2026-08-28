@@ -123,9 +123,9 @@ def test_models_save_reasoning_writes_meta_and_keeps_a_live_turn(
     expect(page.get_by_test_id("models-status-cursor")).to_contain_text("Connected", timeout=8_000)
     expect(page.get_by_test_id("models-using")).to_contain_text("scripted")
     expect(page.get_by_test_id("models-use-cursor")).to_be_enabled()
-    expect(page.get_by_test_id("models-save-settings-cursor")).to_be_enabled()
+    expect(page.get_by_test_id("models-save-settings-cursor")).to_have_count(0)
     page.get_by_test_id("models-effort-cursor").select_option("low")
-    page.get_by_test_id("models-save-settings-cursor").click()
+    expect(page.get_by_test_id("models-using")).to_contain_text("Low", timeout=8_000)
     page.get_by_role("button", name="Close Models").click()
     expect(page.get_by_test_id("meta-block")).to_contain_text("Using scripted · Low", timeout=8_000)
     open_models(page)
@@ -135,10 +135,34 @@ def test_models_save_reasoning_writes_meta_and_keeps_a_live_turn(
     expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
     open_models(page)
     page.get_by_test_id("models-effort-cursor").select_option("high")
-    page.get_by_test_id("models-save-settings-cursor").click()
+    expect(page.get_by_test_id("models-using")).to_contain_text("High", timeout=8_000)
     page.get_by_role("button", name="Close Models").click()
     expect(
         page.get_by_test_id("meta-block").filter(has_text="This turn keeps going.")
     ).to_be_visible(timeout=8_000)
     expect(page.get_by_test_id("run-error")).to_have_count(0)
     expect(page.get_by_test_id("thread-stop")).to_be_visible()
+
+
+def test_models_one_commit_and_empty_provider_next_step(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, unique_bot("OneCommit"))
+    open_models(page)
+    for provider in ("cursor", "openrouter", "openai", "anthropic", "xai"):
+        forget = page.get_by_test_id(f"models-forget-{provider}")
+        if forget.count() and forget.first.is_visible(timeout=0):
+            forget.click()
+    page.get_by_label("Cursor API key").fill("test-secret-cursor")
+    expect(page.get_by_label("Cursor API key")).to_have_value("test-secret-cursor")
+    page.get_by_test_id("models-save-cursor").click()
+    expect(page.get_by_test_id("models-status-cursor")).to_contain_text("Connected", timeout=8_000)
+    expect(page.get_by_test_id("models-use-cursor")).to_be_visible()
+    expect(page.get_by_test_id("models-save-settings-cursor")).to_have_count(0)
+    expect(page.get_by_test_id("models-empty-openrouter")).to_contain_text(
+        "Paste a key on this row to load models."
+    )
+    expect(page.get_by_test_id("models-use-openrouter")).to_have_count(0)
+    page.get_by_test_id("models-forget-cursor").click()
+    expect(page.get_by_label("Cursor API key")).to_be_visible(timeout=8_000)
