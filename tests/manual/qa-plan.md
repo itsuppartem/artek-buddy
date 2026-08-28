@@ -300,7 +300,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Search filters inbox (and Archived) by name / preview | [ ] | [ ] |
+| Search filters inbox (and Archived) by name / preview. A name or preview hit is marked | [ ] | [ ] |
 | Click a row opens that chat. Selected row, header, composer, and computer pane name the **same** bot | [ ] | [ ] |
 | Switching chats does not blank the thread or jump inbox order under the pointer | [ ] | [ ] |
 | Opening a chat marks it read. A reply while that chat is open does not leave the unread pin | [ ] | [ ] |

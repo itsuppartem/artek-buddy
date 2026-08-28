@@ -24,3 +24,18 @@ export function filterBots<
   if (!needle) return bots;
   return bots.filter((bot) => `${bot.name} ${previewOf(bot)}`.toLowerCase().includes(needle));
 }
+
+export type HighlightPart = { text: string; hit: boolean };
+
+export function splitQueryMatch(text: string, query: string): HighlightPart[] {
+  const needle = query.trim();
+  if (!needle) return [{ text, hit: false }];
+  const index = text.toLowerCase().indexOf(needle.toLowerCase());
+  if (index < 0) return [{ text, hit: false }];
+  const parts: HighlightPart[] = [];
+  if (index > 0) parts.push({ text: text.slice(0, index), hit: false });
+  parts.push({ text: text.slice(index, index + needle.length), hit: true });
+  const rest = text.slice(index + needle.length);
+  if (rest) parts.push({ text: rest, hit: false });
+  return parts;
+}

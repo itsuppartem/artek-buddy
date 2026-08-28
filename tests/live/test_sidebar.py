@@ -158,6 +158,22 @@ def test_unread_mark_is_named_and_visible(page: Page, client_url: str, host_url:
     expect(row).to_have_accessible_name(f"Open chat {name} (unread)")
 
 
+def test_inbox_search_marks_preview_hit(page: Page, client_url: str, host_url: str) -> None:
+    token = uuid.uuid4().hex[:8]
+    lead = unique_bot("Lead")
+    other = unique_bot("Other")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, lead, title=f"notes about cats {token}")
+    create_named_bot(page, other, title="shipping desk")
+    search = page.get_by_placeholder("Search")
+    search.fill(token)
+    row = bot_row(page, lead)
+    expect(row).to_have_count(1)
+    expect(bot_row(page, other)).to_have_count(0)
+    expect(row.get_by_test_id("inbox-hit")).to_have_text(token)
+    expect(row.get_by_test_id("bot-preview")).to_contain_text(token)
+
+
 def test_switch_during_stream_keeps_chat(page: Page, client_url: str, host_url: str) -> None:
     first = unique_bot("LiveA")
     second = unique_bot("LiveB")
