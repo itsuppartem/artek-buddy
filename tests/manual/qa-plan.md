@@ -386,6 +386,7 @@ Computer → Routines.
 | --- | --- | --- |
 | New: name, cron, prompt. Invalid cron disables Save | [ ] | [ ] |
 | On / off, Run (test), Delete | [ ] | [ ] |
+| Next run is a short time (`next 2026-08-31 09:30:00 UTC`), not `09:30:00.000000` | [ ] | [ ] |
 | A due routine fires through the same send path while the laptop can be closed (watch the thread later) | [ ] | [ ] |
 
 ---

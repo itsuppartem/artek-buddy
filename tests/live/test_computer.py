@@ -114,6 +114,24 @@ def test_routine_survives_reload(page: Page, client_url: str, host_url: str) -> 
     expect(page.get_by_test_id("routine-row")).to_have_count(0)
 
 
+def test_routine_next_run_has_no_microseconds(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Next")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    open_computer_pane(page)
+    page.get_by_test_id("new-routine").click()
+    page.get_by_placeholder("Name").fill("Monday")
+    page.get_by_placeholder("0 9 * * *").fill("30 9 * * 1")
+    page.get_by_placeholder("Prompt to send").fill("brief me")
+    page.get_by_test_id("routine-save").click()
+    row = page.get_by_test_id("routine-row")
+    expect(row).to_contain_text("Monday", timeout=8_000)
+    nxt = page.get_by_test_id("routine-next-run")
+    expect(nxt).to_contain_text("next")
+    expect(nxt).to_contain_text("UTC")
+    expect(nxt).not_to_contain_text(".")
+
+
 def test_offline_click_to_start_is_view_only(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("Glance")
     pair_fresh(page, client_url, host_url)
