@@ -145,6 +145,19 @@ def test_switch_bots_keeps_header_and_thread(page: Page, client_url: str, host_u
     assert first_box["y"] < second_box["y"]
 
 
+def test_unread_mark_is_named_and_visible(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Unread")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    open_bot_menu(page, name)
+    page.get_by_role("menuitem", name="Mark as unread").click()
+    row = bot_row(page, name)
+    pin = row.get_by_test_id("unread-dot")
+    expect(pin).to_be_visible()
+    expect(pin).to_have_accessible_name("Unread")
+    expect(row).to_have_accessible_name(f"Open chat {name} (unread)")
+
+
 def test_switch_during_stream_keeps_chat(page: Page, client_url: str, host_url: str) -> None:
     first = unique_bot("LiveA")
     second = unique_bot("LiveB")

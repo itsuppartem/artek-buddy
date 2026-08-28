@@ -303,7 +303,8 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Search filters inbox (and Archived) by name / preview | [ ] | [ ] |
 | Click a row opens that chat. Selected row, header, composer, and computer pane name the **same** bot | [ ] | [ ] |
 | Switching chats does not blank the thread or jump inbox order under the pointer | [ ] | [ ] |
-| Opening a chat marks it read. A reply while that chat is open does not leave the unread dot | [ ] | [ ] |
+| Opening a chat marks it read. A reply while that chat is open does not leave the unread pin | [ ] | [ ] |
+| Unread pin is a tan circle named Unread (not a hidden 7px square). The name is bold | [ ] | [ ] |
 | Right-click (Deb) / long-press if offered (Phone): Pin / Unpin, Mark as unread (sticks until you leave and open again), Edit profile, Duplicate, Archive, Delete | [ ] | [ ] |
 | Empty inbox: Restore from Archived, or create a first bot | [ ] | [ ] |
 | Create: Name (inbox), Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team / Private. Focusing Name does not mint a bot; only Create does | [ ] | [ ] |
