@@ -243,6 +243,24 @@ def test_composer_shift_enter_and_undo(page: Page, client_url: str, host_url: st
     expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
 
 
+def test_composer_placeholder_does_not_clip_mid_word(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("ResearchOverflowName")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    box = composer(page)
+    placeholder = box.get_attribute("placeholder") or ""
+    full = f"Message {name}"
+    assert placeholder.startswith("Message ")
+    assert placeholder != "Message Resea"
+    if placeholder != full:
+        assert placeholder.endswith("…")
+        assert not full.startswith(placeholder)
+    else:
+        raise AssertionError(f"long name stayed untruncated: {placeholder}")
+
+
 def test_load_earlier_messages(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Older")
     other = unique_bot("Other")
