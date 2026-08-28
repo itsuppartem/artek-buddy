@@ -642,6 +642,31 @@ def test_takeover_banner_on_other_chat(page: Page, client_url: str, host_url: st
     expect(banner).to_have_count(0)
 
 
+def test_dismiss_needs_you_keeps_current_chat(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("ParkA")
+    watcher = unique_bot("ParkB")
+    other = unique_bot("ParkC")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    create_named_bot(page, other)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-takeover")
+    expect(box).to_have_value("please e2e-takeover")
+    box.press("Enter")
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    banner = page.get_by_test_id("attention-alert")
+    expect(banner).to_contain_text(f"{speaker} needs you", timeout=15_000)
+    page.get_by_test_id("attention-dismiss").click()
+    expect(banner).to_have_count(0)
+    expect(thread_header(page)).to_contain_text(watcher)
+    expect(thread_header(page)).not_to_contain_text(speaker)
+    expect(thread_header(page)).not_to_contain_text(other)
+    expect(composer(page)).to_have_attribute("placeholder", f"Message {watcher}")
+
+
 def test_notify_off_mutes_replied_not_ask(page: Page, client_url: str, host_url: str) -> None:
     speaker = unique_bot("Mute")
     watcher = unique_bot("Hear")

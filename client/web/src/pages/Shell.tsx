@@ -1879,7 +1879,7 @@ export function ShellPage() {
                 >
                   <button
                     type="button"
-                    className="min-w-0 flex-1 text-left hover:text-tan"
+                    className="relative z-0 min-w-0 flex-1 text-left hover:text-tan"
                     onClick={() => {
                       dismissedAlerts.current.add(attentionFingerprint(attention));
                       navigate(`/app/${attention.botId}`);
@@ -1896,8 +1896,16 @@ export function ShellPage() {
                   <button
                     type="button"
                     data-testid="attention-dismiss"
-                    onClick={() => dismissAttention()}
-                    className="shrink-0 px-2 text-[13px] text-mute hover:text-paper"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      dismissAttention();
+                    }}
+                    className="relative z-10 shrink-0 px-2 text-[13px] text-mute hover:text-paper"
                   >
                     Dismiss
                   </button>
