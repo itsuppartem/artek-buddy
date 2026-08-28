@@ -80,6 +80,7 @@ import {
   screenFrameLooksFailed,
   screenPolicy,
   shouldFetchScreenUrl,
+  shouldKeepScreenUrlOnRelease,
   shouldRefreshScreenUrl,
   shouldReplaceScreenUrl,
   shouldTakeControl,
@@ -1476,7 +1477,7 @@ export function ShellPage() {
 
   async function releaseComputer() {
     if (!active) return;
-    if (screenPolicy(screenUrlRef.current) === "control") {
+    if (!shouldKeepScreenUrlOnRelease() && screenPolicy(screenUrlRef.current) === "control") {
       adoptScreenUrl(null);
       setScreenEpoch((value) => value + 1);
     }
@@ -1487,7 +1488,6 @@ export function ShellPage() {
       setSnapshot((prev) => (prev ? { ...prev, computer: status } : prev));
     }
     await ensureScreenUrl(active.id, true, true);
-    setScreenEpoch((value) => value + 1);
   }
 
   async function createBot(input: {

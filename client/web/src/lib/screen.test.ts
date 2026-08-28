@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   embeddableScreenUrl,
+  overlayDisplayUrl,
+  overlayPendingUrl,
+  overlayWaitingLabel,
   shouldAutoBoot,
   shouldFetchScreenUrl,
+  shouldKeepScreenUrlOnRelease,
   shouldReplaceScreenUrl,
   shouldReportOwnerActivity,
   shouldTakeControl,
@@ -65,5 +69,67 @@ describe("shouldReplaceScreenUrl", () => {
 
   it("drops a control URL when the next screen is missing", () => {
     expect(shouldReplaceScreenUrl(control, null)).toBe(true);
+  });
+});
+
+describe("shouldKeepScreenUrlOnRelease", () => {
+  it("keeps the last guest frame while Release remints view-only", () => {
+    expect(shouldKeepScreenUrlOnRelease()).toBe(true);
+  });
+});
+
+describe("overlayWaitingLabel", () => {
+  it("names waking until the first frame, not a black void", () => {
+    expect(
+      overlayWaitingLabel({
+        booting: true,
+        state: "suspended",
+        hasFrame: false,
+        hasUrl: false,
+      }),
+    ).toBe("Waking the desktop…");
+    expect(
+      overlayWaitingLabel({
+        booting: false,
+        state: "running",
+        hasFrame: false,
+        hasUrl: true,
+      }),
+    ).toBe("Waking the desktop…");
+    expect(
+      overlayWaitingLabel({
+        booting: false,
+        state: "running",
+        hasFrame: true,
+        hasUrl: true,
+      }),
+    ).toBeNull();
+    expect(
+      overlayWaitingLabel({
+        booting: false,
+        state: "running",
+        hasFrame: false,
+        hasUrl: false,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("overlayDisplayUrl", () => {
+  const view =
+    "/novnc/YWJj/6080/view/9999999999999.abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=true";
+  const control =
+    "/novnc/YWJj/6081/control/9999999999999.abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=false";
+
+  it("keeps the last guest URL until the reminted frame is ready", () => {
+    expect(overlayDisplayUrl(control, view)).toBe(control);
+    expect(overlayPendingUrl(control, view)).toBe(view);
+    expect(overlayDisplayUrl(view, view)).toBe(view);
+    expect(overlayPendingUrl(view, view)).toBeNull();
+  });
+
+  it("shows the incoming URL when there is no last frame yet", () => {
+    expect(overlayDisplayUrl(null, view)).toBe(view);
+    expect(overlayPendingUrl(null, view)).toBeNull();
   });
 });

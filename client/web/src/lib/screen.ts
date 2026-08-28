@@ -54,6 +54,34 @@ export function shouldReplaceScreenUrl(
   return shouldRefreshScreenUrl(cur, nowMs);
 }
 
+export function shouldKeepScreenUrlOnRelease(): boolean {
+  return true;
+}
+
+export function overlayWaitingLabel(opts: {
+  booting: boolean;
+  state: string | null | undefined;
+  hasFrame: boolean;
+  hasUrl: boolean;
+}): string | null {
+  if (opts.hasFrame) return null;
+  if (opts.booting || opts.state === "booting" || opts.state === "suspended" || opts.hasUrl) {
+    return "Waking the desktop…";
+  }
+  return null;
+}
+
+export function overlayDisplayUrl(shown: string | null, next: string | null): string | null {
+  return embeddableScreenUrl(shown) ?? embeddableScreenUrl(next);
+}
+
+export function overlayPendingUrl(shown: string | null, next: string | null): string | null {
+  const current = embeddableScreenUrl(shown);
+  const incoming = embeddableScreenUrl(next);
+  if (!incoming || !current || incoming === current) return null;
+  return incoming;
+}
+
 export function screenIframeSandbox(url: string | null | undefined): string {
   return embeddableScreenUrl(url) ? "allow-scripts allow-same-origin allow-forms" : "";
 }

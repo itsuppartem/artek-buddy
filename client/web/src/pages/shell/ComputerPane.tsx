@@ -140,7 +140,7 @@ export function ComputerPane({
               title="Computer preview"
               src={preview}
               sandbox={screenIframeSandbox(preview)}
-              className="pointer-events-none h-full w-full border-0 bg-black"
+              className="pointer-events-none h-full w-full border-0 bg-ink"
               allow="clipboard-read; clipboard-write"
               style={{ pointerEvents: previewPointerEvents() }}
               onLoad={onScreenFrameLoad}

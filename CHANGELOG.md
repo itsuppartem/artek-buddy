@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Release keeps the last guest frame on the overlay until the view-only picture loads. Take control from Sleeping names Waking the desktop… instead of a black void.
 - New memory defaults to This bot with a filled scope control. Delete is Remove. Save acknowledgement uses the create/edit buttons, not a shared Saved name.
 - The closed Plugins hatch does not steal the thread wheel or open from the right edge. One Close dismisses.
 - Plugins Search apps stays open on Enter and keeps catalog scroll where the owner left it.

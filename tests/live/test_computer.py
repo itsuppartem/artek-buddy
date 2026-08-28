@@ -493,6 +493,146 @@ def test_release_keeps_view_preview_and_drops_control(
     expect(overlay.locator("iframe")).to_have_attribute("src", re.compile(r"view_only=true"))
 
 
+def test_release_keeps_overlay_guest_iframe(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("RelKeep")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    view = (
+        "/novnc/YWJj/6080/view/9999999999999."
+        "abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=true"
+    )
+    control = (
+        "/novnc/YWJj/6081/control/9999999999999."
+        "abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=false"
+    )
+    holder = {"value": "bot"}
+
+    def computer_route(route):
+        url = route.request.url.split("?", 1)[0]
+        parts = url.rstrip("/").split("/")
+        method = route.request.method
+        if method == "POST" and parts[-1] == "takeover":
+            holder["value"] = "user"
+            route.continue_()
+            return
+        if method == "POST" and parts[-1] == "release":
+            holder["value"] = "bot"
+            route.continue_()
+            return
+        if method == "GET" and parts[-1] == "screen":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps({"url": control if holder["value"] == "user" else view}),
+            )
+            return
+        route.continue_()
+
+    page.route("**/v1/computer/**", computer_route)
+    open_computer_pane(page)
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=15_000
+    )
+    page.get_by_role("button", name="Take control").click()
+    overlay = page.get_by_test_id("computer-overlay")
+    expect(overlay).to_be_visible(timeout=15_000)
+    expect(overlay.locator("iframe")).to_have_count(1)
+    page.evaluate(
+        """() => {
+          const root = document.querySelector('[data-testid="computer-overlay-screen"]');
+          window.__overlayLostGuest = false;
+          if (!root) {
+            window.__overlayLostGuest = true;
+            return;
+          }
+          const note = () => {
+            if (!root.querySelector("iframe")) window.__overlayLostGuest = true;
+          };
+          note();
+          new MutationObserver(note).observe(root, { childList: true, subtree: true });
+        }"""
+    )
+    overlay.get_by_role("button", name="Release").click()
+    expect(page.get_by_test_id("computer-overlay-holder")).to_have_count(0)
+    expect(overlay.get_by_role("button", name="Take control")).to_be_visible()
+    expect(overlay.locator("iframe")).not_to_have_count(0)
+    expect(overlay.locator("iframe").first).to_have_attribute("src", re.compile(r"/view/"))
+    lost = page.evaluate("() => window.__overlayLostGuest === true")
+    assert lost is False
+
+
+def test_take_control_from_sleeping_shows_waking_until_frame(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("WakeCopy")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    view = (
+        "/novnc/YWJj/6080/view/9999999999999."
+        "abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=true"
+    )
+    control = (
+        "/novnc/YWJj/6081/control/9999999999999."
+        "abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=false"
+    )
+    holder = {"value": "bot"}
+    parked = []
+
+    def computer_route(route):
+        url = route.request.url.split("?", 1)[0]
+        parts = url.rstrip("/").split("/")
+        method = route.request.method
+        if method == "POST" and parts[-1] == "takeover":
+            holder["value"] = "user"
+            route.continue_()
+            return
+        if method == "GET" and parts[-1] == "screen":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps({"url": control if holder["value"] == "user" else view}),
+            )
+            return
+        route.continue_()
+
+    def park_novnc(route):
+        parked.append(route)
+
+    page.route("**/v1/computer/**", computer_route)
+    open_computer_pane(page)
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=15_000
+    )
+    page.get_by_role("button", name="Settings").last.click()
+    page.get_by_test_id("computer-stop").click()
+    page.get_by_test_id("computer-stop-confirm").click()
+    expect(page.get_by_test_id("computer-power-state")).to_contain_text("Sleeping", timeout=8_000)
+    page.get_by_label("Close settings").click()
+    expect(page.get_by_text("Sleeping • Click to start")).to_be_visible()
+    page.route("**/novnc/**", park_novnc)
+    page.get_by_role("button", name="Take control").click()
+    overlay = page.get_by_test_id("computer-overlay")
+    expect(overlay).to_be_visible(timeout=15_000)
+    waiting = overlay.get_by_test_id("computer-overlay-waiting")
+    expect(waiting).to_be_visible()
+    expect(waiting).to_have_text("Waking the desktop…")
+    expect(overlay.get_by_test_id("computer-overlay-holder")).to_contain_text("You have control")
+    page.unroute("**/novnc/**")
+    page.route(
+        "**/novnc/**",
+        lambda route: route.fulfill(
+            status=200, content_type="text/html", body="<html><body>guest</body></html>"
+        ),
+    )
+    for route in parked:
+        route.fulfill(status=200, content_type="text/html", body="<html><body>guest</body></html>")
+    parked.clear()
+    expect(waiting).to_have_count(0, timeout=8_000)
+    expect(overlay.locator("iframe").first).to_have_attribute("src", re.compile(r"/novnc/"))
+
+
 def test_bot_open_path_starts_computer_without_click(
     page: Page, client_url: str, host_url: str
 ) -> None:
