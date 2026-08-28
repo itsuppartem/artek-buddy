@@ -289,6 +289,39 @@ def test_load_earlier_messages(page: Page, client_url: str, host_url: str) -> No
     expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible(timeout=15_000)
 
 
+def test_download_and_load_earlier_look_like_controls(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Chrome")
+    with page.expect_file_chooser() as chooser:
+        page.get_by_role("button", name="Attach files").click()
+    chooser.value.set_files({"name": "shot.png", "mimeType": "image/png", "buffer": TINY_PNG})
+    expect(page.get_by_test_id("attach-chip")).to_contain_text("shot.png", timeout=5_000)
+    send_message(page, "my shot", name)
+    user_card = (
+        page.locator('[data-testid="thread-message"][data-role="user"]')
+        .filter(has_text="my shot")
+        .get_by_test_id("file-card")
+    )
+    download = user_card.get_by_test_id("file-download")
+    expect(download).to_be_visible(timeout=8_000)
+    expect(download).to_have_accessible_name("Download shot.png")
+    other = unique_bot("Other")
+    send_message(page, "please e2e-load-earlier", name)
+    create_named_bot(page, other)
+    open_chat(page, name)
+    earlier = page.get_by_test_id("load-earlier")
+    expect(earlier).to_be_visible(timeout=15_000)
+    expect(earlier).to_have_accessible_name("Load earlier messages")
+    earlier.click()
+    expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible(timeout=15_000)
+    leftover = page.get_by_test_id("load-earlier")
+    if leftover.count() and leftover.first.is_visible():
+        leftover.click()
+        expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible()
+    expect(page.get_by_test_id("thread-start")).to_contain_text("Beginning of this chat.")
+
+
 def test_ask_options_custom_and_detail(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Ask")
     send_message(page, "please e2e-ask", name)

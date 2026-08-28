@@ -243,6 +243,7 @@ export function ShellPage() {
   const autoBooted = useRef<string | null>(null);
   const sleepHeld = useRef(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [threadAtStart, setThreadAtStart] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ShellErrorKind>("host");
   const errorKindRef = useRef<ShellErrorKind>("host");
@@ -300,6 +301,10 @@ export function ShellPage() {
     (thread?.run && isLiveTurn(thread.run.status)) ||
       (thread && !isParked && (hasLive(thread) || hasActiveWorkers(thread))),
   );
+
+  useEffect(() => {
+    setThreadAtStart(false);
+  }, [active?.id]);
 
   useEffect(() => {
     botsRef.current = bots;
@@ -918,6 +923,7 @@ export function ShellPage() {
       if (activeIdRef.current !== requested) return;
       expandedHistoryThread.current = page.threadId;
       setSnapshot((prev) => prependThreadMessagePage(prev, page));
+      if (page.olderCursor == null) setThreadAtStart(true);
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
         if (element) element.scrollTop += element.scrollHeight - previousHeight;
@@ -1939,12 +1945,17 @@ export function ShellPage() {
               <button
                 type="button"
                 data-testid="load-earlier"
+                aria-label="Load earlier messages"
                 disabled={loadingOlder}
                 onClick={() => void loadOlderMessages()}
-                className="self-center rounded-lg px-3 py-1.5 text-[13px] text-mute hover:bg-raised hover:text-paper disabled:opacity-50"
+                className="self-center rounded-lg border border-hairline px-3 py-1.5 text-[13px] text-paper hover:bg-raised disabled:opacity-50"
               >
                 {loadingOlder ? "Loading…" : "Load earlier messages"}
               </button>
+            ) : threadAtStart ? (
+              <p data-testid="thread-start" className="self-center text-[13px] text-mute">
+                Beginning of this chat.
+              </p>
             ) : null}
             {mergeQueuedIntoMessages(
               thread?.messages ?? [],
