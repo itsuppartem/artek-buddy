@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Plugins Search apps stays open on Enter and keeps catalog scroll where the owner left it.
 - Plugins Connect only marks Connected. The chip fills `please use {name}` on a real click; leftover mouse-up after Connect does not Send.
 - A queued send is marked Waiting for the host until reconnect, then Sent while offline with local time.
 - Dismiss on a needs-you pill only hides it. The open chat stays put.

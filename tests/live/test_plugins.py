@@ -205,6 +205,32 @@ def test_plugin_connect_does_not_send_please_use(
     page.get_by_role("button", name="Close Plugins").click()
 
 
+def test_plugins_search_keeps_pane_open(page: Page, client_url: str, host_url: str) -> None:
+    pair_fresh(page, client_url, host_url)
+    page.get_by_test_id("open-plugins").click()
+    _plugins_key_form(page)
+    page.get_by_label("Plugins key").fill("ak-test-secret-search-open")
+    page.get_by_test_id("plugins-save").click()
+    expect(page.get_by_test_id("plugins-key-saved")).to_contain_text("Key saved")
+    mail = page.get_by_test_id("plugin-row-mail")
+    docs = page.get_by_test_id("plugin-row-docs")
+    expect(mail).to_be_visible()
+    expect(docs).to_be_visible()
+    search = page.get_by_label("Search apps")
+    search.fill("docs")
+    expect(search).to_have_value("docs")
+    expect(docs).to_be_visible()
+    expect(mail).to_have_count(0)
+    search.press("Enter")
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible()
+    expect(search).to_have_value("docs")
+    expect(docs).to_be_visible()
+    expect(mail).to_have_count(0)
+    page.get_by_test_id("plugins-remove").click()
+    expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
+    page.get_by_role("button", name="Close Plugins").click()
+
+
 def test_plugins_search_filters_without_enter(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
     page.get_by_test_id("open-plugins").click()
