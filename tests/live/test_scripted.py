@@ -43,6 +43,27 @@ def test_scripted_fail_raw_id_is_human(page: Page, client_url: str, host_url: st
     expect(page.get_by_test_id("run-error")).not_to_contain_text("run failed: run-")
 
 
+def test_dead_wait_shows_next_step_and_next_send_runs(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _open_named(page, client_url, host_url, "WaitDead")
+    send_message(page, "hello", name)
+    expect(page.locator('[data-testid="thread-message"][data-role="bot"]').last).to_contain_text(
+        "ok",
+        timeout=20_000,
+    )
+    send_message(page, "please e2e-dead-wait", name)
+    err = page.get_by_test_id("run-error")
+    expect(err).to_be_visible(timeout=20_000)
+    expect(err).to_contain_text("The turn failed.")
+    expect(err).to_contain_text("Send again")
+    send_message(page, "hello", name)
+    expect(page.locator('[data-testid="thread-message"][data-role="bot"]').last).to_contain_text(
+        "ok",
+        timeout=20_000,
+    )
+
+
 def test_scripted_consent_deny(page: Page, client_url: str, host_url: str) -> None:
     name = _open_named(page, client_url, host_url, "Deny")
     send_message(page, "e2e-consent-browse", name)

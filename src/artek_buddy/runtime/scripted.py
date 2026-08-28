@@ -18,9 +18,9 @@ from artek_buddy.consent import (
     OWNER_HOME_SCOPE,
     browse_origin,
 )
-from artek_buddy.db.shaping import new_id
+from artek_buddy.db.shaping import TURN_FAILED, new_id
 from artek_buddy.runtime.base import RuntimeBase
-from artek_buddy.runtime.cursor_wait import note_auth_failures
+from artek_buddy.runtime.cursor_wait import dead_wait_owner_error, note_auth_failures
 from artek_buddy.runtime.tools import ProductTools
 from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord
 from artek_buddy.stream import _map_tool_to_events
@@ -714,6 +714,36 @@ class ScriptedRuntime(RuntimeBase):
         self.bind_agent_bot(agent_id, bot_id)
         self.last_prompt = prompt
         hay = _user_tail(prompt).lower()
+        if "e2e-dead-wait" in hay:
+            run_id = new_id("run")
+            self._auth_fails, recycle = note_auth_failures(
+                self._auth_fails,
+                status="failed",
+                error=TURN_FAILED,
+                duration_s=0.0,
+            )
+            yield RunRecord(
+                id=run_id,
+                agent_id=agent_id,
+                status="failed",
+                result=None,
+                error=dead_wait_owner_error(TURN_FAILED, recycle),
+            )
+            if recycle:
+                self._agents.pop(agent_id, None)
+                live = await self.create_session(
+                    name="artek-buddy",
+                    persist_default=True,
+                    bot_id=bot_id,
+                )
+                if bot_id and self.store is not None:
+                    try:
+                        self.store.attach_agent(bot_id, live)
+                    except Exception:
+                        log.exception("failed to attach recycled scripted agent")
+                self.bridge_recycles += 1
+                self._auth_fails = 0
+            return
         if "e2e-auth-error" in hay:
             run_id = new_id("run")
             if self._pending_recover:
