@@ -27,7 +27,13 @@ import {
   shouldStickDismissOnView,
   shouldWatchBackgroundBot,
 } from "../lib/alerts";
-import { hideBookSlug, slugsConsumedByRunPrompt, visibleSkillBooks } from "../lib/books-ask";
+import {
+  hideBookSlug,
+  showBookSlug,
+  slugForBookName,
+  slugsConsumedByRunPrompt,
+  visibleSkillBooks,
+} from "../lib/books-ask";
 import { composerCanSend } from "../lib/composer";
 import {
   composerRedo,
@@ -1932,6 +1938,12 @@ export function ShellPage() {
                   onOpenComputer={() => void openOverlay("preview")}
                   onOpenBot={(id) => {
                     void refreshBots().then(() => navigate(`/app/${id}`));
+                  }}
+                  onRestoreSkill={(name) => {
+                    if (!active) return;
+                    const slug = slugForBookName(skillBooks, name);
+                    if (!slug) return;
+                    setHiddenBookSlugs((map) => showBookSlug(map, active.id, slug));
                   }}
                   onContextMenu={(event, item) => {
                     event.preventDefault();

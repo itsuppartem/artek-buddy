@@ -20,6 +20,26 @@ export function hideBookSlug(
   return { ...hidden, [botId]: [...already, slug] };
 }
 
+export function showBookSlug(
+  hidden: Record<string, string[]>,
+  botId: string,
+  slug: string,
+): Record<string, string[]> {
+  const already = hidden[botId] ?? [];
+  if (!already.includes(slug)) return hidden;
+  const rest = already.filter((item) => item !== slug);
+  if (!rest.length) {
+    const next = { ...hidden };
+    delete next[botId];
+    return next;
+  }
+  return { ...hidden, [botId]: rest };
+}
+
+export function slugForBookName(books: SkillBookChip[], name: string): string | undefined {
+  return books.find((book) => book.name === name)?.slug;
+}
+
 export function visibleSkillBooks(
   books: SkillBookChip[],
   hidden: Record<string, string[]>,

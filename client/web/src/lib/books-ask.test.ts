@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   hideBookSlug,
   runPromptForBook,
+  showBookSlug,
+  slugForBookName,
   slugsConsumedByRunPrompt,
   visibleSkillBooks,
 } from "./books-ask";
@@ -20,5 +22,13 @@ describe("skill composer chips", () => {
     expect(visibleSkillBooks([invoice, extra], hidden, "bot-a")).toEqual([extra]);
     expect(visibleSkillBooks([invoice, extra], hidden, "bot-b")).toEqual([invoice, extra]);
     expect(runPromptForBook(invoice.name)).toBe("please run Invoice");
+  });
+
+  it("puts a dismissed slug back for that chat", () => {
+    const hidden = hideBookSlug({}, "bot-a", invoice.slug);
+    expect(
+      visibleSkillBooks([invoice], showBookSlug(hidden, "bot-a", invoice.slug), "bot-a"),
+    ).toEqual([invoice]);
+    expect(slugForBookName([invoice, extra], "Invoice")).toBe("invoice");
   });
 });
