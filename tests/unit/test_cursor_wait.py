@@ -71,6 +71,30 @@ def test_completed_run_does_not_recycle() -> None:
     assert recycle is False
 
 
+def test_instant_turn_failed_wait_recycles_immediately() -> None:
+    from artek_buddy.db.shaping import TURN_FAILED
+
+    n, recycle = note_auth_failures(0, status="failed", error=TURN_FAILED, duration_s=0.0)
+    assert recycle is True
+    assert n == 0
+
+
+def test_slow_turn_failed_does_not_recycle() -> None:
+    from artek_buddy.db.shaping import TURN_FAILED
+
+    n, recycle = note_auth_failures(0, status="failed", error=TURN_FAILED, duration_s=5.0)
+    assert recycle is False
+    assert n == 0
+
+
+def test_dead_wait_owner_error_names_the_next_step() -> None:
+    from artek_buddy.db.shaping import TURN_FAILED
+    from artek_buddy.runtime.cursor_wait import DEAD_WAIT_NEXT_STEP, dead_wait_owner_error
+
+    assert dead_wait_owner_error(TURN_FAILED, True) == DEAD_WAIT_NEXT_STEP
+    assert dead_wait_owner_error(TURN_FAILED, False) == TURN_FAILED
+
+
 def test_wait_error_logs_status_and_error_code(caplog) -> None:
     from artek_buddy.runtime.cursor_wait import log_cursor_wait
 

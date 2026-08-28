@@ -332,7 +332,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
-| Failed / cancelled run shows a run-error, not a silent hole | [ ] | [ ] |
+| Failed / cancelled run shows a run-error, not a silent hole. Instant Cursor wait fail after a good turn (`please e2e-dead-wait`): **The turn failed. Send again…**; the next hello still answers | [ ] | [ ] |
 | A follow-up while `waiting_takeover` starts a turn (does not only enqueue) | [ ] | [ ] |
 | Stop keeps the run cancelled: a late complete does not append the essay (scripted `please e2e-late-complete` or a live Cursor turn). **Stopped.** is one `run-error` line. Queued owner lines survive Stop and prepend to the next send | [ ] | [ ] |
 

@@ -19,6 +19,7 @@ from cursor_sdk import (
 from artek_buddy.config import Settings
 from artek_buddy.runtime.base import RuntimeBase
 from artek_buddy.runtime.cursor_wait import (
+    dead_wait_owner_error,
     describe_cursor_wait,
     log_cursor_wait,
     note_auth_failures,
@@ -292,6 +293,7 @@ class CursorRuntime(RuntimeBase):
                 )
                 if recycle:
                     await self._recycle_dead_agent(agent_id, bot_id)
+                error_code = dead_wait_owner_error(error_code, recycle)
                 yield RunRecord(
                     id=str(getattr(run, "id", "")),
                     agent_id=agent_id,
