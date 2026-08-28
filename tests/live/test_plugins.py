@@ -255,3 +255,27 @@ def test_plugins_search_filters_without_enter(page: Page, client_url: str, host_
     page.get_by_test_id("plugins-remove").click()
     expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
     page.get_by_role("button", name="Close Plugins").click()
+
+
+def test_plugins_closed_wheel_does_not_open_and_one_close(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    pair_fresh(page, client_url, host_url)
+    hatch = page.locator('[data-shell="hatch"]')
+    expect(hatch).to_have_attribute("data-hatch-open", "0")
+    expect(hatch).to_have_css("pointer-events", "none")
+    expect(page.get_by_test_id("plugins-pane")).to_have_count(0)
+    thread = page.get_by_test_id("thread-pane")
+    expect(thread).to_be_visible()
+    thread.hover()
+    page.mouse.wheel(0, 800)
+    expect(page.get_by_test_id("plugins-pane")).to_have_count(0)
+    expect(hatch).to_have_attribute("data-hatch-open", "0")
+    page.get_by_test_id("open-plugins").click()
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible()
+    expect(hatch).to_have_attribute("data-hatch-open", "1")
+    expect(hatch).to_have_css("pointer-events", "auto")
+    page.get_by_role("button", name="Close Plugins").click()
+    expect(page.get_by_test_id("plugins-pane")).to_have_count(0)
+    expect(hatch).to_have_attribute("data-hatch-open", "0")
+    expect(hatch).to_have_css("pointer-events", "none")

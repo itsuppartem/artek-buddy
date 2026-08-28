@@ -44,6 +44,7 @@ import {
   resetComposerHistory,
 } from "../lib/composer-undo";
 import { fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/consent";
+import { hatchIsOpen, hatchPointerEvents } from "../lib/hatch";
 import { stripMarkdown } from "../lib/markdown";
 import { dispatchMemoryChanged } from "../lib/memory";
 import { NEEDS_MODEL_TEXT } from "../lib/models";
@@ -1180,6 +1181,7 @@ export function ShellPage() {
   );
   const emptyInbox = inboxEmptyState(bots.length, archivedBots.length);
   const needsModel = !modelState?.defaultModel;
+  const hatchOpen = hatchIsOpen(panel, Boolean(active));
 
   function writeDraft(value: string, reset = false) {
     if (reset) {
@@ -2217,16 +2219,22 @@ export function ShellPage() {
 
         <aside
           data-shell="hatch"
+          data-hatch-open={hatchOpen ? "1" : "0"}
           data-phone-show={phoneTab === "desk" ? "1" : "0"}
-          className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-ink transition-[width] duration-200 ease-out ${
+          onWheel={(event) => {
+            if (hatchOpen) event.stopPropagation();
+          }}
+          className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-ink ${
+            hatchPointerEvents(hatchOpen) === "none" ? "pointer-events-none" : "pointer-events-auto"
+          } ${
             phoneShell
               ? "w-full max-w-none border-l-0"
-              : panel && (active || panel === "create" || panel === "models" || panel === "plugins")
+              : hatchOpen
                 ? "w-[360px] border-l border-hairline"
                 : "w-0"
           }`}
         >
-          {panel && (active || panel === "create" || panel === "models" || panel === "plugins") ? (
+          {hatchOpen ? (
             <div
               className={`ab-scroll h-full overflow-y-auto px-4 py-3 ${
                 phoneShell ? "w-full" : "w-[360px]"

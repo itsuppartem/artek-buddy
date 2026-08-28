@@ -142,6 +142,7 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Plugins → key → Save → **Key saved** + last four. Key field gone. Full key never on the page | [ ] | [ ] |
+| Wheel the thread with Plugins closed: hatch stays shut. Open Plugins, one Close, pane is gone | [ ] | [ ] |
 | Search apps filters as you type (no Enter needed). Enter does **not** close the pane. Catalog scroll stays put | [ ] | [ ] |
 | Search → Connect a simple app (no browser) → Connected. No new user bubble. Composer stays empty | [ ] | [ ] |
 | Chip click fills `please use {name}` and still does not Send | [ ] | [ ] |

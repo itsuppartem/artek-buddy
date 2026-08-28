@@ -15,6 +15,7 @@
 
 ### Fixed
 - New memory defaults to This bot with a filled scope control. Delete is Remove. Save acknowledgement uses the create/edit buttons, not a shared Saved name.
+- The closed Plugins hatch does not steal the thread wheel or open from the right edge. One Close dismisses.
 - Plugins Search apps stays open on Enter and keeps catalog scroll where the owner left it.
 - Plugins Connect only marks Connected. The chip fills `please use {name}` on a real click; leftover mouse-up after Connect does not Send.
 - A queued send is marked Waiting for the host until reconnect, then Sent while offline with local time.

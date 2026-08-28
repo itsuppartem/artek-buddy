@@ -110,7 +110,7 @@ Copy: Save, Forget, Retry, Models, API key, Model, Use this model, Reasoning, Fa
 
 ## Plugins (host)
 
-Host-wide connected apps. Open from **Plugins** (`open-plugins`). Works with an empty inbox. Close returns to the thread.
+Host-wide connected apps. Open from **Plugins** (`open-plugins`). Works with an empty inbox. Close returns to the thread. The closed hatch does not steal the thread wheel or open from the right edge. One Close dismisses.
 
 ```
 ┌── Plugins ──┐
