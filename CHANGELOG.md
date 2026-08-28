@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Escape closes Settings and New bot. Composer text and the guest overlay keep their own Escape.
 - Models Cursor has one commit. Empty providers say to paste a key instead of a dead Use this model.
 - Settings Restart… and Stop… confirm once, same as Reset… and Delete chat….
 - File-card Download and Load earlier look like controls. Owner cards still offer Download; the oldest page leaves a beginning line.

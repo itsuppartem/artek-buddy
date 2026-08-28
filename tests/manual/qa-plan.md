@@ -59,7 +59,7 @@ Mint three bots for the run. Names can differ; they must be distinct:
 | **You** opens **Models**, not the bot profile | [ ] | [ ] |
 | **Plugins** opens even with an empty inbox | [ ] | [ ] |
 | Create a bot → focus lands in the new chat | [ ] | [ ] |
-| **Settings** from the gear does **not** boot the desktop | [ ] | [ ] |
+| **Settings** from the gear does **not** boot the desktop. Escape closes Settings and New bot (composer text stays; overlay Esc still drops fullscreen first) | [ ] | [ ] |
 | Settings, Memory, Routines, ask/file cards, and the overlay share the same warm tokens as pairing and the thread (ink / paper / mute / tan / sage). Not a cool gray hatch | [ ] | [ ] |
 
 Phone: Create / Models / Plugins open the **Desktop** tab (also in §11).
@@ -308,7 +308,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Unread pin is a tan circle named Unread (not a hidden 7px square). The name is bold | [ ] | [ ] |
 | Right-click (Deb) / long-press if offered (Phone): Pin / Unpin, Mark as unread (sticks until you leave and open again), Edit profile, Duplicate, Archive, Delete | [ ] | [ ] |
 | Empty inbox: Restore from Archived, or create a first bot | [ ] | [ ] |
-| Create: Name (inbox), Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team / Private. Focusing Name does not mint a bot; only Create does | [ ] | [ ] |
+| Create: Name (inbox), Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team / Private. Focusing Name does not mint a bot; only Create does. Escape closes New bot the same as × | [ ] | [ ] |
 | Duplicate makes a second bot. Delete removes that bot; optional purge memories | [ ] | [ ] |
 | Inbox order is pinned first, then created. A later message does not jump a row | [ ] | [ ] |
 
@@ -400,7 +400,7 @@ Computer → Routines.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Settings: Name, Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team \| Private, notifyOnFinish, Restart… / Stop… / Reset… (each confirms), Delete | [ ] | [ ] |
+| Settings: Name, Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team \| Private, notifyOnFinish, Restart… / Stop… / Reset… (each confirms), Delete. Escape closes Settings the same as Close | [ ] | [ ] |
 | Title keeps what you typed through blur / Tab and Save (the field must not empty). Save flashes Saved. Reopen Edit profile shows the same title | [ ] | [ ] |
 | Settings opened from the computer pane returns to that pane. Create / Models Close do the same if the pane was open | [ ] | [ ] |
 | Changing Team ↔ Private rebinds the desktop; the old home is **not** copied | [ ] | [ ] |
@@ -562,6 +562,7 @@ If time is short, in this order:
 8. **§12 Pad and Cyrillic**
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
+11. **§1 / §21 Escape** on Settings and New bot
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 
