@@ -15,6 +15,7 @@
 
 ### Fixed
 - Ctrl+A in Message selects the draft. It does not Send or duplicate the bubble.
+- Plugins pane waits for host key status before showing the paste field, so a leftover key is not a flash of an empty form.
 - Inbox Search with no matches shows empty copy and a Clear control instead of a blank rack.
 - Escape closes Settings and New bot. Composer text and the guest overlay keep their own Escape.
 - Models Cursor has one commit. Empty providers say to paste a key instead of a dead Use this model.

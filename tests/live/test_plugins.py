@@ -15,15 +15,19 @@ from tests.live.helpers import (
 pytestmark = pytest.mark.live
 
 
+def _plugins_ready(page: Page) -> None:
+    pane = page.get_by_test_id("plugins-pane")
+    expect(pane).to_be_visible()
+    expect(pane).to_have_attribute("data-plugins-ready", "1", timeout=8_000)
+
+
 def _plugins_key_form(page: Page) -> None:
-    expect(page.get_by_test_id("plugins-pane")).to_be_visible()
+    _plugins_ready(page)
     saved = page.get_by_test_id("plugins-key-saved")
-    save = page.get_by_test_id("plugins-save")
-    expect(saved.or_(save)).to_be_visible(timeout=8_000)
-    if saved.is_visible():
+    if saved.count() and saved.is_visible():
         page.get_by_test_id("plugins-remove").click()
         expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
-    expect(save).to_be_visible()
+    expect(page.get_by_label("Plugins key")).to_be_visible()
 
 
 def test_plugins_pane_key_connect_docs_then_chat_answers(
@@ -33,8 +37,7 @@ def test_plugins_pane_key_connect_docs_then_chat_answers(
     pair_fresh(page, client_url, host_url)
     expect(page.get_by_role("button", name="Plugins")).to_be_visible()
     page.get_by_test_id("open-plugins").click()
-    pane = page.get_by_test_id("plugins-pane")
-    expect(pane).to_be_visible()
+    _plugins_ready(page)
     leftover = page.get_by_test_id("plugins-remove")
     if leftover.count() and leftover.first.is_visible():
         leftover.click()
@@ -90,7 +93,7 @@ def test_chat_connects_docs_without_pane_click(page: Page, client_url: str, host
     name = unique_bot("PlugChat")
     pair_fresh(page, client_url, host_url)
     page.get_by_test_id("open-plugins").click()
-    expect(page.get_by_test_id("plugins-pane")).to_be_visible()
+    _plugins_ready(page)
     leftover = page.get_by_test_id("plugins-remove")
     if leftover.count() and leftover.first.is_visible():
         leftover.click()
