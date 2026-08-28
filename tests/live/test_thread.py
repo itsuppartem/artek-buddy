@@ -735,6 +735,7 @@ def test_offline_send_queues_then_flushes_with_caption(
         has_text=parked
     )
     expect(bubble).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("queued-pending")).to_contain_text("Waiting for the host")
     expect(page.get_by_test_id("offline-sent-caption")).to_have_count(0)
     expect(box).to_have_value("")
     restore_host(page)
@@ -742,6 +743,7 @@ def test_offline_send_queues_then_flushes_with_caption(
     expect(page.get_by_test_id("offline-sent-caption")).to_contain_text(
         "Sent while offline", timeout=20_000
     )
+    expect(page.get_by_test_id("queued-pending")).to_have_count(0)
     expect(page.get_by_test_id("reconnect-banner")).to_have_count(0)
     box.fill(later)
     expect(box).to_have_value(later)
@@ -750,6 +752,43 @@ def test_offline_send_queues_then_flushes_with_caption(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=later)
     ).to_be_visible(timeout=8_000)
     expect(page.get_by_test_id("offline-sent-caption")).to_have_count(1)
+
+
+def test_queued_send_shows_pending_then_local_caption(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Queued")
+    ensure_model(page)
+    expect(thread_header(page)).to_contain_text(name)
+    parked = "queued while unreachable"
+    later = "online after the queue"
+    cut_host(page)
+    box = composer(page)
+    box.fill(parked)
+    expect(box).to_have_value(parked)
+    box.press("Enter")
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+        has_text=parked
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(bubble).to_have_attribute("data-queued", "true")
+    pending = page.get_by_test_id("queued-pending")
+    expect(pending).to_be_visible()
+    expect(pending).to_contain_text("Waiting for the host")
+    expect(page.get_by_test_id("offline-sent-caption")).to_have_count(0)
+    restore_host(page)
+    page.get_by_test_id("reconnect-banner").get_by_role("button", name="Retry connection").click()
+    caption = page.get_by_test_id("offline-sent-caption")
+    expect(caption).to_contain_text("Sent while offline", timeout=20_000)
+    expect(caption).to_contain_text("·")
+    expect(pending).to_have_count(0)
+    box.fill(later)
+    expect(box).to_have_value(later)
+    box.press("Enter")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=later)
+    ).to_be_visible(timeout=8_000)
+    expect(caption).to_have_count(1)
 
 
 def test_auth_error_send_does_not_queue(page: Page, client_url: str, host_url: str) -> None:

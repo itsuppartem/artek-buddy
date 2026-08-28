@@ -128,10 +128,16 @@ export function captionForMessage(
   return captions.find((item) => item.messageId === messageId);
 }
 
-export function formatOfflineCaption(queuedAt: number, now: Date = new Date()): string {
+export function formatOfflineCaption(
+  queuedAt: number,
+  now: Date = new Date(),
+  timeZone: string = Intl.DateTimeFormat().resolvedOptions().timeZone,
+): string {
   const time = new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
     minute: "2-digit",
+    timeZone,
+    timeZoneName: "short",
   }).format(new Date(queuedAt));
   void now;
   return `Sent while offline · ${time}`;

@@ -93,8 +93,14 @@ describe("captions after flush", () => {
 
   it("formats a local-time caption and remembers it by message id", () => {
     const queuedAt = Date.parse("2026-08-25T08:32:00Z");
-    const text = formatOfflineCaption(queuedAt, new Date("2026-08-25T08:40:00Z"));
+    const text = formatOfflineCaption(
+      queuedAt,
+      new Date("2026-08-25T08:40:00Z"),
+      "Europe/Belgrade",
+    );
     expect(text.startsWith("Sent while offline · ")).toBe(true);
+    expect(text).toMatch(/10:32/);
+    expect(text).not.toMatch(/08:32/);
     const captions = rememberCaption([], { messageId: "msg_1", botId: "bot-a", queuedAt });
     expect(captionForMessage(captions, "msg_1")?.queuedAt).toBe(queuedAt);
     expect(rememberCaption(captions, { messageId: "msg_1", botId: "bot-a", queuedAt })).toEqual(
