@@ -87,6 +87,8 @@ import {
 import {
   filterBots,
   inboxEmptyState,
+  inboxFallbackPath,
+  inboxRowClickShouldOpen,
   inboxSearchEmpty,
   type SidebarView,
   sortInboxBots,
@@ -273,6 +275,8 @@ export function ShellPage() {
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
   const botIdRef = useRef<string | undefined>(undefined);
+  const requestedBotId = useRef<string | null>(null);
+  const inboxPointerDown = useRef<string | null>(null);
   const botsRef = useRef<Bot[]>([]);
   const shellOpenedAt = useRef(Date.now());
   const freshBotIds = useRef(new Set<string>());
@@ -458,6 +462,7 @@ export function ShellPage() {
   }
 
   function openBot(id: string) {
+    requestedBotId.current = id;
     activeIdRef.current = id;
     botIdRef.current = id;
     setPhoneTab(nextPhoneTab("select-bot"));
@@ -960,15 +965,17 @@ export function ShellPage() {
 
   useEffect(() => {
     if (!botsReady) return;
-    if (botId && bots.some((bot) => bot.id === botId)) return;
-    const fallback = sortInboxBots(bots)[0];
-    if (!botId && fallback) {
-      navigate(`/app/${fallback.id}`, { replace: true });
-      return;
+    const listedIds = bots.map((bot) => bot.id);
+    if (botId && listedIds.includes(botId) && requestedBotId.current === botId) {
+      requestedBotId.current = null;
     }
-    if (botId && !bots.some((bot) => bot.id === botId)) {
-      navigate(fallback ? `/app/${fallback.id}` : "/app", { replace: true });
-    }
+    const next = inboxFallbackPath(
+      botId,
+      listedIds,
+      sortInboxBots(bots)[0]?.id,
+      requestedBotId.current,
+    );
+    if (next) navigate(next, { replace: true });
   }, [botsReady, botId, bots, navigate]);
 
   useEffect(() => {
@@ -1691,7 +1698,15 @@ export function ShellPage() {
                     aria-label={
                       bot.unread ? `Open chat ${bot.name} (unread)` : `Open chat ${bot.name}`
                     }
-                    onClick={() => openBot(bot.id)}
+                    aria-current={active?.id === bot.id ? "page" : undefined}
+                    onPointerDown={() => {
+                      inboxPointerDown.current = bot.id;
+                    }}
+                    onClick={() => {
+                      if (!inboxRowClickShouldOpen(inboxPointerDown.current === bot.id)) return;
+                      inboxPointerDown.current = null;
+                      openBot(bot.id);
+                    }}
                     onContextMenu={(event) => {
                       event.preventDefault();
                       setContextMenu({
