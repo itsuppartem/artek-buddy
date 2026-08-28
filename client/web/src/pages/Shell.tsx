@@ -1430,6 +1430,7 @@ export function ShellPage() {
     name: string;
     title: string;
     description: string;
+    instructions: string;
     computerMode: ComputerMode;
   }) {
     const name = input.name.trim();
@@ -1440,7 +1441,7 @@ export function ShellPage() {
         name,
         title: input.title,
         description: input.description,
-        instructions: input.description,
+        instructions: input.instructions,
         computerMode: input.computerMode,
       });
       freshBotIds.current.add(bot.id);

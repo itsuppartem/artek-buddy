@@ -262,6 +262,7 @@ def create_named_bot(
     name: str,
     title: str | None = None,
     description: str | None = None,
+    instructions: str | None = None,
     *,
     private: bool | None = None,
 ) -> None:
@@ -275,6 +276,8 @@ def create_named_bot(
         page.get_by_placeholder("e.g. Code Reviewer").fill(title)
     if description is not None:
         page.get_by_placeholder("What this bot is for").fill(description)
+    if instructions is not None:
+        page.get_by_placeholder("Standing orders for this bot").fill(instructions)
     if private is True:
         page.get_by_test_id("computer-mode-private").click()
     elif private is False:

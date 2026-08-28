@@ -10,6 +10,7 @@ export function CreateBotForm({
     name: string;
     title: string;
     description: string;
+    instructions: string;
     computerMode: ComputerMode;
   }) => void;
   onCancel: () => void;
@@ -17,13 +18,14 @@ export function CreateBotForm({
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [computerMode, setComputerMode] = useState<ComputerMode>("team");
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
         if (!name.trim()) return;
-        onCreate({ name, title, description, computerMode });
+        onCreate({ name, title, description, instructions, computerMode });
       }}
     >
       <div className="mb-4 flex items-center justify-between">
@@ -61,6 +63,16 @@ export function CreateBotForm({
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           placeholder="What this bot is for"
+          rows={4}
+          className="mt-2 w-full rounded-[10px] border border-hairline bg-raised px-3.5 py-3 text-paper"
+        />
+      </label>
+      <label className="mt-4 block text-[14px] text-mute">
+        Instructions
+        <textarea
+          value={instructions}
+          onChange={(event) => setInstructions(event.target.value)}
+          placeholder="Standing orders for this bot"
           rows={4}
           className="mt-2 w-full rounded-[10px] border border-hairline bg-raised px-3.5 py-3 text-paper"
         />
