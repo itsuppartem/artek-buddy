@@ -34,7 +34,7 @@ import {
   slugsConsumedByRunPrompt,
   visibleSkillBooks,
 } from "../lib/books-ask";
-import { composerCanSend } from "../lib/composer";
+import { composerCanSend, composerPlaceholder } from "../lib/composer";
 import {
   composerRedo,
   composerUndo,
@@ -2079,10 +2079,10 @@ export function ShellPage() {
                   replyTo
                     ? "Write a reply…"
                     : active
-                      ? `Message ${active.name}`
+                      ? composerPlaceholder(active.name)
                       : "Create a bot to start"
                 }
-                className="max-h-40 min-h-[44px] flex-1 resize-none rounded-[10px] border border-hairline bg-raised px-3 py-2.5 text-[15px] leading-[22px] text-paper disabled:cursor-not-allowed disabled:opacity-40"
+                className="max-h-40 min-h-[44px] min-w-0 flex-1 resize-none rounded-[10px] border border-hairline bg-raised px-3 py-2.5 text-[15px] leading-[22px] text-paper disabled:cursor-not-allowed disabled:opacity-40"
               />
               {isBusy ? (
                 <button
