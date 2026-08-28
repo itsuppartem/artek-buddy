@@ -1605,7 +1605,9 @@ export function ShellPage() {
                     data-testid="bot-row"
                     data-bot-id={bot.id}
                     data-bot-name={bot.name}
-                    aria-label={`Open chat ${bot.name}`}
+                    aria-label={
+                      bot.unread ? `Open chat ${bot.name} (unread)` : `Open chat ${bot.name}`
+                    }
                     onClick={() => openBot(bot.id)}
                     onContextMenu={(event) => {
                       event.preventDefault();
@@ -1640,8 +1642,9 @@ export function ShellPage() {
                           {bot.unread ? (
                             <span
                               data-testid="unread-dot"
-                              aria-hidden="true"
-                              className="inline-block h-[7px] w-[7px] bg-tan"
+                              role="img"
+                              aria-label="Unread"
+                              className="inline-block h-2.5 w-2.5 rounded-full bg-tan"
                             />
                           ) : null}
                         </span>

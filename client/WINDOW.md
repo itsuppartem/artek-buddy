@@ -44,7 +44,7 @@ Auth error in the thread: **Pair this computer again** (`.deb`) or **Pair this p
 
 - **New bot** opens Create. Accessible name is the visible label.
 - Search filters inbox and archived by name / preview. Accessible name is `Search inbox`.
-- Bot row: Fraunces name, pin mark, tan square unread pin (`unread-dot`), status, preview. Selected row has a tan 3px left rail. Accessible name is `Open chat {name}`. Click opens the chat. Right-click: Pin / Unpin, Mark as read / unread, Edit profile, Duplicate, Archive, Delete. Inbox order is pinned first, then created; a later message does not jump a row under the pointer.
+- Bot row: Fraunces name, pin mark, tan round unread pin (`unread-dot`, named Unread), status, preview. Unread names are bold. Selected row has a tan 3px left rail. Accessible name is `Open chat {name}` or `Open chat {name} (unread)`. Click opens the chat. Right-click: Pin / Unpin, Mark as read / unread, Edit profile, Duplicate, Archive, Delete. Inbox order is pinned first, then created; a later message does not jump a row under the pointer.
 - The selected row, thread header, composer, and computer pane always name the same bot. The thread never blanks to an empty column on a switch.
 - Empty inbox (all archived): Restore one from Archived, or create a new bot.
 - No bots: Create your first bot.
