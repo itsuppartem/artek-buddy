@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-from tests.live.helpers import create_named_bot, open_settings, pair_fresh, unique_bot
+from tests.live.helpers import composer, create_named_bot, open_settings, pair_fresh, unique_bot
 
 pytestmark = pytest.mark.live
 
@@ -112,3 +112,25 @@ def test_create_instructions_stores_standing_orders(
     page.get_by_role("button", name="Edit profile").click()
     expect(page.get_by_placeholder("Standing orders for this bot")).to_have_value("be terse")
     expect(page.get_by_placeholder("What this bot is for")).to_have_value("reviews diffs")
+
+
+def test_escape_closes_settings_and_new_bot(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Esc")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    box = composer(page)
+    box.fill("keep me")
+    expect(box).to_have_value("keep me")
+    box.press("Escape")
+    expect(box).to_have_value("keep me")
+    expect(page.get_by_text("Bot Settings")).to_have_count(0)
+    open_settings(page, name)
+    expect(page.get_by_text("Bot Settings")).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(page.get_by_text("Bot Settings")).to_have_count(0)
+    expect(box).to_have_value("keep me")
+    page.get_by_role("button", name="New bot").click()
+    expect(page.get_by_placeholder("Name this bot")).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(page.get_by_placeholder("Name this bot")).to_have_count(0)
+    expect(box).to_have_value("keep me")

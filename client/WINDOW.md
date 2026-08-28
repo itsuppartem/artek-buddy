@@ -128,7 +128,7 @@ Copy: Plugins, Plugins key, Save, Replace, Remove, Search apps, Connect, Disconn
 
 Create: Name (inbox row, `Name this bot`), Title (short role, `e.g. Code Reviewer`), Description (`What this bot is for`), Instructions (`Standing orders for this bot`, not labelled Prompt), Team | Private (`computer-mode-team` / `computer-mode-private`).
 
-Settings: the same fields plus mode change (rebinds the desktop; home is not copied), Restart… / Stop… / Reset… (each confirms once; Reset wipes that home; Team reset wipes the shared desktop), busy-bot name, notifyOnFinish, Delete with optional purge memories. **Edit profile** opens the fields. Title keeps what you typed through blur and Save. Save flashes **Saved** for about a second, then the sheet. A host error stays under the row.
+Settings: the same fields plus mode change (rebinds the desktop; home is not copied), Restart… / Stop… / Reset… (each confirms once; Reset wipes that home; Team reset wipes the shared desktop), busy-bot name, notifyOnFinish, Delete with optional purge memories. **Edit profile** opens the fields. Title keeps what you typed through blur and Save. Save flashes **Saved** for about a second, then the sheet. A host error stays under the row. Escape closes Settings and New bot the same as Close / ×. Composer text stays put. Fullscreen overlay Escape still drops the overlay first; guest keys are unchanged.
 
 ## Computer pane (hatch)
 

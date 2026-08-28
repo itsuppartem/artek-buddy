@@ -65,6 +65,7 @@ import {
   shouldQueueSend,
   writeStoredList,
 } from "../lib/offline-queue";
+import { panelEscapeAction } from "../lib/panel-escape";
 import {
   nextPhoneTab,
   type PhoneTab,
@@ -643,6 +644,20 @@ export function ShellPage() {
     if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
   }
 
+  function closeSettings() {
+    const restore = panelAfterSettings.current;
+    panelAfterSettings.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+  }
+
+  function closeCreate() {
+    const restore = panelAfterCreate.current;
+    panelAfterCreate.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+  }
+
   function openPlugins() {
     setPhoneTab(nextPhoneTab("open-desk"));
     setPanel("plugins");
@@ -1132,13 +1147,27 @@ export function ShellPage() {
   }, [active?.id, computer?.state, screenError]);
 
   useEffect(() => {
-    if (!computerOpen) return;
     function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") setComputerOpen(false);
+      if (event.key !== "Escape" || event.isComposing) return;
+      const action = panelEscapeAction({ computerOpen, panel });
+      if (action === "close-overlay") {
+        event.preventDefault();
+        setComputerOpen(false);
+        return;
+      }
+      if (action === "close-settings") {
+        event.preventDefault();
+        closeSettings();
+        return;
+      }
+      if (action === "close-create") {
+        event.preventDefault();
+        closeCreate();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [computerOpen]);
+  }, [computerOpen, panel, phoneShell]);
 
   const filtered = useMemo(
     () => filterBots(sortInboxBots(bots), query, (bot) => stripMarkdown(bot.preview || bot.title)),
@@ -2188,26 +2217,13 @@ export function ShellPage() {
                 />
               ) : null}
               {panel === "create" ? (
-                <CreateBotForm
-                  onCancel={() => {
-                    const restore = panelAfterCreate.current;
-                    panelAfterCreate.current = null;
-                    setPanel(restore);
-                    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
-                  }}
-                  onCreate={(input) => void createBot(input)}
-                />
+                <CreateBotForm onCancel={closeCreate} onCreate={(input) => void createBot(input)} />
               ) : null}
               {panel === "settings" && active ? (
                 <BotSettings
                   bot={active}
                   computer={computer ?? snapshot?.computer ?? null}
-                  onClose={() => {
-                    const restore = panelAfterSettings.current;
-                    panelAfterSettings.current = null;
-                    setPanel(restore);
-                    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
-                  }}
+                  onClose={closeSettings}
                   onUpdated={() => void refreshBots()}
                   onDelete={(deleteMemories) => void deleteBot(active, deleteMemories)}
                   onRestart={() => restartComputer()}
