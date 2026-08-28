@@ -301,7 +301,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Search filters inbox (and Archived) by name / preview. A name or preview hit is marked | [ ] | [ ] |
+| Search filters inbox (and Archived) by name / preview. A name or preview hit is marked. No matches: empty copy plus Clear Search; clear restores the list | [ ] | [ ] |
 | Click a row opens that chat. Selected row, header, composer, and computer pane name the **same** bot | [ ] | [ ] |
 | Switching chats does not blank the thread or jump inbox order under the pointer | [ ] | [ ] |
 | Opening a chat marks it read. A reply while that chat is open does not leave the unread pin | [ ] | [ ] |
@@ -563,6 +563,7 @@ If time is short, in this order:
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
 11. **§1 / §21 Escape** on Settings and New bot
+12. **§14 Inbox Search** no-match empty copy + Clear
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 

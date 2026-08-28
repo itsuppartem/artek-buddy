@@ -174,6 +174,28 @@ def test_inbox_search_marks_preview_hit(page: Page, client_url: str, host_url: s
     expect(row.get_by_test_id("bot-preview")).to_contain_text(token)
 
 
+def test_inbox_search_no_match_shows_empty_and_clear(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("Seek")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    expect(bot_row(page, name)).to_have_count(1)
+    search = page.get_by_placeholder("Search")
+    search.fill("zzz-no-match")
+    expect(bot_row(page, name)).to_have_count(0)
+    empty = page.get_by_test_id("inbox-search-empty")
+    expect(empty).to_be_visible()
+    expect(empty).to_contain_text("No chats match")
+    expect(empty).to_contain_text("Clear Search")
+    clearer = page.get_by_role("button", name="Clear Search")
+    expect(clearer).to_be_visible()
+    clearer.click()
+    expect(search).to_have_value("")
+    expect(empty).to_have_count(0)
+    expect(bot_row(page, name)).to_have_count(1)
+
+
 def test_switch_during_stream_keeps_chat(page: Page, client_url: str, host_url: str) -> None:
     first = unique_bot("LiveA")
     second = unique_bot("LiveB")
