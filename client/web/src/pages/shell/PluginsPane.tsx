@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../../api";
+import { filterPluginCatalog } from "../../lib/plugins-catalog";
 import type { Connection, ConnectionCatalogItem, ConnectionKeyStatus } from "../../types";
 import { Button } from "../../ui/button";
 import { IconClose } from "../../ui/icons";
@@ -23,10 +24,10 @@ export function PluginsPane({
   const showKeyField = !configured || replace;
 
   useEffect(() => {
-    void refresh("");
+    void refresh();
   }, []);
 
-  async function refresh(search: string) {
+  async function refresh() {
     const next = await api.connections.status();
     setStatus(next);
     if (!next.configured) {
@@ -35,7 +36,7 @@ export function PluginsPane({
       return;
     }
     try {
-      const catalog = await api.connections.catalog(search);
+      const catalog = await api.connections.catalog("");
       setItems(catalog.items ?? []);
       setRows((await api.connections.list()).connections ?? []);
       setError("");
@@ -60,7 +61,7 @@ export function PluginsPane({
       setStatus(await api.connections.setKey(apiKey));
       setDraft("");
       setReplace(false);
-      await refresh(query);
+      await refresh();
       onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the key.");
@@ -91,7 +92,7 @@ export function PluginsPane({
       if (started.authorizationUrl) {
         window.open(started.authorizationUrl, "_blank", "noopener,noreferrer");
       }
-      await refresh(query);
+      await refresh();
       onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not connect that app.");
@@ -104,7 +105,7 @@ export function PluginsPane({
     setBusy(`finish-${connectionId}`);
     try {
       await api.connections.complete(connectionId);
-      await refresh(query);
+      await refresh();
       onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not finish that app.");
@@ -117,7 +118,7 @@ export function PluginsPane({
     setBusy(`disconnect-${connectionId}`);
     try {
       await api.connections.revoke(connectionId);
-      await refresh(query);
+      await refresh();
       onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not disconnect that app.");
@@ -218,17 +219,16 @@ export function PluginsPane({
               id="plugins-search"
               data-testid="plugins-search"
               aria-label="Search apps"
+              placeholder="Search apps"
               className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper"
               value={query}
-              onChange={(event) => {
-                const next = event.target.value;
-                setQuery(next);
-                void refresh(next);
-              }}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+              onKeyUp={(event) => setQuery(event.currentTarget.value)}
             />
           </label>
           <div className="mt-3 flex flex-col gap-2" data-testid="plugins-catalog">
-            {items.map((item) => {
+            {filterPluginCatalog(items, query).map((item) => {
               const row = rows.find(
                 (entry) => entry.provider === item.slug && entry.status !== "revoked",
               );
