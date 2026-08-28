@@ -165,6 +165,7 @@ Computer pane on **Demo** (Private) or Team.
 | Preview is a live screen, caption **Preview · view only**. Not black text «Desktop is running». Click on the preview does **not** take control | [ ] | [ ] |
 | fluxbox panel: window title, close, menu. Not a bare X | [ ] | [ ] |
 | **Take control** → mouse / keys go to the guest. Caps Lock arrives. **Release** → the same turn continues; typing dots and Stop work again | [ ] | [ ] |
+| Take control from Sleeping (or Open screen before pixels): overlay says **Waking the desktop…** until the guest is on the glass, not a black void | [ ] | [ ] |
 | No pointer for **2 minutes** on the overlay → host Releases itself (holder is bot again) | [ ] | [ ] |
 | In chat, **without** pressing start: «Открой https://example.com» (or `HTTPS://…`). Card Allow once / Always / Deny | [ ] | [ ] |
 | After Allow: tile itself **Running**; guest has **only the browser**; the file manager does not fill home | [ ] | [ ] |
@@ -205,7 +206,7 @@ On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; t
 | Scroll (wheel on Deb, two-finger on Phone) moves the guest page | [ ] | [ ] |
 | Right-click (Deb) or two-finger tap (Phone) opens a guest context menu | [ ] | [ ] |
 | fluxbox **Files** / Browser / Terminal open a real window you can see | [ ] | [ ] |
-| Release: overlay is view-only again (same guest page, **not a black tile**). Pane says **Take control**, not You have control. Message and Stop work | [ ] | [ ] |
+| Release: overlay is view-only again (same guest page, **not a black tile** — last frame stays until the view-only picture loads). Pane says **Take control**, not You have control. Message and Stop work | [ ] | [ ] |
 
 If Chrome emulation cannot drag the pad, say **fail / blocked**, not skip. This section is why the phone desk exists.
 
@@ -560,7 +561,7 @@ If time is short, in this order:
 3. **§4 Skill from the web**
 4. **§5 Bot asks bot**
 5. **§6 Plugins** (pane Connect or chat attach)
-6. **§7 Desktop** + **§7a Hands on the guest**
+6. **§7 Desktop** + **§7a Hands on the guest** (Release keeps the picture; Sleeping → Take control shows Waking the desktop…)
 7. **§11 Phone chrome** + **§29 Computer must not blank**
 8. **§12 Pad and Cyrillic**
 9. **§25 File + §26 Picture + §27 Ctrl+V**

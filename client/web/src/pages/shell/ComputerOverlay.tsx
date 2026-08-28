@@ -10,9 +10,11 @@ import {
 import {
   computerLabel,
   embeddableScreenUrl,
+  overlayDisplayUrl,
+  overlayPendingUrl,
   overlayPointerEvents,
+  overlayWaitingLabel,
   screenIframeSandbox,
-  screenTargetKey,
   shouldReportOwnerActivity,
 } from "../../lib/screen";
 import type { Bot, ComputerStatus } from "../../types";
@@ -88,7 +90,13 @@ export function ComputerOverlay({
   }
   const [frameReady, setFrameReady] = useState(0);
   const [keysOpen, setKeysOpen] = useState(false);
+  const nextUrl = embeddableScreenUrl(screenUrl);
+  const [shownUrl, setShownUrl] = useState<string | null>(null);
   const view = useOverlayViewport(phone && open);
+
+  useEffect(() => {
+    if (!open || !nextUrl) setShownUrl(null);
+  }, [open, nextUrl]);
 
   function reportOwnerActivity() {
     if (computer?.controlHolder !== "user" || !bot) return;
@@ -115,19 +123,6 @@ export function ComputerOverlay({
     };
   }, [open, computer?.controlHolder, overlayFrameRef, screenEpoch, screenUrl, frameReady]);
 
-  if (booting) {
-    return (
-      <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-[rgba(4,4,5,.96)]">
-        <div className="text-[19px] font-medium text-paper">
-          Booting up{" "}
-          {bot ? computerLabel(computer?.mode || bot.computerMode, bot.name) : "computer"}
-        </div>
-        <div className="h-[5px] w-[min(420px,70%)] overflow-hidden rounded-full bg-raised">
-          <div className="h-full w-2/3 rounded-full bg-paper" />
-        </div>
-      </div>
-    );
-  }
   if (!open || !bot) return null;
 
   function sendDeskInput(input: DeskInput) {
@@ -137,6 +132,20 @@ export function ComputerOverlay({
 
   const inControl = computer?.controlHolder === "user";
   const title = overlayTitle(computer?.mode || bot.computerMode, bot.name, phone);
+  const displayUrl = overlayDisplayUrl(shownUrl, nextUrl);
+  const pendingUrl = overlayPendingUrl(shownUrl, nextUrl);
+  const waiting = overlayWaitingLabel({
+    booting,
+    state: computer?.state,
+    hasFrame: Boolean(shownUrl),
+    hasUrl: Boolean(nextUrl),
+  });
+
+  function markGuestFrame(url: string, event: SyntheticEvent<HTMLIFrameElement>) {
+    onScreenFrameLoad(event);
+    setShownUrl(url);
+    setFrameReady((value) => value + 1);
+  }
 
   return (
     <div
@@ -238,25 +247,43 @@ export function ComputerOverlay({
         </p>
       ) : null}
       <div className="relative min-h-0 flex-1 bg-ink" data-testid="computer-overlay-screen">
-        {embeddableScreenUrl(screenUrl) ? (
+        {displayUrl ? (
           <>
             <iframe
-              ref={overlayFrameRef}
-              key={`${screenTargetKey(screenUrl) ?? "screen"}-${screenEpoch}`}
+              ref={pendingUrl ? undefined : overlayFrameRef}
+              key={`${displayUrl}-${screenEpoch}`}
               title="Bot screen"
-              src={embeddableScreenUrl(screenUrl) ?? undefined}
-              sandbox={screenIframeSandbox(screenUrl)}
-              className="absolute inset-0 h-full w-full border-0 bg-black"
+              src={displayUrl}
+              sandbox={screenIframeSandbox(displayUrl)}
+              className="absolute inset-0 z-0 h-full w-full border-0 bg-ink"
               allow="clipboard-read; clipboard-write; fullscreen"
               style={{
                 pointerEvents: phone ? "none" : overlayPointerEvents(computer?.controlHolder),
               }}
-              onLoad={(event) => {
-                onScreenFrameLoad(event);
-                setFrameReady((value) => value + 1);
-              }}
+              onLoad={(event) => markGuestFrame(displayUrl, event)}
               onError={() => onScreenError("Screen preview failed to load")}
             />
+            {pendingUrl ? (
+              <iframe
+                ref={overlayFrameRef}
+                key={`${pendingUrl}-${screenEpoch}`}
+                title="Bot screen (next)"
+                src={pendingUrl}
+                sandbox={screenIframeSandbox(pendingUrl)}
+                className="pointer-events-none absolute inset-0 z-0 h-full w-full border-0 bg-ink opacity-0"
+                allow="clipboard-read; clipboard-write; fullscreen"
+                onLoad={(event) => markGuestFrame(pendingUrl, event)}
+                onError={() => onScreenError("Screen preview failed to load")}
+              />
+            ) : null}
+            {waiting ? (
+              <div
+                data-testid="computer-overlay-waiting"
+                className="absolute inset-0 z-20 grid place-items-center bg-ink/85 px-6 text-center text-sm text-paper"
+              >
+                {waiting}
+              </div>
+            ) : null}
             {screenError ? (
               <div className="absolute inset-0 z-10 grid place-items-center gap-3 bg-ink text-sm text-mute">
                 <div>{screenError}</div>
@@ -268,17 +295,23 @@ export function ComputerOverlay({
           </>
         ) : (
           <div className="absolute inset-0 grid place-items-center gap-3 px-6 text-center text-sm text-mute">
-            <div>
-              {screenError
-                ? screenError
-                : computer?.state === "running"
-                  ? phone
-                    ? "Desktop is running. Drag to move the pointer."
-                    : "Desktop is running"
-                  : computer?.state === "suspended"
-                    ? "Computer is asleep"
-                    : computerLabel(computer?.mode, bot.name)}
-            </div>
+            {waiting ? (
+              <div data-testid="computer-overlay-waiting" className="text-paper">
+                {waiting}
+              </div>
+            ) : (
+              <div>
+                {screenError
+                  ? screenError
+                  : computer?.state === "running"
+                    ? phone
+                      ? "Desktop is running. Drag to move the pointer."
+                      : "Desktop is running"
+                    : computer?.state === "suspended"
+                      ? "Computer is asleep"
+                      : computerLabel(computer?.mode, bot.name)}
+              </div>
+            )}
             {screenError ? (
               <Button type="button" variant="outline" size="sm" onClick={onRetry}>
                 Retry
