@@ -35,6 +35,14 @@ export function memoryTitle(document: MemoryDocument): string {
   return line || memoryKind(document.path) || document.path;
 }
 
+export function defaultMemoryScope(): "bot" | "user" {
+  return "bot";
+}
+
+export function memoryDeleteName(): string {
+  return "Remove";
+}
+
 export function dispatchMemoryChanged(type: string): void {
   if (type !== "memory.revised") return;
   if (typeof window === "undefined") return;

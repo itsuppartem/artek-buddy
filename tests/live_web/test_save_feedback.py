@@ -38,7 +38,7 @@ def test_memory_save_shows_saved(page: Page, host_url: str) -> None:
     page.get_by_test_id("new-memory").click()
     page.get_by_placeholder("Facts to remember").fill(note)
     page.get_by_test_id("memory-save").click()
-    expect(page.get_by_role("button", name="Saved")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("memory-save")).to_have_text("Saved", timeout=8_000)
     expect(page.get_by_test_id("memory-doc").filter(has_text=note)).to_be_visible(timeout=8_000)
     page.reload(wait_until="domcontentloaded")
     expect(page.get_by_test_id("phone-nav")).to_be_visible(timeout=20_000)
