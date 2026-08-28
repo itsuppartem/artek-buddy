@@ -35,12 +35,12 @@ def test_create_memory_routine_and_settings(
 
     expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
     page.get_by_test_id("new-memory").click()
-    page.get_by_role("button", name="This bot").click()
+    expect(page.get_by_test_id("memory-scope-bot")).to_have_attribute("aria-pressed", "true")
     facts = page.get_by_placeholder("Facts to remember")
     expect(facts).to_be_visible(timeout=8_000)
     facts.fill("CI prefers short answers")
     page.get_by_test_id("memory-save").click()
-    expect(page.get_by_role("button", name="Saved")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("memory-save")).to_have_text("Saved", timeout=8_000)
     doc = page.get_by_test_id("memory-doc").filter(has_text="CI prefers short answers")
     expect(doc).to_be_visible(timeout=8_000)
     expect(doc).to_contain_text("this bot")
@@ -48,7 +48,7 @@ def test_create_memory_routine_and_settings(
     expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
     doc.get_by_role("button", name="Edit").click()
     doc.locator("textarea").fill("CI prefers terse answers")
-    doc.get_by_role("button", name="Save").click()
+    doc.get_by_test_id("memory-edit-save").click()
     expect(
         page.get_by_test_id("memory-doc").filter(has_text="CI prefers terse answers")
     ).to_be_visible(timeout=8_000)
@@ -57,7 +57,7 @@ def test_create_memory_routine_and_settings(
     page.get_by_role("button", name="Shared").click()
     page.get_by_placeholder("Facts to remember").fill("Shared house rule")
     page.get_by_test_id("memory-save").click()
-    expect(page.get_by_role("button", name="Saved")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("memory-save")).to_have_text("Saved", timeout=8_000)
     shared = page.get_by_test_id("memory-doc").filter(has_text="Shared house rule")
     expect(shared).to_be_visible(timeout=8_000)
     expect(shared).to_contain_text("shared")
@@ -68,7 +68,7 @@ def test_create_memory_routine_and_settings(
         page.get_by_role("button", name="Export").click()
     assert download.value.suggested_filename.endswith(".md")
 
-    shared.get_by_role("button", name="Outdated").click()
+    shared.get_by_role("button", name="Remove").click()
     expect(shared).to_have_count(0)
 
     page.get_by_test_id("new-routine").click()
@@ -93,6 +93,35 @@ def test_create_memory_routine_and_settings(
     page.get_by_role("button", name="Save").click()
     expect(bot_row(page, renamed)).to_be_visible(timeout=8_000)
     close_computer_pane(page)
+
+
+def test_new_memory_defaults_this_bot_and_remove_is_a_verb(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("MemScope")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    open_computer_pane(page)
+    page.get_by_test_id("new-memory").click()
+    bot_scope = page.get_by_test_id("memory-scope-bot")
+    shared_scope = page.get_by_test_id("memory-scope-shared")
+    expect(bot_scope).to_have_attribute("aria-pressed", "true")
+    expect(shared_scope).to_have_attribute("aria-pressed", "false")
+    expect(bot_scope).to_have_class(re.compile(r"bg-tan"))
+    expect(shared_scope).not_to_have_class(re.compile(r"bg-tan"))
+    note = f"Scope {name}"
+    page.get_by_placeholder("Facts to remember").fill(note)
+    page.get_by_test_id("memory-save").click()
+    expect(page.get_by_test_id("memory-save")).to_have_text("Saved", timeout=8_000)
+    doc = page.get_by_test_id("memory-doc").filter(has_text=note)
+    expect(doc).to_be_visible(timeout=8_000)
+    expect(doc).to_contain_text("this bot")
+    expect(doc).to_be_in_viewport()
+    remove = doc.get_by_role("button", name="Remove")
+    expect(remove).to_be_visible()
+    expect(doc.get_by_role("button", name="Outdated")).to_have_count(0)
+    remove.click()
+    expect(doc).to_have_count(0)
 
 
 def test_routine_survives_reload(page: Page, client_url: str, host_url: str) -> None:

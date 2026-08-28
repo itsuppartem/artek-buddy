@@ -104,6 +104,7 @@ Computer → Memory: the **identity** chapter updated while that pane is open (n
 | «Привет» / `hello` does not rewrite identity | [ ] | [ ] |
 | Memory pane identity chapter has the new city only | [ ] | [ ] |
 | One standing rule in chat (`please e2e-remember-twice` on a scripted host, or «не спрашивай разрешения на read») → **one** Remembered line and one Memory card | [ ] | [ ] |
+| **+ New memory** defaults to **This bot** (filled segment). Save flashes Saved and keeps the card in view. Delete is **Remove**, not Outdated | [ ] | [ ] |
 
 ---
 
@@ -380,7 +381,7 @@ Computer → Memory.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Owner / work / charter list is visible. New (this bot \| shared), Edit, Outdated = delete, Export `.md` | [ ] | [ ] |
+| Owner / work / charter list is visible. New (this bot \| shared), Edit, **Remove** = delete, Export `.md` | [ ] | [ ] |
 | A weeks-grown book is not cut to a 200-character Settings stub | [ ] | [ ] |
 
 ---
@@ -555,7 +556,7 @@ Out of this pass: collaboration (#154–#169) and research tickets (#98, #100).
 If time is short, in this order:
 
 1. **§2 Models**
-2. **§3 Memory book**
+2. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated)
 3. **§4 Skill from the web**
 4. **§5 Bot asks bot**
 5. **§6 Plugins** (pane Connect or chat attach)
