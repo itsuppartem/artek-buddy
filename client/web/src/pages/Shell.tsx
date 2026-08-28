@@ -82,7 +82,13 @@ import {
   shouldReplaceScreenUrl,
   shouldTakeControl,
 } from "../lib/screen";
-import { filterBots, inboxEmptyState, type SidebarView, sortInboxBots } from "../lib/sidebar";
+import {
+  filterBots,
+  inboxEmptyState,
+  type SidebarView,
+  sortInboxBots,
+  splitQueryMatch,
+} from "../lib/sidebar";
 import {
   isHiddenLiveDraft,
   isRawRunFailedMessage,
@@ -150,6 +156,26 @@ import { PluginsAsk } from "./shell/PluginsAsk";
 import { PluginsPane } from "./shell/PluginsPane";
 
 type Panel = "computer" | "settings" | "create" | "models" | "plugins" | null;
+
+function InboxHit({ text, query }: { text: string; query: string }) {
+  return (
+    <>
+      {splitQueryMatch(text, query).map((part, index) =>
+        part.hit ? (
+          <mark
+            key={`${part.text}-${index}`}
+            data-testid="inbox-hit"
+            className="rounded-sm bg-tan/40 text-inherit"
+          >
+            {part.text}
+          </mark>
+        ) : (
+          part.text
+        ),
+      )}
+    </>
+  );
+}
 
 export function ShellPage() {
   const { botId } = useParams();
@@ -1578,10 +1604,10 @@ export function ShellPage() {
                       <BotAvatar color={bot.color} size={38} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-display text-[14.5px] text-paper">
-                          {bot.name}
+                          <InboxHit text={bot.name} query={query} />
                         </div>
                         <div className="mt-0.5 truncate text-[12.5px] text-mute">
-                          {stripMarkdown(bot.preview || bot.title)}
+                          <InboxHit text={stripMarkdown(bot.preview || bot.title)} query={query} />
                         </div>
                       </div>
                       <button
@@ -1630,7 +1656,7 @@ export function ShellPage() {
                             bot.unread ? "font-semibold" : "font-normal"
                           }`}
                         >
-                          {bot.name}
+                          <InboxHit text={bot.name} query={query} />
                           {bot.pinned ? (
                             <span title="Pinned" className="text-[11px] text-mute">
                               📌
@@ -1655,7 +1681,7 @@ export function ShellPage() {
                           bot.unread ? "font-medium text-paper" : "text-mute"
                         }`}
                       >
-                        {stripMarkdown(bot.preview || bot.title)}
+                        <InboxHit text={stripMarkdown(bot.preview || bot.title)} query={query} />
                       </div>
                     </div>
                   </button>

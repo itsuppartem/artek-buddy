@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Inbox Search marks the matching name or preview text so a snippet hit is obvious.
 - A Shift+Enter newline stays a newline in the sent user bubble.
 - Unread is a named tan circle and a bold row, not a hidden 7px square.
 - Message placeholder truncates a long bot name with an ellipsis instead of clipping mid-word.
