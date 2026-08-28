@@ -112,7 +112,10 @@ export function MessageView({
         if (block.kind === "text" && message.role === "user") {
           return (
             <div key={index} className="flex flex-col items-end gap-1">
-              <div className="max-w-[70%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[16px] bg-paper px-[18px] py-3 text-[15.5px] leading-[1.45] text-ink">
+              <div
+                data-testid="user-text"
+                className="max-w-[70%] min-w-0 break-words whitespace-pre-wrap [overflow-wrap:anywhere] rounded-[16px] bg-paper px-[18px] py-3 text-[15.5px] leading-[1.45] text-ink"
+              >
                 {block.text}
               </div>
               {offlineCaption ? (

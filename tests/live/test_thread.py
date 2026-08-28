@@ -261,6 +261,22 @@ def test_composer_placeholder_does_not_clip_mid_word(
         raise AssertionError(f"long name stayed untruncated: {placeholder}")
 
 
+def test_user_bubble_keeps_shift_enter_newline(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Break")
+    box = composer(page)
+    box.fill("line one")
+    box.press("Shift+Enter")
+    box.type("line two")
+    expect(box).to_have_value("line one\nline two")
+    box.press("Enter")
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').get_by_test_id(
+        "user-text"
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(bubble).to_have_css("white-space", "pre-wrap")
+    expect(bubble).to_have_js_property("textContent", "line one\nline two")
+
+
 def test_load_earlier_messages(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Older")
     other = unique_bot("Other")
