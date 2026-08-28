@@ -24,7 +24,7 @@
 - Settings, Memory, and Routine Save flash **Saved** for about a second, then the form closes. A host error stays under the row.
 - A failed playbook run shows a steps card on success, or one human **The turn failed.** line — not a raw `run failed: run-` id, and not that same line as a bubble plus a red box.
 - Settings, Memory, Routines, ask/file cards, and the computer overlay use the same `@theme` tokens as pairing and the thread. Traffic lights and guest noVNC pixels stay as they were.
-- Create and Settings ask three different questions: Title is a short role, Description is what the bot is for, and Instructions are standing orders (not labelled Prompt).
+- Create and Settings ask three different questions: Title is a short role, Description is what the bot is for, and Instructions are standing orders (not labelled Prompt). Create now has that Instructions field too.
 - Auth recovery on the host page says **Pair this phone again**, matching the pairing title. The `.deb` still says **Pair this computer again**.
 - Pairing tells the owner where to get a code and what Pair does. The phone page has no token or host-module command. The `.deb` footer is the README Compose exec.
 - Chat that writes the identity book lists that chapter in Computer → Memory. Owner place/person rows are labeled identity, and a later city replaces the old one on the same card.

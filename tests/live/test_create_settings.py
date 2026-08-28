@@ -92,3 +92,23 @@ def test_settings_title_keeps_value_after_blur_and_save(
     expect(page.get_by_test_id("bot-settings-role")).to_have_text("QA Helper")
     page.get_by_role("button", name="Edit profile").click()
     expect(page.get_by_test_id("bot-title-input")).to_have_value("QA Helper")
+
+
+def test_create_instructions_stores_standing_orders(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("Inst")
+    pair_fresh(page, client_url, host_url)
+    page.get_by_role("button", name="New bot").click()
+    page.get_by_placeholder("Name this bot").fill(name)
+    page.get_by_placeholder("e.g. Code Reviewer").fill("reviewer")
+    page.get_by_placeholder("What this bot is for").fill("reviews diffs")
+    expect(page.get_by_label("Instructions (Prompt)")).to_have_count(0)
+    expect(page.get_by_placeholder("Standing orders for this bot")).to_be_visible()
+    page.get_by_label("Instructions").fill("be terse")
+    page.get_by_role("button", name="Create", exact=True).click()
+    expect(page.get_by_placeholder("Name this bot")).to_have_count(0, timeout=20_000)
+    open_settings(page, name)
+    page.get_by_role("button", name="Edit profile").click()
+    expect(page.get_by_placeholder("Standing orders for this bot")).to_have_value("be terse")
+    expect(page.get_by_placeholder("What this bot is for")).to_have_value("reviews diffs")

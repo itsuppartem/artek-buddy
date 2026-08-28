@@ -126,9 +126,9 @@ Copy: Plugins, Plugins key, Save, Replace, Remove, Search apps, Connect, Disconn
 
 ## Create / Settings
 
-Create: Name (inbox row, `Name this bot`), Title (short role, `e.g. Code Reviewer`), Description (`What this bot is for`), Team | Private (`computer-mode-team` / `computer-mode-private`).
+Create: Name (inbox row, `Name this bot`), Title (short role, `e.g. Code Reviewer`), Description (`What this bot is for`), Instructions (`Standing orders for this bot`, not labelled Prompt), Team | Private (`computer-mode-team` / `computer-mode-private`).
 
-Settings: the same fields plus Instructions (standing orders, not labelled Prompt), mode change (rebinds the desktop; home is not copied), Restart / Stop / Reset (Reset wipes that home; Team reset wipes the shared desktop), busy-bot name, notifyOnFinish, Delete with optional purge memories. **Edit profile** opens the fields. Title keeps what you typed through blur and Save. Save flashes **Saved** for about a second, then the sheet. A host error stays under the row.
+Settings: the same fields plus mode change (rebinds the desktop; home is not copied), Restart / Stop / Reset (Reset wipes that home; Team reset wipes the shared desktop), busy-bot name, notifyOnFinish, Delete with optional purge memories. **Edit profile** opens the fields. Title keeps what you typed through blur and Save. Save flashes **Saved** for about a second, then the sheet. A host error stays under the row.
 
 ## Computer pane (hatch)
 

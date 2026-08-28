@@ -305,7 +305,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Opening a chat marks it read. A reply while that chat is open does not leave the unread dot | [ ] | [ ] |
 | Right-click (Deb) / long-press if offered (Phone): Pin / Unpin, Mark as unread (sticks until you leave and open again), Edit profile, Duplicate, Archive, Delete | [ ] | [ ] |
 | Empty inbox: Restore from Archived, or create a first bot | [ ] | [ ] |
-| Create: Name (inbox), Title (role), Description (what it is for), Team / Private. Focusing Name does not mint a bot; only Create does | [ ] | [ ] |
+| Create: Name (inbox), Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team / Private. Focusing Name does not mint a bot; only Create does | [ ] | [ ] |
 | Duplicate makes a second bot. Delete removes that bot; optional purge memories | [ ] | [ ] |
 | Inbox order is pinned first, then created. A later message does not jump a row | [ ] | [ ] |
 
