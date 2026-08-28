@@ -274,7 +274,11 @@ export function PluginsPane({
                         variant="cream"
                         size="sm"
                         disabled={busy.startsWith("connect-")}
-                        onClick={() => void connect(item.slug)}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void connect(item.slug);
+                        }}
                       >
                         Connect
                       </Button>

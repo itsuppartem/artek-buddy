@@ -173,6 +173,38 @@ def test_plugin_chip_remove_does_not_send(page: Page, client_url: str, host_url:
     page.get_by_role("button", name="Close Plugins").click()
 
 
+def test_plugin_connect_does_not_send_please_use(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("PlugNoSend")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    ensure_model(page)
+    page.get_by_test_id("open-plugins").click()
+    _plugins_key_form(page)
+    page.get_by_label("Plugins key").fill("ak-test-secret-nosend")
+    page.get_by_test_id("plugins-save").click()
+    expect(page.get_by_test_id("plugins-key-saved")).to_contain_text("Key saved")
+    page.get_by_label("Search apps").fill("docs")
+    row = page.get_by_test_id("plugin-row-docs")
+    expect(row).to_be_visible()
+    row.get_by_role("button", name="Connect").click()
+    expect(row.get_by_text("Connected")).to_be_visible()
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
+    expect(composer(page)).to_have_value("")
+    page.get_by_role("button", name="Close Plugins").click()
+    chip = page.get_by_test_id("plugin-ask-docs")
+    expect(chip).to_be_visible()
+    chip.click()
+    expect(composer(page)).to_have_value("please use Docs")
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
+    page.get_by_test_id("open-plugins").click()
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible()
+    page.get_by_test_id("plugins-remove").click()
+    expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
+    page.get_by_role("button", name="Close Plugins").click()
+
+
 def test_plugins_search_filters_without_enter(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
     page.get_by_test_id("open-plugins").click()
