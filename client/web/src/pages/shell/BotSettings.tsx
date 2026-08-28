@@ -47,6 +47,7 @@ export function BotSettings({
   const saveAck = useSaveAck();
   const [confirming, setConfirming] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [powerConfirm, setPowerConfirm] = useState<"restart" | "stop" | null>(null);
   const [powerBusy, setPowerBusy] = useState(false);
   const [deleteMemories, setDeleteMemories] = useState(false);
 
@@ -231,11 +232,11 @@ export function BotSettings({
             data-testid="computer-restart"
             disabled={powerBusy || Boolean(computer?.busyBotName)}
             onClick={() => {
-              setPowerBusy(true);
-              void onRestart().finally(() => setPowerBusy(false));
+              setResetting(false);
+              setPowerConfirm("restart");
             }}
           >
-            Restart
+            Restart…
           </Button>
           <Button
             type="button"
@@ -244,11 +245,11 @@ export function BotSettings({
             data-testid="computer-stop"
             disabled={powerBusy || Boolean(computer?.busyBotName)}
             onClick={() => {
-              setPowerBusy(true);
-              void onStop().finally(() => setPowerBusy(false));
+              setResetting(false);
+              setPowerConfirm("stop");
             }}
           >
-            Stop
+            Stop…
           </Button>
           {resetting ? null : (
             <Button
@@ -257,13 +258,70 @@ export function BotSettings({
               size="sm"
               data-testid="computer-reset"
               disabled={powerBusy || Boolean(computer?.busyBotName)}
-              onClick={() => setResetting(true)}
+              onClick={() => {
+                setPowerConfirm(null);
+                setResetting(true);
+              }}
               className="border-danger text-danger hover:bg-danger/10"
             >
               Reset…
             </Button>
           )}
         </div>
+        {powerConfirm === "restart" ? (
+          <div className="mt-3 rounded-lg border border-hairline bg-raised p-3">
+            <div className="text-[13px] leading-5 text-paper">
+              Restart this computer? Open windows close. Logins on disk stay.
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="computer-restart-confirm"
+                disabled={powerBusy}
+                onClick={() => {
+                  setPowerBusy(true);
+                  void onRestart()
+                    .then(() => setPowerConfirm(null))
+                    .finally(() => setPowerBusy(false));
+                }}
+              >
+                Restart computer
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setPowerConfirm(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {powerConfirm === "stop" ? (
+          <div className="mt-3 rounded-lg border border-hairline bg-raised p-3">
+            <div className="text-[13px] leading-5 text-paper">
+              Sleep this computer? A running turn stops. The box stays on disk.
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="computer-stop-confirm"
+                disabled={powerBusy}
+                onClick={() => {
+                  setPowerBusy(true);
+                  void onStop()
+                    .then(() => setPowerConfirm(null))
+                    .finally(() => setPowerBusy(false));
+                }}
+              >
+                Stop computer
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setPowerConfirm(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
         {resetting ? (
           <div className="mt-3 rounded-lg border border-danger-bg bg-danger-bg p-3">
             <div className="text-[13px] leading-5 text-danger">
