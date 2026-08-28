@@ -21,7 +21,8 @@ export function PluginsPane({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const configured = Boolean(status?.configured);
-  const showKeyField = !configured || replace;
+  const ready = status !== null;
+  const showKeyField = ready && (!configured || replace);
 
   useEffect(() => {
     void refresh();
@@ -128,7 +129,7 @@ export function PluginsPane({
   }
 
   return (
-    <div data-testid="plugins-pane">
+    <div data-testid="plugins-pane" data-plugins-ready={ready ? "1" : "0"}>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-display text-[16px] font-semibold text-paper">Plugins</h2>
         <button
@@ -142,7 +143,9 @@ export function PluginsPane({
           Close
         </button>
       </div>
-      {showKeyField ? (
+      {!ready ? (
+        <p className="mb-3 text-[13px] leading-5 text-mute">Checking the key…</p>
+      ) : showKeyField ? (
         <p className="mb-3 text-[13px] leading-5 text-mute">Paste a key to connect apps.</p>
       ) : (
         <p className="mb-3 text-[13px] leading-5 text-sage" data-testid="plugins-key-saved">

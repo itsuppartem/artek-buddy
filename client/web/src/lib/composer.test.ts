@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composerCanSend, composerPlaceholder } from "./composer";
+import { composerCanSend, composerPlaceholder, composerShouldSend } from "./composer";
 
 describe("composerCanSend", () => {
   it("disables send when there is no text and no files", () => {
@@ -10,6 +10,32 @@ describe("composerCanSend", () => {
   it("enables send when there is text or a file", () => {
     expect(composerCanSend("hello", 0)).toBe(true);
     expect(composerCanSend("", 1)).toBe(true);
+  });
+});
+
+describe("composerShouldSend", () => {
+  it("sends on Enter and ignores Ctrl+A or other modifiers", () => {
+    expect(
+      composerShouldSend({ key: "Enter", shiftKey: false, ctrlKey: false, metaKey: false }),
+    ).toBe(true);
+    expect(
+      composerShouldSend({ key: "Enter", shiftKey: true, ctrlKey: false, metaKey: false }),
+    ).toBe(false);
+    expect(composerShouldSend({ key: "a", shiftKey: false, ctrlKey: true, metaKey: false })).toBe(
+      false,
+    );
+    expect(
+      composerShouldSend({ key: "Enter", shiftKey: false, ctrlKey: true, metaKey: false }),
+    ).toBe(false);
+    expect(
+      composerShouldSend({
+        key: "Enter",
+        shiftKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        isComposing: true,
+      }),
+    ).toBe(false);
   });
 });
 
