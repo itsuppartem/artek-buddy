@@ -1,6 +1,10 @@
-import { useEffect, useState } from "react";
+import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
-import { filterPluginCatalog } from "../../lib/plugins-catalog";
+import {
+  filterPluginCatalog,
+  pluginCatalogScrollAfterUpdate,
+  pluginSearchShouldPreventDefault,
+} from "../../lib/plugins-catalog";
 import type { Connection, ConnectionCatalogItem, ConnectionKeyStatus } from "../../types";
 import { Button } from "../../ui/button";
 import { IconClose } from "../../ui/icons";
@@ -20,6 +24,8 @@ export function PluginsPane({
   const [rows, setRows] = useState<Connection[]>([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const catalogRef = useRef<HTMLDivElement>(null);
+  const catalogScroll = useRef(0);
   const configured = Boolean(status?.configured);
   const ready = status !== null;
   const showKeyField = ready && (!configured || replace);
@@ -27,6 +33,13 @@ export function PluginsPane({
   useEffect(() => {
     void refresh();
   }, []);
+
+  useLayoutEffect(() => {
+    const node = catalogRef.current;
+    if (!node) return;
+    const max = node.scrollHeight - node.clientHeight;
+    node.scrollTop = pluginCatalogScrollAfterUpdate(catalogScroll.current, max);
+  }, [query, items]);
 
   async function refresh() {
     const next = await api.connections.status();
@@ -128,6 +141,12 @@ export function PluginsPane({
     }
   }
 
+  function onSearchKey(event: KeyboardEvent<HTMLInputElement>) {
+    if (!pluginSearchShouldPreventDefault(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   return (
     <div data-testid="plugins-pane" data-plugins-ready={ready ? "1" : "0"}>
       <div className="mb-3 flex items-center justify-between">
@@ -216,21 +235,42 @@ export function PluginsPane({
       </div>
       {configured ? (
         <>
-          <label className="mt-5 block text-[13px] text-mute" htmlFor="plugins-search">
-            Search apps
-            <input
-              id="plugins-search"
-              data-testid="plugins-search"
-              aria-label="Search apps"
-              placeholder="Search apps"
-              className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper"
-              value={query}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-              onInput={(event) => setQuery(event.currentTarget.value)}
-              onKeyUp={(event) => setQuery(event.currentTarget.value)}
-            />
-          </label>
-          <div className="mt-3 flex flex-col gap-2" data-testid="plugins-catalog">
+          <form
+            className="mt-5 block"
+            onSubmit={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <label className="block text-[13px] text-mute" htmlFor="plugins-search">
+              Search apps
+              <input
+                id="plugins-search"
+                data-testid="plugins-search"
+                type="search"
+                enterKeyHint="search"
+                aria-label="Search apps"
+                placeholder="Search apps"
+                className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper"
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                onInput={(event) => setQuery(event.currentTarget.value)}
+                onKeyDown={onSearchKey}
+                onKeyUp={(event) => {
+                  onSearchKey(event);
+                  setQuery(event.currentTarget.value);
+                }}
+              />
+            </label>
+          </form>
+          <div
+            ref={catalogRef}
+            className="mt-3 flex max-h-72 flex-col gap-2 overflow-y-auto"
+            data-testid="plugins-catalog"
+            onScroll={(event) => {
+              catalogScroll.current = event.currentTarget.scrollTop;
+            }}
+          >
             {filterPluginCatalog(items, query).map((item) => {
               const row = rows.find(
                 (entry) => entry.provider === item.slug && entry.status !== "revoked",
