@@ -136,7 +136,7 @@ States: Offline, Booting, Running, Sleeping, Error (`computer-state` / `data-sta
 
 Memory (same pane): owner / work / charter list. Owner place/person rows show as **identity**. A chat that writes the owner book (`remember` / extract, including `please e2e-identity-city {City}` on a scripted host) lists that chapter when the host publishes `memory.revised` — not only after New or a 10s poll. A later city on the same chapter replaces the old one. New (this bot \| shared, `memory-save`), Edit, Outdated = delete, Export `.md`. Save on New or Edit flashes **Saved**, then the form closes. A host error stays under the row.
 
-Routines (same pane): New (name, cron, prompt; invalid cron disables Save), on/off, Run (`POST .../test`), Delete. Save on New flashes **Saved**, then the form closes. A host error stays under the row.
+Routines (same pane): New (name, cron, prompt; invalid cron disables Save), on/off, Run (`POST .../test`), Delete. Next run is a short time with timezone, without the ISO fraction. Save on New flashes **Saved**, then the form closes. A host error stays under the row.
 
 ## Consent and this PC
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api";
-import { isCronShape } from "../../lib/cron";
+import { formatNextRunAt, isCronShape } from "../../lib/cron";
 import { useSaveAck } from "../../lib/save-ack";
 import type { Routine } from "../../types";
 import { Button } from "../../ui/button";
@@ -95,10 +95,10 @@ export function RoutinesPanel({
               <div className="min-w-0">
                 <div className="truncate text-[14.5px] text-paper">{routine.name}</div>
                 <div className="mt-0.5 font-mono text-[12px] text-mute">{routine.cron}</div>
-                <div className="mt-0.5 text-[12px] text-mute">
+                <div data-testid="routine-next-run" className="mt-0.5 text-[12px] text-mute">
                   {routine.active
                     ? routine.nextRunAt
-                      ? `next ${routine.nextRunAt.replace("T", " ").replace("Z", " UTC")}`
+                      ? `next ${formatNextRunAt(routine.nextRunAt)}`
                       : "scheduled"
                     : "paused"}
                 </div>
