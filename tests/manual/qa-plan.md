@@ -216,7 +216,7 @@ Need a turn where the bot asks for the desk (`waiting_takeover` + **Open compute
 | --- | --- | --- |
 | Stay on **this** chat — no «needs you» pill (you are already here) | [ ] | [ ] |
 | Switch to another chat → under the header **`{name} needs you`**, not «replied» | [ ] | [ ] |
-| Dismiss or enter that chat — the pill does not come back on later switches | [ ] | [ ] |
+| Dismiss or enter that chat — the pill does not come back on later switches. Dismiss does not change the open chat | [ ] | [ ] |
 | A leftover park from the previous window launch stays silent | [ ] | [ ] |
 
 ---
@@ -325,7 +325,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Right-click Reply (Deb) puts a quote in the next user bubble | [ ] | — |
 | Ask card (options or free text) waits; answering continues the turn. A missing / already-answered card does not break the thread | [ ] | [ ] |
 | Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks | [ ] | [ ] |
-| Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss does not | [ ] | [ ] |
+| Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
 | Failed / cancelled run shows a run-error, not a silent hole | [ ] | [ ] |
@@ -565,6 +565,7 @@ If time is short, in this order:
 11. **§1 / §21 Escape** on Settings and New bot
 12. **§14 Inbox Search** no-match empty copy + Clear
 13. **§15 Composer** Ctrl+A selects, does not Send
+14. **§8 / §15 Dismiss** on needs-you keeps the current chat
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 

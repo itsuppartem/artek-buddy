@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Dismiss on a needs-you pill only hides it. The open chat stays put.
 - Ctrl+A in Message selects the draft. It does not Send or duplicate the bubble.
 - Plugins pane waits for host key status before showing the paste field, so a leftover key is not a flash of an empty form.
 - Inbox Search with no matches shows empty copy and a Clear control instead of a blank rack.
