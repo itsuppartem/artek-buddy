@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   filterBots,
   inboxEmptyState,
+  inboxFallbackPath,
+  inboxRowClickShouldOpen,
   inboxSearchEmpty,
   sortInboxBots,
   splitQueryMatch,
@@ -60,5 +62,19 @@ describe("splitQueryMatch", () => {
       { text: "earch: Novi Sad", hit: false },
     ]);
     expect(splitQueryMatch("Lead", "res")).toEqual([{ text: "Lead", hit: false }]);
+  });
+});
+
+describe("inboxFallbackPath", () => {
+  it("does not steal a row the owner just opened before the list catches up", () => {
+    expect(inboxFallbackPath("lead", ["research"], "research", "lead")).toBeNull();
+    expect(inboxFallbackPath("lead", ["lead", "research"], "research", "lead")).toBeNull();
+    expect(inboxFallbackPath("gone", ["research"], "research", null)).toBe("/app/research");
+    expect(inboxFallbackPath(undefined, ["research"], "research", null)).toBe("/app/research");
+  });
+
+  it("ignores a click that never pressed that row", () => {
+    expect(inboxRowClickShouldOpen(false)).toBe(false);
+    expect(inboxRowClickShouldOpen(true)).toBe(true);
   });
 });

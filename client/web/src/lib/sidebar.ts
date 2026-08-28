@@ -43,3 +43,22 @@ export function splitQueryMatch(text: string, query: string): HighlightPart[] {
   if (rest) parts.push({ text: rest, hit: false });
   return parts;
 }
+
+export function inboxFallbackPath(
+  botId: string | undefined,
+  listedIds: string[],
+  firstInboxId: string | undefined,
+  requestedId: string | null,
+): string | null {
+  if (botId && listedIds.includes(botId)) return null;
+  if (requestedId && botId === requestedId) return null;
+  if (!botId && firstInboxId) return `/app/${firstInboxId}`;
+  if (botId && !listedIds.includes(botId)) {
+    return firstInboxId ? `/app/${firstInboxId}` : "/app";
+  }
+  return null;
+}
+
+export function inboxRowClickShouldOpen(hadPointerDown: boolean): boolean {
+  return hadPointerDown;
+}

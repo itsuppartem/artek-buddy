@@ -15,6 +15,7 @@
 
 ### Fixed
 - Release keeps the last guest frame on the overlay until the view-only picture loads. Take control from Sleeping names Waking the desktop… instead of a black void.
+- One click on an inbox row opens that chat. A leftover mouse-up or a late inbox fallback does not land on the previous thread.
 - New memory defaults to This bot with a filled scope control. Delete is Remove. Save acknowledgement uses the create/edit buttons, not a shared Saved name.
 - The closed Plugins hatch does not steal the thread wheel or open from the right edge. One Close dismisses.
 - Plugins Search apps stays open on Enter and keeps catalog scroll where the owner left it.
