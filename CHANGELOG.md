@@ -14,6 +14,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- File-card Download and Load earlier look like controls. Owner cards still offer Download; the oldest page leaves a beginning line.
 - Inbox Search marks the matching name or preview text so a snippet hit is obvious.
 - A Shift+Enter newline stays a newline in the sent user bubble.
 - Unread is a named tan circle and a bold row, not a hidden 7px square.

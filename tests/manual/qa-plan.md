@@ -320,7 +320,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Enter sends. Shift+Enter inserts a newline (Deb) and that break stays in the sent bubble. Phone return key follows the on-screen keyboard | [ ] | [ ] |
 | Message placeholder stays readable: full name, or `Message …` with an ellipsis — not a clipped mid-word (`Message Resea`) | [ ] | [ ] |
 | Deb: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo) | [ ] | — |
-| Load earlier pulls older messages without jumping off the latest if you were pinned to the bottom | [ ] | [ ] |
+| Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays | [ ] | [ ] |
 | Right-click Reply (Deb) puts a quote in the next user bubble | [ ] | — |
 | Ask card (options or free text) waits; answering continues the turn. A missing / already-answered card does not break the thread | [ ] | [ ] |
 | Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks | [ ] | [ ] |
@@ -350,6 +350,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Bot posts a file card. Pictures / video / audio show a preview, not only a Download row | [ ] | [ ] |
+| Download is a named bordered button on bot **and** owner file cards | [ ] | [ ] |
 | Deb Download opens the system Save dialog (Downloads / Загрузки by default). Cancel writes nothing | [ ] | — |
 | Phone Download uses the browser / share sheet; it does not write the Linux home | — | [ ] |
 
@@ -529,7 +530,7 @@ From **inside a chat** on Phone:
 | --- | :---: | :---: |
 | Ask card (options or free text) waits. Answering continues the turn | [ ] | [ ] |
 | Right-click Reply (Deb) quotes in the next user bubble. Cancel drops the quote | [ ] | — |
-| Load earlier pulls older messages. If you were pinned to the bottom, new cards stay in view | [ ] | [ ] |
+| Load earlier is a bordered button and pulls older messages. After the last page, **Beginning of this chat.** stays. If you were pinned to the bottom, new cards stay in view | [ ] | [ ] |
 
 ---
 

@@ -9,6 +9,7 @@ import {
 } from "../../lib/files";
 import { previewKind } from "../../lib/uploads";
 import type { ThreadMessage } from "../../types";
+import { Button } from "../../ui/button";
 
 export type FileBlock = Extract<ThreadMessage["blocks"][number], { kind: "file" }>;
 
@@ -72,14 +73,20 @@ export function FileCard({ block }: { block: FileBlock }) {
       {kind === "audio" && preview ? (
         <audio data-testid="file-preview" src={preview} controls className="mt-3 w-full" />
       ) : null}
-      <button
-        type="button"
-        className="mt-3 rounded-full bg-raised px-3.5 py-1.5 text-[13.5px] text-paper hover:bg-hairline disabled:opacity-60"
-        disabled={busy}
-        onClick={() => void download()}
-      >
-        {busy ? "Choose where…" : "Download"}
-      </button>
+      {block.artifactId ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-3"
+          data-testid="file-download"
+          aria-label={`Download ${block.name}`}
+          disabled={busy}
+          onClick={() => void download()}
+        >
+          {busy ? "Choose where…" : "Download"}
+        </Button>
+      ) : null}
       {saved ? (
         <div
           data-testid="file-saved"
