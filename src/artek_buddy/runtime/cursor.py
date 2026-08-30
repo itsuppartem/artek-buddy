@@ -428,9 +428,7 @@ class CursorRuntime(RuntimeBase):
                     if recycle and not recycled_once:
                         await self._recycle_dead_agent(agent_id, bot_id)
                         recycled_once = True
-                    error_code = dead_wait_owner_error(
-                        attempt.error, recycle or recycled_once
-                    )
+                    error_code = dead_wait_owner_error(attempt.error, recycle or recycled_once)
                     yield RunRecord(
                         id=str(getattr(attempt.run, "id", "")),
                         agent_id=agent_id,

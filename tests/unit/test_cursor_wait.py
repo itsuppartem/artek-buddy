@@ -108,18 +108,14 @@ def test_send_local_options_omits_force_unless_asked() -> None:
 def test_should_retry_dead_wait_only_when_instant_and_silent() -> None:
     from artek_buddy.db.shaping import TURN_FAILED
 
-    assert should_retry_dead_wait(
-        streamed=0, status="failed", error=TURN_FAILED, duration_s=0.0
-    )
+    assert should_retry_dead_wait(streamed=0, status="failed", error=TURN_FAILED, duration_s=0.0)
     assert not should_retry_dead_wait(
         streamed=1, status="failed", error=TURN_FAILED, duration_s=0.0
     )
     assert not should_retry_dead_wait(
         streamed=0, status="failed", error=TURN_FAILED, duration_s=5.0
     )
-    assert not should_retry_dead_wait(
-        streamed=0, status="completed", error=None, duration_s=0.0
-    )
+    assert not should_retry_dead_wait(streamed=0, status="completed", error=None, duration_s=0.0)
 
 
 def test_wait_error_logs_status_and_error_code(caplog) -> None:
