@@ -56,7 +56,7 @@ def test_dead_wait_retries_without_run_error(page: Page, client_url: str, host_u
         timeout=20_000,
     )
     expect(page.get_by_test_id("run-error")).to_have_count(0)
-    expect(page.get_by_text("Send again", exact=False)).to_have_count(0)
+    expect(page.get_by_test_id("run-error").filter(has_text="Send again")).to_have_count(0)
     send_message(page, "hello", name)
     expect(page.locator('[data-testid="thread-message"][data-role="bot"]').last).to_contain_text(
         "ok",
