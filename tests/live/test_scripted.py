@@ -43,7 +43,7 @@ def test_scripted_fail_raw_id_is_human(page: Page, client_url: str, host_url: st
     expect(page.get_by_test_id("run-error")).not_to_contain_text("run failed: run-")
 
 
-def test_dead_wait_shows_next_step_and_next_send_runs(
+def test_dead_wait_retries_without_run_error(
     page: Page, client_url: str, host_url: str
 ) -> None:
     name = _open_named(page, client_url, host_url, "WaitDead")
@@ -53,6 +53,29 @@ def test_dead_wait_shows_next_step_and_next_send_runs(
         timeout=20_000,
     )
     send_message(page, "please e2e-dead-wait", name)
+    expect(page.locator('[data-testid="thread-message"][data-role="bot"]').last).to_contain_text(
+        "ok",
+        timeout=20_000,
+    )
+    expect(page.get_by_test_id("run-error")).to_have_count(0)
+    expect(page.get_by_text("Send again", exact=False)).to_have_count(0)
+    send_message(page, "hello", name)
+    expect(page.locator('[data-testid="thread-message"][data-role="bot"]').last).to_contain_text(
+        "ok",
+        timeout=20_000,
+    )
+
+
+def test_dead_wait_stuck_shows_run_error(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _open_named(page, client_url, host_url, "WaitStuck")
+    send_message(page, "hello", name)
+    expect(page.locator('[data-testid="thread-message"][data-role="bot"]').last).to_contain_text(
+        "ok",
+        timeout=20_000,
+    )
+    send_message(page, "please e2e-dead-wait-stuck", name)
     err = page.get_by_test_id("run-error")
     expect(err).to_be_visible(timeout=20_000)
     expect(err).to_contain_text("The turn failed.")

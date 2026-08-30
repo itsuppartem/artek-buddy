@@ -4,9 +4,11 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Any
 
 from cursor_sdk import (
+    AgentBusyError,
     AgentOptions,
     AsyncClient,
     CursorAgentError,
@@ -23,12 +25,26 @@ from artek_buddy.runtime.cursor_wait import (
     describe_cursor_wait,
     log_cursor_wait,
     note_auth_failures,
+    send_local_options,
+    should_retry_dead_wait,
 )
 from artek_buddy.runtime.tools import ProductTools
 from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord
 from artek_buddy.stream import map_cursor_event
 
 log = logging.getLogger("artek_buddy")
+
+
+@dataclass
+class _SendAttempt:
+    run: Any
+    agent_id: str
+    streamed: int
+    events: list[ProductStreamEvent]
+    mapped: str
+    text: str | None
+    error: str | None
+    duration_s: float
 
 
 async def _cancel_cursor_run(run: Any) -> None:
@@ -221,10 +237,53 @@ class CursorRuntime(RuntimeBase):
         lock = self._locks.setdefault(agent_id, asyncio.Lock())
         return agent_id, agent, lock
 
+    async def _close_agent(self, agent: Any) -> None:
+        close = getattr(agent, "close", None)
+        if not callable(close):
+            return
+        try:
+            result = close()
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception:
+            log.exception("failed to close cursor agent")
+
+    async def _cancel_stale_runs(self, agent_id: str) -> None:
+        list_runs = getattr(self.client, "list_runs", None)
+        cancel_run = getattr(self.client, "cancel_run", None)
+        if not callable(list_runs) or not callable(cancel_run):
+            return
+        try:
+            listed = await list_runs(agent_id, limit=8)
+        except Exception:
+            log.exception("failed to list cursor runs for %s", agent_id)
+            return
+        items = getattr(listed, "items", None)
+        if items is None:
+            items = []
+        for run in items:
+            status = str(
+                getattr(run, "status", "")
+                or getattr(getattr(run, "snapshot", None), "status", "")
+                or ""
+            ).lower()
+            if "running" not in status:
+                continue
+            rid = getattr(run, "id", None) or getattr(run, "run_id", None)
+            if not rid:
+                continue
+            try:
+                await cancel_run(str(rid), agent_id=agent_id)
+                log.warning("cancelled stale cursor run %s on %s", rid, agent_id)
+            except Exception:
+                log.exception("failed to cancel stale cursor run %s", rid)
+
     async def _recycle_dead_agent(self, burned_id: str, bot_id: str | None) -> str:
-        log.warning("recycling cursor agent %s after consecutive auth errors", burned_id)
-        self._agents.pop(burned_id, None)
+        log.warning("recycling cursor agent %s", burned_id)
+        burned = self._agents.pop(burned_id, None)
         self._locks.pop(burned_id, None)
+        if burned is not None:
+            await self._close_agent(burned)
         self._auth_fails = 0
         self.bridge_recycles += 1
         live = await self.create_session(
@@ -240,6 +299,62 @@ class CursorRuntime(RuntimeBase):
                 log.exception("failed to attach recycled agent")
         return live
 
+    async def _attempt_send(
+        self,
+        agent: Any,
+        agent_id: str,
+        prompt: str,
+        cwd: str,
+        *,
+        force: bool,
+    ) -> _SendAttempt:
+        events: list[ProductStreamEvent] = []
+        streamed = 0
+        run = await agent.send(prompt, send_local_options(cwd, force=force))
+        log.info("run started run_id=%s agent_id=%s force=%s", run.id, agent_id, force)
+        async for event in run.events():
+            mapped_events = map_cursor_event(event)
+            if mapped_events:
+                streamed += 1
+            for typ, payload in mapped_events:
+                events.append(ProductStreamEvent(type=typ, payload=payload))
+        text = ""
+        status = "unknown"
+        waited = time.monotonic()
+        result = None
+        try:
+            result = await run.wait()
+            text = getattr(result, "result", None) or ""
+            status = str(getattr(result, "status", "unknown"))
+        except Exception:
+            log.exception("wait after stream failed")
+        duration_s = time.monotonic() - waited
+        if not text:
+            try:
+                text = await run.text()
+            except Exception:
+                text = ""
+        mapped, wait_text, wait_error = describe_cursor_wait(result, run)
+        if wait_text:
+            text = wait_text
+        log_cursor_wait(
+            str(getattr(run, "id", "")),
+            agent_id,
+            status,
+            duration_s,
+            wait_error,
+        )
+        return _SendAttempt(
+            run=run,
+            agent_id=agent_id,
+            streamed=streamed,
+            events=events,
+            mapped=mapped,
+            text=text or None,
+            error=wait_error,
+            duration_s=duration_s,
+        )
+
     async def stream(
         self,
         prompt: str,
@@ -252,55 +367,78 @@ class CursorRuntime(RuntimeBase):
         self.last_prompt = prompt
         async with lock:
             run = None
+            force = False
+            forced_once = False
+            recycled_once = False
             try:
-                run = await agent.send(prompt, {"local": {"force": True, "cwd": cwd}})
-                log.info("run started run_id=%s agent_id=%s", run.id, agent_id)
-                async for event in run.events():
-                    for typ, payload in map_cursor_event(event):
-                        yield ProductStreamEvent(type=typ, payload=payload)
-                text = ""
-                status = "unknown"
-                waited = time.monotonic()
-                result = None
-                try:
-                    result = await run.wait()
-                    text = getattr(result, "result", None) or ""
-                    status = str(getattr(result, "status", "unknown"))
-                except Exception:
-                    log.exception("wait after stream failed")
-                duration_s = time.monotonic() - waited
-                if not text:
+                while True:
+                    await self._cancel_stale_runs(agent_id)
                     try:
-                        text = await run.text()
-                    except Exception:
-                        text = ""
-                mapped, wait_text, wait_error = describe_cursor_wait(result, run)
-                if wait_text:
-                    text = wait_text
-                error_code = wait_error
-                log_cursor_wait(
-                    str(getattr(run, "id", "")),
-                    agent_id,
-                    status,
-                    duration_s,
-                    error_code,
-                )
-                self._auth_fails, recycle = note_auth_failures(
-                    self._auth_fails,
-                    status=mapped,
-                    error=error_code,
-                    duration_s=duration_s,
-                )
-                if recycle:
-                    await self._recycle_dead_agent(agent_id, bot_id)
-                error_code = dead_wait_owner_error(error_code, recycle)
-                yield RunRecord(
-                    id=str(getattr(run, "id", "")),
-                    agent_id=agent_id,
-                    status=mapped,
-                    result=text or None,
-                    error=None if mapped == "completed" else error_code,
-                )
+                        attempt = await self._attempt_send(
+                            agent, agent_id, prompt, cwd, force=force
+                        )
+                    except AgentBusyError:
+                        if forced_once:
+                            raise
+                        log.warning(
+                            "cursor agent busy; retrying send with force on %s",
+                            agent_id,
+                        )
+                        force = True
+                        forced_once = True
+                        continue
+                    run = attempt.run
+                    for event in attempt.events:
+                        yield event
+                    self._auth_fails, recycle = note_auth_failures(
+                        self._auth_fails,
+                        status=attempt.mapped,
+                        error=attempt.error,
+                        duration_s=attempt.duration_s,
+                    )
+                    if attempt.mapped == "completed":
+                        yield RunRecord(
+                            id=str(getattr(attempt.run, "id", "")),
+                            agent_id=agent_id,
+                            status=attempt.mapped,
+                            result=attempt.text,
+                            error=None,
+                        )
+                        return
+                    retry_dead = should_retry_dead_wait(
+                        streamed=attempt.streamed,
+                        status=attempt.mapped,
+                        error=attempt.error,
+                        duration_s=attempt.duration_s,
+                    )
+                    if retry_dead and not forced_once:
+                        log.warning(
+                            "dead cursor wait; retrying same send with force on %s",
+                            agent_id,
+                        )
+                        force = True
+                        forced_once = True
+                        continue
+                    if retry_dead and forced_once and not recycled_once:
+                        agent_id = await self._recycle_dead_agent(agent_id, bot_id)
+                        agent = self._agents[agent_id]
+                        force = False
+                        recycled_once = True
+                        continue
+                    if recycle and not recycled_once:
+                        await self._recycle_dead_agent(agent_id, bot_id)
+                        recycled_once = True
+                    error_code = dead_wait_owner_error(
+                        attempt.error, recycle or recycled_once
+                    )
+                    yield RunRecord(
+                        id=str(getattr(attempt.run, "id", "")),
+                        agent_id=agent_id,
+                        status=attempt.mapped,
+                        result=attempt.text,
+                        error=error_code,
+                    )
+                    return
             except CursorAgentError as err:
                 log.error(
                     "run did not start: %s retryable=%s request_id=%s",
