@@ -12,12 +12,6 @@ CURSOR_AUTH_RECYCLE_AFTER = 3
 CURSOR_INSTANT_FAIL_S = 2.0
 DEAD_WAIT_NEXT_STEP = "The turn failed. Send again — the host will start a new session."
 
-log = logging.getLogger("artek_buddy")
-
-CURSOR_AUTH_ERROR_HINT = "authentication error"
-CURSOR_AUTH_RECYCLE_AFTER = 3
-CURSOR_INSTANT_FAIL_S = 2.0
-
 
 def store_error_code(result: Any, run: Any) -> str | None:
     for obj in (result, run):
@@ -78,6 +72,33 @@ def note_auth_failures(
     if status == "failed" and instant and is_dead_wait_error(error):
         return 0, True
     return consecutive, False
+
+
+def send_local_options(cwd: str, *, force: bool = False) -> dict[str, Any]:
+    """Local send options. `force` expires a stuck run; do not set it on every send."""
+    local: dict[str, Any] = {"cwd": cwd}
+    if force:
+        local["force"] = True
+    return {"local": local}
+
+
+def should_retry_dead_wait(
+    *,
+    streamed: int,
+    status: str,
+    error: str | None,
+    duration_s: float,
+) -> bool:
+    """Retry the same prompt only when wait died instantly and nothing reached the thread."""
+    if streamed > 0:
+        return False
+    _, recycle = note_auth_failures(
+        0,
+        status=status,
+        error=error,
+        duration_s=duration_s,
+    )
+    return recycle and is_dead_wait_error(error)
 
 
 def dead_wait_owner_error(error: str | None, recycle: bool) -> str | None:

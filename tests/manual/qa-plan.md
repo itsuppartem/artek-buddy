@@ -332,7 +332,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
-| Failed / cancelled run shows a run-error, not a silent hole. Instant Cursor wait fail after a good turn (`please e2e-dead-wait`): **The turn failed. Send again…**; the next hello still answers | [ ] | [ ] |
+| Failed / cancelled run shows a run-error, not a silent hole. Instant Cursor wait fail after a good turn (`please e2e-dead-wait`) completes on that send (bot `ok`, no Send-again). `please e2e-dead-wait-stuck` still shows **The turn failed. Send again…**; the next hello still answers | [ ] | [ ] |
 | A follow-up while `waiting_takeover` starts a turn (does not only enqueue) | [ ] | [ ] |
 | Stop keeps the run cancelled: a late complete does not append the essay (scripted `please e2e-late-complete` or a live Cursor turn). **Stopped.** is one `run-error` line. Queued owner lines survive Stop and prepend to the next send | [ ] | [ ] |
 
@@ -572,6 +572,7 @@ If time is short, in this order:
 14. **§8 / §15 Dismiss** on needs-you keeps the current chat
 15. **§9 Queue** pending mark, then local Sent while offline
 16. **§15 Stop** on a live turn shows Stopped. A late complete does not land
+17. **§15 dead wait** `please e2e-dead-wait` completes on that send; `please e2e-dead-wait-stuck` still shows Send again
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 

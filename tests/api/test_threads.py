@@ -506,7 +506,7 @@ def test_single_auth_error_does_not_recycle_the_bridge(client, auth_header) -> N
     assert app.state.runtime.bridge_recycles == 0
 
 
-def test_dead_wait_recycles_and_next_send_runs(client, auth_header) -> None:
+def test_dead_wait_retries_same_send(client, auth_header) -> None:
     from artek_buddy.main import app
     from artek_buddy.runtime.cursor_wait import DEAD_WAIT_NEXT_STEP
 
@@ -527,9 +527,35 @@ def test_dead_wait_recycles_and_next_send_runs(client, auth_header) -> None:
     )
     assert dead.status_code == 200
     snap = wait_run(client, auth_header, bot_id, dead.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    assert not snap["run"].get("error")
+    assert DEAD_WAIT_NEXT_STEP not in (snap["run"].get("error") or "")
+    assert "Send again" not in "\n".join(message_texts(snap))
+    assert "ok" in message_texts(snap)
+    assert app.state.runtime.bridge_recycles == 1
+
+
+def test_dead_wait_stuck_still_fails_once(client, auth_header) -> None:
+    from artek_buddy.main import app
+    from artek_buddy.runtime.cursor_wait import DEAD_WAIT_NEXT_STEP
+
+    bot_id = create_bot(client, auth_header, "WaitStuck")["id"]
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "hello"},
+    )
+    assert first.status_code == 200
+    wait_run(client, auth_header, bot_id, first.json()["run_id"])
+    stuck = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-dead-wait-stuck"},
+    )
+    assert stuck.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, stuck.json()["run_id"])
     assert snap["run"]["status"] == "failed"
     assert snap["run"].get("error") == DEAD_WAIT_NEXT_STEP
-    assert "The turn failed." in (snap["run"].get("error") or "")
     assert "Send again" in (snap["run"].get("error") or "")
     assert app.state.runtime.bridge_recycles == 1
     nxt = client.post(
