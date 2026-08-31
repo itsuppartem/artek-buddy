@@ -18,6 +18,7 @@
 
 ### Fixed
 - A second `.deb` window that loses an owner-job ACK no longer reports that conflict as the winning client's failure. Claim-capable results carry the winning ACK nonce; queued no-ACK results remain compatible. Thread snapshots expose every queued automatic job instead of hiding parallel work behind one id.
+- Clicking a Models chip uses that model. Tan is the host default, not a local pick that still leaves Grok in use.
 - Caps Lock during Take control raises letter case on the bot desktop. The overlay does not swallow that key.
 - Ctrl+V in the Linux WebKit window no longer cancels an empty/deferred clipboard event before ordinary text can reach Message. Image, file, and file-manager-path paste still use the attachment path.
 - Chat links open in the owner's system browser from the `.deb`. Right-clicking a link offers Open in browser, Copy URL, and Reply; URL copy falls back for older WebKit clipboard support.
