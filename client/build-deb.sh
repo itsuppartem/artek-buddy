@@ -74,6 +74,9 @@ chmod -R a+rX "$LIB/web"
 cat > "$BIN/artek-buddy" <<'EOF'
 #!/usr/bin/env python3
 import runpy
+import sys
+
+sys.argv[0] = "artek-buddy"
 runpy.run_path("/usr/lib/artek-buddy-client/artek_buddy.py", run_name="__main__")
 EOF
 chmod 755 "$BIN/artek-buddy"
@@ -102,6 +105,9 @@ cat > "$DEBIAN/postinst" <<'EOF'
 set -e
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database -q /usr/share/applications >/dev/null 2>&1 || true
 fi
 EOF
 chmod 755 "$DEBIAN/postinst"

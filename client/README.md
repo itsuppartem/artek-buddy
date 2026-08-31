@@ -45,6 +45,8 @@ The GTK3 client publishes a StatusNotifier/AppIndicator tray icon. Closing the
 window hides it only after the indicator reports that the desktop is displaying
 it. **Open Artek Buddy** presents the same window; **Quit** stops the client and
 its loopback proxy. Without desktop indicator support, close exits normally.
+The process names itself `artek-buddy` so the dock matches `artek-buddy.desktop`
+and the packaged mark, not a generic `artek_buddy.py` gear.
 
 ## Config
 

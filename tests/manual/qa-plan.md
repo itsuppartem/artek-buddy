@@ -438,6 +438,7 @@ The computer pane is screen, memory, and routines — not a second file list.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
+| Show Applications lists **Artek Buddy** with the packaged mark. After launch, the dock shows that mark and name, not `artek_buddy.py` or a generic gear | [ ] | — |
 | The installed client shows an **Artek Buddy** tray icon. Its menu **Open Artek Buddy** presents the window; **Quit** exits | [ ] | — |
 | Close the window with ×: it hides to the tray and keeps running. Start it again only if the desktop has no indicator support and close therefore exits | [ ] | — |
 | Run `please e2e-slow` in Demo and switch to Research: completion raises exactly one native **Demo replied** notification and does not steal the open chat | [ ] | — |

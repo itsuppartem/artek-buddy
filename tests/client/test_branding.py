@@ -39,6 +39,9 @@ def test_deb_script_installs_artek_icon() -> None:
     assert "web_paths.py" in text
     assert "gir1.2-ayatanaappindicator3-0.1" in text
     assert "X-GNOME-UsesNotifications=true" in text
+    assert 'sys.argv[0] = "artek-buddy"' in text
+    assert "update-desktop-database" in text
+    assert "StartupWMClass=Artek Buddy" in text
 
 
 def test_bundled_icon_path_finds_source_tree(client_mod) -> None:
@@ -66,3 +69,55 @@ def test_notify_passes_bundled_icon(client_mod, monkeypatch) -> None:
     assert icon_args
     assert icon_args[0].endswith(".png")
     assert "--hint=string:desktop-entry:artek-buddy" in cmd
+
+
+class _FakeGLib:
+    def __init__(self) -> None:
+        self.prgname = None
+        self.app_name = None
+
+    def set_prgname(self, name: str) -> None:
+        self.prgname = name
+
+    def set_application_name(self, name: str) -> None:
+        self.app_name = name
+
+
+class _FakeGdk:
+    def __init__(self) -> None:
+        self.wm_class = None
+
+    def set_program_class(self, name: str) -> None:
+        self.wm_class = name
+
+
+class _FakeGtkWindow:
+    default_icon = None
+    default_icon_name = None
+
+    @classmethod
+    def set_default_icon_from_file(cls, path: str) -> None:
+        cls.default_icon = path
+
+    @classmethod
+    def set_default_icon_name(cls, name: str) -> None:
+        cls.default_icon_name = name
+
+
+class _FakeGtk:
+    Window = _FakeGtkWindow
+
+
+def test_identify_desktop_app_matches_the_installed_launcher(client_mod) -> None:
+    glib = _FakeGLib()
+    gdk = _FakeGdk()
+    _FakeGtkWindow.default_icon = None
+    _FakeGtkWindow.default_icon_name = None
+
+    client_mod.identify_desktop_app(glib=glib, gdk=gdk, gtk=_FakeGtk)
+
+    assert glib.prgname == "artek-buddy"
+    assert glib.app_name == "Artek Buddy"
+    assert gdk.wm_class == "Artek Buddy"
+    assert _FakeGtkWindow.default_icon_name == "artek-buddy"
+    assert str(_FakeGtkWindow.default_icon).endswith(".png")

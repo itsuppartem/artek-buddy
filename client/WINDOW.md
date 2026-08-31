@@ -31,6 +31,8 @@ Chrome colors come from `@theme` (`ink`, `plate`, `raised`, `hairline`, `paper`,
 
 The installed GTK3 client publishes an **Artek Buddy** tray indicator. Its menu has **Open Artek Buddy** and **Quit**. Closing the window hides it to the tray while the indicator is available, so background replies can still alert; **Open Artek Buddy** presents the same window and **Quit** stops the client. If the desktop has no StatusNotifier/AppIndicator support, close keeps the normal quit behavior.
 
+The packaged launcher is **Artek Buddy** (`artek-buddy.desktop`, icon `artek-buddy`). The GTK process names itself `artek-buddy` / `Artek Buddy` before the window exists, so the dock and app menu keep that mark instead of a generic `artek_buddy.py` gear. The tray looks up the same PNG from the packaged icon directory.
+
 ## Screens
 
 | Screen | When | Controls |

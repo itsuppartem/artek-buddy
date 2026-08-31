@@ -12,6 +12,7 @@ from window_chrome import (
     _register_window,
     _unregister_window,
     apply_window_icon,
+    identify_desktop_app,
 )
 
 
@@ -68,6 +69,7 @@ def _open_webkit2(local_url: str) -> bool:
         raise RuntimeError("WebKit2 typelib not found")
     from gi.repository import Gtk, WebKit2
 
+    identify_desktop_app()
     window = Gtk.Window(title="Artek Buddy")
     window.set_default_size(1440, 900)
     apply_window_icon(window)
@@ -97,6 +99,8 @@ def _open_webkit6(local_url: str) -> bool:
     gi.require_version("Gtk", "4.0")
     gi.require_version("WebKit", "6.0")
     from gi.repository import Gtk, WebKit
+
+    identify_desktop_app()
 
     def on_activate(app: Gtk.Application) -> None:
         window = Gtk.ApplicationWindow(application=app, title="Artek Buddy")
