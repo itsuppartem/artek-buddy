@@ -49,8 +49,9 @@ import {
   reportOwnerJobError,
   shouldAutoFulfillOwnerJob,
 } from "../lib/consent";
+import { copyText } from "../lib/copy-text";
 import { hatchIsOpen, hatchPointerEvents } from "../lib/hatch";
-import { stripMarkdown } from "../lib/markdown";
+import { contextLinkUrl, stripMarkdown } from "../lib/markdown";
 import { dispatchMemoryChanged } from "../lib/memory";
 import { NEEDS_MODEL_TEXT } from "../lib/models";
 import {
@@ -298,6 +299,7 @@ export function ShellPage() {
   const [messageMenu, setMessageMenu] = useState<{
     message: ThreadMessage;
     position: ContextMenuPosition;
+    url?: string;
   } | null>(null);
   const [replyTo, setReplyTo] = useState<ThreadMessage | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
@@ -2073,6 +2075,7 @@ export function ShellPage() {
                     setMessageMenu({
                       message: item,
                       position: { x: event.clientX, y: event.clientY },
+                      url: contextLinkUrl(event.target),
                     });
                   }}
                 />
@@ -2326,7 +2329,24 @@ export function ShellPage() {
         {messageMenu ? (
           <MessageContextMenu
             position={messageMenu.position}
+            url={messageMenu.url}
             onClose={() => setMessageMenu(null)}
+            onCopyUrl={async () => {
+              if (!messageMenu.url) return false;
+              const copied = await copyText(messageMenu.url);
+              if (!copied) {
+                errorKindRef.current = "action";
+                setErrorKind("action");
+                setError("Could not copy URL. Select and copy the link instead.");
+              }
+              return copied;
+            }}
+            onOpenUrl={() => {
+              if (messageMenu.url) {
+                window.open(messageMenu.url, "_blank", "noopener,noreferrer");
+              }
+              setMessageMenu(null);
+            }}
             onReply={() => {
               setReplyTo(messageMenu.message);
               setMessageMenu(null);

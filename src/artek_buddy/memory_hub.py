@@ -45,6 +45,7 @@ _PIECE = re.compile(r"[a-zа-яё]+|\d+", re.IGNORECASE)
 _INBOX = "The user sent these messages"
 _FORGET = re.compile(r"(?i)\b(forget|забудь|не помни|stop remembering)\b")
 _ONE_OFF = re.compile(r"(?i)\b(open|открой|вкладк|tab|gmail|url|http|сейчас|this time|once)\b")
+_NEGATED_RULE = re.compile(r"(?i)\b(?:do not|don't|never|не|нельзя|никогда)\b")
 _DURABLE_ASK = re.compile(
     r"(?i)\b(city|город|name|зовут|timezone|часовой|prefer|язык|language|где жив)\b"
 )
@@ -315,16 +316,8 @@ def similar_memory(left: str, right: str) -> bool:
     stay different. Short function words and stems (don't / do not, разрешения /
     разрешение) do not count as a new fact.
     """
-    a = {
-        w
-        for w in (m.group(0).lower() for m in _PIECE.finditer(left or ""))
-        if w not in _STOPWORDS and (w.isdigit() or len(w) >= 2)
-    }
-    b = {
-        w
-        for w in (m.group(0).lower() for m in _PIECE.finditer(right or ""))
-        if w not in _STOPWORDS and (w.isdigit() or len(w) >= 2)
-    }
+    a = _memory_pieces(left)
+    b = _memory_pieces(right)
     if not a or not b:
         return False
     overlap = a & b
@@ -342,6 +335,25 @@ def similar_memory(left: str, right: str) -> bool:
         if not any(_same_stem(word, other) for other in others):
             return False
     return True
+
+
+def _memory_pieces(text: str) -> set[str]:
+    return {
+        w
+        for w in (match.group(0).lower() for match in _PIECE.finditer(text or ""))
+        if w not in _STOPWORDS and w not in {"do", "don"} and (w.isdigit() or len(w) >= 2)
+    }
+
+
+def memory_covers(existing: str, candidate: str) -> bool:
+    """True when a longer saved rule already contains a shorter restatement."""
+    if bool(_NEGATED_RULE.search(existing or "")) != bool(_NEGATED_RULE.search(candidate or "")):
+        return False
+    saved = _memory_pieces(existing)
+    incoming = _memory_pieces(candidate)
+    if len(incoming) < 3 or len(saved) <= len(incoming):
+        return False
+    return all(any(_same_stem(word, prior) for prior in saved) for word in incoming)
 
 
 def _same_stem(left: str, right: str) -> bool:
@@ -471,11 +483,11 @@ class MemoryHub:
             body = ready
         if run_id:
             for prior in self._bodies.get(run_id, []):
-                if similar_memory(prior, body):
+                if similar_memory(prior, body) or memory_covers(prior, body):
                     self._mark_capture(run_id, section, body)
                     return None
         for live in self.store.list_live_memory_entries(bot_id=bot_id):
-            if not similar_memory(live.text, body):
+            if not (similar_memory(live.text, body) or memory_covers(live.text, body)):
                 continue
             if facts_contradict(live.text, body):
                 merged = scripted_rewrite(section, live.text, "", body)
@@ -495,7 +507,9 @@ class MemoryHub:
             return None
         previous = self.store.find_live_memory_entry_by_slot(section, scope=scope, bot_id=bot_id)
         if previous is not None:
-            if similar_memory(previous.text, body) and not facts_contradict(previous.text, body):
+            if (
+                similar_memory(previous.text, body) or memory_covers(previous.text, body)
+            ) and not facts_contradict(previous.text, body):
                 self._mark_capture(run_id, section, body)
                 return None
             merged = scripted_rewrite(section, previous.text, "", body)

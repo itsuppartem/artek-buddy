@@ -103,7 +103,7 @@ Computer → Memory: the **identity** chapter updated while that pane is open (n
 | After (1)+(2)+(3) the next city answer is Novi Sad | [ ] | [ ] |
 | «Привет» / `hello` does not rewrite identity | [ ] | [ ] |
 | Memory pane identity chapter has the new city only | [ ] | [ ] |
-| One standing rule in chat (`please e2e-remember-twice` on a scripted host, or «не спрашивай разрешения на read») → **one** Remembered line and one Memory card | [ ] | [ ] |
+| One detailed standing rule followed by a shorter restatement (`please e2e-remember-twice` on a scripted host) → **one** Remembered line and one Memory card. Reading This PC afterward does not repeat it | [ ] | [ ] |
 | **+ New memory** defaults to **This bot** (filled segment). Save flashes Saved and keeps the card in view. Delete is **Remove**, not Outdated | [ ] | [ ] |
 
 ---
@@ -328,6 +328,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Deb: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo) | [ ] | — |
 | Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays | [ ] | [ ] |
 | Right-click Reply (Deb) puts a quote in the next user bubble | [ ] | — |
+| `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Open in browser**, **Copy URL**, and Reply; Copy changes to **URL copied** | [ ] | [ ] |
 | Ask card (options or free text) waits; answering continues the turn. A missing / already-answered card does not break the thread | [ ] | [ ] |
 | Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks | [ ] | [ ] |
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
@@ -578,7 +579,7 @@ If time is short, in this order:
 11. **§10 This-PC** back-to-back read/list and one Allow action exactly once on Deb
 12. **§1 / §21 Escape** on Settings and New bot
 13. **§14 Inbox** Search empty + one click opens that row
-14. **§15 Composer** Ctrl+A selects, does not Send
+14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL
 15. **§8 / §15 Dismiss** on needs-you keeps the current chat
 16. **§9 Queue** pending mark, then local Sent while offline
 17. **§15 Stop** on a live turn shows Stopped. A late complete does not land
