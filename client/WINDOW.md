@@ -29,6 +29,8 @@ The computer pane, Models, and Settings overlay sit on the right of the same she
 
 Chrome colors come from `@theme` (`ink`, `plate`, `raised`, `hairline`, `paper`, `mute`, `tan`, `sage`, `danger`). Settings, Memory, Routines, ask/file cards, and the computer overlay use those names — not a second cool gray palette. Traffic lights stay `close` / `min` / `full`. Guest noVNC pixels are not restyled.
 
+The installed GTK3 client publishes an **Artek Buddy** tray indicator. Its menu has **Open Artek Buddy** and **Quit**. Closing the window hides it to the tray while the indicator is available, so background replies can still alert; **Open Artek Buddy** presents the same window and **Quit** stops the client. If the desktop has no StatusNotifier/AppIndicator support, close keeps the normal quit behavior.
+
 ## Screens
 
 | Screen | When | Controls |
@@ -86,7 +88,9 @@ Errors: host down shows a reconnect banner (`reconnect-banner`, Retry connection
 
 If the user is pinned to the bottom, new cards keep the latest in view. Switching chats lands on the latest messages. Stop cancels the lead and workers and always writes one **Stopped.** `run-error`. A later completed token from that run must not append (`please e2e-late-complete` on a scripted host). An instant Cursor wait fail after a good turn (`please e2e-dead-wait`) retries that same send under the hood and completes; there is no Send-again `run-error`. `please e2e-dead-wait-stuck` still shows **The turn failed. Send again — the host will start a new session.** The host prompt includes a compact summary of this chat (byte-capped) plus owner lines that never reached the model (inbox kept across Stop). `waiting_takeover` is a pause: no typing dots and no Stop. A new send starts a turn. **Release** resumes the same parked run.
 
-Not in this window: `threads.followUp` (the host queues on send while a lead is running; a parked takeover starts work), `subagents.steer`, `me`, `deployment`. `notify-send` exists on the proxy and is unused by React.
+Not in this window: `threads.followUp` (the host queues on send while a lead is running; a parked takeover starts work), `subagents.steer`, `me`, `deployment`.
+
+On the `.deb` surface, a reply / failure with `notifyOnFinish` enabled and every owner question / takeover calls loopback `notify` once when the window is hidden or another chat is open. The focused open chat stays quiet. The host page uses the browser notification path instead and never calls the Linux loopback endpoint. Native notifications carry the installed desktop-entry identity and Artek Buddy icon.
 
 ## Models (host)
 

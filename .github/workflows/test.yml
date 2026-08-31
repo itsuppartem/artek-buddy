@@ -238,7 +238,8 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update -o Acquire::ForceIPv4=true
           sudo apt-get install -y --no-install-recommends \
-            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils libnotify-bin \
+            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
+            gir1.2-ayatanaappindicator3-0.1 xdg-utils libnotify-bin \
             libnss3 libnspr4 libgbm1 libasound2t64 libatk-bridge2.0-0 libxkbcommon0 \
             libxcomposite1 libxdamage1 libxrandr2 libcups2
           unset ARTEK_BAKE_URL
@@ -554,7 +555,8 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update -o Acquire::ForceIPv4=true
           sudo apt-get install -y --no-install-recommends \
-            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils libnotify-bin \
+            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
+            gir1.2-ayatanaappindicator3-0.1 xdg-utils libnotify-bin \
             libnss3 libnspr4 libgbm1 libasound2t64 libatk-bridge2.0-0 libxkbcommon0 \
             libxcomposite1 libxdamage1 libxrandr2 libcups2
           unset ARTEK_BAKE_URL

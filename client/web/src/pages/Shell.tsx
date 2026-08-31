@@ -275,6 +275,7 @@ export function ShellPage() {
   const requestedBotId = useRef<string | null>(null);
   const inboxPointerDown = useRef<string | null>(null);
   const botsRef = useRef<Bot[]>([]);
+  const windowFocusedRef = useRef(true);
   const shellOpenedAt = useRef(Date.now());
   const freshBotIds = useRef(new Set<string>());
   const previousViewingRef = useRef<string | null>(null);
@@ -316,6 +317,21 @@ export function ShellPage() {
   }, [bots]);
 
   useEffect(() => {
+    function syncFocus() {
+      windowFocusedRef.current = document.visibilityState === "visible" && document.hasFocus();
+    }
+    syncFocus();
+    window.addEventListener("focus", syncFocus);
+    window.addEventListener("blur", syncFocus);
+    document.addEventListener("visibilitychange", syncFocus);
+    return () => {
+      window.removeEventListener("focus", syncFocus);
+      window.removeEventListener("blur", syncFocus);
+      document.removeEventListener("visibilitychange", syncFocus);
+    };
+  }, []);
+
+  useEffect(() => {
     filesEpoch.current += 1;
     setPendingFiles([]);
   }, [botId]);
@@ -349,17 +365,30 @@ export function ShellPage() {
     const now = Date.now();
     const viewing = activeIdRef.current || botIdRef.current || null;
     const pageHidden = typeof document !== "undefined" && document.hidden;
+    const surface = pageSurface();
     const showBanner = shouldSendDesktopAlert({
       windowFocused: true,
       viewingBotId: viewing,
       alertBotId: next.botId,
     });
-    const showWeb = shouldShowWebNotification({
-      pageHidden,
-      viewingBotId: viewing,
-      alertBotId: next.botId,
-    });
-    if (shouldHoldHostAlert({ pageHidden, viewingBotId: viewing, alertBotId: next.botId })) {
+    const showNative =
+      surface === "desktop" &&
+      shouldSendDesktopAlert({
+        windowFocused: windowFocusedRef.current && !pageHidden,
+        viewingBotId: viewing,
+        alertBotId: next.botId,
+      });
+    const showWeb =
+      surface === "host" &&
+      shouldShowWebNotification({
+        pageHidden,
+        viewingBotId: viewing,
+        alertBotId: next.botId,
+      });
+    if (
+      surface === "host" &&
+      shouldHoldHostAlert({ pageHidden, viewingBotId: viewing, alertBotId: next.botId })
+    ) {
       const held = pendingAlerts.current.get(next.botId);
       if (!held || shouldReplaceAttention(held.alert, next)) {
         pendingAlerts.current.set(next.botId, { alert: next, notifyOnFinish, key });
@@ -378,6 +407,13 @@ export function ShellPage() {
     pendingAlerts.current.delete(next.botId);
     if (showBanner) {
       setAttention((current) => (shouldReplaceAttention(current, next) ? next : current));
+    }
+    if (showNative) {
+      void api.local.notify({
+        title: next.title,
+        body: next.body,
+        urgency: next.urgency,
+      });
     }
     if (showWeb) {
       raiseWebNotification(next);
