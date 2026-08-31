@@ -63,6 +63,7 @@ def test_catalog_stays_names_only_and_rides_in_the_turn() -> None:
     assert "open_book" in text
     assert "install_book" in text
     assert "teach" not in text.lower()
+    assert "Do not wait for the owner to name or trigger it" in text
     wrapped = wrap_turn_prompt("hello", None, role="lead", books_context=text)
     assert "<skill_books>" in wrapped
     assert "install_book" in wrapped
