@@ -411,7 +411,7 @@ export function ShellPage() {
     if (showNative) {
       void api.local.notify({
         title: next.title,
-        body: webNotificationBody(next),
+        body: next.body,
         urgency: next.urgency,
       });
     }
