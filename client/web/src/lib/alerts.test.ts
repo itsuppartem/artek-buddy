@@ -195,6 +195,34 @@ describe("attentionFromBotChange", () => {
     expect(alert?.kind).toBe("replied");
     expect(alert?.title).toBe("Need replied");
   });
+
+  it("does not treat auto waiting_input as asking", () => {
+    expect(
+      attentionFromBotChange(
+        botSnap({ status: "running", preview: "working" }),
+        botSnap({
+          status: "waiting_input",
+          unread: true,
+          preview: "Remembered: Work robot RN-017MINE: repo /home/nsys",
+          updatedAt: "2026-01-01T00:00:02Z",
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("does not alert on a Remembered preview after the turn", () => {
+    expect(
+      attentionFromBotChange(
+        botSnap({ status: "running", unread: false }),
+        botSnap({
+          status: "idle",
+          unread: true,
+          preview: "Remembered: Work robot RN-017MINE: repo /home/nsys",
+          updatedAt: "2026-01-01T00:00:02Z",
+        }),
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("attentionFromParkedBot", () => {

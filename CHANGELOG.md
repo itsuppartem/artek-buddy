@@ -17,6 +17,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- A `Remembered:` memory line no longer raises **is asking** (or a finish alert). Auto owner-tool `waiting_input` is not treated as an owner question.
 - GNOME's notification list keeps an **Artek Buddy** row while the client is running. The tray badge was only the window urgency hint; `notify-send` left the bus and GNOME destroyed the matched-app source.
 - The installed Linux client identifies as **Artek Buddy** so the dock and app menu use the packaged mark instead of a generic `artek_buddy.py` gear. The tray looks up that same PNG from the packaged icon directory.
 - The Linux `.deb` sends one native notification for background replies, failures, owner questions, and takeover instead of dropping the event after the in-window banner. Its tray indicator can reopen or quit the client; closing the window hides it to the tray while indicators are supported.
