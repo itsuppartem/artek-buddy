@@ -450,7 +450,8 @@ class Handler(BaseHTTPRequestHandler):
         urgency = str(payload.get("urgency") or "normal").strip().lower()
         if urgency not in {"low", "normal", "critical"}:
             urgency = "normal"
-        _desktop_notify(title, body, urgency)
+        tag = _notify_text(payload.get("tag"), 80)
+        _desktop_notify(title, body, urgency, tag)
         self._json(200, {"ok": True})
 
     def _local_owner_read(self) -> None:

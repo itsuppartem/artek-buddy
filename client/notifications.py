@@ -8,6 +8,7 @@ from pairing import _log
 from window_chrome import _apply_urgency, bundled_icon_path, notify_icon_args
 
 _ACTIVE_NOTES: list[object] = []
+_ACTIVE_BY_TAG: dict[str, object] = {}
 
 _URGENCY_ATTR = {
     "low": "LOW",
@@ -27,17 +28,35 @@ def _libnotify_api() -> object | None:
     return Notify
 
 
-def _desktop_notify(title: str, body: str, urgency: str) -> None:
+def _desktop_notify(title: str, body: str, urgency: str, tag: str = "") -> None:
     _apply_urgency(True)
     if os.environ.get("ARTEK_BUDDY_NOTIFY") == "0":
         _log("notify skipped")
         return
-    if _show_libnotify(title, body, urgency):
+    if _show_libnotify(title, body, urgency, tag):
         return
     _show_notify_send(title, body, urgency)
 
 
-def _show_libnotify(title: str, body: str, urgency: str) -> bool:
+def _close_tagged_note(tag: str) -> None:
+    if not tag:
+        return
+    previous = _ACTIVE_BY_TAG.pop(tag, None)
+    if previous is None:
+        return
+    closer = getattr(previous, "close", None)
+    if callable(closer):
+        try:
+            closer()
+        except Exception:
+            pass
+    try:
+        _ACTIVE_NOTES.remove(previous)
+    except ValueError:
+        pass
+
+
+def _show_libnotify(title: str, body: str, urgency: str, tag: str = "") -> bool:
     api = _libnotify_api()
     if api is None:
         return False
@@ -56,10 +75,18 @@ def _show_libnotify(title: str, body: str, urgency: str) -> bool:
         hint = getattr(note, "set_hint_string", None)
         if callable(hint):
             hint("desktop-entry", "artek-buddy")
+        _close_tagged_note(tag)
         note.show()
         _ACTIVE_NOTES.append(note)
+        if tag:
+            _ACTIVE_BY_TAG[tag] = note
         if len(_ACTIVE_NOTES) > 20:
+            extra = _ACTIVE_NOTES[:-12]
             del _ACTIVE_NOTES[:-12]
+            for stale in extra:
+                for key, held in list(_ACTIVE_BY_TAG.items()):
+                    if held is stale:
+                        _ACTIVE_BY_TAG.pop(key, None)
         return True
     except Exception as exc:
         _log(f"libnotify failed: {type(exc).__name__}")

@@ -19,9 +19,11 @@ import {
   attentionFromBotChange,
   attentionFromEvent,
   isHistoricalEvent,
+  nativeNotifyTag,
   parkedAttentionForView,
   rememberShownAlert,
   shouldClearAttentionForView,
+  shouldCountThreadRead,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
   shouldStickDismissOnView,
@@ -276,6 +278,8 @@ export function ShellPage() {
   const inboxPointerDown = useRef<string | null>(null);
   const botsRef = useRef<Bot[]>([]);
   const windowFocusedRef = useRef(true);
+  const [windowFocused, setWindowFocused] = useState(true);
+  const [pageHidden, setPageHidden] = useState(false);
   const shellOpenedAt = useRef(Date.now());
   const freshBotIds = useRef(new Set<string>());
   const previousViewingRef = useRef<string | null>(null);
@@ -318,7 +322,11 @@ export function ShellPage() {
 
   useEffect(() => {
     function syncFocus() {
-      windowFocusedRef.current = document.visibilityState === "visible" && document.hasFocus();
+      const hidden = document.hidden;
+      const focused = document.visibilityState === "visible" && document.hasFocus();
+      windowFocusedRef.current = focused;
+      setWindowFocused(focused);
+      setPageHidden(hidden);
     }
     syncFocus();
     window.addEventListener("focus", syncFocus);
@@ -351,20 +359,32 @@ export function ShellPage() {
 
   useEffect(() => {
     if (!botId) return;
+    if (
+      !shouldCountThreadRead({
+        viewingBotId: botId,
+        chatId: botId,
+        windowFocused,
+        pageHidden,
+      })
+    ) {
+      return;
+    }
     markOpenThreadRead(botId);
-  }, [botId]);
+  }, [botId, windowFocused, pageHidden]);
 
   function dispatchAlert(next: AttentionAlert, key: string, notifyOnFinish: boolean) {
     if (!allowAlert(next, notifyOnFinish)) return;
-    if (seenAlertKeys.current.has(key)) return;
-    if (dismissedAlerts.current.has(attentionFingerprint(next))) {
+    const fingerprint = attentionFingerprint(next);
+    if (seenAlertKeys.current.has(key) || seenAlertKeys.current.has(fingerprint)) return;
+    if (dismissedAlerts.current.has(fingerprint)) {
       seenAlertKeys.current.add(key);
+      seenAlertKeys.current.add(fingerprint);
       return;
     }
     const kindKey = `${next.botId}:${next.kind}`;
     const now = Date.now();
     const viewing = activeIdRef.current || botIdRef.current || null;
-    const pageHidden = typeof document !== "undefined" && document.hidden;
+    const hidden = typeof document !== "undefined" && document.hidden;
     const surface = pageSurface();
     const showBanner = shouldSendDesktopAlert({
       windowFocused: true,
@@ -374,20 +394,21 @@ export function ShellPage() {
     const showNative =
       surface === "desktop" &&
       shouldSendDesktopAlert({
-        windowFocused: windowFocusedRef.current && !pageHidden,
+        windowFocused: windowFocusedRef.current && !hidden,
         viewingBotId: viewing,
         alertBotId: next.botId,
+        pageHidden: hidden,
       });
     const showWeb =
       surface === "host" &&
       shouldShowWebNotification({
-        pageHidden,
+        pageHidden: hidden,
         viewingBotId: viewing,
         alertBotId: next.botId,
       });
     if (
       surface === "host" &&
-      shouldHoldHostAlert({ pageHidden, viewingBotId: viewing, alertBotId: next.botId })
+      shouldHoldHostAlert({ pageHidden: hidden, viewingBotId: viewing, alertBotId: next.botId })
     ) {
       const held = pendingAlerts.current.get(next.botId);
       if (!held || shouldReplaceAttention(held.alert, next)) {
@@ -398,8 +419,13 @@ export function ShellPage() {
     if (
       rememberShownAlert(seenAlertKeys.current, recentKindAt.current, key, kindKey, now) === "skip"
     ) {
+      if (!key.endsWith(":parked")) {
+        seenAlertKeys.current.add(key);
+        seenAlertKeys.current.add(fingerprint);
+      }
       return;
     }
+    seenAlertKeys.current.add(fingerprint);
     if (seenAlertKeys.current.size > 250) {
       const oldest = seenAlertKeys.current.values().next().value;
       if (oldest) seenAlertKeys.current.delete(oldest);
@@ -413,6 +439,7 @@ export function ShellPage() {
         title: next.title,
         body: next.body,
         urgency: next.urgency,
+        tag: nativeNotifyTag(next.botId),
       });
     }
     if (showWeb) {
@@ -604,14 +631,22 @@ export function ShellPage() {
 
   useEffect(() => {
     const viewing = activeIdRef.current || botIdRef.current || null;
-    if (shouldClearAttentionForView(attention, viewing)) {
+    const lookingAtThread =
+      viewing != null &&
+      shouldCountThreadRead({
+        viewingBotId: viewing,
+        chatId: viewing,
+        windowFocused,
+        pageHidden,
+      });
+    if (lookingAtThread && shouldClearAttentionForView(attention, viewing)) {
       if (shouldStickDismissOnView(attention, viewing, previousViewingRef.current)) {
         dismissedAlerts.current.add(attentionFingerprint(attention));
       }
       setAttention(null);
     }
     previousViewingRef.current = viewing;
-  }, [active?.id, attention]);
+  }, [active?.id, attention, windowFocused, pageHidden]);
 
   async function refreshBots() {
     const list = await api.bots.list();
@@ -635,7 +670,16 @@ export function ShellPage() {
       }
     }
     const viewing = activeIdRef.current || botIdRef.current;
-    if (viewing && !heldUnreadIds.current.has(viewing)) {
+    if (
+      viewing &&
+      !heldUnreadIds.current.has(viewing) &&
+      shouldCountThreadRead({
+        viewingBotId: viewing,
+        chatId: viewing,
+        windowFocused: windowFocusedRef.current,
+        pageHidden: typeof document !== "undefined" && document.hidden,
+      })
+    ) {
       const open = list.find((item) => item.id === viewing);
       if (open?.unread) {
         open.unread = false;

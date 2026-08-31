@@ -8,9 +8,11 @@ import {
   attentionFromParkedBot,
   type BotAlertSnapshot,
   isHistoricalEvent,
+  nativeNotifyTag,
   parkedAttentionForView,
   rememberShownAlert,
   shouldClearAttentionForView,
+  shouldCountThreadRead,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
   shouldStickDismissOnView,
@@ -37,13 +39,69 @@ describe("shouldSendDesktopAlert", () => {
     ).toBe(false);
   });
 
-  it("alerts when the window is focused on another chat or unfocused", () => {
+  it("alerts when another chat is open", () => {
     expect(
       shouldSendDesktopAlert({ windowFocused: true, viewingBotId: "bot-b", alertBotId: "bot-a" }),
     ).toBe(true);
+  });
+
+  it("does not treat looking at the OS alert list as leaving the open chat", () => {
     expect(
-      shouldSendDesktopAlert({ windowFocused: false, viewingBotId: "bot-a", alertBotId: "bot-a" }),
+      shouldSendDesktopAlert({
+        windowFocused: false,
+        pageHidden: false,
+        viewingBotId: "bot-a",
+        alertBotId: "bot-a",
+      }),
+    ).toBe(false);
+  });
+
+  it("alerts the open chat only when the window is hidden", () => {
+    expect(
+      shouldSendDesktopAlert({
+        windowFocused: false,
+        pageHidden: true,
+        viewingBotId: "bot-a",
+        alertBotId: "bot-a",
+      }),
     ).toBe(true);
+  });
+});
+
+describe("shouldCountThreadRead", () => {
+  it("counts a chat as read only while that thread is focused on screen", () => {
+    expect(
+      shouldCountThreadRead({
+        viewingBotId: "bot-a",
+        chatId: "bot-a",
+        windowFocused: true,
+        pageHidden: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldCountThreadRead({
+        viewingBotId: "bot-a",
+        chatId: "bot-a",
+        windowFocused: false,
+        pageHidden: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldCountThreadRead({
+        viewingBotId: "bot-b",
+        chatId: "bot-a",
+        windowFocused: true,
+        pageHidden: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("nativeNotifyTag", () => {
+  it("is stable per bot so the OS can replace a stacked alert", () => {
+    expect(nativeNotifyTag("bot-a")).toBe("artek-buddy:bot-a");
+    expect(nativeNotifyTag("bot-a")).toBe(nativeNotifyTag("bot-a"));
+    expect(nativeNotifyTag("bot-b")).not.toBe(nativeNotifyTag("bot-a"));
   });
 });
 
