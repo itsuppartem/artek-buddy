@@ -229,9 +229,7 @@ export function shouldCountThreadRead(input: {
   windowFocused: boolean;
   pageHidden: boolean;
 }): boolean {
-  return (
-    input.viewingBotId === input.chatId && input.windowFocused && !input.pageHidden
-  );
+  return input.viewingBotId === input.chatId && input.windowFocused && !input.pageHidden;
 }
 
 export function nativeNotifyTag(botId: string): string {
