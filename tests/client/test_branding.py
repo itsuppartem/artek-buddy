@@ -33,9 +33,12 @@ def test_deb_script_installs_artek_icon() -> None:
     assert "pairing.py" in text
     assert "proxy.py" in text
     assert "notifications.py" in text
+    assert "tray.py" in text
     assert "window.py" in text
     assert "clipboard_image.py" in text
     assert "web_paths.py" in text
+    assert "gir1.2-ayatanaappindicator3-0.1" in text
+    assert "X-GNOME-UsesNotifications=true" in text
 
 
 def test_bundled_icon_path_finds_source_tree(client_mod) -> None:
@@ -62,3 +65,4 @@ def test_notify_passes_bundled_icon(client_mod, monkeypatch) -> None:
     icon_args = [item for item in cmd if str(item).startswith("--icon=")]
     assert icon_args
     assert icon_args[0].endswith(".png")
+    assert "--hint=string:desktop-entry:artek-buddy" in cmd
