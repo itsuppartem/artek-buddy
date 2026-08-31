@@ -826,6 +826,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/consents/{consent_id}/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge Consent Job */
+        post: operations["acknowledge_consent_job_v1_consents__consent_id__ack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/consents/{consent_id}/file": {
         parameters: {
             query?: never;
@@ -1757,6 +1774,8 @@ export interface components {
             cwd?: string | null;
             /** Id */
             id: string;
+            /** Job Status */
+            job_status?: ("queued" | "acknowledged" | "completed" | "failed" | "timed_out") | null;
             /** Kind */
             kind?: string | null;
             /** Path */
@@ -4446,6 +4465,41 @@ export interface operations {
                 "application/json": components["schemas"]["ConsentAnswerInput"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    acknowledge_consent_job_v1_consents__consent_id__ack_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                consent_id: string;
+            };
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

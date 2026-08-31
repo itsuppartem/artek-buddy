@@ -170,6 +170,14 @@ PROCEDURES: list[Procedure] = [
     ),
     _p("consents.get", "GET", "/v1/consents/{consent_id}", None, "ConsentJob", True),
     _p(
+        "consents.ack",
+        "POST",
+        "/v1/consents/{consent_id}/ack",
+        None,
+        "OkResponse",
+        True,
+    ),
+    _p(
         "consents.file",
         "POST",
         "/v1/consents/{consent_id}/file",

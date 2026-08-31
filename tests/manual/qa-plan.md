@@ -103,7 +103,7 @@ Computer → Memory: the **identity** chapter updated while that pane is open (n
 | After (1)+(2)+(3) the next city answer is Novi Sad | [ ] | [ ] |
 | «Привет» / `hello` does not rewrite identity | [ ] | [ ] |
 | Memory pane identity chapter has the new city only | [ ] | [ ] |
-| One standing rule in chat (`please e2e-remember-twice` on a scripted host, or «не спрашивай разрешения на read») → **one** Remembered line and one Memory card | [ ] | [ ] |
+| One detailed standing rule followed by a shorter restatement (`please e2e-remember-twice` on a scripted host) → **one** Remembered line and one Memory card. Reading This PC afterward does not repeat it | [ ] | [ ] |
 | **+ New memory** defaults to **This bot** (filled segment). Save flashes Saved and keeps the card in view. Delete is **Remove**, not Outdated | [ ] | [ ] |
 
 ---
@@ -245,8 +245,9 @@ On **Deb**: stop the `artek-buddy` container for about 30 seconds (or pull the n
 | Paste a screenshot into Message → chip `screenshot-1.png` (or the file name). Ordinary text is not an attachment | [ ] | [ ] |
 | Ask to hand a long task to a helper / long search: **no** worker card with the full assignment. Lines `Started …` / `Finished …` / `Stopped …` | [ ] | [ ] |
 | Composer **Stop** kills the lead and the workers | [ ] | [ ] |
-| This-PC Allow (read / write this Linux home) works on Deb | [ ] | — |
-| Phone `/local/owner-*` is **403**. No This-PC card that reads the phone | — | [ ] |
+| This-PC Allow (read / write this Linux home) works on Deb. Refresh or open a second window while it runs: the same write/exec happens **once**, not once per window | [ ] | — |
+| Back-to-back This-PC read + list return their own results; neither waits on or receives the other job | [ ] | — |
+| Phone `/local/owner-*` is **403**. It does not fail an auto job while the paired Deb can claim it | — | [ ] |
 
 ---
 
@@ -327,12 +328,13 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Deb: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo) | [ ] | — |
 | Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays | [ ] | [ ] |
 | Right-click Reply (Deb) puts a quote in the next user bubble | [ ] | — |
+| `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Open in browser**, **Copy URL**, and Reply; Copy changes to **URL copied** | [ ] | [ ] |
 | Ask card (options or free text) waits; answering continues the turn. A missing / already-answered card does not break the thread | [ ] | [ ] |
 | Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks | [ ] | [ ] |
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
-| Failed / cancelled run shows a run-error, not a silent hole. Instant Cursor wait fail after a good turn (`please e2e-dead-wait`): **The turn failed. Send again…**; the next hello still answers | [ ] | [ ] |
+| Failed / cancelled run shows a run-error, not a silent hole. Instant Cursor wait fail after a good turn (`please e2e-dead-wait`) completes on that send (bot `ok`, no Send-again). `please e2e-dead-wait-stuck` still shows **The turn failed. Send again…**; the next hello still answers | [ ] | [ ] |
 | A follow-up while `waiting_takeover` starts a turn (does not only enqueue) | [ ] | [ ] |
 | Stop keeps the run cancelled: a late complete does not append the essay (scripted `please e2e-late-complete` or a live Cursor turn). **Stopped.** is one `run-error` line. Queued owner lines survive Stop and prepend to the next send | [ ] | [ ] |
 
@@ -367,11 +369,19 @@ Read a file or list a folder under the Linux home: no Allow card. Read-only shel
 
 Write a file or a command that can change the PC: Allow once / Always / Deny. Always covers later writes and commands on this PC, not each folder. Paths outside `$HOME` stay 403 on the card.
 
+For SSH reuse, use a real alias already present on the owner PC. Do not add one
+for this test and do not change `~/.ssh/config`. First test without
+`~/.config/artek-buddy/ssh-mux`; then `touch` that opt-in file and restart the
+rebuilt client. This stays in the long walk because it needs a real owner alias.
+
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Read / list under home: no card | [ ] | — |
 | Write / mutating command: card, then the action only after Allow | [ ] | — |
 | Deny does not touch the PC | [ ] | — |
+| Ask for several small remote checks. The agent sends one `ssh alias 'check; check; check'` owner command / one card, not one SSH call per check | [ ] | — |
+| Without `ssh-mux`, SSH behaves as before. With the opt-in file, two sequential calls to the same alias reuse a private socket under `$XDG_RUNTIME_DIR/artek-buddy/ssh` (or the documented cache fallback) | [ ] | — |
+| Quit the client or wait for ControlPersist: the master exits. `~/.ssh/config` is unchanged and no owner private key appears on the Pi | [ ] | — |
 | Phone never runs owner tools | — | [ ] |
 
 ---
@@ -566,12 +576,14 @@ If time is short, in this order:
 8. **§12 Pad and Cyrillic**
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
-11. **§1 / §21 Escape** on Settings and New bot
-12. **§14 Inbox** Search empty + one click opens that row
-13. **§15 Composer** Ctrl+A selects, does not Send
-14. **§8 / §15 Dismiss** on needs-you keeps the current chat
-15. **§9 Queue** pending mark, then local Sent while offline
-16. **§15 Stop** on a live turn shows Stopped. A late complete does not land
+11. **§10 This-PC** back-to-back read/list and one Allow action exactly once on Deb
+12. **§1 / §21 Escape** on Settings and New bot
+13. **§14 Inbox** Search empty + one click opens that row
+14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL
+15. **§8 / §15 Dismiss** on needs-you keeps the current chat
+16. **§9 Queue** pending mark, then local Sent while offline
+17. **§15 Stop** on a live turn shows Stopped. A late complete does not land
+18. **§15 dead wait** `please e2e-dead-wait` completes on that send; `please e2e-dead-wait-stuck` still shows Send again
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 
