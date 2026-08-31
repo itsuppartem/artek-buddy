@@ -23,3 +23,7 @@ export function parseDefaultModelValue(value: string): { provider: string; model
 export function maskedKey(lastFour: string | null | undefined): string {
   return lastFour ? `•••• ${lastFour}` : "";
 }
+
+export function modelChipSelected(using: string, modelId: string): boolean {
+  return Boolean(using) && using === modelId;
+}
