@@ -179,7 +179,7 @@ def test_owner_exec_uses_opt_in_ssh_mux_environment(
     monkeypatch.setattr(
         proxy,
         "owner_exec_environment",
-        lambda env: {**env, "ARTEK_SSH_CONTROL_PATH": "/tmp/artek-test/%C"},
+        lambda: {"ARTEK_SSH_CONTROL_PATH": "/tmp/artek-test/%C"},
     )
     monkeypatch.setattr(
         proxy.subprocess,
