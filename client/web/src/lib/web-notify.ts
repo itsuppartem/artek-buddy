@@ -58,6 +58,7 @@ export function shouldShowWebNotification(input: {
     windowFocused: !input.pageHidden,
     viewingBotId: input.viewingBotId,
     alertBotId: input.alertBotId,
+    pageHidden: input.pageHidden,
   });
 }
 

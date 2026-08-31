@@ -215,9 +215,25 @@ export function shouldSendDesktopAlert(input: {
   windowFocused: boolean;
   viewingBotId: string | null;
   alertBotId: string;
+  pageHidden?: boolean;
 }): boolean {
-  if (!input.windowFocused) return true;
-  return input.viewingBotId !== input.alertBotId;
+  if (input.viewingBotId !== input.alertBotId) return true;
+  // Looking at the OS notification list blurs the window but does not hide
+  // the open chat. That is not "left the thread" and must not re-notify.
+  return input.pageHidden === true;
+}
+
+export function shouldCountThreadRead(input: {
+  viewingBotId: string | null | undefined;
+  chatId: string;
+  windowFocused: boolean;
+  pageHidden: boolean;
+}): boolean {
+  return input.viewingBotId === input.chatId && input.windowFocused && !input.pageHidden;
+}
+
+export function nativeNotifyTag(botId: string): string {
+  return `artek-buddy:${botId}`;
 }
 
 export function shouldWatchBackgroundBot(

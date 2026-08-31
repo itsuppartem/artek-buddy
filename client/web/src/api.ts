@@ -159,7 +159,12 @@ export const api = {
     unpair() {
       return request<{ ok: boolean; paired?: boolean }>("POST", "/local/unpair");
     },
-    notify(input: { title: string; body: string; urgency: "low" | "normal" | "critical" }) {
+    notify(input: {
+      title: string;
+      body: string;
+      urgency: "low" | "normal" | "critical";
+      tag?: string;
+    }) {
       return request<{ ok: boolean }>("POST", "/local/notify", input).catch(() => ({ ok: false }));
     },
     ownerRead(path: string) {

@@ -17,6 +17,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Looking at the OS notification list no longer counts as reading the open chat and no longer re-sends that thread's native alerts in a stack. Read / dismiss require the thread on a focused window. One libnotify row per bot replaces the previous.
 - A `Remembered:` memory line no longer raises **is asking** (or a finish alert). Auto owner-tool `waiting_input` is not treated as an owner question.
 - GNOME's notification list keeps an **Artek Buddy** row while the client is running. The tray badge was only the window urgency hint; `notify-send` left the bus and GNOME destroyed the matched-app source.
 - The installed Linux client identifies as **Artek Buddy** so the dock and app menu use the packaged mark instead of a generic `artek_buddy.py` gear. The tray looks up that same PNG from the packaged icon directory.
