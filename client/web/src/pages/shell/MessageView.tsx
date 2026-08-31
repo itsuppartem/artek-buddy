@@ -22,7 +22,6 @@ export function MessageView({
   onAnswer,
   onOpenBot,
   onOpenComputer,
-  onRestoreSkill,
   onContextMenu,
 }: {
   canAnswer: boolean;
@@ -33,7 +32,6 @@ export function MessageView({
   onAnswer: (text: string) => Promise<void>;
   onOpenBot: (botId: string) => void;
   onOpenComputer?: () => void;
-  onRestoreSkill?: (name: string) => void;
   onContextMenu?: (event: MouseEvent, message: ThreadMessage) => void;
 }) {
   const quote = message.replyTo;
@@ -210,35 +208,7 @@ export function MessageView({
           );
         }
         if (block.kind === "book") {
-          return (
-            <div
-              key={index}
-              role={onRestoreSkill ? "button" : undefined}
-              tabIndex={onRestoreSkill ? 0 : undefined}
-              aria-label={onRestoreSkill ? `Show ${block.name}` : undefined}
-              data-testid="book-card"
-              data-action={block.action}
-              className={`max-w-[74%] rounded-[10px] border border-hairline border-l-[3px] border-l-tan bg-plate px-3.5 py-3${
-                onRestoreSkill ? " cursor-pointer" : ""
-              }`}
-              onClick={onRestoreSkill ? () => onRestoreSkill(block.name) : undefined}
-              onKeyDown={
-                onRestoreSkill
-                  ? (event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        onRestoreSkill(block.name);
-                      }
-                    }
-                  : undefined
-              }
-            >
-              <div className="text-[13px] font-medium text-tan">{block.name}</div>
-              <div className="mt-1.5 text-[14.5px] leading-[1.5] text-paper">
-                <ChatMarkdown>{block.text}</ChatMarkdown>
-              </div>
-            </div>
-          );
+          return null;
         }
         if (block.kind === "computer") {
           const waiting =
