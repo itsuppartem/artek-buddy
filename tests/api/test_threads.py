@@ -412,7 +412,50 @@ def test_auto_owner_read_exposes_pending_consent(client, auth_header) -> None:
     assert completed.json()["job_status"] == "completed"
 
 
-def test_auto_owner_job_ack_is_single_claim_and_rejects_late_result(client, auth_header) -> None:
+def test_thread_snapshot_exposes_every_pending_auto_owner_job(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "ParallelAutoRead")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "e2e-consent-auto-read"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    waiting = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input", timeout=5)
+    first_id = waiting["pending_auto_consent_id"]
+    assert first_id
+
+    store = client.app.state.store
+    bot = store.get_bot(bot_id)
+    assert bot is not None
+    second_id = "cns_parallel_snapshot"
+    store.create_consent_request(
+        second_id,
+        bot_id=bot_id,
+        run_id=run_id,
+        thread_id=bot.thread_id,
+        message_id=None,
+        action_class="owner_read",
+        scope_key="~",
+        summary="List ~ on your computer?",
+        workspace_id=bot.workspace_id,
+        job_status="queued",
+    )
+
+    snapshot = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert snapshot.status_code == 200
+    assert set(snapshot.json()["pending_auto_consent_ids"]) == {first_id, second_id}
+    assert store.finish_consent_job(second_id, "completed")
+    uploaded = client.post(
+        f"/v1/consents/{first_id}/result",
+        headers=auth_header,
+        json={"ok": True, "text": "notes from owner"},
+    )
+    assert uploaded.status_code == 200
+    assert wait_run(client, auth_header, bot_id, run_id)["run"]["status"] == "completed"
+
+
+def test_auto_owner_job_ack_is_single_claim_and_rejects_loser_result(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "AutoAck")["id"]
     sent = client.post(
         f"/v1/threads/{bot_id}/messages",
@@ -425,26 +468,32 @@ def test_auto_owner_job_ack_is_single_claim_and_rejects_late_result(client, auth
     consent_id = snap["pending_auto_consent_id"]
     assert consent_id
 
-    claimed = client.post(f"/v1/consents/{consent_id}/ack", headers=auth_header)
+    claimed = client.post(
+        f"/v1/consents/{consent_id}/ack",
+        headers=auth_header,
+        json={"claim_capable": True},
+    )
     assert claimed.status_code == 200
+    claim = claimed.json().get("claim")
+    assert isinstance(claim, str) and claim
     duplicate = client.post(f"/v1/consents/{consent_id}/ack", headers=auth_header)
     assert duplicate.status_code == 409
     acknowledged = client.get(f"/v1/consents/{consent_id}", headers=auth_header)
     assert acknowledged.status_code == 200
     assert acknowledged.json()["job_status"] == "acknowledged"
 
-    uploaded = client.post(
+    loser = client.post(
         f"/v1/consents/{consent_id}/result",
         headers=auth_header,
         json={"ok": False, "error": "owner read failed"},
     )
-    assert uploaded.status_code == 200
-    late = client.post(
+    assert loser.status_code == 409
+    uploaded = client.post(
         f"/v1/consents/{consent_id}/result",
         headers=auth_header,
-        json={"ok": True, "text": "late duplicate"},
+        json={"ok": True, "text": "notes from owner", "claim": claim},
     )
-    assert late.status_code == 409
+    assert uploaded.status_code == 200
 
     finished = wait_run(client, auth_header, bot_id, run_id)
     assert finished["run"]["status"] == "completed"

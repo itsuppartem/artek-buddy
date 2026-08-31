@@ -184,3 +184,43 @@ def test_ack_claims_owner_job_once_and_late_result_is_rejected() -> None:
     assert hub.put_owner_result("cns_1", {"ok": True, "stdout": "done"}) is True
     assert store.row.job_status == "completed"
     assert hub.put_owner_result("cns_1", {"ok": True, "stdout": "late"}) is False
+
+
+def test_claim_capable_ack_rejects_a_result_without_the_claim() -> None:
+    class Store:
+        def __init__(self) -> None:
+            self.row = ConsentRequest(
+                id="cns_1",
+                bot_id="bot_1",
+                action_class="owner_exec",
+                scope_key="~",
+                summary="Run it?",
+                job_status="queued",
+            )
+
+        def get_consent_request(self, _request_id: str) -> ConsentRequest:
+            return self.row
+
+        def acknowledge_consent_job(self, _request_id: str) -> bool:
+            if self.row.job_status != "queued":
+                return False
+            self.row.job_status = "acknowledged"
+            return True
+
+        def finish_consent_job(self, _request_id: str, job_status: str) -> bool:
+            if self.row.job_status not in {"queued", "acknowledged"}:
+                return False
+            self.row.job_status = job_status
+            return True
+
+    store = Store()
+    hub = ConsentHub(store)
+
+    claimed, claim = hub.claim_owner_job("cns_1", claim_capable=True)
+    assert claimed is True
+    assert claim
+    assert hub.put_owner_result("cns_1", {"ok": False}, claim=None) is False
+    assert hub.put_owner_result("cns_1", {"ok": False}, claim="wrong") is False
+    assert store.row.job_status == "acknowledged"
+    assert hub.put_owner_result("cns_1", {"ok": True}, claim=claim) is True
+    assert store.row.job_status == "completed"
