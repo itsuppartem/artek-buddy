@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import secrets
 import shlex
 import threading
 from dataclasses import dataclass
@@ -224,6 +225,7 @@ class ConsentHub:
         self._files: dict[str, tuple[str, bytes]] = {}
         self._file_waiters: dict[str, threading.Event] = {}
         self._jobs: dict[str, dict[str, Any]] = {}
+        self._job_claims: dict[str, str] = {}
         self._results: dict[str, dict[str, Any]] = {}
         self._result_waiters: dict[str, threading.Event] = {}
 
@@ -432,17 +434,40 @@ class ConsentHub:
         return job
 
     def acknowledge_owner_job(self, request_id: str) -> bool:
+        claimed, _claim = self.claim_owner_job(request_id)
+        return claimed
+
+    def claim_owner_job(
+        self,
+        request_id: str,
+        *,
+        claim_capable: bool = False,
+    ) -> tuple[bool, str | None]:
         row = self.store.get_consent_request(request_id)
         if row is None or row.action_class not in OWNER_CLASSES or row.job_status != "queued":
-            return False
-        return bool(self.store.acknowledge_consent_job(request_id))
+            return False, None
+        with self._lock:
+            if not self.store.acknowledge_consent_job(request_id):
+                return False, None
+            claim = secrets.token_urlsafe(24) if claim_capable else None
+            if claim is not None:
+                self._job_claims[request_id] = claim
+        return True, claim
 
-    def put_owner_file(self, request_id: str, name: str, data: bytes) -> bool:
+    def put_owner_file(
+        self,
+        request_id: str,
+        name: str,
+        data: bytes,
+        *,
+        claim: str | None = None,
+    ) -> bool:
         row = self.store.get_consent_request(request_id)
         if (
             row is None
             or row.action_class != CLASS_OWNER_READ
             or row.job_status not in {"queued", "acknowledged"}
+            or not self._owner_claim_matches(request_id, claim)
         ):
             return False
         with self._lock:
@@ -452,18 +477,26 @@ class ConsentHub:
             waiter.set()
         return True
 
-    def put_owner_result(self, request_id: str, payload: dict[str, Any]) -> bool:
+    def put_owner_result(
+        self,
+        request_id: str,
+        payload: dict[str, Any],
+        *,
+        claim: str | None = None,
+    ) -> bool:
         row = self.store.get_consent_request(request_id)
         if (
             row is None
             or row.action_class not in OWNER_CLASSES
             or row.job_status not in {"queued", "acknowledged"}
+            or not self._owner_claim_matches(request_id, claim)
         ):
             return False
         final_status = "completed" if payload.get("ok", True) else "failed"
         if not self.store.finish_consent_job(request_id, final_status):
             return False
         with self._lock:
+            self._job_claims.pop(request_id, None)
             self._results[request_id] = dict(payload)
             waiter = self._result_waiters.get(request_id)
             file_waiter = self._file_waiters.get(request_id)
@@ -472,6 +505,15 @@ class ConsentHub:
         if file_waiter is not None:
             file_waiter.set()
         return True
+
+    def _owner_claim_matches(self, request_id: str, claim: str | None) -> bool:
+        with self._lock:
+            expected = self._job_claims.get(request_id)
+        if expected is None:
+            return True
+        if not claim:
+            return False
+        return secrets.compare_digest(expected, claim)
 
     def take_owner_result(
         self,
@@ -497,7 +539,11 @@ class ConsentHub:
     def timeout_owner_job(self, request_id: str | None) -> bool:
         if not request_id:
             return False
-        return bool(self.store.finish_consent_job(request_id, "timed_out"))
+        finished = bool(self.store.finish_consent_job(request_id, "timed_out"))
+        if finished:
+            with self._lock:
+                self._job_claims.pop(request_id, None)
+        return finished
 
     def pull_owner_action(
         self,

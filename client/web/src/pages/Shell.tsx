@@ -39,7 +39,7 @@ import {
 import {
   fulfillOwnerJob,
   isAutoOwnerJob,
-  reportOwnerJobError,
+  pendingOwnerJobIds,
   shouldAutoFulfillOwnerJob,
 } from "../lib/consent";
 import { copyText } from "../lib/copy-text";
@@ -479,9 +479,8 @@ export function ShellPage() {
     if (!consentId || fulfilledOwnerJobs.current.has(consentId)) return;
     if (!shouldAutoFulfillOwnerJob(pageSurface())) return;
     fulfilledOwnerJobs.current.add(consentId);
-    void fulfillOwnerJob(consentId).catch((err) => {
+    void fulfillOwnerJob(consentId).catch(() => {
       fulfilledOwnerJobs.current.delete(consentId);
-      void reportOwnerJobError(consentId, err);
     });
   }
 
@@ -898,7 +897,7 @@ export function ShellPage() {
       mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId),
     );
     setComputer(snap.computer);
-    if (snap.pendingAutoConsentId) startOwnerFulfill(snap.pendingAutoConsentId);
+    for (const consentId of pendingOwnerJobIds(snap)) startOwnerFulfill(consentId);
     if (stickToEnd) {
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;

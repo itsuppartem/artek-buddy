@@ -136,23 +136,26 @@ class ConsentsMixin:
         )
 
     def pending_auto_consent_id(self, bot_id: str, run_id: str | None) -> str | None:
+        pending = self.pending_auto_consent_ids(bot_id, run_id)
+        return pending[-1] if pending else None
+
+    def pending_auto_consent_ids(self, bot_id: str, run_id: str | None) -> list[str]:
         if not run_id:
-            return None
+            return []
         with self._conn() as conn:
-            row = conn.execute(
+            rows = conn.execute(
                 """
                 SELECT id FROM consent_requests
                 WHERE bot_id = %s AND run_id = %s
                   AND status = 'pending'
                   AND job_status = 'queued'
                   AND message_id IS NULL
-                ORDER BY created_at DESC
-                LIMIT 1
+                ORDER BY created_at, id
                 """,
                 (bot_id, run_id),
-            ).fetchone()
+            ).fetchall()
             conn.commit()
-        return str(row["id"]) if row else None
+        return [str(row["id"]) for row in rows]
 
     def acknowledge_consent_job(self, request_id: str) -> bool:
         with self._conn() as conn:

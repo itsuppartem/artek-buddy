@@ -1023,6 +1023,39 @@
         "title": "ConnectionList",
         "type": "object"
       },
+      "ConsentAckInput": {
+        "properties": {
+          "claim_capable": {
+            "default": false,
+            "title": "Claim Capable",
+            "type": "boolean"
+          }
+        },
+        "title": "ConsentAckInput",
+        "type": "object"
+      },
+      "ConsentAckResponse": {
+        "properties": {
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "ConsentAckResponse",
+        "type": "object"
+      },
       "ConsentAnswerInput": {
         "properties": {
           "decision": {
@@ -1039,6 +1072,17 @@
       },
       "ConsentFileInput": {
         "properties": {
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
           "content_base64": {
             "anyOf": [
               {
@@ -1215,6 +1259,17 @@
               }
             ],
             "title": "Bytes"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
           },
           "content_base64": {
             "anyOf": [
@@ -3449,6 +3504,13 @@
               }
             ],
             "title": "Pending Auto Consent Id"
+          },
+          "pending_auto_consent_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending Auto Consent Ids",
+            "type": "array"
           },
           "run": {
             "anyOf": [
@@ -7340,12 +7402,29 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ConsentAckInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
+                  "$ref": "#/components/schemas/ConsentAckResponse"
                 }
               }
             },

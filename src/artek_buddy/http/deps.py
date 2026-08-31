@@ -215,11 +215,13 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
         status = record.status_for(bot.id, bot.computer_mode, history.busy_bot_name(record, bot.id))
     run = history.latest_run(bot.id)
     pending = None
+    pending_ids: list[str] = []
     run_status = getattr(getattr(run, "status", None), "value", None) or getattr(
         run, "status", None
     )
     if run is not None and run_status == "waiting_input":
-        pending = history.pending_auto_consent_id(bot.id, run.id)
+        pending_ids = history.pending_auto_consent_ids(bot.id, run.id)
+        pending = pending_ids[-1] if pending_ids else None
     return ThreadSnapshot(
         bot_id=bot.id,
         thread_id=bot.thread_id,
@@ -230,6 +232,7 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
         computer=status,
         subagents=sorted(history.list_subagents(bot.id), key=lambda item: item.index),
         pending_auto_consent_id=pending,
+        pending_auto_consent_ids=pending_ids,
     )
 
 
