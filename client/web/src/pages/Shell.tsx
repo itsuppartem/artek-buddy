@@ -27,13 +27,6 @@ import {
   shouldStickDismissOnView,
   shouldWatchBackgroundBot,
 } from "../lib/alerts";
-import {
-  hideBookSlug,
-  showBookSlug,
-  slugForBookName,
-  slugsConsumedByRunPrompt,
-  visibleSkillBooks,
-} from "../lib/books-ask";
 import { composerCanSend, composerPlaceholder, composerShouldSend } from "../lib/composer";
 import {
   composerRedo,
@@ -157,7 +150,6 @@ import { WindowChrome } from "../ui/window-chrome";
 import { BotContextMenu, type ContextMenuPosition } from "./BotContextMenu";
 import { MessageContextMenu } from "./MessageContextMenu";
 import { applyThreadEvent } from "./shell/apply-thread-event";
-import { BooksAsk } from "./shell/BooksAsk";
 import { BotSettings } from "./shell/BotSettings";
 import { ComputerOverlay } from "./shell/ComputerOverlay";
 import { ComputerPane } from "./shell/ComputerPane";
@@ -229,8 +221,6 @@ export function ShellPage() {
   const [panel, setPanel] = useState<Panel>(null);
   const [pluginApps, setPluginApps] = useState<{ slug: string; name: string }[]>([]);
   const [hiddenPluginSlugs, setHiddenPluginSlugs] = useState<Record<string, string[]>>({});
-  const [skillBooks, setSkillBooks] = useState<{ slug: string; name: string }[]>([]);
-  const [hiddenBookSlugs, setHiddenBookSlugs] = useState<Record<string, string[]>>({});
   const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
   const panelAfterSettings = useRef<"computer" | null>(null);
   const panelAfterCreate = useRef<"computer" | null>(null);
@@ -692,23 +682,6 @@ export function ShellPage() {
   useEffect(() => {
     void refreshPlugins();
   }, []);
-
-  async function refreshBooks(botId?: string) {
-    if (!botId) {
-      setSkillBooks([]);
-      return;
-    }
-    try {
-      const listed = await api.books.list(botId);
-      setSkillBooks((listed.books ?? []).map((row) => ({ slug: row.slug, name: row.name })));
-    } catch {
-      setSkillBooks([]);
-    }
-  }
-
-  useEffect(() => {
-    void refreshBooks(active?.id);
-  }, [active?.id, thread?.messages?.length, thread?.run?.status]);
 
   function persistQueue(next: QueuedSend[]): QueuedSend[] {
     try {
@@ -1351,24 +1324,10 @@ export function ShellPage() {
         : undefined;
       if (hostDownRef.current) {
         parkSend(targetId, text, replyId, attachments);
-        setHiddenBookSlugs((map) => {
-          let next = map;
-          for (const slug of slugsConsumedByRunPrompt(text, skillBooks)) {
-            next = hideBookSlug(next, targetId, slug);
-          }
-          return next;
-        });
         return;
       }
       await api.threads.send(targetId, text, replyId, attachments);
       setReplyTo(null);
-      setHiddenBookSlugs((map) => {
-        let next = map;
-        for (const slug of slugsConsumedByRunPrompt(text, skillBooks)) {
-          next = hideBookSlug(next, targetId, slug);
-        }
-        return next;
-      });
     } catch (err) {
       const classified = classifyError(err);
       if (shouldQueueSend(classified.kind)) {
@@ -2064,12 +2023,6 @@ export function ShellPage() {
                   onOpenBot={(id) => {
                     void refreshBots().then(() => navigate(`/app/${id}`));
                   }}
-                  onRestoreSkill={(name) => {
-                    if (!active) return;
-                    const slug = slugForBookName(skillBooks, name);
-                    if (!slug) return;
-                    setHiddenBookSlugs((map) => showBookSlug(map, active.id, slug));
-                  }}
                   onContextMenu={(event, item) => {
                     event.preventDefault();
                     setMessageMenu({
@@ -2138,15 +2091,6 @@ export function ShellPage() {
               onDismiss={(slug) => {
                 if (!active) return;
                 setHiddenPluginSlugs((map) => hidePluginSlug(map, active.id, slug));
-              }}
-            />
-            <BooksAsk
-              books={visibleSkillBooks(skillBooks, hiddenBookSlugs, active?.id)}
-              disabled={!active}
-              onAsk={(name) => writeDraft(`please run ${name}`)}
-              onDismiss={(slug) => {
-                if (!active) return;
-                setHiddenBookSlugs((map) => hideBookSlug(map, active.id, slug));
               }}
             />
             {pendingFiles.length ? (

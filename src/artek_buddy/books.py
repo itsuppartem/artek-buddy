@@ -79,7 +79,8 @@ def format_book_catalog(books: list[SkillBook]) -> str | None:
     lines = [
         "<skill_books>",
         "Skills kept for this chat. The next turn sees names only.",
-        "Open a book with open_book before following its steps.",
+        "Open a matching book yourself with open_book before following its steps. "
+        "Do not wait for the owner to name or trigger it.",
         "Find and keep a published skill with install_book. Drop one with forget_book.",
     ]
     for book in books:

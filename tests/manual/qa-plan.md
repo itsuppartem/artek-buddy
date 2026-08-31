@@ -110,15 +110,14 @@ Computer → Memory: the **identity** chapter updated while that pane is open (n
 
 ## 4. Skill from the web
 
-Same Demo chat. Ordinary language: «найди скилл для invoice и сохрани». On a scripted host send `please e2e-install-book` instead of dictating the steps.
+Same Demo chat. Ordinary language: «найди скилл для invoice и сохрани». On a scripted host send `please e2e-install-book`, then `please e2e-run-book` for the matching-task turn.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Allow / Deny card for that origin. Deny stores nothing | [ ] | [ ] |
-| After Allow: book card **Saved** | [ ] | [ ] |
-| Chip above Message has **×**. Click inserts `please run Invoice` and does **not** send. Send consumes the chip (it must not stick) | [ ] | [ ] |
-| After ×, click the Saved book card to show the chip again. Click still inserts `please run Invoice` and does not send | [ ] | [ ] |
-| Send → card with the fetched steps, not a form in Settings. A fail is one human **run-error** line (`The turn failed.` or the real reason), not `run failed: run-` plus a uuid, and not a second bubble with the same line | [ ] | [ ] |
+| After Allow: the normal bot reply appears, with no skill card and no skill chip above Message | [ ] | [ ] |
+| A matching task makes the agent use the kept skill itself; the owner does not type or tap a `please run` trigger | [ ] | [ ] |
+| Fetched steps and frontmatter never appear in the thread or inbox preview. A fail is one human **run-error** line (`The turn failed.` or the real reason), not YAML or `run failed: run-` plus a uuid | [ ] | [ ] |
 | Another bot does not see the book | [ ] | [ ] |
 
 ---

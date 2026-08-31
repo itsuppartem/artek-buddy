@@ -21,7 +21,7 @@ def test_skill_book_stays_internal_to_the_agent(page: Page, client_url: str, hos
     send_message(page, "please e2e-install-book", name)
     consent = page.get_by_test_id("consent-card")
     expect(consent).to_be_visible(timeout=8_000)
-    page.get_by_role("button", name="Always", exact=True).click()
+    page.get_by_role("button", name="B Always", exact=True).click()
     expect(page.get_by_text("I'll keep that skill.", exact=True)).to_be_visible(timeout=8_000)
     expect(page.get_by_test_id("book-card")).to_have_count(0)
     expect(page.get_by_test_id("book-ask-invoice")).to_have_count(0)

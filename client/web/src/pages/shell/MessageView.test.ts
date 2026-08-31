@@ -29,7 +29,6 @@ describe("MessageView", () => {
         message,
         onAnswer: async () => undefined,
         onOpenBot: vi.fn(),
-        onRestoreSkill: vi.fn(),
       }),
     );
 

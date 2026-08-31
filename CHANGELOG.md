@@ -8,7 +8,7 @@
 - A replaced Cursor lead session receives one bounded, redacted resume brief with known workspace, path/branch facts, constraints, and the last visible result.
 - Phone desktop overlay only: the remote screen is a pad (drag moves the pointer, tap left click, two fingers right click). Keyboard opens the phone keyboard. Chats and Chat stay as they were. The host page clears the iPhone notch (`safe-area-inset-top`) and does not leave a second empty strip under the nav.
 - The same Funnel / tailnet URL serves the window. A phone pairs with a code; the device token stays in an httpOnly cookie. Narrow screens stack Chats / Chat / Desktop (iPhone 11 Pro 375×812). iPhone Add to Home Screen plus Turn on alerts (only while that app is open — no background). This-PC files stay on the Linux `.deb`. CI splits `ui` (`.deb`) from `ui_web` / `live_web` (host page).
-- The owner can keep a published skill for this chat (`install_book` from a public URL after Allow). The stored body is the fetched markdown. The next turn sees names only; `open_book` loads the steps. A chip fills `please run {name}`. No Settings form.
+- The owner can keep a published skill for this chat (`install_book` from a public URL after Allow). The stored body is the fetched markdown. The next turn sees names only; the agent calls `open_book` itself when the description matches the task. No Settings form or owner trigger.
 - Models and Plugins Save name a host error instead of staying silent. A row's model is the host default (no second Default list). Cursor exposes reasoning and Fast; Save prefers grok-4.6 extra-high fast when that id is on the list. A Plugins key already on the host at boot shows as Key saved.
 - After an app is connected, a chip above Message fills `please use {name}`. The thread shows that app's result as a card.
 - The lead can search catalog apps (`list_apps`) and attach them (`connect_app`) from chat. Connected names ride in the turn. Login URLs open in the owner's browser, not the bot desktop.
@@ -47,14 +47,13 @@
 - Message placeholder truncates a long bot name with an ellipsis instead of clipping mid-word.
 - Plugins Search apps filters the catalog as you type. Enter is not required.
 - Phone file-card Download uses the browser, not a Linux `/local/save-artifact` path.
-- A skill chip above Message has ×, and Send consumes it so it does not stick next to screenshot chips.
-- Clicking a skill book card shows a dismissed chip again. There is no need to re-install the skill.
+- Skill-book procedures and controls stay internal to the agent. Historical skill blocks are hidden and omitted from inbox/reply excerpts; successful install/open/forget no longer persists a card or adds a chip above Message.
 - A plugin chip above Message has ×. Dismiss hides it and does not send.
 - Plugins Connect on a no-browser catalog app either connects or names the next setup step. It no longer dies on `could not start that connection` with nothing to do.
 - Settings Title keeps the typed role through blur and Save. A host refresh while Edit profile is open no longer empties the field.
 - Routine next-run drops the ISO microsecond fraction and keeps UTC.
 - Settings, Memory, and Routine Save flash **Saved** for about a second, then the form closes. A host error stays under the row.
-- A failed playbook run shows a steps card on success, or one human **The turn failed.** line — not a raw `run failed: run-` id, and not that same line as a bubble plus a red box.
+- A failed playbook run shows one human **The turn failed.** line — not a raw `run failed: run-` id, YAML, or that same line as a bubble plus a red box.
 - Settings, Memory, Routines, ask/file cards, and the computer overlay use the same `@theme` tokens as pairing and the thread. Traffic lights and guest noVNC pixels stay as they were.
 - Create and Settings ask three different questions: Title is a short role, Description is what the bot is for, and Instructions are standing orders (not labelled Prompt). Create now has that Instructions field too.
 - Auth recovery on the host page says **Pair this phone again**, matching the pairing title. The `.deb` still says **Pair this computer again**.
