@@ -43,7 +43,7 @@ def _allow_install(client, auth_header, bot_id: str, run_id: str) -> dict:
     return wait_run(client, auth_header, bot_id, run_id)
 
 
-def test_install_run_and_forget_playbook_in_the_thread(client, auth_header) -> None:
+def test_install_run_and_forget_keep_book_steps_out_of_the_thread(client, auth_header) -> None:
     bot = create_bot(client, auth_header, "BookChat")
     empty = client.get(f"/v1/bots/{bot['id']}/books", headers=auth_header)
     assert empty.status_code == 200
@@ -56,11 +56,7 @@ def test_install_run_and_forget_playbook_in_the_thread(client, auth_header) -> N
     )
     assert saved.status_code == 200
     after_save = _allow_install(client, auth_header, bot["id"], saved.json()["run_id"])
-    books = _book_blocks(after_save)
-    assert books
-    assert books[0]["name"] == "Invoice"
-    assert books[0]["action"] == "saved"
-    assert "please run Invoice" in books[0]["text"]
+    assert _book_blocks(after_save) == []
 
     listed = client.get(f"/v1/bots/{bot['id']}/books", headers=auth_header)
     assert listed.status_code == 200
@@ -78,14 +74,11 @@ def test_install_run_and_forget_playbook_in_the_thread(client, auth_header) -> N
     ran = client.post(
         f"/v1/threads/{bot['id']}/messages",
         headers=auth_header,
-        json={"text": "please run Invoice"},
+        json={"text": "please e2e-run-book"},
     )
     assert ran.status_code == 200
     after_run = wait_run(client, auth_header, bot["id"], ran.json()["run_id"])
-    opened = [block for block in _book_blocks(after_run) if block.get("action") == "opened"]
-    assert opened
-    assert opened[0]["name"] == "Invoice"
-    assert "Open the invoice site" in opened[0]["text"]
+    assert _book_blocks(after_run) == []
 
     forgotten = client.post(
         f"/v1/threads/{bot['id']}/messages",
@@ -94,9 +87,7 @@ def test_install_run_and_forget_playbook_in_the_thread(client, auth_header) -> N
     )
     assert forgotten.status_code == 200
     after_forget = wait_run(client, auth_header, bot["id"], forgotten.json()["run_id"])
-    dropped = [block for block in _book_blocks(after_forget) if block.get("action") == "forgotten"]
-    assert dropped
-    assert dropped[0]["name"] == "Invoice"
+    assert _book_blocks(after_forget) == []
     gone = client.get(f"/v1/bots/{bot['id']}/books", headers=auth_header)
     assert gone.json()["books"] == []
 
