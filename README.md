@@ -253,6 +253,8 @@ Local builds stay in the repo root (gitignored). Copy the file to the desktop PC
 On the desktop PC:
 
 ```bash
+# From Downloads, use dpkg. `apt install ./…` often fails because `_apt`
+# cannot read the home directory.
 sudo dpkg -i artek-buddy-client_0.10.27_all.deb
 sudo apt-get install -f
 ```

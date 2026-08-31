@@ -5,6 +5,9 @@ from pathlib import Path
 
 from owner_paths import owner_downloads_dir
 
+DESKTOP_ID = "artek-buddy"
+DESKTOP_WM_CLASS = "Artek Buddy"
+
 _WINDOW_LOCK = threading.Lock()
 _GTK_WINDOWS: list[object] = []
 
@@ -78,6 +81,53 @@ def bundled_icon_path() -> Path | None:
         if path.is_file():
             return path
     return None
+
+
+def icon_theme_path() -> Path | None:
+    icon = bundled_icon_path()
+    return icon.parent if icon is not None else None
+
+
+def identify_desktop_app(
+    *,
+    glib: object | None = None,
+    gdk: object | None = None,
+    gtk: object | None = None,
+) -> None:
+    """Bind this process to the installed Artek Buddy launcher and icon."""
+    if glib is None or gdk is None or gtk is None:
+        try:
+            from gi.repository import Gdk as gdk_mod
+            from gi.repository import GLib as glib_mod
+            from gi.repository import Gtk as gtk_mod
+        except Exception:
+            return
+        glib = glib or glib_mod
+        gdk = gdk or gdk_mod
+        gtk = gtk or gtk_mod
+    prgname = getattr(glib, "set_prgname", None)
+    if callable(prgname):
+        prgname(DESKTOP_ID)
+    app_name = getattr(glib, "set_application_name", None)
+    if callable(app_name):
+        app_name(DESKTOP_WM_CLASS)
+    wm_class = getattr(gdk, "set_program_class", None)
+    if callable(wm_class):
+        wm_class(DESKTOP_WM_CLASS)
+    window_type = getattr(gtk, "Window", None)
+    icon = bundled_icon_path()
+    from_file = getattr(window_type, "set_default_icon_from_file", None)
+    if icon is not None and callable(from_file):
+        try:
+            from_file(str(icon))
+        except Exception:
+            pass
+    icon_name = getattr(window_type, "set_default_icon_name", None)
+    if callable(icon_name):
+        try:
+            icon_name(DESKTOP_ID)
+        except Exception:
+            pass
 
 
 def notify_icon_args() -> list[str]:

@@ -46,6 +46,7 @@ class FakeIndicator:
         self.category = category
         self.status = None
         self.menu = None
+        self.icon_theme_path = None
         FakeIndicator.created = self
 
     @classmethod
@@ -57,6 +58,9 @@ class FakeIndicator:
 
     def set_menu(self, menu: FakeMenu) -> None:
         self.menu = menu
+
+    def set_icon_theme_path(self, path: str) -> None:
+        self.icon_theme_path = path
 
 
 class FakeIndicatorApi:
@@ -116,6 +120,8 @@ def test_tray_indicator_uses_app_icon_and_open_quit_menu() -> None:
     assert indicator.icon == "artek-buddy"
     assert indicator.category == "application"
     assert indicator.status == "active"
+    assert indicator.icon_theme_path
+    assert indicator.icon_theme_path.endswith(("apps", "pixmaps", "assets"))
     assert indicator.menu.shown is True
     assert [item.label for item in indicator.menu.items] == ["Open Artek Buddy", "Quit"]
 

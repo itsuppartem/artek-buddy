@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from pairing import _log
+from window_chrome import icon_theme_path
 
 
 def _load_tray_modules() -> tuple[Any, Any]:
@@ -43,6 +44,10 @@ def create_tray(
             "artek-buddy",
             indicator_api.IndicatorCategory.APPLICATION_STATUS,
         )
+        theme = icon_theme_path()
+        theme_setter = getattr(indicator, "set_icon_theme_path", None)
+        if theme is not None and callable(theme_setter):
+            theme_setter(str(theme))
         menu = gtk.Menu()
         open_item = gtk.MenuItem(label="Open Artek Buddy")
         open_item.connect("activate", lambda *_args: _show_window(window))

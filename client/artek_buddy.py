@@ -27,6 +27,7 @@ from proxy import proxy_origin_allowed as proxy_origin_allowed
 from proxy import serve
 from window import open_window
 from window_chrome import bundled_icon_path as bundled_icon_path
+from window_chrome import identify_desktop_app as identify_desktop_app
 
 
 def main() -> None:
