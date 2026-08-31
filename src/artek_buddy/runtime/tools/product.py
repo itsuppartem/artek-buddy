@@ -9,6 +9,7 @@ from artek_buddy.consent import (
     browse_origin,
 )
 from artek_buddy.observe import log_tool
+from artek_buddy.runtime.tools.apps import AppsToolsMixin
 from artek_buddy.runtime.tools.books import BooksToolsMixin
 from artek_buddy.runtime.tools.chat import ChatToolsMixin
 from artek_buddy.runtime.tools.common import (
@@ -99,14 +100,38 @@ class ProductToolsCore:
         path: str | None = None,
         job: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
+        allowed, _request_id = self._consent_gate(
+            bot_id,
+            action_class,
+            scope_key,
+            summary,
+            detail=detail,
+            path=path,
+            job=job,
+        )
+        if allowed:
+            return None
+        return {"ok": False, "error": "denied by owner", "denied": True}
+
+    def _consent_gate(
+        self,
+        bot_id: str | None,
+        action_class: str,
+        scope_key: str,
+        summary: str,
+        *,
+        detail: str | None = None,
+        path: str | None = None,
+        job: dict[str, Any] | None = None,
+    ) -> tuple[bool, str | None]:
         hub = getattr(self.runtime, "consent", None)
         if hub is None:
-            return None
+            return True, None
         resolved_bot, run_id, _thread_id = self.runtime.resolve_turn_context(bot_id)
         device_id = getattr(self.runtime, "resolve_turn_device", lambda: None)()
         if not resolved_bot:
-            return {"ok": False, "error": "no active bot"}
-        allowed = hub.require(
+            return False, None
+        return hub.require(
             bot_id=resolved_bot,
             action_class=action_class,
             scope_key=scope_key,
@@ -117,9 +142,6 @@ class ProductToolsCore:
             path=path,
             job=job,
         )
-        if allowed:
-            return None
-        return {"ok": False, "error": "denied by owner", "denied": True}
 
     def _page_origin(self, actions: list[Any], extra: str | None = None) -> str | None:
         origin = browse_origin(extra or "")
@@ -160,20 +182,21 @@ class ProductToolsCore:
         scope_key: str,
         summary: str,
         job: dict[str, Any],
+        request_id: str | None = None,
     ) -> dict[str, Any] | None:
         hub = getattr(self.runtime, "consent", None)
         if hub is None or getattr(hub, "_mode", lambda: None)() == "allow":
             return None
-        request_id = getattr(hub, "last_request_id", None)
         if request_id:
-            found = hub.take_owner_result(request_id)
+            found = hub.take_owner_result(request_id, finalize_timeout=False)
             if found is not None:
                 return found
             if action_class == CLASS_OWNER_READ and job.get("kind") != "list":
-                file_found = hub.take_owner_file(request_id)
+                file_found = hub.take_owner_file(request_id, finalize_timeout=False)
                 if file_found is not None:
                     name, data = file_found
                     return {"ok": True, "name": name, "bytes": len(data), "_data": data}
+            hub.timeout_owner_job(request_id)
             return None
         device_id = getattr(self.runtime, "resolve_turn_device", lambda: None)()
         return hub.pull_owner_action(
@@ -238,6 +261,7 @@ class ProductToolsCore:
 class ProductTools(
     ChatToolsMixin,
     BooksToolsMixin,
+    AppsToolsMixin,
     OwnerToolsMixin,
     ComputerToolsMixin,
     SubagentToolsMixin,

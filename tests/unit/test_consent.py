@@ -13,6 +13,7 @@ from artek_buddy.consent import (
     owner_command_is_readonly,
     owner_scope,
 )
+from artek_buddy.runtime.tools.product import ProductToolsCore
 
 
 def test_decision_from_label_happy_and_fail() -> None:
@@ -54,7 +55,11 @@ class _ConsentStore:
             action_class="owner_read",
             scope_key="~",
             summary="Read notes.txt from your computer?",
+            job_status="queued",
         )
+
+    def finish_consent_job(self, _request_id: str, _job_status: str) -> bool:
+        return True
 
 
 def test_take_owner_file_unblocks_when_client_reports_error(monkeypatch) -> None:
@@ -114,3 +119,68 @@ def test_auto_owner_read_publishes_consent_on_waiting_input() -> None:
     assert event.payload["consent_id"] == request_id
     assert event.payload["action_class"] == "owner_read"
     assert event.payload["path"] == "notes.txt"
+    assert not hasattr(hub, "last_request_id")
+
+
+def test_owner_result_wait_uses_the_current_call_request_id() -> None:
+    class Hub:
+        def _mode(self) -> None:
+            return None
+
+        def take_owner_result(self, request_id: str, **_kwargs: object) -> dict[str, object]:
+            return {"ok": True, "request_id": request_id}
+
+    runtime = SimpleNamespace(
+        consent=Hub(),
+        resolve_turn_device=lambda: "dev_1",
+    )
+    tools = ProductToolsCore(runtime)
+
+    second = tools._owner_client_result(
+        bot_id="bot_2",
+        run_id="run_2",
+        action_class="owner_exec",
+        scope_key="~",
+        summary="Run second?",
+        job={"kind": "exec", "command": "echo second"},
+        request_id="cns_second",
+    )
+
+    assert second == {"ok": True, "request_id": "cns_second"}
+
+
+def test_ack_claims_owner_job_once_and_late_result_is_rejected() -> None:
+    class Store:
+        def __init__(self) -> None:
+            self.row = ConsentRequest(
+                id="cns_1",
+                bot_id="bot_1",
+                action_class="owner_exec",
+                scope_key="~",
+                summary="Run it?",
+                job_status="queued",
+            )
+
+        def get_consent_request(self, _request_id: str) -> ConsentRequest:
+            return self.row
+
+        def acknowledge_consent_job(self, _request_id: str) -> bool:
+            if self.row.job_status != "queued":
+                return False
+            self.row.job_status = "acknowledged"
+            return True
+
+        def finish_consent_job(self, _request_id: str, job_status: str) -> bool:
+            if self.row.job_status not in {"queued", "acknowledged"}:
+                return False
+            self.row.job_status = job_status
+            return True
+
+    store = Store()
+    hub = ConsentHub(store)
+
+    assert hub.acknowledge_owner_job("cns_1") is True
+    assert hub.acknowledge_owner_job("cns_1") is False
+    assert hub.put_owner_result("cns_1", {"ok": True, "stdout": "done"}) is True
+    assert store.row.job_status == "completed"
+    assert hub.put_owner_result("cns_1", {"ok": True, "stdout": "late"}) is False

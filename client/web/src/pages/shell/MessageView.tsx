@@ -22,6 +22,7 @@ export function MessageView({
   onAnswer,
   onOpenBot,
   onOpenComputer,
+  onRestoreSkill,
   onContextMenu,
 }: {
   canAnswer: boolean;
@@ -32,6 +33,7 @@ export function MessageView({
   onAnswer: (text: string) => Promise<void>;
   onOpenBot: (botId: string) => void;
   onOpenComputer?: () => void;
+  onRestoreSkill?: (name: string) => void;
   onContextMenu?: (event: MouseEvent, message: ThreadMessage) => void;
 }) {
   const quote = message.replyTo;
@@ -93,16 +95,16 @@ export function MessageView({
               data-status={block.status}
               disabled={removed}
               onClick={() => onOpenBot(block.botId)}
-              className="w-[min(340px,90%)] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4 text-left disabled:opacity-60"
+              className="w-[min(340px,90%)] rounded-[18px] border border-hairline bg-plate px-[18px] py-4 text-left disabled:opacity-60"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[15px] font-medium text-[#ECECEE]">{block.name}</span>
-                <span className="rounded-full bg-[rgba(48,162,75,.14)] px-[11px] py-1 text-[13px] text-[#4ECB71]">
+                <span className="text-[15px] font-medium text-paper">{block.name}</span>
+                <span className="rounded-full bg-sage-bg px-[11px] py-1 text-[13px] text-sage">
                   {block.status}
                 </span>
               </div>
               {block.title ? (
-                <div className="mt-2 text-[14.5px] leading-[1.5] text-[#A8A8AD]">{block.title}</div>
+                <div className="mt-2 text-[14.5px] leading-[1.5] text-mute">{block.title}</div>
               ) : null}
             </button>
           );
@@ -110,10 +112,17 @@ export function MessageView({
         if (block.kind === "text" && message.role === "user") {
           return (
             <div key={index} className="flex flex-col items-end gap-1">
-              <div className="max-w-[70%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[16px] bg-paper px-[18px] py-3 text-[15.5px] leading-[1.45] text-ink">
+              <div
+                data-testid="user-text"
+                className="max-w-[70%] min-w-0 break-words whitespace-pre-wrap [overflow-wrap:anywhere] rounded-[16px] bg-paper px-[18px] py-3 text-[15.5px] leading-[1.45] text-ink"
+              >
                 {block.text}
               </div>
-              {offlineCaption ? (
+              {queued ? (
+                <div data-testid="queued-pending" className="max-w-[70%] text-[12.5px] text-mute">
+                  Waiting for the host
+                </div>
+              ) : offlineCaption ? (
                 <div
                   data-testid="offline-sent-caption"
                   className="max-w-[70%] text-[12.5px] text-mute"
@@ -136,12 +145,12 @@ export function MessageView({
         if (block.kind === "card") {
           return (
             <div key={index} className="flex justify-start" data-testid="check-card">
-              <div className="flex flex-col gap-2 rounded-[20px] bg-[#1A1A1D] px-5 py-4">
+              <div className="flex flex-col gap-2 rounded-[20px] bg-plate px-5 py-4">
                 {block.lines.map((line) => (
                   <div key={line.k} className="flex items-baseline gap-2.5 text-[15px]">
-                    <span className="text-[#30A24B]">✓</span>
+                    <span className="text-sage">✓</span>
                     <span className="font-semibold text-white">{line.k}</span>
-                    <span className="text-[#85858A]">→</span>
+                    <span className="text-mute">→</span>
                     <span>{line.v}</span>
                   </div>
                 ))}
@@ -163,6 +172,16 @@ export function MessageView({
           return <AskCard key={index} block={block} canAnswer={canAnswer} onAnswer={onAnswer} />;
         }
         if (block.kind === "plugin") {
+          const raw = "url" in block && block.url ? String(block.url) : "";
+          let connectHref = "";
+          try {
+            const parsed = new URL(raw);
+            if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+              connectHref = parsed.href;
+            }
+          } catch {
+            connectHref = "";
+          }
           return (
             <div
               key={index}
@@ -173,6 +192,20 @@ export function MessageView({
               <div className="mt-1.5 text-[14.5px] leading-[1.5] text-paper">
                 <ChatMarkdown>{block.text}</ChatMarkdown>
               </div>
+              {connectHref ? (
+                <Button
+                  type="button"
+                  variant="cream"
+                  size="sm"
+                  className="mt-2"
+                  data-testid="plugin-connect-open"
+                  onClick={() => {
+                    window.open(connectHref, "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  Open to connect
+                </Button>
+              ) : null}
             </div>
           );
         }
@@ -180,9 +213,25 @@ export function MessageView({
           return (
             <div
               key={index}
+              role={onRestoreSkill ? "button" : undefined}
+              tabIndex={onRestoreSkill ? 0 : undefined}
+              aria-label={onRestoreSkill ? `Show ${block.name}` : undefined}
               data-testid="book-card"
               data-action={block.action}
-              className="max-w-[74%] rounded-[10px] border border-hairline border-l-[3px] border-l-tan bg-plate px-3.5 py-3"
+              className={`max-w-[74%] rounded-[10px] border border-hairline border-l-[3px] border-l-tan bg-plate px-3.5 py-3${
+                onRestoreSkill ? " cursor-pointer" : ""
+              }`}
+              onClick={onRestoreSkill ? () => onRestoreSkill(block.name) : undefined}
+              onKeyDown={
+                onRestoreSkill
+                  ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onRestoreSkill(block.name);
+                      }
+                    }
+                  : undefined
+              }
             >
               <div className="text-[13px] font-medium text-tan">{block.name}</div>
               <div className="mt-1.5 text-[14.5px] leading-[1.5] text-paper">
@@ -199,15 +248,15 @@ export function MessageView({
             <div
               key={index}
               data-testid="computer-card"
-              className="w-[340px] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4"
+              className="w-[340px] rounded-[18px] border border-hairline bg-plate px-[18px] py-4"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[15px] font-medium text-[#ECECEE]">Computer</span>
-                <span className="rounded-full bg-[rgba(48,162,75,.14)] px-[11px] py-1 text-[13px] text-[#4ECB71]">
+                <span className="text-[15px] font-medium text-paper">Computer</span>
+                <span className="rounded-full bg-sage-bg px-[11px] py-1 text-[13px] text-sage">
                   {waiting ? "waiting" : "done"}
                 </span>
               </div>
-              <div className="my-2.5 text-[14.5px] leading-[1.5] text-[#A8A8AD]">
+              <div className="my-2.5 text-[14.5px] leading-[1.5] text-mute">
                 <ChatMarkdown>{block.text}</ChatMarkdown>
               </div>
               {waiting ? (

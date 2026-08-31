@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   embeddableScreenUrl,
+  overlayDisplayUrl,
+  overlayPendingUrl,
+  overlayWaitingLabel,
   shouldAutoBoot,
   shouldFetchScreenUrl,
+  shouldKeepScreenUrlOnRelease,
+  shouldReplaceScreenUrl,
   shouldReportOwnerActivity,
   shouldTakeControl,
 } from "./screen";
@@ -16,9 +21,10 @@ describe("embeddableScreenUrl", () => {
 });
 
 describe("shouldTakeControl", () => {
-  it("boots from the button, not from a preview click", () => {
+  it("only Take control grants control; start and preview stay view-only", () => {
     expect(shouldTakeControl("button")).toBe(true);
     expect(shouldTakeControl("preview")).toBe(false);
+    expect(shouldTakeControl("start")).toBe(false);
   });
 });
 
@@ -43,5 +49,87 @@ describe("shouldReportOwnerActivity", () => {
     expect(shouldReportOwnerActivity(1_000, 1_000)).toBe(false);
     expect(shouldReportOwnerActivity(1_000, 5_999)).toBe(false);
     expect(shouldReportOwnerActivity(1_000, 6_000)).toBe(true);
+  });
+});
+
+describe("shouldReplaceScreenUrl", () => {
+  const view =
+    "/novnc/YWJj/6080/view/9999999999999.abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=true";
+  const control =
+    "/novnc/YWJj/6081/control/9999999999999.abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=false";
+
+  it("switches the iframe off a dead control URL after Release", () => {
+    expect(shouldReplaceScreenUrl(control, view)).toBe(true);
+    expect(shouldReplaceScreenUrl(view, control)).toBe(true);
+  });
+
+  it("does not reload the same view-only target on every poll", () => {
+    expect(shouldReplaceScreenUrl(view, view)).toBe(false);
+  });
+
+  it("drops a control URL when the next screen is missing", () => {
+    expect(shouldReplaceScreenUrl(control, null)).toBe(true);
+  });
+});
+
+describe("shouldKeepScreenUrlOnRelease", () => {
+  it("keeps the last guest frame while Release remints view-only", () => {
+    expect(shouldKeepScreenUrlOnRelease()).toBe(true);
+  });
+});
+
+describe("overlayWaitingLabel", () => {
+  it("names waking until the first frame, not a black void", () => {
+    expect(
+      overlayWaitingLabel({
+        booting: true,
+        state: "suspended",
+        hasFrame: false,
+        hasUrl: false,
+      }),
+    ).toBe("Waking the desktop…");
+    expect(
+      overlayWaitingLabel({
+        booting: false,
+        state: "running",
+        hasFrame: false,
+        hasUrl: true,
+      }),
+    ).toBe("Waking the desktop…");
+    expect(
+      overlayWaitingLabel({
+        booting: false,
+        state: "running",
+        hasFrame: true,
+        hasUrl: true,
+      }),
+    ).toBeNull();
+    expect(
+      overlayWaitingLabel({
+        booting: false,
+        state: "running",
+        hasFrame: false,
+        hasUrl: false,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("overlayDisplayUrl", () => {
+  const view =
+    "/novnc/YWJj/6080/view/9999999999999.abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=true";
+  const control =
+    "/novnc/YWJj/6081/control/9999999999999.abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=false";
+
+  it("keeps the last guest URL until the reminted frame is ready", () => {
+    expect(overlayDisplayUrl(control, view)).toBe(control);
+    expect(overlayPendingUrl(control, view)).toBe(view);
+    expect(overlayDisplayUrl(view, view)).toBe(view);
+    expect(overlayPendingUrl(view, view)).toBeNull();
+  });
+
+  it("shows the incoming URL when there is no last frame yet", () => {
+    expect(overlayDisplayUrl(null, view)).toBe(view);
+    expect(overlayPendingUrl(null, view)).toBeNull();
   });
 });

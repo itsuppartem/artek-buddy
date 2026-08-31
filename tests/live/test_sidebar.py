@@ -145,6 +145,57 @@ def test_switch_bots_keeps_header_and_thread(page: Page, client_url: str, host_u
     assert first_box["y"] < second_box["y"]
 
 
+def test_unread_mark_is_named_and_visible(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Unread")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    open_bot_menu(page, name)
+    page.get_by_role("menuitem", name="Mark as unread").click()
+    row = bot_row(page, name)
+    pin = row.get_by_test_id("unread-dot")
+    expect(pin).to_be_visible()
+    expect(pin).to_have_accessible_name("Unread")
+    expect(row).to_have_accessible_name(f"Open chat {name} (unread)")
+
+
+def test_inbox_search_marks_preview_hit(page: Page, client_url: str, host_url: str) -> None:
+    token = uuid.uuid4().hex[:8]
+    lead = unique_bot("Lead")
+    other = unique_bot("Other")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, lead, title=f"notes about cats {token}")
+    create_named_bot(page, other, title="shipping desk")
+    search = page.get_by_placeholder("Search")
+    search.fill(token)
+    row = bot_row(page, lead)
+    expect(row).to_have_count(1)
+    expect(bot_row(page, other)).to_have_count(0)
+    expect(row.get_by_test_id("inbox-hit")).to_have_text(token)
+    expect(row.get_by_test_id("bot-preview")).to_contain_text(token)
+
+
+def test_inbox_search_no_match_shows_empty_and_clear(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("Seek")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    expect(bot_row(page, name)).to_have_count(1)
+    search = page.get_by_placeholder("Search")
+    search.fill("zzz-no-match")
+    expect(bot_row(page, name)).to_have_count(0)
+    empty = page.get_by_test_id("inbox-search-empty")
+    expect(empty).to_be_visible()
+    expect(empty).to_contain_text("No chats match")
+    expect(empty).to_contain_text("Clear Search")
+    clearer = page.get_by_role("button", name="Clear Search")
+    expect(clearer).to_be_visible()
+    clearer.click()
+    expect(search).to_have_value("")
+    expect(empty).to_have_count(0)
+    expect(bot_row(page, name)).to_have_count(1)
+
+
 def test_switch_during_stream_keeps_chat(page: Page, client_url: str, host_url: str) -> None:
     first = unique_bot("LiveA")
     second = unique_bot("LiveB")
@@ -184,3 +235,26 @@ def test_switch_never_blanks_thread(page: Page, client_url: str, host_url: str) 
     expect(page.get_by_test_id("thread-composer")).to_be_visible()
     expect(page.locator('[data-testid="thread-message"][data-role="user"]')).not_to_have_count(0)
     expect(page.get_by_test_id("empty-bots")).to_have_count(0)
+
+
+def test_inbox_row_click_opens_that_chat(page: Page, client_url: str, host_url: str) -> None:
+    lead = unique_bot("Lead")
+    research = unique_bot("Research")
+    park = unique_bot("Park")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, lead)
+    create_named_bot(page, research)
+    create_named_bot(page, park)
+    open_chat(page, research)
+    expect(thread_header(page)).to_contain_text(research)
+    bot_row(page, lead).click()
+    expect(thread_header(page)).to_contain_text(lead)
+    expect(bot_row(page, lead)).to_have_attribute("aria-current", "page")
+    expect(composer(page)).to_be_visible()
+    open_chat(page, park)
+    expect(thread_header(page)).to_contain_text(park)
+    bot_row(page, lead).click()
+    expect(thread_header(page)).to_contain_text(lead)
+    expect(bot_row(page, lead)).to_have_attribute("aria-current", "page")
+    expect(thread_header(page)).not_to_contain_text(research)
+    expect(thread_header(page)).not_to_contain_text(park)

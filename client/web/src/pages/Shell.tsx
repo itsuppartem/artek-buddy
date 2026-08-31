@@ -27,7 +27,14 @@ import {
   shouldStickDismissOnView,
   shouldWatchBackgroundBot,
 } from "../lib/alerts";
-import { composerCanSend } from "../lib/composer";
+import {
+  hideBookSlug,
+  showBookSlug,
+  slugForBookName,
+  slugsConsumedByRunPrompt,
+  visibleSkillBooks,
+} from "../lib/books-ask";
+import { composerCanSend, composerPlaceholder, composerShouldSend } from "../lib/composer";
 import {
   composerRedo,
   composerUndo,
@@ -36,8 +43,16 @@ import {
   pushComposerChange,
   resetComposerHistory,
 } from "../lib/composer-undo";
-import { fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/consent";
-import { stripMarkdown } from "../lib/markdown";
+import {
+  fulfillOwnerJob,
+  isAutoOwnerJob,
+  reportOwnerJobError,
+  shouldAutoFulfillOwnerJob,
+} from "../lib/consent";
+import { copyText } from "../lib/copy-text";
+import { hatchIsOpen, hatchPointerEvents } from "../lib/hatch";
+import { contextLinkUrl, stripMarkdown } from "../lib/markdown";
+import { dispatchMemoryChanged } from "../lib/memory";
 import { NEEDS_MODEL_TEXT } from "../lib/models";
 import {
   captionForMessage,
@@ -57,18 +72,38 @@ import {
   shouldQueueSend,
   writeStoredList,
 } from "../lib/offline-queue";
-import { nextPhoneTab, type PhoneTab } from "../lib/phone-shell";
+import { panelEscapeAction } from "../lib/panel-escape";
+import {
+  nextPhoneTab,
+  type PhoneTab,
+  phoneTabAfterPanel,
+  shouldUsePhoneShell,
+} from "../lib/phone-shell";
+import { hidePluginSlug, pluginAskDraft, visiblePluginApps } from "../lib/plugins-ask";
+import { ownerRunError } from "../lib/run-error";
 import {
   embeddableScreenUrl,
   screenFrameLooksFailed,
+  screenPolicy,
   shouldFetchScreenUrl,
+  shouldKeepScreenUrlOnRelease,
   shouldRefreshScreenUrl,
   shouldReplaceScreenUrl,
   shouldTakeControl,
 } from "../lib/screen";
-import { filterBots, inboxEmptyState, type SidebarView, sortInboxBots } from "../lib/sidebar";
+import {
+  filterBots,
+  inboxEmptyState,
+  inboxFallbackPath,
+  inboxRowClickShouldOpen,
+  inboxSearchEmpty,
+  type SidebarView,
+  sortInboxBots,
+  splitQueryMatch,
+} from "../lib/sidebar";
 import {
   isHiddenLiveDraft,
+  isRawRunFailedMessage,
   isToolNoise,
   mergeThreadSnapshot,
   prependThreadMessagePage,
@@ -91,6 +126,7 @@ import {
   isIosDevice,
   isStandaloneDisplay,
   pageSurface,
+  pairAgainLabel,
   shouldHoldHostAlert,
   shouldOfferWebAlerts,
   shouldShowHomeScreenHint,
@@ -133,6 +169,26 @@ import { PluginsPane } from "./shell/PluginsPane";
 
 type Panel = "computer" | "settings" | "create" | "models" | "plugins" | null;
 
+function InboxHit({ text, query }: { text: string; query: string }) {
+  return (
+    <>
+      {splitQueryMatch(text, query).map((part, index) =>
+        part.hit ? (
+          <mark
+            key={`${part.text}-${index}`}
+            data-testid="inbox-hit"
+            className="rounded-sm bg-tan/40 text-inherit"
+          >
+            {part.text}
+          </mark>
+        ) : (
+          part.text
+        ),
+      )}
+    </>
+  );
+}
+
 export function ShellPage() {
   const { botId } = useParams();
   const navigate = useNavigate();
@@ -142,6 +198,11 @@ export function ShellPage() {
   const [archivedBots, setArchivedBots] = useState<Bot[]>([]);
   const [sidebarView, setSidebarView] = useState<SidebarView>("inbox");
   const [phoneTab, setPhoneTab] = useState<PhoneTab>("chat");
+  const [phoneShell, setPhoneShell] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : shouldUsePhoneShell(window.innerWidth, window.innerHeight),
+  );
   const [alertOffer, setAlertOffer] = useState<"hide" | "ask" | "ready">(() =>
     shouldOfferWebAlerts({
       surface: pageSurface(),
@@ -167,7 +228,9 @@ export function ShellPage() {
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [pluginApps, setPluginApps] = useState<{ slug: string; name: string }[]>([]);
+  const [hiddenPluginSlugs, setHiddenPluginSlugs] = useState<Record<string, string[]>>({});
   const [skillBooks, setSkillBooks] = useState<{ slug: string; name: string }[]>([]);
+  const [hiddenBookSlugs, setHiddenBookSlugs] = useState<Record<string, string[]>>({});
   const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
   const panelAfterSettings = useRef<"computer" | null>(null);
   const panelAfterCreate = useRef<"computer" | null>(null);
@@ -192,6 +255,7 @@ export function ShellPage() {
   const autoBooted = useRef<string | null>(null);
   const sleepHeld = useRef(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [threadAtStart, setThreadAtStart] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ShellErrorKind>("host");
   const errorKindRef = useRef<ShellErrorKind>("host");
@@ -218,6 +282,8 @@ export function ShellPage() {
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
   const botIdRef = useRef<string | undefined>(undefined);
+  const requestedBotId = useRef<string | null>(null);
+  const inboxPointerDown = useRef<string | null>(null);
   const botsRef = useRef<Bot[]>([]);
   const shellOpenedAt = useRef(Date.now());
   const freshBotIds = useRef(new Set<string>());
@@ -233,6 +299,7 @@ export function ShellPage() {
   const [messageMenu, setMessageMenu] = useState<{
     message: ThreadMessage;
     position: ContextMenuPosition;
+    url?: string;
   } | null>(null);
   const [replyTo, setReplyTo] = useState<ThreadMessage | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
@@ -249,6 +316,10 @@ export function ShellPage() {
     (thread?.run && isLiveTurn(thread.run.status)) ||
       (thread && !isParked && (hasLive(thread) || hasActiveWorkers(thread))),
   );
+
+  useEffect(() => {
+    setThreadAtStart(false);
+  }, [active?.id]);
 
   useEffect(() => {
     botsRef.current = bots;
@@ -399,6 +470,7 @@ export function ShellPage() {
   }
 
   function openBot(id: string) {
+    requestedBotId.current = id;
     activeIdRef.current = id;
     botIdRef.current = id;
     setPhoneTab(nextPhoneTab("select-bot"));
@@ -415,14 +487,7 @@ export function ShellPage() {
 
   function startOwnerFulfill(consentId: string) {
     if (!consentId || fulfilledOwnerJobs.current.has(consentId)) return;
-    if (pageSurface() === "host") {
-      fulfilledOwnerJobs.current.add(consentId);
-      void reportOwnerJobError(
-        consentId,
-        new Error("This-PC files need the Linux app, not the phone browser."),
-      );
-      return;
-    }
+    if (!shouldAutoFulfillOwnerJob(pageSurface())) return;
     fulfilledOwnerJobs.current.add(consentId);
     void fulfillOwnerJob(consentId).catch((err) => {
       fulfilledOwnerJobs.current.delete(consentId);
@@ -433,6 +498,7 @@ export function ShellPage() {
   function considerEvent(incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) {
     const granted = isAutoOwnerJob(incoming);
     if (granted) startOwnerFulfill(granted.consentId);
+    dispatchMemoryChanged(incoming.type);
     if (!opts?.live && isHistoricalEvent(incoming, shellOpenedAt.current)) return;
     const next = attentionFromEvent(incoming, bot.name);
     const answered = answeredAskBody(incoming);
@@ -580,8 +646,24 @@ export function ShellPage() {
   }
 
   function closeModels() {
-    setPanel(panelAfterModels.current);
+    const restore = panelAfterModels.current;
     panelAfterModels.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+  }
+
+  function closeSettings() {
+    const restore = panelAfterSettings.current;
+    panelAfterSettings.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+  }
+
+  function closeCreate() {
+    const restore = panelAfterCreate.current;
+    panelAfterCreate.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
   }
 
   function openPlugins() {
@@ -864,6 +946,7 @@ export function ShellPage() {
       if (activeIdRef.current !== requested) return;
       expandedHistoryThread.current = page.threadId;
       setSnapshot((prev) => prependThreadMessagePage(prev, page));
+      if (page.olderCursor == null) setThreadAtStart(true);
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
         if (element) element.scrollTop += element.scrollHeight - previousHeight;
@@ -883,15 +966,17 @@ export function ShellPage() {
 
   useEffect(() => {
     if (!botsReady) return;
-    if (botId && bots.some((bot) => bot.id === botId)) return;
-    const fallback = sortInboxBots(bots)[0];
-    if (!botId && fallback) {
-      navigate(`/app/${fallback.id}`, { replace: true });
-      return;
+    const listedIds = bots.map((bot) => bot.id);
+    if (botId && listedIds.includes(botId) && requestedBotId.current === botId) {
+      requestedBotId.current = null;
     }
-    if (botId && !bots.some((bot) => bot.id === botId)) {
-      navigate(fallback ? `/app/${fallback.id}` : "/app", { replace: true });
-    }
+    const next = inboxFallbackPath(
+      botId,
+      listedIds,
+      sortInboxBots(bots)[0]?.id,
+      requestedBotId.current,
+    );
+    if (next) navigate(next, { replace: true });
   }, [botsReady, botId, bots, navigate]);
 
   useEffect(() => {
@@ -949,6 +1034,7 @@ export function ShellPage() {
             if (event.type === "run.completed" || event.type === "run.failed") {
               void refreshBotsRef.current().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
+              void refreshPlugins();
             }
           }
         } catch (err) {
@@ -1071,13 +1157,27 @@ export function ShellPage() {
   }, [active?.id, computer?.state, screenError]);
 
   useEffect(() => {
-    if (!computerOpen) return;
     function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") setComputerOpen(false);
+      if (event.key !== "Escape" || event.isComposing) return;
+      const action = panelEscapeAction({ computerOpen, panel });
+      if (action === "close-overlay") {
+        event.preventDefault();
+        setComputerOpen(false);
+        return;
+      }
+      if (action === "close-settings") {
+        event.preventDefault();
+        closeSettings();
+        return;
+      }
+      if (action === "close-create") {
+        event.preventDefault();
+        closeCreate();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [computerOpen]);
+  }, [computerOpen, panel, phoneShell]);
 
   const filtered = useMemo(
     () => filterBots(sortInboxBots(bots), query, (bot) => stripMarkdown(bot.preview || bot.title)),
@@ -1089,6 +1189,7 @@ export function ShellPage() {
   );
   const emptyInbox = inboxEmptyState(bots.length, archivedBots.length);
   const needsModel = !modelState?.defaultModel;
+  const hatchOpen = hatchIsOpen(panel, Boolean(active));
 
   function writeDraft(value: string, reset = false) {
     if (reset) {
@@ -1137,7 +1238,7 @@ export function ShellPage() {
       }
       return;
     }
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (composerShouldSend(event)) {
       event.preventDefault();
       const typed = event.currentTarget.value;
       if (composerRef.current) composerRef.current.value = typed;
@@ -1250,10 +1351,24 @@ export function ShellPage() {
         : undefined;
       if (hostDownRef.current) {
         parkSend(targetId, text, replyId, attachments);
+        setHiddenBookSlugs((map) => {
+          let next = map;
+          for (const slug of slugsConsumedByRunPrompt(text, skillBooks)) {
+            next = hideBookSlug(next, targetId, slug);
+          }
+          return next;
+        });
         return;
       }
       await api.threads.send(targetId, text, replyId, attachments);
       setReplyTo(null);
+      setHiddenBookSlugs((map) => {
+        let next = map;
+        for (const slug of slugsConsumedByRunPrompt(text, skillBooks)) {
+          next = hideBookSlug(next, targetId, slug);
+        }
+        return next;
+      });
     } catch (err) {
       const classified = classifyError(err);
       if (shouldQueueSend(classified.kind)) {
@@ -1284,17 +1399,15 @@ export function ShellPage() {
 
   async function bootComputer({
     takeControl,
-    overlay,
     force = false,
   }: {
     takeControl: boolean;
-    overlay: boolean;
     force?: boolean;
   }): Promise<boolean> {
     if (!active) return false;
     sleepHeld.current = false;
     const needsBoot = force || computer?.state !== "running" || !screenUrlRef.current;
-    if (overlay && needsBoot) setBooting(true);
+    if (needsBoot) setBooting(true);
     try {
       if (needsBoot) {
         const status = await api.computer.boot(active.id);
@@ -1364,7 +1477,6 @@ export function ShellPage() {
     if (!active) return;
     const ok = await bootComputer({
       takeControl: shouldTakeControl(source),
-      overlay: computer?.state !== "running",
       force: computer?.state !== "running",
     });
     if (ok) setComputerOpen(true);
@@ -1372,9 +1484,16 @@ export function ShellPage() {
 
   async function releaseComputer() {
     if (!active) return;
+    if (!shouldKeepScreenUrlOnRelease() && screenPolicy(screenUrlRef.current) === "control") {
+      adoptScreenUrl(null);
+      setScreenEpoch((value) => value + 1);
+    }
     await api.computer.release(active.id).catch(() => undefined);
     const status = await api.computer.status(active.id).catch(() => null);
-    if (status) setComputer(status);
+    if (status) {
+      setComputer(status);
+      setSnapshot((prev) => (prev ? { ...prev, computer: status } : prev));
+    }
     await ensureScreenUrl(active.id, true, true);
   }
 
@@ -1382,6 +1501,7 @@ export function ShellPage() {
     name: string;
     title: string;
     description: string;
+    instructions: string;
     computerMode: ComputerMode;
   }) {
     const name = input.name.trim();
@@ -1392,7 +1512,7 @@ export function ShellPage() {
         name,
         title: input.title,
         description: input.description,
-        instructions: input.description,
+        instructions: input.instructions,
         computerMode: input.computerMode,
       });
       freshBotIds.current.add(bot.id);
@@ -1431,11 +1551,26 @@ export function ShellPage() {
     return () => window.clearTimeout(timer);
   }, [later]);
 
+  useLayoutEffect(() => {
+    function apply() {
+      setPhoneShell(shouldUsePhoneShell(window.innerWidth, window.innerHeight));
+    }
+    apply();
+    window.addEventListener("resize", apply);
+    window.addEventListener("orientationchange", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      window.removeEventListener("orientationchange", apply);
+    };
+  }, []);
+
   return (
     <div
       className="relative flex h-full min-w-0 flex-col overflow-hidden bg-ink text-paper"
       data-surface={pageSurface()}
       data-phone-tab={phoneTab}
+      data-phone-shell={phoneShell ? "1" : "0"}
+      data-desk-overlay={computerOpen ? "1" : "0"}
     >
       <HostPhoneBanners
         alertOffer={alertOffer}
@@ -1463,7 +1598,7 @@ export function ShellPage() {
         <aside
           data-shell="rack"
           data-phone-show={phoneTab === "chats" ? "1" : "0"}
-          className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-[#1a1613] max-[720px]:w-full"
+          className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-ink"
         >
           <div className="app-drag flex items-center justify-between px-3 pb-2 pt-3">
             {pageSurface() === "host" ? (
@@ -1480,8 +1615,19 @@ export function ShellPage() {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search"
                 aria-label="Search inbox"
-                className="w-full bg-transparent"
+                className="w-full min-w-0 bg-transparent"
               />
+              {query.trim() ? (
+                <button
+                  type="button"
+                  data-testid="inbox-search-clear"
+                  aria-label="Clear Search"
+                  onClick={() => setQuery("")}
+                  className="shrink-0 text-[13px] text-mute hover:text-paper"
+                >
+                  ×
+                </button>
+              ) : null}
             </label>
             <button
               type="button"
@@ -1514,10 +1660,10 @@ export function ShellPage() {
                       <BotAvatar color={bot.color} size={38} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-display text-[14.5px] text-paper">
-                          {bot.name}
+                          <InboxHit text={bot.name} query={query} />
                         </div>
                         <div className="mt-0.5 truncate text-[12.5px] text-mute">
-                          {stripMarkdown(bot.preview || bot.title)}
+                          <InboxHit text={stripMarkdown(bot.preview || bot.title)} query={query} />
                         </div>
                       </div>
                       <button
@@ -1530,6 +1676,14 @@ export function ShellPage() {
                       </button>
                     </div>
                   ))}
+                  {inboxSearchEmpty(query, filteredArchived.length) ? (
+                    <p
+                      data-testid="inbox-search-empty"
+                      className="px-2.5 py-3 text-[13px] leading-5 text-mute"
+                    >
+                      No chats match. Clear Search or try another name.
+                    </p>
+                  ) : null}
                 </div>
               </>
             ) : (
@@ -1541,8 +1695,18 @@ export function ShellPage() {
                     data-testid="bot-row"
                     data-bot-id={bot.id}
                     data-bot-name={bot.name}
-                    aria-label={`Open chat ${bot.name}`}
-                    onClick={() => openBot(bot.id)}
+                    aria-label={
+                      bot.unread ? `Open chat ${bot.name} (unread)` : `Open chat ${bot.name}`
+                    }
+                    aria-current={active?.id === bot.id ? "page" : undefined}
+                    onPointerDown={() => {
+                      inboxPointerDown.current = bot.id;
+                    }}
+                    onClick={() => {
+                      if (!inboxRowClickShouldOpen(inboxPointerDown.current === bot.id)) return;
+                      inboxPointerDown.current = null;
+                      openBot(bot.id);
+                    }}
                     onContextMenu={(event) => {
                       event.preventDefault();
                       setContextMenu({
@@ -1564,7 +1728,7 @@ export function ShellPage() {
                             bot.unread ? "font-semibold" : "font-normal"
                           }`}
                         >
-                          {bot.name}
+                          <InboxHit text={bot.name} query={query} />
                           {bot.pinned ? (
                             <span title="Pinned" className="text-[11px] text-mute">
                               📌
@@ -1576,8 +1740,9 @@ export function ShellPage() {
                           {bot.unread ? (
                             <span
                               data-testid="unread-dot"
-                              aria-hidden="true"
-                              className="inline-block h-[7px] w-[7px] bg-tan"
+                              role="img"
+                              aria-label="Unread"
+                              className="inline-block h-2.5 w-2.5 rounded-full bg-tan"
                             />
                           ) : null}
                         </span>
@@ -1588,11 +1753,19 @@ export function ShellPage() {
                           bot.unread ? "font-medium text-paper" : "text-mute"
                         }`}
                       >
-                        {stripMarkdown(bot.preview || bot.title)}
+                        <InboxHit text={stripMarkdown(bot.preview || bot.title)} query={query} />
                       </div>
                     </div>
                   </button>
                 ))}
+                {inboxSearchEmpty(query, filtered.length) ? (
+                  <p
+                    data-testid="inbox-search-empty"
+                    className="px-2.5 py-3 text-[13px] leading-5 text-mute"
+                  >
+                    No chats match. Clear Search or try another name.
+                  </p>
+                ) : null}
                 {archivedBots.length > 0 ? (
                   <button
                     type="button"
@@ -1661,8 +1834,13 @@ export function ShellPage() {
                 type="button"
                 disabled={!active}
                 onClick={() => {
+                  if (panel === "computer") {
+                    setPanel(null);
+                    if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
+                    return;
+                  }
                   setPhoneTab(nextPhoneTab("open-desk"));
-                  setPanel((current) => (current === "computer" ? null : "computer"));
+                  setPanel("computer");
                 }}
                 className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
                   panel === "computer"
@@ -1718,7 +1896,7 @@ export function ShellPage() {
                 >
                   <button
                     type="button"
-                    className="min-w-0 flex-1 text-left hover:text-tan"
+                    className="relative z-0 min-w-0 flex-1 text-left hover:text-tan"
                     onClick={() => {
                       dismissedAlerts.current.add(attentionFingerprint(attention));
                       navigate(`/app/${attention.botId}`);
@@ -1735,8 +1913,16 @@ export function ShellPage() {
                   <button
                     type="button"
                     data-testid="attention-dismiss"
-                    onClick={() => dismissAttention()}
-                    className="shrink-0 px-2 text-[13px] text-mute hover:text-paper"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      dismissAttention();
+                    }}
+                    className="relative z-10 shrink-0 px-2 text-[13px] text-mute hover:text-paper"
                   >
                     Dismiss
                   </button>
@@ -1772,7 +1958,7 @@ export function ShellPage() {
                     onClick={() => void forgetDevice()}
                     className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
                   >
-                    Pair this computer again
+                    {pairAgainLabel()}
                   </button>
                 ) : (
                   <button
@@ -1841,12 +2027,17 @@ export function ShellPage() {
               <button
                 type="button"
                 data-testid="load-earlier"
+                aria-label="Load earlier messages"
                 disabled={loadingOlder}
                 onClick={() => void loadOlderMessages()}
-                className="self-center rounded-lg px-3 py-1.5 text-[13px] text-mute hover:bg-raised hover:text-paper disabled:opacity-50"
+                className="self-center rounded-lg border border-hairline px-3 py-1.5 text-[13px] text-paper hover:bg-raised disabled:opacity-50"
               >
                 {loadingOlder ? "Loading…" : "Load earlier messages"}
               </button>
+            ) : threadAtStart ? (
+              <p data-testid="thread-start" className="self-center text-[13px] text-mute">
+                Beginning of this chat.
+              </p>
             ) : null}
             {mergeQueuedIntoMessages(
               thread?.messages ?? [],
@@ -1854,7 +2045,12 @@ export function ShellPage() {
               active?.id ?? "",
               thread?.threadId ?? "",
             )
-              .filter((message) => !isToolNoise(message) && !isHiddenLiveDraft(message))
+              .filter(
+                (message) =>
+                  !isToolNoise(message) &&
+                  !isHiddenLiveDraft(message) &&
+                  !isRawRunFailedMessage(message),
+              )
               .map((message) => (
                 <MessageView
                   key={message.id}
@@ -1868,11 +2064,18 @@ export function ShellPage() {
                   onOpenBot={(id) => {
                     void refreshBots().then(() => navigate(`/app/${id}`));
                   }}
+                  onRestoreSkill={(name) => {
+                    if (!active) return;
+                    const slug = slugForBookName(skillBooks, name);
+                    if (!slug) return;
+                    setHiddenBookSlugs((map) => showBookSlug(map, active.id, slug));
+                  }}
                   onContextMenu={(event, item) => {
                     event.preventDefault();
                     setMessageMenu({
                       message: item,
                       position: { x: event.clientX, y: event.clientY },
+                      url: contextLinkUrl(event.target),
                     });
                   }}
                 />
@@ -1883,8 +2086,7 @@ export function ShellPage() {
                 data-testid="run-error"
                 className="self-start rounded-xl border border-danger/40 bg-danger-bg px-4 py-2 text-[13.5px] text-danger"
               >
-                {thread.run.error ||
-                  (thread.run.status === "cancelled" ? "Stopped." : "The turn failed.")}
+                {ownerRunError(thread.run.error ?? undefined, thread.run.status)}
               </div>
             ) : null}
             {thread?.run && isLiveTurn(thread.run.status) ? (
@@ -1930,14 +2132,22 @@ export function ShellPage() {
               </div>
             ) : null}
             <PluginsAsk
-              apps={pluginApps}
+              apps={visiblePluginApps(pluginApps, hiddenPluginSlugs, active?.id)}
               disabled={!active}
-              onAsk={(name) => writeDraft(`please use ${name}`)}
+              onAsk={(name) => writeDraft(pluginAskDraft(name))}
+              onDismiss={(slug) => {
+                if (!active) return;
+                setHiddenPluginSlugs((map) => hidePluginSlug(map, active.id, slug));
+              }}
             />
             <BooksAsk
-              books={skillBooks}
+              books={visibleSkillBooks(skillBooks, hiddenBookSlugs, active?.id)}
               disabled={!active}
               onAsk={(name) => writeDraft(`please run ${name}`)}
+              onDismiss={(slug) => {
+                if (!active) return;
+                setHiddenBookSlugs((map) => hideBookSlug(map, active.id, slug));
+              }}
             />
             {pendingFiles.length ? (
               <div className="mb-2 flex flex-wrap items-end gap-2">
@@ -1992,10 +2202,10 @@ export function ShellPage() {
                   replyTo
                     ? "Write a reply…"
                     : active
-                      ? `Message ${active.name}`
+                      ? composerPlaceholder(active.name)
                       : "Create a bot to start"
                 }
-                className="max-h-40 min-h-[44px] flex-1 resize-none rounded-[10px] border border-hairline bg-raised px-3 py-2.5 text-[15px] leading-[22px] text-paper disabled:cursor-not-allowed disabled:opacity-40"
+                className="max-h-40 min-h-[44px] min-w-0 flex-1 resize-none rounded-[10px] border border-hairline bg-raised px-3 py-2.5 text-[15px] leading-[22px] text-paper disabled:cursor-not-allowed disabled:opacity-40"
               />
               {isBusy ? (
                 <button
@@ -2025,21 +2235,32 @@ export function ShellPage() {
 
         <aside
           data-shell="hatch"
+          data-hatch-open={hatchOpen ? "1" : "0"}
           data-phone-show={phoneTab === "desk" ? "1" : "0"}
-          className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#1a1613] transition-[width] duration-200 ease-out max-[720px]:max-w-none ${
-            phoneTab === "desk" ? "max-[720px]:w-full" : ""
+          onWheel={(event) => {
+            if (hatchOpen) event.stopPropagation();
+          }}
+          className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-ink ${
+            hatchPointerEvents(hatchOpen) === "none" ? "pointer-events-none" : "pointer-events-auto"
           } ${
-            panel && (active || panel === "create" || panel === "models" || panel === "plugins")
-              ? "w-[360px] border-l border-hairline"
-              : "w-0"
+            phoneShell
+              ? "w-full max-w-none border-l-0"
+              : hatchOpen
+                ? "w-[360px] border-l border-hairline"
+                : "w-0"
           }`}
         >
-          {panel && (active || panel === "create" || panel === "models" || panel === "plugins") ? (
-            <div className="ab-scroll h-full w-[360px] overflow-y-auto px-4 py-3">
+          {hatchOpen ? (
+            <div
+              className={`ab-scroll h-full overflow-y-auto px-4 py-3 ${
+                phoneShell ? "w-full" : "w-[360px]"
+              }`}
+            >
               {panel === "plugins" ? (
                 <PluginsPane
                   onClose={() => {
                     setPanel(null);
+                    if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
                     void refreshPlugins();
                   }}
                   onAppsChange={() => {
@@ -2056,19 +2277,13 @@ export function ShellPage() {
                 />
               ) : null}
               {panel === "create" ? (
-                <CreateBotForm
-                  onCancel={() => {
-                    setPanel(panelAfterCreate.current);
-                    panelAfterCreate.current = null;
-                  }}
-                  onCreate={(input) => void createBot(input)}
-                />
+                <CreateBotForm onCancel={closeCreate} onCreate={(input) => void createBot(input)} />
               ) : null}
               {panel === "settings" && active ? (
                 <BotSettings
                   bot={active}
                   computer={computer ?? snapshot?.computer ?? null}
-                  onClose={() => setPanel(panelAfterSettings.current)}
+                  onClose={closeSettings}
                   onUpdated={() => void refreshBots()}
                   onDelete={(deleteMemories) => void deleteBot(active, deleteMemories)}
                   onRestart={() => restartComputer()}
@@ -2086,12 +2301,20 @@ export function ShellPage() {
                   screenEpoch={screenEpoch}
                   previewFrameRef={previewFrameRef}
                   booting={booting}
-                  onClose={() => setPanel(null)}
+                  onClose={() => {
+                    setPanel(null);
+                    if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
+                  }}
                   onSettings={() => {
                     panelAfterSettings.current = "computer";
                     setPanel("settings");
                   }}
                   onOpenFullscreen={() => void openOverlay("preview")}
+                  onStart={() =>
+                    void bootComputer({
+                      takeControl: shouldTakeControl("start"),
+                    })
+                  }
                   onTakeControl={() => void openOverlay("button")}
                   onRelease={() => void releaseComputer()}
                   onRetryScreen={retryScreen}
@@ -2106,7 +2329,24 @@ export function ShellPage() {
         {messageMenu ? (
           <MessageContextMenu
             position={messageMenu.position}
+            url={messageMenu.url}
             onClose={() => setMessageMenu(null)}
+            onCopyUrl={async () => {
+              if (!messageMenu.url) return false;
+              const copied = await copyText(messageMenu.url);
+              if (!copied) {
+                errorKindRef.current = "action";
+                setErrorKind("action");
+                setError("Could not copy URL. Select and copy the link instead.");
+              }
+              return copied;
+            }}
+            onOpenUrl={() => {
+              if (messageMenu.url) {
+                window.open(messageMenu.url, "_blank", "noopener,noreferrer");
+              }
+              setMessageMenu(null);
+            }}
             onReply={() => {
               setReplyTo(messageMenu.message);
               setMessageMenu(null);
@@ -2195,11 +2435,7 @@ export function ShellPage() {
         ) : null}
       </div>
 
-      <nav
-        data-testid="phone-nav"
-        className="phone-nav hidden max-[720px]:flex"
-        aria-label="Phone sections"
-      >
+      <nav data-testid="phone-nav" className="phone-nav" aria-label="Phone sections">
         <button
           type="button"
           data-testid="phone-tab-chats"
@@ -2233,17 +2469,21 @@ export function ShellPage() {
         booting={booting}
         open={computerOpen}
         bot={active}
-        computer={computer}
+        computer={computer ?? snapshot?.computer ?? null}
         screenUrl={screenUrl}
         screenError={screenError}
         screenEpoch={screenEpoch}
         overlayFrameRef={overlayFrameRef}
         onRelease={() => void releaseComputer()}
-        onTakeControl={() => void bootComputer({ takeControl: true, overlay: false })}
-        onClose={() => setComputerOpen(false)}
+        onTakeControl={() => void bootComputer({ takeControl: true })}
+        onClose={() => {
+          setComputerOpen(false);
+          if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
+        }}
         onRetry={retryScreen}
         onScreenFrameLoad={onScreenFrameLoad}
         onScreenError={(message) => setScreenError(message)}
+        phone={phoneShell}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 import { api } from "../api";
 import type { ProductEvent } from "../types";
-import { pageSurface } from "./web-notify";
+import { type PageSurface, pageSurface } from "./web-notify";
 
 const HOST_OWNER_CUT = "This-PC files need the Linux app, not the phone browser.";
 
@@ -39,6 +39,10 @@ export function isAutoOwnerJob(event: ProductEvent): { consentId: string } | nul
 }
 
 export const isAutoOwnerFile = isAutoOwnerJob;
+
+export function shouldAutoFulfillOwnerJob(surface: PageSurface = pageSurface()): boolean {
+  return surface !== "host";
+}
 
 export async function reportOwnerJobError(consentId: string, error: unknown): Promise<void> {
   const message = error instanceof Error ? error.message : "Could not run that on this computer";
@@ -83,6 +87,9 @@ export async function fulfillOwnerJob(consentId: string): Promise<void> {
   const job = await api.consents.get(consentId);
   const action = job.actionClass;
   const kind = job.kind || "";
+  if (action.startsWith("owner_")) {
+    await api.consents.ack(consentId);
+  }
   const listHint = ownerJobHint({
     text: job.summary || "",
     detail: job.path ? `owner_list: ${job.path}` : "",

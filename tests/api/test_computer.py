@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import time
 
+import httpx
+import pytest
 from tests.api.helpers import consent_id_from_thread, create_bot, wait_run_status
 
 
@@ -314,3 +317,41 @@ def test_open_path_from_stopped_emits_computer_status(client, auth_header) -> No
     after = client.get(f"/v1/computer/{bot_id}", headers=auth_header)
     assert after.status_code == 200
     assert after.json()["state"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_computer_input_does_not_block_the_event_loop(
+    client, auth_header, monkeypatch
+) -> None:
+    from artek_buddy.main import app
+
+    bot_id = create_bot(client, auth_header, "LoopBox", computer_mode="dedicated")["id"]
+    assert client.post(f"/v1/computer/{bot_id}/boot", headers=auth_header).status_code == 200
+    taken = client.post(f"/v1/computer/{bot_id}/takeover", headers=auth_header)
+    assert taken.status_code == 200
+
+    real = app.state.computers.send_input
+
+    def slow_send_input(bot, kind, payload):
+        time.sleep(0.45)
+        return real(bot, kind, payload)
+
+    monkeypatch.setattr(app.state.computers, "send_input", slow_send_input)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as session:
+        started = time.monotonic()
+        typing = asyncio.create_task(
+            session.post(
+                f"/v1/computer/{bot_id}/input",
+                headers=auth_header,
+                json={"kind": "clipboard", "payload": {"text": "hello"}},
+            )
+        )
+        await asyncio.sleep(0.05)
+        health = await session.get("/health")
+        waited = time.monotonic() - started
+        assert health.status_code == 200
+        assert waited < 0.25, f"health waited {waited:.2f}s behind a 0.45s input"
+        typed = await typing
+        assert typed.status_code == 200

@@ -1,5 +1,10 @@
-import { useEffect, useState } from "react";
+import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
+import {
+  filterPluginCatalog,
+  pluginCatalogScrollAfterUpdate,
+  pluginSearchShouldPreventDefault,
+} from "../../lib/plugins-catalog";
 import type { Connection, ConnectionCatalogItem, ConnectionKeyStatus } from "../../types";
 import { Button } from "../../ui/button";
 import { IconClose } from "../../ui/icons";
@@ -19,14 +24,24 @@ export function PluginsPane({
   const [rows, setRows] = useState<Connection[]>([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const catalogRef = useRef<HTMLDivElement>(null);
+  const catalogScroll = useRef(0);
   const configured = Boolean(status?.configured);
-  const showKeyField = !configured || replace;
+  const ready = status !== null;
+  const showKeyField = ready && (!configured || replace);
 
   useEffect(() => {
-    void refresh("");
+    void refresh();
   }, []);
 
-  async function refresh(search: string) {
+  useLayoutEffect(() => {
+    const node = catalogRef.current;
+    if (!node) return;
+    const max = node.scrollHeight - node.clientHeight;
+    node.scrollTop = pluginCatalogScrollAfterUpdate(catalogScroll.current, max);
+  }, [query, items]);
+
+  async function refresh() {
     const next = await api.connections.status();
     setStatus(next);
     if (!next.configured) {
@@ -35,7 +50,7 @@ export function PluginsPane({
       return;
     }
     try {
-      const catalog = await api.connections.catalog(search);
+      const catalog = await api.connections.catalog("");
       setItems(catalog.items ?? []);
       setRows((await api.connections.list()).connections ?? []);
       setError("");
@@ -60,7 +75,7 @@ export function PluginsPane({
       setStatus(await api.connections.setKey(apiKey));
       setDraft("");
       setReplace(false);
-      await refresh(query);
+      await refresh();
       onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the key.");
@@ -91,7 +106,7 @@ export function PluginsPane({
       if (started.authorizationUrl) {
         window.open(started.authorizationUrl, "_blank", "noopener,noreferrer");
       }
-      await refresh(query);
+      await refresh();
       onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not connect that app.");
@@ -104,7 +119,7 @@ export function PluginsPane({
     setBusy(`finish-${connectionId}`);
     try {
       await api.connections.complete(connectionId);
-      await refresh(query);
+      await refresh();
       onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not finish that app.");
@@ -117,7 +132,7 @@ export function PluginsPane({
     setBusy(`disconnect-${connectionId}`);
     try {
       await api.connections.revoke(connectionId);
-      await refresh(query);
+      await refresh();
       onAppsChange?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not disconnect that app.");
@@ -126,8 +141,14 @@ export function PluginsPane({
     }
   }
 
+  function onSearchKey(event: KeyboardEvent<HTMLInputElement>) {
+    if (!pluginSearchShouldPreventDefault(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   return (
-    <div data-testid="plugins-pane">
+    <div data-testid="plugins-pane" data-plugins-ready={ready ? "1" : "0"}>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-display text-[16px] font-semibold text-paper">Plugins</h2>
         <button
@@ -141,7 +162,9 @@ export function PluginsPane({
           Close
         </button>
       </div>
-      {showKeyField ? (
+      {!ready ? (
+        <p className="mb-3 text-[13px] leading-5 text-mute">Checking the key…</p>
+      ) : showKeyField ? (
         <p className="mb-3 text-[13px] leading-5 text-mute">Paste a key to connect apps.</p>
       ) : (
         <p className="mb-3 text-[13px] leading-5 text-sage" data-testid="plugins-key-saved">
@@ -212,23 +235,43 @@ export function PluginsPane({
       </div>
       {configured ? (
         <>
-          <label className="mt-5 block text-[13px] text-mute" htmlFor="plugins-search">
-            Search apps
-            <input
-              id="plugins-search"
-              data-testid="plugins-search"
-              aria-label="Search apps"
-              className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper"
-              value={query}
-              onChange={(event) => {
-                const next = event.target.value;
-                setQuery(next);
-                void refresh(next);
-              }}
-            />
-          </label>
-          <div className="mt-3 flex flex-col gap-2" data-testid="plugins-catalog">
-            {items.map((item) => {
+          <form
+            className="mt-5 block"
+            onSubmit={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <label className="block text-[13px] text-mute" htmlFor="plugins-search">
+              Search apps
+              <input
+                id="plugins-search"
+                data-testid="plugins-search"
+                type="search"
+                enterKeyHint="search"
+                aria-label="Search apps"
+                placeholder="Search apps"
+                className="mt-1 h-10 w-full rounded-[10px] border border-hairline bg-raised px-2.5 text-[14px] text-paper"
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                onInput={(event) => setQuery(event.currentTarget.value)}
+                onKeyDown={onSearchKey}
+                onKeyUp={(event) => {
+                  onSearchKey(event);
+                  setQuery(event.currentTarget.value);
+                }}
+              />
+            </label>
+          </form>
+          <div
+            ref={catalogRef}
+            className="mt-3 flex max-h-72 flex-col gap-2 overflow-y-auto"
+            data-testid="plugins-catalog"
+            onScroll={(event) => {
+              catalogScroll.current = event.currentTarget.scrollTop;
+            }}
+          >
+            {filterPluginCatalog(items, query).map((item) => {
               const row = rows.find(
                 (entry) => entry.provider === item.slug && entry.status !== "revoked",
               );
@@ -271,7 +314,11 @@ export function PluginsPane({
                         variant="cream"
                         size="sm"
                         disabled={busy.startsWith("connect-")}
-                        onClick={() => void connect(item.slug)}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void connect(item.slug);
+                        }}
                       >
                         Connect
                       </Button>

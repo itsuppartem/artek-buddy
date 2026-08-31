@@ -82,14 +82,15 @@ class ConsentsMixin:
         thread_id: str | None = None,
         message_id: str | None = None,
         workspace_id: str = DEFAULT_WORKSPACE_ID,
+        job_status: str | None = None,
     ) -> None:
         with self._conn() as conn:
             conn.execute(
                 """
                 INSERT INTO consent_requests (
                     id, workspace_id, bot_id, run_id, thread_id, message_id,
-                    action_class, scope_key, summary, status, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s)
+                    action_class, scope_key, summary, status, job_status, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s, %s)
                 """,
                 (
                     request_id,
@@ -101,6 +102,7 @@ class ConsentsMixin:
                     action_class,
                     scope_key,
                     summary,
+                    job_status,
                     isoformat_utc(),
                 ),
             )
@@ -112,7 +114,8 @@ class ConsentsMixin:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                SELECT id, bot_id, action_class, scope_key, summary, status, run_id, message_id
+                SELECT id, bot_id, action_class, scope_key, summary, status, run_id, message_id,
+                       job_status
                 FROM consent_requests WHERE id = %s
                 """,
                 (request_id,),
@@ -129,6 +132,7 @@ class ConsentsMixin:
             status=row["status"],
             run_id=row["run_id"],
             message_id=row["message_id"],
+            job_status=row["job_status"],
         )
 
     def pending_auto_consent_id(self, bot_id: str, run_id: str | None) -> str | None:
@@ -138,7 +142,10 @@ class ConsentsMixin:
             row = conn.execute(
                 """
                 SELECT id FROM consent_requests
-                WHERE bot_id = %s AND run_id = %s AND status = 'pending' AND message_id IS NULL
+                WHERE bot_id = %s AND run_id = %s
+                  AND status = 'pending'
+                  AND job_status = 'queued'
+                  AND message_id IS NULL
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
@@ -146,6 +153,36 @@ class ConsentsMixin:
             ).fetchone()
             conn.commit()
         return str(row["id"]) if row else None
+
+    def acknowledge_consent_job(self, request_id: str) -> bool:
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE consent_requests
+                SET job_status = 'acknowledged', acknowledged_at = %s
+                WHERE id = %s AND job_status = 'queued'
+                RETURNING id
+                """,
+                (isoformat_utc(), request_id),
+            ).fetchone()
+            conn.commit()
+        return row is not None
+
+    def finish_consent_job(self, request_id: str, job_status: str) -> bool:
+        if job_status not in {"completed", "failed", "timed_out"}:
+            raise ValueError("invalid terminal consent job status")
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE consent_requests
+                SET job_status = %s, completed_at = %s
+                WHERE id = %s AND job_status IN ('queued', 'acknowledged')
+                RETURNING id
+                """,
+                (job_status, isoformat_utc(), request_id),
+            ).fetchone()
+            conn.commit()
+        return row is not None
 
     def answer_consent_request(
         self,
@@ -162,7 +199,8 @@ class ConsentsMixin:
                 UPDATE consent_requests
                 SET status = %s, device_id = %s, answered_at = %s
                 WHERE id = %s AND status = 'pending'
-                RETURNING id, bot_id, action_class, scope_key, summary, status, run_id, message_id
+                RETURNING id, bot_id, action_class, scope_key, summary, status, run_id, message_id,
+                          job_status
                 """,
                 (decision, device_id if device_id != "host" else None, now, request_id),
             ).fetchone()
@@ -178,4 +216,5 @@ class ConsentsMixin:
             status=row["status"],
             run_id=row["run_id"],
             message_id=row["message_id"],
+            job_status=row["job_status"],
         )

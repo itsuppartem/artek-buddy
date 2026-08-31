@@ -16,10 +16,11 @@ from artek_buddy.consent import (
     CLASS_OWNER_WRITE,
     CLASS_PAGE,
     OWNER_HOME_SCOPE,
+    browse_origin,
 )
-from artek_buddy.db.shaping import new_id
+from artek_buddy.db.shaping import TURN_FAILED, new_id
 from artek_buddy.runtime.base import RuntimeBase
-from artek_buddy.runtime.cursor_wait import note_auth_failures
+from artek_buddy.runtime.cursor_wait import dead_wait_owner_error, note_auth_failures
 from artek_buddy.runtime.tools import ProductTools
 from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord
 from artek_buddy.stream import _map_tool_to_events
@@ -30,10 +31,12 @@ E2E_DRAFT_LEAK = "grade's current weather from a public API"
 E2E_DRAFT_ANSWER = "Belgrade is 22°C and clear."
 E2E_CLOSE_STATUS = "Closing Chromium"
 E2E_SLOW_ANSWER = "slow done"
-E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C"
+E2E_LATE_COMPLETE = "pong"
+E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C. [Open docs](https://example.com/artek-buddy)"
 E2E_ASK_QUESTION = "Which city?"
 E2E_ASK_FREE_QUESTION = "What should I call you?"
 E2E_FAIL_ERROR = "scripted fail"
+E2E_FAIL_RAW_ERROR = "run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a"
 E2E_META_TEXT = "Remembered: Prefers short answers without emoji"
 E2E_PROGRESS_TEXT = "Checking the desktop"
 E2E_CARD_KEY = "City"
@@ -57,6 +60,7 @@ E2E_PNG = (
     b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
     b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
 )
+E2E_BOOK_URL = ""
 
 
 @dataclass
@@ -71,6 +75,7 @@ class ScriptedStep:
     error: str | None = None
     raise_error: str | None = None
     delay_s: float | None = None
+    ignore_cancel: bool = False
     write_home: tuple[str, bytes] | None = None
     owner_auto_path: str | None = None
 
@@ -110,8 +115,8 @@ def scripted_tool(tool: str, **args: Any) -> ScriptedStep:
     return ScriptedStep(tool=tool, args=dict(args))
 
 
-def scripted_delay(seconds: float) -> ScriptedStep:
-    return ScriptedStep(delay_s=seconds)
+def scripted_delay(seconds: float, *, ignore_cancel: bool = False) -> ScriptedStep:
+    return ScriptedStep(delay_s=seconds, ignore_cancel=ignore_cancel)
 
 
 def scripted_finish(
@@ -172,6 +177,18 @@ def _parse_ask_bot(user: str) -> tuple[str, str] | None:
     return name, question
 
 
+def _parse_identity_city(user: str) -> str | None:
+    key = "e2e-identity-city "
+    idx = user.lower().find(key)
+    if idx < 0:
+        return None
+    rest = user[idx + len(key) :].strip()
+    if not rest:
+        return None
+    token = rest.split()[0].strip(".,;:!?")
+    return token or None
+
+
 def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     user = _user_tail(prompt or "")
     hay = user.lower()
@@ -191,15 +208,38 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "e2e-plugin-docs" in hay or "please use docs" in hay:
         return [scripted_tool("docs_read"), scripted_finish("")]
-    if "e2e-save-book" in hay:
+    if "e2e-list-apps" in hay:
         return [
-            scripted_tool(
-                "save_book",
-                name="Invoice",
-                when_to_use="When I say invoice",
-                body="Open the invoice site and download the PDF.",
+            scripted_tool("list_apps", q="docs"),
+            scripted_finish("I'll search apps."),
+        ]
+    if "e2e-connect-docs" in hay:
+        return [
+            scripted_tool("connect_app", slug="docs"),
+            scripted_finish("I'll attach Docs."),
+        ]
+    if "e2e-connect-mail" in hay:
+        return [
+            scripted_tool("connect_app", slug="mail"),
+            scripted_finish("I'll attach Mail."),
+        ]
+    if "e2e-connect-nope" in hay:
+        return [
+            scripted_tool("connect_app", slug="nope"),
+            scripted_finish("I could not attach that."),
+        ]
+    if "e2e-install-book" in hay:
+        url = E2E_BOOK_URL or "http://127.0.0.1/SKILL.md"
+        origin = browse_origin(url) or "http://127.0.0.1"
+        return [
+            scripted_consent(
+                action_class=CLASS_BROWSE,
+                scope_key=origin,
+                summary=f"Install a skill from {origin}?",
+                detail=f"browse: {origin}",
             ),
-            scripted_finish("I'll remember that playbook."),
+            scripted_tool("install_book", url=url),
+            scripted_finish("I'll keep that skill."),
         ]
     if "e2e-forget-book" in hay:
         return [
@@ -223,6 +263,36 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             scripted_tool("send_message", text=E2E_CLOSE_STATUS),
             scripted_tool("close_app", application="chromium"),
             scripted_finish("browser closed"),
+        ]
+    city = _parse_identity_city(user)
+    if city is not None:
+        return [
+            scripted_tool(
+                "remember",
+                content=f"Lives in {city}",
+                kind="place",
+                section="identity",
+            ),
+            scripted_finish("I'll remember that."),
+        ]
+    if "e2e-remember-twice" in hay:
+        return [
+            scripted_tool(
+                "remember",
+                content=(
+                    "Do not ask the owner for permission to work on this bot's computer or "
+                    "browser, or to run read-only commands on the owner's paired PC. "
+                    "Do not prompt."
+                ),
+                kind="rule",
+                section="bans",
+            ),
+            scripted_tool(
+                "remember",
+                content="Don't ask for read permission",
+                kind="preference",
+            ),
+            scripted_finish("I'll remember that."),
         ]
     if "e2e-remember" in hay:
         return [
@@ -534,10 +604,18 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(""),
         ]
+    if "e2e-late-complete" in hay:
+        return [
+            scripted_delay(2.5, ignore_cancel=True),
+            scripted_text(E2E_LATE_COMPLETE),
+            scripted_finish(E2E_LATE_COMPLETE),
+        ]
     if "e2e-slow" in hay:
         return [scripted_delay(2.5), scripted_finish(E2E_SLOW_ANSWER)]
     if "e2e-markdown-preview" in hay:
         return [scripted_finish(E2E_MARKDOWN_ANSWER)]
+    if "e2e-fail-raw" in hay:
+        return [scripted_finish("", status="failed", error=E2E_FAIL_RAW_ERROR)]
     if "e2e-fail-slow" in hay:
         return [
             scripted_delay(2.5),
@@ -562,12 +640,19 @@ class ScriptedRuntime(RuntimeBase):
         self._auth_fails = 0
         self.bridge_recycles = 0
         self._pending_recover = False
+        self._skill_fixture: Any | None = None
 
     def queue_turn(self, *steps: ScriptedStep) -> None:
         self._queue.append(list(steps))
 
     async def start(self) -> None:
+        global E2E_BOOK_URL
+        from artek_buddy.book_fetch import start_skill_fixture
+
         self._ensure_dirs()
+        self._skill_fixture = start_skill_fixture()
+        E2E_BOOK_URL = self._skill_fixture.url
+        self.book_fixture_url = self._skill_fixture.url
         saved = self._load_state()
         live = await self.ensure_session(saved, name="artek-buddy")
         self.default_agent_id = live
@@ -585,6 +670,8 @@ class ScriptedRuntime(RuntimeBase):
         agent_id = f"sa-{self._seq}"
         self._agents[agent_id] = {"name": name, "role": role}
         self.bind_agent_bot(agent_id, bot_id)
+        if role == "lead":
+            self.mark_session_fresh(agent_id)
         if persist_default or self.default_agent_id is None:
             self.default_agent_id = agent_id
             self._save_state(agent_id)
@@ -622,6 +709,22 @@ class ScriptedRuntime(RuntimeBase):
             role=role,
         )
 
+    async def _recycle_scripted_agent(self, agent_id: str, bot_id: str | None) -> str:
+        self._agents.pop(agent_id, None)
+        live = await self.create_session(
+            name="artek-buddy",
+            persist_default=True,
+            bot_id=bot_id,
+        )
+        if bot_id and self.store is not None:
+            try:
+                self.store.attach_agent(bot_id, live)
+            except Exception:
+                log.exception("failed to attach recycled scripted agent")
+        self.bridge_recycles += 1
+        self._auth_fails = 0
+        return live
+
     async def stream(
         self,
         prompt: str,
@@ -633,6 +736,42 @@ class ScriptedRuntime(RuntimeBase):
         self.bind_agent_bot(agent_id, bot_id)
         self.last_prompt = prompt
         hay = _user_tail(prompt).lower()
+        if "e2e-dead-wait-stuck" in hay:
+            run_id = new_id("run")
+            self._auth_fails, recycle = note_auth_failures(
+                self._auth_fails,
+                status="failed",
+                error=TURN_FAILED,
+                duration_s=0.0,
+            )
+            if recycle:
+                agent_id = await self._recycle_scripted_agent(agent_id, bot_id)
+            yield RunRecord(
+                id=run_id,
+                agent_id=agent_id,
+                status="failed",
+                result=None,
+                error=dead_wait_owner_error(TURN_FAILED, True),
+            )
+            return
+        if "e2e-dead-wait" in hay:
+            run_id = new_id("run")
+            self._auth_fails, recycle = note_auth_failures(
+                self._auth_fails,
+                status="failed",
+                error=TURN_FAILED,
+                duration_s=0.0,
+            )
+            if recycle:
+                agent_id = await self._recycle_scripted_agent(agent_id, bot_id)
+            yield RunRecord(
+                id=run_id,
+                agent_id=agent_id,
+                status="completed",
+                result="ok",
+                error=None,
+            )
+            return
         if "e2e-auth-error" in hay:
             run_id = new_id("run")
             if self._pending_recover:
@@ -660,20 +799,8 @@ class ScriptedRuntime(RuntimeBase):
                 error=E2E_AUTH_ERROR,
             )
             if recycle:
-                self._agents.pop(agent_id, None)
-                live = await self.create_session(
-                    name="artek-buddy",
-                    persist_default=True,
-                    bot_id=bot_id,
-                )
-                if bot_id and self.store is not None:
-                    try:
-                        self.store.attach_agent(bot_id, live)
-                    except Exception:
-                        log.exception("failed to attach recycled scripted agent")
-                self.bridge_recycles += 1
+                await self._recycle_scripted_agent(agent_id, bot_id)
                 self._pending_recover = True
-                self._auth_fails = 0
             return
         steps = self._queue.pop(0) if self._queue else steps_for_prompt(prompt)
         tools = ProductTools(self)
@@ -683,7 +810,11 @@ class ScriptedRuntime(RuntimeBase):
         run_id = new_id("run")
         for step in steps:
             if step.delay_s:
-                await asyncio.sleep(step.delay_s)
+                try:
+                    await asyncio.sleep(step.delay_s)
+                except asyncio.CancelledError:
+                    if not step.ignore_cancel:
+                        raise
                 continue
             if step.write_home:
                 name, data = step.write_home

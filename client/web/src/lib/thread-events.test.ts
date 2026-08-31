@@ -4,6 +4,7 @@ import {
   isComputerStatusEvent,
   isHiddenLiveDraft,
   isLiveMessageId,
+  isRawRunFailedMessage,
   isToolNoise,
   liveMessageId,
   reduceComputerStatus,
@@ -131,6 +132,33 @@ describe("isToolNoise", () => {
   });
 });
 
+describe("isRawRunFailedMessage", () => {
+  it("hides a bot bubble that is only a raw run id", () => {
+    expect(
+      isRawRunFailedMessage({
+        id: "m-fail",
+        threadId: "t",
+        seq: 1,
+        role: "bot",
+        blocks: [{ kind: "text", text: "run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a" }],
+        runId: "run1",
+        createdAt: "2026-01-01T00:00:00Z",
+      }),
+    ).toBe(true);
+    expect(
+      isRawRunFailedMessage({
+        id: "m-ok",
+        threadId: "t",
+        seq: 1,
+        role: "bot",
+        blocks: [{ kind: "text", text: "scripted fail" }],
+        runId: "run1",
+        createdAt: "2026-01-01T00:00:00Z",
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("reduceThreadSnapshot", () => {
   it("does not let a late complete overwrite a cancelled run", () => {
     const prev = snap({
@@ -151,6 +179,22 @@ describe("reduceThreadSnapshot", () => {
     expect(next?.run?.status).toBe("cancelled");
     expect(next?.messages.map((message) => message.id)).toEqual(["stream:run1"]);
   });
+
+  it("drops a late stream token after Stop", () => {
+    const prev = snap({
+      run: run({ status: "cancelled", error: "Stopped." }),
+      messages: [],
+    });
+    const next = reduceThreadSnapshot(
+      prev,
+      event({
+        type: "thread.message.updated",
+        payload: { text: "pong", kind: "text", replace: true },
+      }),
+    );
+    expect(next?.run?.status).toBe("cancelled");
+    expect(next?.messages).toEqual([]);
+  });
 });
 
 describe("reduceComputerStatus", () => {
@@ -167,5 +211,12 @@ describe("reduceComputerStatus", () => {
 
   it("does not treat thread.computer as a pane update", () => {
     expect(isComputerStatusEvent(event({ type: "thread.computer" }))).toBe(false);
+  });
+
+  it("Release drops user control so the pane cannot keep You have control", () => {
+    const held = reduceComputerStatus(computer(), event({ type: "computer.takeover.granted" }));
+    expect(held?.controlHolder).toBe("user");
+    const released = reduceComputerStatus(held, event({ type: "computer.takeover.released" }));
+    expect(released?.controlHolder).toBe("bot");
   });
 });

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from artek_buddy.book_fetch import blocked_fetch_url
 from artek_buddy.books import (
     MAX_BODY,
     MAX_NAME,
@@ -9,6 +10,7 @@ from artek_buddy.books import (
     book_slug,
     format_book_catalog,
     normalize_book,
+    parse_skill_document,
 )
 from artek_buddy.contracts.domain import SkillBook
 from artek_buddy.memory import wrap_turn_prompt
@@ -59,7 +61,38 @@ def test_catalog_stays_names_only_and_rides_in_the_turn() -> None:
     assert "When I say invoice" in text
     assert "SECRET STEPS" not in text
     assert "open_book" in text
+    assert "install_book" in text
+    assert "teach" not in text.lower()
     wrapped = wrap_turn_prompt("hello", None, role="lead", books_context=text)
     assert "<skill_books>" in wrapped
-    assert "save_book" in wrapped
+    assert "install_book" in wrapped
+    assert "teaches a procedure" not in wrapped
     assert "SECRET STEPS" not in wrapped
+
+
+def test_parse_skill_document_keeps_fetched_markdown() -> None:
+    raw = (
+        "---\n"
+        "name: Invoice\n"
+        "description: When I say invoice\n"
+        "---\n"
+        "\n"
+        "Open the invoice site and download the PDF.\n"
+    )
+    name, when, body = parse_skill_document(raw)
+    assert name == "Invoice"
+    assert when == "When I say invoice"
+    assert "Open the invoice site and download the PDF." in body
+    assert "when I say invoice" in body.lower() or "Open the invoice site" in body
+
+
+def test_host_must_not_fetch_loopback_private_or_link_local() -> None:
+    assert blocked_fetch_url("http://127.0.0.1/SKILL.md") is not None
+    assert blocked_fetch_url("http://localhost/SKILL.md") is not None
+    assert blocked_fetch_url("http://10.0.0.1/SKILL.md") is not None
+    assert blocked_fetch_url("http://192.168.1.8/SKILL.md") is not None
+    assert blocked_fetch_url("http://169.254.169.254/latest/meta-data/") is not None
+    assert blocked_fetch_url("http://[::1]/SKILL.md") is not None
+    assert blocked_fetch_url("file:///etc/passwd") is not None
+    assert blocked_fetch_url("ftp://example.com/SKILL.md") is not None
+    assert blocked_fetch_url("https://example.com/skills/invoice/SKILL.md") is None

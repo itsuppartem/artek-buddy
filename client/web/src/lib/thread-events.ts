@@ -8,6 +8,7 @@ import type {
   ThreadMessagePage,
   ThreadSnapshot,
 } from "../types";
+import { isRawRunFailed } from "./run-error";
 
 const computerStates = new Set<ComputerStatus["state"]>([
   "stopped",
@@ -142,6 +143,9 @@ export function reduceThreadSnapshot(
     return { ...prev, cursor: event.seq, messages: replaceLive(prev.messages, streaming) };
   }
   if (event.type === "thread.message.updated") {
+    if (prev.run?.status === "cancelled") {
+      return { ...prev, cursor: event.seq };
+    }
     const liveId = liveMessageId("stream", event.runId);
     const text = progressText(event.payload, liveText(prev.messages, liveId));
     const streaming: ThreadMessage = {
@@ -157,6 +161,15 @@ export function reduceThreadSnapshot(
   }
   if (event.type === "thread.message.created") {
     const raw = asRecord(event.payload.message) ?? event.payload;
+    const createdRunId = str(raw.runId) || event.runId;
+    if (
+      prev.run?.status === "cancelled" &&
+      createdRunId === prev.run.id &&
+      raw.role !== "user" &&
+      raw.role !== "system"
+    ) {
+      return { ...prev, cursor: event.seq };
+    }
     const blocks = normalizeBlocks(raw.blocks) ?? textBlocks(raw);
     if (!blocks.length) return { ...prev, cursor: event.seq };
     const replyTo = asReply(raw.replyTo ?? raw.reply_to);
@@ -394,6 +407,17 @@ export function isToolNoise(message: ThreadMessage): boolean {
     return message.blocks.every((block) => !("text" in block && String(block.text || "").trim()));
   }
   return false;
+}
+
+export function isRawRunFailedMessage(message: ThreadMessage): boolean {
+  if (message.role !== "bot") return false;
+  if (message.blocks.length === 0) return false;
+  const texts: string[] = [];
+  for (const block of message.blocks) {
+    if (block.kind !== "text" || !("text" in block)) return false;
+    texts.push(String(block.text || "").trim());
+  }
+  return texts.length > 0 && texts.every((text) => isRawRunFailed(text));
 }
 
 function isLive(id: string): boolean {

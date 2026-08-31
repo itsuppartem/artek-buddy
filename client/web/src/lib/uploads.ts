@@ -162,11 +162,7 @@ export function clipboardHasAttachable(event: { clipboardData?: DataTransfer | n
 }
 
 export function clipboardShouldClaim(event: { clipboardData?: DataTransfer | null }): boolean {
-  if (clipboardHasAttachable(event)) return true;
-  const data = event.clipboardData;
-  if (!data) return false;
-  const text = (clipboardText(data, "text/plain") || clipboardText(data, "text")).trim();
-  return !text;
+  return clipboardHasAttachable(event);
 }
 
 export function filesFromAttachedPayload(

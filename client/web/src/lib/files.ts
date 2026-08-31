@@ -1,4 +1,5 @@
 import { ApiError, api } from "../api";
+import { type PageSurface, pageSurface } from "./web-notify";
 
 export class DownloadCancelled extends Error {
   constructor() {
@@ -47,4 +48,21 @@ export async function downloadArtifact(
 
 export function artifactUrl(artifactId: string): string {
   return `/v1/artifacts/${encodeURIComponent(artifactId)}`;
+}
+
+export function usesBrowserDownload(surface: PageSurface = pageSurface()): boolean {
+  return surface === "host";
+}
+
+export function startBrowserDownload(artifactId: string, name: string): void {
+  if (!artifactId) {
+    throw new Error("Could not download that file");
+  }
+  const link = document.createElement("a");
+  link.href = artifactUrl(artifactId);
+  link.download = name || "file";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }

@@ -22,6 +22,32 @@ export function sanitizeMarkdownUrl(url: string, allowRelative = false): string 
   return undefined;
 }
 
+export function externalHttpUrl(url: string): string | undefined {
+  try {
+    const parsed = new URL(url.trim());
+    if (
+      (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return undefined;
+    }
+    return parsed.href;
+  } catch {
+    return undefined;
+  }
+}
+
+export function contextLinkUrl(target: unknown): string | undefined {
+  const closest = (target as { closest?: (selector: string) => unknown } | null)?.closest;
+  if (typeof closest !== "function") return undefined;
+  const anchor = closest.call(target, "a[href]") as {
+    getAttribute?: (name: string) => string | null;
+  } | null;
+  const href = anchor?.getAttribute?.("href");
+  return href ? externalHttpUrl(href) : undefined;
+}
+
 export function closeUnterminatedFence(markdown: string): string {
   let openFence: { marker: "`" | "~"; length: number } | undefined;
   for (const line of markdown.split("\n")) {

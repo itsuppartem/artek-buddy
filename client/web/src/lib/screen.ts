@@ -13,6 +13,12 @@ export function screenTargetKey(url: string | null | undefined): string | null {
   return `${match[1]}/${match[2]}/${match[3]}`;
 }
 
+export function screenPolicy(url: string | null | undefined): "view" | "control" | null {
+  const match = embeddableScreenUrl(url)?.match(NOVNC_RE);
+  if (!match) return null;
+  return match[3] === "control" ? "control" : "view";
+}
+
 export function screenExpiresAt(url: string | null | undefined): number | null {
   const match = embeddableScreenUrl(url)?.match(NOVNC_RE);
   if (!match || match[4] == null) return null;
@@ -41,8 +47,39 @@ export function shouldReplaceScreenUrl(
   if (cur === nxt) return false;
   if (!nxt) return Boolean(cur);
   if (!cur) return true;
-  if (screenTargetKey(cur) !== screenTargetKey(nxt)) return true;
+  const curKey = screenTargetKey(cur);
+  const nxtKey = screenTargetKey(nxt);
+  if (!curKey || !nxtKey) return true;
+  if (curKey !== nxtKey) return true;
   return shouldRefreshScreenUrl(cur, nowMs);
+}
+
+export function shouldKeepScreenUrlOnRelease(): boolean {
+  return true;
+}
+
+export function overlayWaitingLabel(opts: {
+  booting: boolean;
+  state: string | null | undefined;
+  hasFrame: boolean;
+  hasUrl: boolean;
+}): string | null {
+  if (opts.hasFrame) return null;
+  if (opts.booting || opts.state === "booting" || opts.state === "suspended" || opts.hasUrl) {
+    return "Waking the desktop…";
+  }
+  return null;
+}
+
+export function overlayDisplayUrl(shown: string | null, next: string | null): string | null {
+  return embeddableScreenUrl(shown) ?? embeddableScreenUrl(next);
+}
+
+export function overlayPendingUrl(shown: string | null, next: string | null): string | null {
+  const current = embeddableScreenUrl(shown);
+  const incoming = embeddableScreenUrl(next);
+  if (!incoming || !current || incoming === current) return null;
+  return incoming;
 }
 
 export function screenIframeSandbox(url: string | null | undefined): string {
@@ -67,7 +104,7 @@ export function shouldReportOwnerActivity(
   return nowMs - lastMs >= minGapMs;
 }
 
-export function shouldTakeControl(source: "preview" | "button"): boolean {
+export function shouldTakeControl(source: "preview" | "button" | "start"): boolean {
   return source === "button";
 }
 

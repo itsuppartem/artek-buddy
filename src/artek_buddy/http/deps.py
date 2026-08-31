@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from http.cookies import CookieError, SimpleCookie
 
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, WebSocket
 
@@ -68,6 +69,9 @@ def consent() -> ConsentHub:
     return hub
 
 
+COOKIE_NAME = "artek_device"
+
+
 def _bearer(authorization: str | None) -> str | None:
     if not authorization or not authorization.startswith("Bearer "):
         return None
@@ -75,19 +79,47 @@ def _bearer(authorization: str | None) -> str | None:
     return token or None
 
 
+def _cookie_named(header: str | None, name: str) -> str | None:
+    if not header:
+        return None
+    jar = SimpleCookie()
+    try:
+        jar.load(header)
+    except CookieError:
+        return None
+    morsel = jar.get(name)
+    if morsel is None:
+        return None
+    value = (morsel.value or "").strip()
+    return value or None
+
+
+def _actor_token(
+    authorization: str | None,
+    device_cookie: str | None,
+    host_secret: str,
+) -> tuple[str | None, str | None]:
+    token = _bearer(authorization)
+    if token is not None and host_token_match(token, host_secret):
+        return ("host", None)
+    cookie = (device_cookie or "").strip() or None
+    if cookie and host_token_match(cookie, host_secret):
+        cookie = None
+    token = token or cookie
+    if token is None:
+        return (None, None)
+    return ("device", token)
+
+
 async def require_auth(
     authorization: str | None = Header(default=None),
-    device_cookie: str | None = Cookie(default=None, alias="artek_device"),
+    device_cookie: str | None = Cookie(default=None, alias=COOKIE_NAME),
     cfg: Settings = Depends(settings),
     history: HistoryStore = Depends(store),
 ) -> str:
-    token = _bearer(authorization)
-    if token is not None and host_token_match(token, cfg.agent_http_token):
+    kind, token = _actor_token(authorization, device_cookie, cfg.agent_http_token)
+    if kind == "host":
         return "host"
-    cookie = (device_cookie or "").strip() or None
-    if cookie and host_token_match(cookie, cfg.agent_http_token):
-        cookie = None
-    token = token or cookie
     if token is None:
         raise HTTPException(status_code=401, detail="missing bearer token")
     try:
@@ -113,11 +145,16 @@ async def require_host(
 async def _authorize_websocket(websocket: WebSocket) -> str:
     cfg: Settings = websocket.app.state.settings
     history: HistoryStore = websocket.app.state.store
-    token = _bearer(websocket.headers.get("authorization"))
+    cookie = _cookie_named(websocket.headers.get("cookie"), COOKIE_NAME)
+    kind, token = _actor_token(
+        websocket.headers.get("authorization"),
+        cookie,
+        cfg.agent_http_token,
+    )
+    if kind == "host":
+        return "host"
     if token is None:
         raise HTTPException(status_code=401, detail="missing bearer token")
-    if host_token_match(token, cfg.agent_http_token):
-        return "host"
     try:
         device = history.lookup_device_token(token)
     except DatabaseUnavailable as err:
