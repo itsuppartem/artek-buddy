@@ -511,7 +511,9 @@ class ConsentHub:
             expected = self._job_claims.get(request_id)
         if expected is None:
             return True
-        return bool(claim) and secrets.compare_digest(expected, claim)
+        if not claim:
+            return False
+        return secrets.compare_digest(expected, claim)
 
     def take_owner_result(
         self,
