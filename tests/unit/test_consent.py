@@ -122,6 +122,54 @@ def test_auto_owner_read_publishes_consent_on_waiting_input() -> None:
     assert not hasattr(hub, "last_request_id")
 
 
+def test_owner_question_timeout_is_explicit_and_resumes_the_run() -> None:
+    published: list[object] = []
+
+    class Events:
+        def next_seq(self, _bot_id: str) -> int:
+            return len(published) + 1
+
+        def publish(self, event: object) -> None:
+            published.append(event)
+
+    class Store:
+        def __init__(self) -> None:
+            self.statuses: list[str] = []
+            self.answer: str | None = None
+
+        def get_bot(self, bot_id: str) -> object:
+            return SimpleNamespace(id=bot_id, workspace_id="ws", thread_id="thr_1")
+
+        def mark_run_waiting_input(self, _run_id: str) -> None:
+            self.statuses.append("waiting_input")
+
+        def mark_run_running(self, _run_id: str) -> None:
+            self.statuses.append("running")
+
+        def answer_message_ask(
+            self, _message_id: str, answer: str, *, include_consent: bool = False
+        ) -> object:
+            assert include_consent is False
+            self.answer = answer
+            return SimpleNamespace(model_dump=lambda **_kwargs: {"id": "msg_1"})
+
+    store = Store()
+    hub = ConsentHub(store, events=Events())
+    assert hub.begin_question("bot_1", "run_1", "thr_1") is True
+    assert hub.activate_question("run_1", "msg_1", "Please finish the browser step") is True
+
+    answer, error = hub.wait_question("run_1", timeout=0)
+
+    assert answer is None
+    assert error == "The owner did not answer in time."
+    assert store.answer == "Timed out"
+    assert store.statuses == ["waiting_input", "running"]
+    assert [event.type.value for event in published] == [
+        "run.waiting_input",
+        "thread.message.created",
+    ]
+
+
 def test_owner_result_wait_uses_the_current_call_request_id() -> None:
     class Hub:
         def _mode(self) -> None:

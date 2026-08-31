@@ -412,6 +412,64 @@ def test_auto_owner_read_exposes_pending_consent(client, auth_header) -> None:
     assert completed.json()["job_status"] == "completed"
 
 
+def test_ask_user_answer_resumes_the_same_run_once(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "OwnerHelp")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-blocked-browser"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    waiting = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input", timeout=5)
+    pending = [
+        (message, block)
+        for message in waiting["messages"]
+        for block in message["blocks"]
+        if block.get("kind") == "ask"
+        and block.get("status") == "pending"
+        and not block.get("consent_id")
+    ]
+    assert len(pending) == 1
+    message, _block = pending[0]
+
+    answered = client.post(
+        f"/v1/threads/{bot_id}/answer",
+        headers=auth_header,
+        json={
+            "run_id": run_id,
+            "message_id": message["id"],
+            "answer": "I completed the step",
+        },
+    )
+    assert answered.status_code == 200, answered.text
+    duplicate = client.post(
+        f"/v1/threads/{bot_id}/answer",
+        headers=auth_header,
+        json={
+            "run_id": run_id,
+            "message_id": message["id"],
+            "answer": "second answer",
+        },
+    )
+    assert duplicate.status_code == 409
+
+    finished = wait_run(client, auth_header, bot_id, run_id)
+    assert finished["run"]["id"] == run_id
+    assert finished["run"]["status"] == "completed"
+    answered_message = next(item for item in finished["messages"] if item["id"] == message["id"])
+    answered_block = next(
+        block for block in answered_message["blocks"] if block.get("kind") == "ask"
+    )
+    assert answered_block["status"] == "answered"
+    assert answered_block["answer"] == "I completed the step"
+    assert any(
+        block.get("kind") == "text" and "continued after your help" in block.get("text", "")
+        for item in finished["messages"]
+        for block in item["blocks"]
+    )
+
+
 def test_thread_snapshot_exposes_every_pending_auto_owner_job(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "ParallelAutoRead")["id"]
     sent = client.post(
