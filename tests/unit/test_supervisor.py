@@ -33,6 +33,12 @@ def test_x11vnc_listens_loopback() -> None:
     assert "-viewonly" in cmd
 
 
+def test_x11vnc_skips_viewer_lock_keys() -> None:
+    cmd = x11vnc_command(5901)
+    assert "-skip_lockkeys" in cmd
+    assert "-xkb" in cmd
+
+
 def test_published_port_reads_host_binding() -> None:
     inspect = {"NetworkSettings": {"Ports": {"6080/tcp": [{"HostPort": "33100"}]}}}
     assert published_port(inspect, "6080") == 33100
