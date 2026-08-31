@@ -43,7 +43,12 @@ import {
   pushComposerChange,
   resetComposerHistory,
 } from "../lib/composer-undo";
-import { fulfillOwnerJob, isAutoOwnerJob, shouldAutoFulfillOwnerJob } from "../lib/consent";
+import {
+  fulfillOwnerJob,
+  isAutoOwnerJob,
+  pendingOwnerJobIds,
+  shouldAutoFulfillOwnerJob,
+} from "../lib/consent";
 import { copyText } from "../lib/copy-text";
 import { hatchIsOpen, hatchPointerEvents } from "../lib/hatch";
 import { contextLinkUrl, stripMarkdown } from "../lib/markdown";
@@ -919,7 +924,7 @@ export function ShellPage() {
       mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId),
     );
     setComputer(snap.computer);
-    if (snap.pendingAutoConsentId) startOwnerFulfill(snap.pendingAutoConsentId);
+    for (const consentId of pendingOwnerJobIds(snap)) startOwnerFulfill(consentId);
     if (stickToEnd) {
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;

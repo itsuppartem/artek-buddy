@@ -44,6 +44,14 @@ export function shouldAutoFulfillOwnerJob(surface: PageSurface = pageSurface()):
   return surface !== "host";
 }
 
+export function pendingOwnerJobIds(snapshot: {
+  pendingAutoConsentId?: string | null;
+  pendingAutoConsentIds?: (string | null)[] | null;
+}): string[] {
+  const ids = [...(snapshot.pendingAutoConsentIds || []), snapshot.pendingAutoConsentId];
+  return [...new Set(ids.filter((value): value is string => Boolean(value)))];
+}
+
 export async function reportOwnerJobError(
   consentId: string,
   error: unknown,
