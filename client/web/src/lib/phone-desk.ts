@@ -154,6 +154,15 @@ export function keyFromDomKey(key: string): DeskInput | null {
   return { kind: "key", payload: { key: mapped } };
 }
 
+export function capsLockDeskInput(
+  key: string,
+  inControl: boolean,
+  guestKeyboard: boolean,
+): DeskInput | null {
+  if (key !== "CapsLock" || !inControl || guestKeyboard) return null;
+  return { kind: "key", payload: { key: "Caps_Lock" } };
+}
+
 export function overlayTitle(
   mode: string | null | undefined,
   name: string,

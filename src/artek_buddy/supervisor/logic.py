@@ -110,9 +110,10 @@ def _close_app_command(raw_app: str) -> str:
 
 def x11vnc_command(port: int, *, view_only: bool = False) -> str:
     extra = " -viewonly" if view_only else ""
+    # Viewer Caps_Lock would toggle the guest lock and then invert letter case.
     return (
         f"x11vnc -display :1 -forever -shared{extra} -nopw -listen 127.0.0.1 "
-        f"-rfbport {port} -xkb -ncache 0 -noxdamage -noshm -noxinerama "
+        f"-rfbport {port} -xkb -skip_lockkeys -ncache 0 -noxdamage -noshm -noxinerama "
         f"-threads -wait 100 -defer 100"
     )
 

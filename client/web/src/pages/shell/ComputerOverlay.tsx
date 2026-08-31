@@ -1,6 +1,7 @@
 import { type RefObject, type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import {
+  capsLockDeskInput,
   createDeskInputGate,
   type DeskInput,
   overlayHolderText,
@@ -123,6 +124,18 @@ export function ComputerOverlay({
     };
   }, [open, computer?.controlHolder, overlayFrameRef, screenEpoch, screenUrl, frameReady]);
 
+  useEffect(() => {
+    if (!open || computer?.controlHolder !== "user") return;
+    const guestKeyboard = Boolean(embeddableScreenUrl(screenUrl));
+    const onKey = (event: KeyboardEvent) => {
+      const input = capsLockDeskInput(event.key, true, guestKeyboard);
+      if (!input) return;
+      deskGateRef.current?.(input);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, computer?.controlHolder, screenUrl]);
+
   if (!open || !bot) return null;
 
   function sendDeskInput(input: DeskInput) {
@@ -161,12 +174,7 @@ export function ComputerOverlay({
       onPointerDown={reportOwnerActivity}
       onPointerMove={reportOwnerActivity}
       onWheel={reportOwnerActivity}
-      onKeyDown={(event) => {
-        reportOwnerActivity();
-        if (event.key !== "CapsLock" || !inControl) return;
-        event.preventDefault();
-        sendDeskInput({ kind: "key", payload: { key: "Caps_Lock" } });
-      }}
+      onKeyDown={reportOwnerActivity}
     >
       <div
         className={`relative z-30 flex items-center justify-between border-b border-hairline ${
