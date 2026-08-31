@@ -445,6 +445,14 @@ def test_thread_snapshot_exposes_every_pending_auto_owner_job(client, auth_heade
     snapshot = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
     assert snapshot.status_code == 200
     assert set(snapshot.json()["pending_auto_consent_ids"]) == {first_id, second_id}
+    assert store.finish_consent_job(second_id, "completed")
+    uploaded = client.post(
+        f"/v1/consents/{first_id}/result",
+        headers=auth_header,
+        json={"ok": True, "text": "notes from owner"},
+    )
+    assert uploaded.status_code == 200
+    assert wait_run(client, auth_header, bot_id, run_id)["run"]["status"] == "completed"
 
 
 def test_auto_owner_job_ack_is_single_claim_and_rejects_loser_result(client, auth_header) -> None:
