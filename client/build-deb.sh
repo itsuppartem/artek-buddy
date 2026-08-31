@@ -6,8 +6,22 @@ set -eu
 cd "$(git rev-parse --show-toplevel)"
 
 VERSION=$(tr -d '[:space:]' < VERSION)
+BUILD_SUFFIX=${ARTEK_BUILD_SUFFIX:-}
+case "$BUILD_SUFFIX" in
+  "") ;;
+  *[!A-Za-z0-9.+~]*)
+    echo "ARTEK_BUILD_SUFFIX may contain only letters, digits, dot, plus, and tilde" >&2
+    exit 1
+    ;;
+  *) VERSION="${VERSION}+${BUILD_SUFFIX}" ;;
+esac
 NAME=artek-buddy-client
 PKG="${NAME}_${VERSION}_all"
+OUT="${PKG}.deb"
+if [ -e "$OUT" ]; then
+  echo "$OUT already exists; refusing to overwrite it" >&2
+  exit 1
+fi
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 
@@ -103,5 +117,5 @@ Description: Desktop client for the Artek Buddy host
  Desktop shell for the host HTTP API.
 EOF
 
-dpkg-deb --build --root-owner-group "$ROOT" "${PKG}.deb"
-echo "built ${PKG}.deb"
+dpkg-deb --build --root-owner-group "$ROOT" "$OUT"
+echo "built $OUT"
