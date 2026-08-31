@@ -68,7 +68,7 @@ SSE. Blocks in a message:
 | file | name, media preview, named Download button (`file-download`) on bot and owner cards |
 | computer | reason + **Open computer** while `waiting_takeover`; after Release the same run resumes |
 | plugin | connected app name + result (`plugin-card`). A login URL on that card is **Open to connect** (`plugin-connect-open`), owner browser, not the bot desktop |
-| book | playbook name + Saved / opened steps / Forgotten (`book-card`) |
+| book | internal skill result; not rendered or used as an inbox/reply excerpt |
 | subagent | not shown; the lead writes a one-line Started / Finished / Stopped `{name}` |
 | child_bot | click opens that chat (disabled if deleted/archived). After `message_bot`, one card is the other inbox bot plus the question |
 
@@ -78,7 +78,7 @@ Ask another inbox bot (`message_bot` / `POST /v1/bots/{id}/asks`): this chat sho
 
 The open chat uses `/v1/threads/{id}/events` for the thread. Inbox banners use one `/v1/events` stream for every bot, including the open chat, so a switch cannot drop `run.completed`. Duplicate event ids are ignored. Chrome HTTP/1.1 allows six connections per host; one SSE per leftover chat would starve Create and pair.
 
-Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `open-computer`, `plugin-card`, `book-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`. Worker cards (`subagent-card`) are not shown. After an app is connected, a chip (`plugin-ask-{slug}`) sits above Message. Click fills `please use {name}` and does not send. The chip has **×**. No key or no connected apps: no chip row. The lead can search with `list_apps` and attach with `connect_app` (same Connect as the pane). A playbook kept for this chat (installed from a public page, not taught in the thread) puts a chip (`book-ask-{slug}`) that fills `please run {name}`. The chip has **×**. Send consumes it. Click the book card to show the chip again. That is not a Settings form and not a memory card.
+Block test ids: `meta-block`, `progress-block`, `check-card`, `computer-card`, `open-computer`, `plugin-card`, `child-bot-card`, plus the existing `file-card` / `ask-card` / `consent-card`. Worker cards (`subagent-card`) and internal skill-book blocks (`book-card`) are not shown. After an app is connected, a chip (`plugin-ask-{slug}`) sits above Message. Click fills `please use {name}` and does not send. The chip has **×**. No key or no connected apps: no chip row. The lead can search with `list_apps` and attach with `connect_app` (same Connect as the pane). A skill kept for this chat is catalogued in the lead prompt; when its description matches the task, the agent calls `open_book` itself. No skill chip, trigger phrase, or fetched procedure appears in the owner thread. Install consent and a short failure remain visible.
 
 Errors: host down shows a reconnect banner (`reconnect-banner`, Retry connection) under the thread header, not only a red card. Send while the host is unreachable parks the user bubble with a pending mark (`queued-pending`, Waiting for the host) and an outbound queue for that chat (survives switch, Stop, and reload; no token in storage). Auth errors still re-pair and do not queue. After health is back the queue flushes in order; that bubble keeps `offline-sent-caption` («Sent while offline ·» local time with a short zone). A later online send has no caption. Action Dismiss.
 

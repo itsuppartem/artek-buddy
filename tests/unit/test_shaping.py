@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from artek_buddy.db.shaping import (
     TURN_FAILED,
+    blocks_text,
     isoformat_utc,
     owner_visible_error,
     strip_markdown,
@@ -33,3 +34,19 @@ def test_owner_visible_error_drops_raw_run_id() -> None:
     assert owner_visible_error(None, "run_abc") == TURN_FAILED
     assert owner_visible_error("run failed: run_abc", "run_abc") == TURN_FAILED
     assert owner_visible_error("scripted fail") == "scripted fail"
+
+
+def test_internal_book_body_is_not_used_as_a_message_excerpt() -> None:
+    assert (
+        blocks_text(
+            [
+                {
+                    "kind": "book",
+                    "name": "git-commit-style",
+                    "action": "opened",
+                    "text": "internal skill procedure",
+                }
+            ]
+        )
+        == ""
+    )
