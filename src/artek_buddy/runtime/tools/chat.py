@@ -363,8 +363,8 @@ class ChatToolsMixin:
         if not question:
             return {"ok": False, "error": "question is required"}
         raw_options = args.get("options") or []
-        if not isinstance(raw_options, list) or not raw_options:
-            return {"ok": False, "error": "options list is required"}
+        if not isinstance(raw_options, list):
+            return {"ok": False, "error": "options must be a list"}
         actions = [{"id": f"opt_{i + 1}", "label": str(opt)} for i, opt in enumerate(raw_options)]
         detail = str(args.get("detail") or "").strip() or None
         blocks = [
@@ -373,7 +373,24 @@ class ChatToolsMixin:
                 "text": question,
                 "detail": detail,
                 "status": "pending",
-                "actions": actions,
+                "actions": actions or None,
             }
         ]
-        return self._append_bot_blocks(args, bound_bot_id, blocks)
+        bot_id, run_id, thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+        hub = getattr(self.runtime, "consent", None)
+        if hub is None or not bot_id or not run_id or not thread_id:
+            return {"ok": False, "error": "owner questions are not available"}
+        if not hub.begin_question(bot_id, run_id, thread_id):
+            return {"ok": False, "error": "another owner question is already waiting"}
+        posted = self._append_bot_blocks(args, bound_bot_id, blocks, mark_sent=False)
+        message_id = str(posted.get("message_id") or "")
+        if not posted.get("ok") or not message_id:
+            hub.abort_question(run_id)
+            return posted
+        if not hub.activate_question(run_id, message_id, question):
+            hub.abort_question(run_id)
+            return {"ok": False, "error": "could not wait for the owner's answer"}
+        answer, error = hub.wait_question(run_id)
+        if answer is None:
+            return {"ok": False, "error": error or "owner question failed"}
+        return {"ok": True, "message_id": message_id, "answer": answer}

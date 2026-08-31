@@ -85,9 +85,9 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     )
 
     free = steps_for_prompt("please e2e-ask-free")
-    assert free[0].blocks is not None
-    assert free[0].blocks[0]["text"] == E2E_ASK_FREE_QUESTION
-    assert not free[0].blocks[0].get("actions")
+    assert free[0].tool == "ask_user"
+    assert free[0].args["question"] == E2E_ASK_FREE_QUESTION
+    assert "options" not in free[0].args
 
     hang = steps_for_prompt("please e2e-hang now")
     assert hang[0].delay_s == E2E_HANG_S

@@ -382,8 +382,12 @@ def test_ask_options_custom_and_detail(page: Page, client_url: str, host_url: st
     page.get_by_text("Type custom reply…").click()
     page.get_by_label("Answer").fill("Lisbon")
     page.get_by_role("button", name="Send answer").click()
+    expect(card).to_contain_text("Answered: Lisbon", timeout=8_000)
     expect(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="Lisbon")
+    ).to_have_count(0)
+    expect(
+        page.get_by_test_id("thread").get_by_text("I continued after your help.", exact=True)
     ).to_be_visible(timeout=8_000)
 
 
@@ -396,17 +400,26 @@ def test_ask_free_edit_first(page: Page, client_url: str, host_url: str) -> None
     page.get_by_role("button", name="Edit first").click()
     page.get_by_label("Answer").fill("Sam")
     page.get_by_role("button", name="Send answer").click()
+    expect(card).to_contain_text("Answered: Sam", timeout=8_000)
     expect(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="Sam")
+    ).to_have_count(0)
+    expect(
+        page.get_by_test_id("thread").get_by_text("I continued after your help.", exact=True)
     ).to_be_visible(timeout=8_000)
 
 
 def test_ask_free_send_it(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "SendIt")
     send_message(page, "please e2e-ask-free", name)
+    card = page.get_by_test_id("ask-card")
     page.get_by_role("button", name="Send it").click()
+    expect(card).to_contain_text("Answered: approved", timeout=8_000)
     expect(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="approved")
+    ).to_have_count(0)
+    expect(
+        page.get_by_test_id("thread").get_by_text("I continued after your help.", exact=True)
     ).to_be_visible(timeout=8_000)
 
 

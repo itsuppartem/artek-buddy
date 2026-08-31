@@ -28,14 +28,12 @@ export function AskCard({
     try {
       if (consentId) {
         const picked = decision || text;
-        try {
-          await completeOwnerConsent(consentId, picked);
-        } catch (err) {
-          setFileError(err instanceof Error ? err.message : "Could not run that on this computer");
-        }
+        await completeOwnerConsent(consentId, picked);
         return;
       }
       await onAnswer(text);
+    } catch (err) {
+      setFileError(err instanceof Error ? err.message : "Could not send that answer");
     } finally {
       setSubmitting(false);
     }
@@ -60,7 +58,11 @@ export function AskCard({
       ) : null}
       {block.status === "answered" ? (
         <div className="mt-3.5 text-[13.5px] font-medium text-sage">
-          {block.answer ? `Answered: ${block.answer}` : "Answered"}
+          {block.answer === "Timed out"
+            ? "Timed out"
+            : block.answer
+              ? `Answered: ${block.answer}`
+              : "Answered"}
         </div>
       ) : !canAnswer ? (
         <div className="mt-3.5 text-[13.5px] font-medium text-mute">No longer active</div>

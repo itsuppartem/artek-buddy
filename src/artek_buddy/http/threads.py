@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 
 from artek_buddy.bus import HEARTBEAT, REPLAY_GAP, EventHub
+from artek_buddy.consent import ConsentHub
 from artek_buddy.contracts import (
     ArtifactList,
     AttachmentList,
@@ -17,6 +18,7 @@ from artek_buddy.contracts import (
     ProductEventType,
     Run,
     RunRequest,
+    ThreadAnswerInput,
     ThreadFollowUpInput,
     ThreadMessagePage,
     ThreadSendInput,
@@ -45,6 +47,7 @@ from artek_buddy.http.deps import (
     _require_bot,
     _resolve_bot,
     _snapshot,
+    consent,
     current_app,
     hub,
     require_auth,
@@ -122,6 +125,28 @@ async def send_thread_message(
     )
 
 
+@router.post("/v1/threads/{bot_id}/answer")
+async def answer_thread_question(
+    bot_id: str,
+    body: ThreadAnswerInput,
+    actor: str = Depends(require_auth),
+    rt: AgentRuntime = Depends(runtime),
+    history: HistoryStore = Depends(store),
+    questions: ConsentHub = Depends(consent),
+) -> OkResponse:
+    rt.set_turn_device(actor)
+    try:
+        bot = _require_bot(history, bot_id)
+        if body.bot_id is not None and body.bot_id != bot.id:
+            raise HTTPException(status_code=404, detail="bot not found")
+        updated = questions.answer_question(bot.id, body.run_id, body.message_id, body.answer)
+        if updated is None:
+            raise HTTPException(status_code=409, detail="question is no longer waiting")
+        return OkResponse(ok=True)
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+
+
 @router.post("/v1/threads/{bot_id}/attachments", dependencies=[Depends(require_auth)])
 async def upload_thread_attachments(
     bot_id: str,
@@ -192,6 +217,9 @@ async def stop_thread(
     try:
         bot = _require_bot(history, bot_id)
         cancelled_ids = history.cancel_active_runs(bot_id)
+        question_hub = getattr(current_app().state, "consent", None)
+        if question_hub is not None:
+            question_hub.cancel_questions(cancelled_ids)
         _cancel_turns(bot_id)
         service = getattr(current_app().state, "subagents", None)
         if service is not None:

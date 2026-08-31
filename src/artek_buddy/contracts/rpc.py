@@ -159,7 +159,14 @@ PROCEDURES: list[Procedure] = [
         "OkResponse",
         True,
     ),
-    _p("threads.answer", "POST", "/v1/threads/{bot_id}/answer", "ThreadAnswerInput", "OkResponse"),
+    _p(
+        "threads.answer",
+        "POST",
+        "/v1/threads/{bot_id}/answer",
+        "ThreadAnswerInput",
+        "OkResponse",
+        True,
+    ),
     _p(
         "consents.answer",
         "POST",

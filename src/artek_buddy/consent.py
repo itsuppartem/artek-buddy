@@ -17,6 +17,7 @@ log = logging.getLogger("artek_buddy")
 DECISIONS = ("once", "always", "deny")
 LABELS = {"once": "Allow once", "always": "Always", "deny": "Deny"}
 WAIT_SECONDS = 300
+OWNER_QUESTION_WAIT = 300
 OWNER_FILE_WAIT = 90
 OWNER_RESULT_WAIT = 120
 CLASS_BROWSE = "browse"
@@ -205,6 +206,17 @@ class ConsentRequest:
     job_status: str | None = None
 
 
+@dataclass
+class OwnerQuestion:
+    bot_id: str
+    run_id: str
+    thread_id: str
+    waiter: threading.Event
+    message_id: str | None = None
+    answer: str | None = None
+    cancelled: bool = False
+
+
 class ConsentHub:
     """Ask before changing the owner PC or leaving the Pi box. Reads do not prompt."""
 
@@ -228,6 +240,7 @@ class ConsentHub:
         self._job_claims: dict[str, str] = {}
         self._results: dict[str, dict[str, Any]] = {}
         self._result_waiters: dict[str, threading.Event] = {}
+        self._questions: dict[str, OwnerQuestion] = {}
 
     def _mode(self) -> str | None:
         if self.auto in {"allow", "deny"}:
@@ -398,7 +411,11 @@ class ConsentHub:
             )
         bot = self.store.get_bot(row.bot_id)
         if bot is not None and row.message_id:
-            updated = self.store.answer_message_ask(row.message_id, LABELS.get(picked, picked))
+            updated = self.store.answer_message_ask(
+                row.message_id,
+                LABELS.get(picked, picked),
+                include_consent=True,
+            )
             if updated is not None:
                 self._publish(
                     bot,
@@ -419,6 +436,140 @@ class ConsentHub:
         if waiter is not None:
             waiter.wait(timeout)
         return self._decisions.get(request_id, "deny")
+
+    def begin_question(self, bot_id: str, run_id: str, thread_id: str) -> bool:
+        if not bot_id or not run_id or not thread_id or self.store.get_bot(bot_id) is None:
+            return False
+        with self._lock:
+            if run_id in self._questions:
+                return False
+            self._questions[run_id] = OwnerQuestion(
+                bot_id=bot_id,
+                run_id=run_id,
+                thread_id=thread_id,
+                waiter=threading.Event(),
+            )
+        return True
+
+    def activate_question(
+        self,
+        run_id: str,
+        message_id: str,
+        question: str,
+    ) -> bool:
+        with self._lock:
+            pending = self._questions.get(run_id)
+            if pending is None or pending.cancelled:
+                return False
+            if pending.message_id not in {None, message_id}:
+                return False
+            pending.message_id = message_id
+            if pending.answer is not None:
+                return True
+            bot = self.store.get_bot(pending.bot_id)
+            if bot is None:
+                self._questions.pop(run_id, None)
+                return False
+            self.store.mark_run_waiting_input(run_id)
+            self._publish(
+                bot,
+                ProductEventType.RUN_WAITING_INPUT,
+                {
+                    "run_id": run_id,
+                    "message_id": message_id,
+                    "text": question,
+                },
+                run_id,
+            )
+        return True
+
+    def answer_question(
+        self,
+        bot_id: str,
+        run_id: str,
+        message_id: str,
+        answer: str,
+    ) -> Any | None:
+        text = (answer or "").strip()
+        if not text:
+            return None
+        with self._lock:
+            pending = self._questions.get(run_id)
+            if pending is None or pending.cancelled or pending.bot_id != bot_id:
+                return None
+            if pending.message_id is None:
+                message = self.store.get_message_in_thread(pending.thread_id, message_id)
+                if message is None or message.run_id != run_id:
+                    return None
+                pending.message_id = message_id
+            if pending.message_id != message_id or pending.answer is not None:
+                return None
+            updated = self.store.answer_message_ask(message_id, text)
+            if updated is None:
+                return None
+            pending.answer = text
+            self.store.mark_run_running(run_id)
+            bot = self.store.get_bot(bot_id)
+            if bot is not None:
+                self._publish(
+                    bot,
+                    ProductEventType.THREAD_MESSAGE_CREATED,
+                    {"message": updated.model_dump(mode="json")},
+                    run_id,
+                )
+            pending.waiter.set()
+            return updated
+
+    def wait_question(
+        self,
+        run_id: str,
+        timeout: float = OWNER_QUESTION_WAIT,
+    ) -> tuple[str | None, str | None]:
+        with self._lock:
+            pending = self._questions.get(run_id)
+        if pending is None:
+            return None, "The owner question is no longer active."
+        pending.waiter.wait(timeout)
+        with self._lock:
+            current = self._questions.pop(run_id, None)
+            if current is None:
+                return None, "The owner question is no longer active."
+            answer = current.answer
+            cancelled = current.cancelled
+        if answer is not None:
+            return answer, None
+        if cancelled:
+            return None, "The owner question was cancelled."
+        bot = self.store.get_bot(current.bot_id)
+        updated = (
+            self.store.answer_message_ask(current.message_id, "Timed out")
+            if current.message_id
+            else None
+        )
+        self.store.mark_run_running(run_id)
+        if bot is not None and updated is not None:
+            self._publish(
+                bot,
+                ProductEventType.THREAD_MESSAGE_CREATED,
+                {"message": updated.model_dump(mode="json")},
+                run_id,
+            )
+        return None, "The owner did not answer in time."
+
+    def abort_question(self, run_id: str) -> None:
+        with self._lock:
+            pending = self._questions.pop(run_id, None)
+        if pending is not None:
+            pending.waiter.set()
+
+    def cancel_questions(self, run_ids: list[str]) -> None:
+        with self._lock:
+            for run_id in run_ids:
+                pending = self._questions.get(run_id)
+                if pending is None:
+                    continue
+                pending.cancelled = True
+                pending.waiter.set()
 
     def get_job(self, request_id: str) -> dict[str, Any] | None:
         row = self.store.get_consent_request(request_id)

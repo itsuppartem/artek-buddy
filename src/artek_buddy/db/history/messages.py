@@ -296,7 +296,13 @@ class MessagesMixin:
                 out.append(message)
         return out
 
-    def answer_message_ask(self, message_id: str, answer: str) -> ThreadMessage | None:
+    def answer_message_ask(
+        self,
+        message_id: str,
+        answer: str,
+        *,
+        include_consent: bool = False,
+    ) -> ThreadMessage | None:
         text = (answer or "").strip()
         if not text:
             return None
@@ -316,13 +322,15 @@ class MessagesMixin:
             next_blocks, changed = answer_ask_blocks(
                 blocks if isinstance(blocks, list) else [],
                 text,
-                include_consent=True,
+                include_consent=include_consent,
             )
-            if changed:
-                conn.execute(
-                    "UPDATE messages SET blocks = %s WHERE id = %s",
-                    (Json(next_blocks), message_id),
-                )
+            if not changed:
+                conn.commit()
+                return None
+            conn.execute(
+                "UPDATE messages SET blocks = %s WHERE id = %s",
+                (Json(next_blocks), message_id),
+            )
             conn.commit()
         return self._get_message(message_id)
 
