@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import traceback
+import webbrowser
+from urllib.parse import urlsplit
 
 from pairing import _log
 from window_chrome import (
@@ -10,6 +12,43 @@ from window_chrome import (
     _unregister_window,
     apply_window_icon,
 )
+
+
+def external_http_url(uri: str, local_url: str) -> str | None:
+    try:
+        target = urlsplit((uri or "").strip())
+        local = urlsplit(local_url)
+        if target.scheme.lower() not in {"http", "https"} or not target.hostname:
+            return None
+        if target.username is not None or target.password is not None:
+            return None
+        target_origin = (target.scheme.lower(), target.hostname.lower(), target.port)
+        local_origin = (local.scheme.lower(), (local.hostname or "").lower(), local.port)
+    except ValueError:
+        return None
+    return None if target_origin == local_origin else uri
+
+
+def bind_external_links(view: object, local_url: str) -> None:
+    def on_decide_policy(_view: object, decision: object, _decision_type: object) -> bool:
+        try:
+            action = decision.get_navigation_action()
+            uri = action.get_request().get_uri()
+            target = external_http_url(uri, local_url)
+        except Exception:
+            return False
+        if target is None:
+            return False
+        try:
+            webbrowser.open(target, new=2, autoraise=True)
+        except Exception:
+            _log("could not open external link:\n" + traceback.format_exc())
+        decision.ignore()
+        return True
+
+    connect = getattr(view, "connect", None)
+    if callable(connect):
+        connect("decide-policy", on_decide_policy)
 
 
 def _open_webkit2(local_url: str) -> bool:
@@ -34,6 +73,7 @@ def _open_webkit2(local_url: str) -> bool:
     window.connect("destroy", lambda *_args: (_unregister_window(window), Gtk.main_quit()))
     window.connect("focus-in-event", _on_focus_in)
     view = WebKit2.WebView()
+    bind_external_links(view, local_url)
     try:
         from clipboard_image import bind_webkit_paste
 
@@ -66,6 +106,7 @@ def _open_webkit6(local_url: str) -> bool:
         window.connect("notify::is-active", _on_gtk_active)
         window.connect("destroy", lambda *_args: _unregister_window(window))
         view = WebKit.WebView()
+        bind_external_links(view, local_url)
         try:
             from clipboard_image import bind_webkit_paste
 

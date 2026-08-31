@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Added
+- Owner jobs have a short client delivery ACK and a separate queued / acknowledged / terminal lifecycle. A new `.deb` claims a job before touching This PC; older clients may still return a result without ACK.
+- The Linux client can opt into SSH connection reuse with `~/.config/artek-buddy/ssh-mux`. Its private ControlMaster socket never changes `~/.ssh/config`; related small remote checks are batched into one SSH session.
+- A replaced Cursor lead session receives one bounded, redacted resume brief with known workspace, path/branch facts, constraints, and the last visible result.
 - Phone desktop overlay only: the remote screen is a pad (drag moves the pointer, tap left click, two fingers right click). Keyboard opens the phone keyboard. Chats and Chat stay as they were. The host page clears the iPhone notch (`safe-area-inset-top`) and does not leave a second empty strip under the nav.
 - The same Funnel / tailnet URL serves the window. A phone pairs with a code; the device token stays in an httpOnly cookie. Narrow screens stack Chats / Chat / Desktop (iPhone 11 Pro 375×812). iPhone Add to Home Screen plus Turn on alerts (only while that app is open — no background). This-PC files stay on the Linux `.deb`. CI splits `ui` (`.deb`) from `ui_web` / `live_web` (host page).
 - The owner can keep a published skill for this chat (`install_book` from a public URL after Allow). The stored body is the fetched markdown. The next turn sees names only; `open_book` loads the steps. A chip fills `please run {name}`. No Settings form.
@@ -15,7 +18,12 @@
 
 ### Fixed
 - Caps Lock during Take control raises letter case on the bot desktop. The overlay does not swallow that key.
-- An instant dead Cursor wait after a good turn names Send again and starts a new session on the next send, instead of repeating The turn failed.
+- Ctrl+V in the Linux WebKit window no longer cancels an empty/deferred clipboard event before ordinary text can reach Message. Image, file, and file-manager-path paste still use the attachment path.
+- Chat links open in the owner's system browser from the `.deb`. Right-clicking a link offers Open in browser, Copy URL, and Reply; URL copy falls back for older WebKit clipboard support.
+- A shorter restatement of an already detailed standing rule no longer revises the same Memory chapter or writes another identical Remembered line.
+- Back-to-back and parallel This-PC calls no longer reuse a process-global consent id. Late owner results are rejected, completed auto jobs are not offered again, and the phone/host page leaves auto jobs for the paired Linux client.
+- A new model session no longer receives the current user send twice in compact history; repeated identical user lines from silent failed runs collapse to one.
+- An instant dead Cursor wait after a good turn retries that same send (expire a stuck run, then a new session if needed) instead of asking the owner to Send again. A stuck double-dead still shows one Send-again run-error.
 - Stop on a live turn writes Stopped. A late model complete from that run does not land as a bot bubble.
 - Release keeps the last guest frame on the overlay until the view-only picture loads. Take control from Sleeping names Waking the desktop… instead of a black void.
 - One click on an inbox row opens that chat. A leftover mouse-up or a late inbox fallback does not land on the previous thread.
@@ -68,6 +76,7 @@
 - A takeover on another chat shows «needs you», not «replied». The bot stays `waiting_takeover` (same idea as `waiting_input`), and the window does not dismiss that banner during the chat switch. If the takeover event arrives while that chat is open, or the thread stream drops it on switch, the other chat still raises the pill from the parked status.
 
 ### Changed
+- Local `.deb` builds refuse to overwrite an existing package; `ARTEK_BUILD_SUFFIX` creates a distinct filename and Debian version for manual testing.
 - Memory is a book the bot revises from chat: owner sections (identity, tone, contacts, machines, paths) and this-chat standing rules always ride in the next turn. Work notes still match the request. The 3+4 card caps and 200-character Settings cut no longer drop a weeks-grown book.
 - After a turn that saved a section, the host rewrites that section (default model when a key is set) so a newer fact replaces a contradiction instead of stacking both. The book block in the model prompt is 256 KiB.
 - Send while the host is down parks the user bubble and flushes it when health returns, with a «sent while offline» caption. A reconnect banner replaces the red host-error card.

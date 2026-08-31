@@ -776,7 +776,10 @@ async def _run_turn(
             log.exception("failed to bind asked turn %s", run.id)
     try:
         page = history.page_messages(bot.thread_id, limit=40)
-        thread_context = compact_thread_context(page.messages)
+        thread_context = compact_thread_context(page.messages, exclude_run_id=run.id)
+        session_resume = (
+            rt.build_session_resume(bot.id) if rt.consume_session_fresh(agent_id) else None
+        )
         inbox_context = _format_inbox(history, bot, inbox_items) if inbox_items else None
         memory_prompt = wrap_turn_prompt(
             text,
@@ -794,6 +797,7 @@ async def _run_turn(
             other_bots=format_other_bots(history.list_bots(), bot.id),
             books_context=format_book_catalog(history.list_skill_books(bot.id)),
             apps_context=format_apps_context(history),
+            session_resume=session_resume,
         )
         async for item in _turn_stream(history, rt, memory_prompt, agent_id, bot):
             if isinstance(item, RunRecord):

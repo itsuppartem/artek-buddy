@@ -323,9 +323,12 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name="run_owner_command",
         description=(
             "Run a shell command on the owner's paired computer, like an SSH session. "
+            "Batch related small remote checks into one command and one SSH session instead of "
+            "calling this tool once per check. "
             "Read-only commands (ls, cat, echo, pwd, uname, …) run without a card. "
             "Commands that can change the PC ask Allow once / Always / Deny once for that bot. "
-            "cwd stays under the owner's home. Without a paired window this fails."
+            "cwd stays under the owner's home. Never copy private keys or edit ~/.ssh/config. "
+            "Without a paired window this fails."
         ),
         input_schema={
             "type": "object",

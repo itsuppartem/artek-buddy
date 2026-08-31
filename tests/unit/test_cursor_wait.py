@@ -6,6 +6,8 @@ from artek_buddy.runtime.cursor_wait import (
     CURSOR_AUTH_RECYCLE_AFTER,
     describe_cursor_wait,
     note_auth_failures,
+    send_local_options,
+    should_retry_dead_wait,
 )
 
 
@@ -93,6 +95,27 @@ def test_dead_wait_owner_error_names_the_next_step() -> None:
 
     assert dead_wait_owner_error(TURN_FAILED, True) == DEAD_WAIT_NEXT_STEP
     assert dead_wait_owner_error(TURN_FAILED, False) == TURN_FAILED
+
+
+def test_send_local_options_omits_force_unless_asked() -> None:
+    plain = send_local_options("/data/homes/bot")
+    assert plain == {"local": {"cwd": "/data/homes/bot"}}
+    assert "force" not in plain["local"]
+    forced = send_local_options("/data/homes/bot", force=True)
+    assert forced == {"local": {"cwd": "/data/homes/bot", "force": True}}
+
+
+def test_should_retry_dead_wait_only_when_instant_and_silent() -> None:
+    from artek_buddy.db.shaping import TURN_FAILED
+
+    assert should_retry_dead_wait(streamed=0, status="failed", error=TURN_FAILED, duration_s=0.0)
+    assert not should_retry_dead_wait(
+        streamed=1, status="failed", error=TURN_FAILED, duration_s=0.0
+    )
+    assert not should_retry_dead_wait(
+        streamed=0, status="failed", error=TURN_FAILED, duration_s=5.0
+    )
+    assert not should_retry_dead_wait(streamed=0, status="completed", error=None, duration_s=0.0)
 
 
 def test_wait_error_logs_status_and_error_code(caplog) -> None:

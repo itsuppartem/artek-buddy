@@ -32,7 +32,7 @@ E2E_DRAFT_ANSWER = "Belgrade is 22°C and clear."
 E2E_CLOSE_STATUS = "Closing Chromium"
 E2E_SLOW_ANSWER = "slow done"
 E2E_LATE_COMPLETE = "pong"
-E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C"
+E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C. [Open docs](https://example.com/artek-buddy)"
 E2E_ASK_QUESTION = "Which city?"
 E2E_ASK_FREE_QUESTION = "What should I call you?"
 E2E_FAIL_ERROR = "scripted fail"
@@ -279,7 +279,11 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         return [
             scripted_tool(
                 "remember",
-                content="Do not ask permission for read",
+                content=(
+                    "Do not ask the owner for permission to work on this bot's computer or "
+                    "browser, or to run read-only commands on the owner's paired PC. "
+                    "Do not prompt."
+                ),
                 kind="rule",
                 section="bans",
             ),
@@ -666,6 +670,8 @@ class ScriptedRuntime(RuntimeBase):
         agent_id = f"sa-{self._seq}"
         self._agents[agent_id] = {"name": name, "role": role}
         self.bind_agent_bot(agent_id, bot_id)
+        if role == "lead":
+            self.mark_session_fresh(agent_id)
         if persist_default or self.default_agent_id is None:
             self.default_agent_id = agent_id
             self._save_state(agent_id)
@@ -703,6 +709,22 @@ class ScriptedRuntime(RuntimeBase):
             role=role,
         )
 
+    async def _recycle_scripted_agent(self, agent_id: str, bot_id: str | None) -> str:
+        self._agents.pop(agent_id, None)
+        live = await self.create_session(
+            name="artek-buddy",
+            persist_default=True,
+            bot_id=bot_id,
+        )
+        if bot_id and self.store is not None:
+            try:
+                self.store.attach_agent(bot_id, live)
+            except Exception:
+                log.exception("failed to attach recycled scripted agent")
+        self.bridge_recycles += 1
+        self._auth_fails = 0
+        return live
+
     async def stream(
         self,
         prompt: str,
@@ -714,6 +736,24 @@ class ScriptedRuntime(RuntimeBase):
         self.bind_agent_bot(agent_id, bot_id)
         self.last_prompt = prompt
         hay = _user_tail(prompt).lower()
+        if "e2e-dead-wait-stuck" in hay:
+            run_id = new_id("run")
+            self._auth_fails, recycle = note_auth_failures(
+                self._auth_fails,
+                status="failed",
+                error=TURN_FAILED,
+                duration_s=0.0,
+            )
+            if recycle:
+                agent_id = await self._recycle_scripted_agent(agent_id, bot_id)
+            yield RunRecord(
+                id=run_id,
+                agent_id=agent_id,
+                status="failed",
+                result=None,
+                error=dead_wait_owner_error(TURN_FAILED, True),
+            )
+            return
         if "e2e-dead-wait" in hay:
             run_id = new_id("run")
             self._auth_fails, recycle = note_auth_failures(
@@ -722,27 +762,15 @@ class ScriptedRuntime(RuntimeBase):
                 error=TURN_FAILED,
                 duration_s=0.0,
             )
+            if recycle:
+                agent_id = await self._recycle_scripted_agent(agent_id, bot_id)
             yield RunRecord(
                 id=run_id,
                 agent_id=agent_id,
-                status="failed",
-                result=None,
-                error=dead_wait_owner_error(TURN_FAILED, recycle),
+                status="completed",
+                result="ok",
+                error=None,
             )
-            if recycle:
-                self._agents.pop(agent_id, None)
-                live = await self.create_session(
-                    name="artek-buddy",
-                    persist_default=True,
-                    bot_id=bot_id,
-                )
-                if bot_id and self.store is not None:
-                    try:
-                        self.store.attach_agent(bot_id, live)
-                    except Exception:
-                        log.exception("failed to attach recycled scripted agent")
-                self.bridge_recycles += 1
-                self._auth_fails = 0
             return
         if "e2e-auth-error" in hay:
             run_id = new_id("run")
@@ -771,20 +799,8 @@ class ScriptedRuntime(RuntimeBase):
                 error=E2E_AUTH_ERROR,
             )
             if recycle:
-                self._agents.pop(agent_id, None)
-                live = await self.create_session(
-                    name="artek-buddy",
-                    persist_default=True,
-                    bot_id=bot_id,
-                )
-                if bot_id and self.store is not None:
-                    try:
-                        self.store.attach_agent(bot_id, live)
-                    except Exception:
-                        log.exception("failed to attach recycled scripted agent")
-                self.bridge_recycles += 1
+                await self._recycle_scripted_agent(agent_id, bot_id)
                 self._pending_recover = True
-                self._auth_fails = 0
             return
         steps = self._queue.pop(0) if self._queue else steps_for_prompt(prompt)
         tools = ProductTools(self)
