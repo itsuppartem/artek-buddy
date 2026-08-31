@@ -32,6 +32,12 @@ const urgencyByKind: Record<AttentionKind, AttentionAlert["urgency"]> = {
   failed: "critical",
 };
 
+const quietPreview = /^(Remembered:|Forgot:|Remembered a note\b|Forgot a saved note\b)/i;
+
+function isQuietPreview(preview: string): boolean {
+  return quietPreview.test(preview.trim());
+}
+
 function clip(text: string, max = 180): string {
   const clean = stripMarkdown(text).replace(/\s+/g, " ").trim();
   if (clean.length <= max) return clean;
@@ -177,11 +183,11 @@ export function attentionFromBotChange(
   if (next.status === "waiting_takeover" && prev.status !== "waiting_takeover") {
     return makeAlert("takeover", next.id, name, "Take control of the computer.", at);
   }
-  if (next.status === "waiting_input" && prev.status !== "waiting_input") {
-    return makeAlert("ask", next.id, name, next.preview, at);
-  }
+  // Auto owner jobs use waiting_input with no ask card. Real questions arrive
+  // as thread.ask / ask blocks / non-auto run.waiting_input.
   const leftBusy = busyStatus.has(prev.status) && !busyStatus.has(next.status);
   const becameUnread = next.unread && !prev.unread;
+  if (isQuietPreview(next.preview)) return null;
   if (next.status === "error" && (leftBusy || becameUnread)) {
     return makeAlert("failed", next.id, name, next.preview, at);
   }

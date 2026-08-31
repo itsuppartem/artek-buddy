@@ -444,6 +444,7 @@ The computer pane is screen, memory, and routines — not a second file list.
 | Run `please e2e-slow` in Demo and switch to Research: completion raises exactly one native **Demo replied** notification and does not steal the open chat | [ ] | — |
 | Start `please e2e-slow`, leave Demo open, then hide the window to the tray: completion still raises the native notification. The same completion while Demo is focused stays quiet | [ ] | — |
 | After that background reply, Ubuntu Notifications (calendar flyout) lists **Artek Buddy** with the title and body. A tray / dock badge alone is not enough | [ ] | — |
+| A `Remembered:` / `Forgot:` line, or a This-PC auto read/command, does **not** raise **is asking** or a native alert | [ ] | [ ] |
 | Phone: Turn on alerts from the Home Screen icon. Alerts only while that app is open or still in memory. Kill the icon → no wake | — | [ ] |
 | `notifyOnFinish` off mutes only replied / failed, not «needs you» | [ ] | [ ] |
 
