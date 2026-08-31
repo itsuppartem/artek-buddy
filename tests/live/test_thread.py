@@ -166,6 +166,38 @@ def test_thread_reply_quote_and_cancel(page: Page, client_url: str, host_url: st
     expect(quoted).to_contain_text("ok")
 
 
+def test_markdown_link_opens_and_has_link_actions(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Links")
+    page.context.grant_permissions(
+        ["clipboard-read", "clipboard-write"],
+        origin=client_url.rstrip("/"),
+    )
+    page.context.route(
+        "https://example.com/**",
+        lambda route: route.fulfill(status=200, content_type="text/html", body="docs"),
+    )
+    send_message(page, "please e2e-markdown-preview", name)
+    link = page.get_by_role("link", name="Open docs", exact=True)
+    expect(link).to_have_attribute("href", "https://example.com/artek-buddy", timeout=15_000)
+
+    with page.expect_popup() as opened:
+        link.click()
+    expect(opened.value).to_have_url("https://example.com/artek-buddy")
+    opened.value.close()
+
+    link.click(button="right")
+    menu = page.get_by_role("menu", name="Message actions")
+    expect(menu.get_by_role("menuitem", name="Open in browser", exact=True)).to_be_visible()
+    copy_url = menu.get_by_role("menuitem", name="Copy URL", exact=True)
+    expect(copy_url).to_be_visible()
+    expect(menu.get_by_role("menuitem", name="Reply", exact=True)).to_be_visible()
+    copy_url.click()
+    expect(menu.get_by_role("menuitem", name="URL copied", exact=True)).to_be_visible()
+    assert page.evaluate("navigator.clipboard.readText()") == "https://example.com/artek-buddy"
+
+
 def test_composer_paste_screenshot_attaches_chip(
     page: Page, client_url: str, host_url: str
 ) -> None:
@@ -195,15 +227,13 @@ def test_composer_paste_text_does_not_attach(page: Page, client_url: str, host_u
     _named(page, client_url, host_url, "TextPaste")
     box = composer(page)
     box.click()
-    box.evaluate(
-        """el => {
-          const data = new DataTransfer();
-          data.setData("text/plain", "hello from the clipboard");
-          const event = new Event("paste", { bubbles: true, cancelable: true });
-          Object.defineProperty(event, "clipboardData", { value: data });
-          el.dispatchEvent(event);
-        }"""
+    page.context.grant_permissions(
+        ["clipboard-read", "clipboard-write"],
+        origin=client_url.rstrip("/"),
     )
+    page.evaluate("navigator.clipboard.writeText('hello from the clipboard')")
+    box.press("Control+V")
+    expect(box).to_have_value("hello from the clipboard")
     expect(page.get_by_test_id("attach-chip")).to_have_count(0)
 
 

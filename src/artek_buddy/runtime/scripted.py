@@ -32,7 +32,7 @@ E2E_DRAFT_ANSWER = "Belgrade is 22°C and clear."
 E2E_CLOSE_STATUS = "Closing Chromium"
 E2E_SLOW_ANSWER = "slow done"
 E2E_LATE_COMPLETE = "pong"
-E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C"
+E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C. [Open docs](https://example.com/artek-buddy)"
 E2E_ASK_QUESTION = "Which city?"
 E2E_ASK_FREE_QUESTION = "What should I call you?"
 E2E_FAIL_ERROR = "scripted fail"
@@ -279,7 +279,11 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         return [
             scripted_tool(
                 "remember",
-                content="Do not ask permission for read",
+                content=(
+                    "Do not ask the owner for permission to work on this bot's computer or "
+                    "browser, or to run read-only commands on the owner's paired PC. "
+                    "Do not prompt."
+                ),
                 kind="rule",
                 section="bans",
             ),

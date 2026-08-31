@@ -17,6 +17,9 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Ctrl+V in the Linux WebKit window no longer cancels an empty/deferred clipboard event before ordinary text can reach Message. Image, file, and file-manager-path paste still use the attachment path.
+- Chat links open in the owner's system browser from the `.deb`. Right-clicking a link offers Open in browser, Copy URL, and Reply; URL copy falls back for older WebKit clipboard support.
+- A shorter restatement of an already detailed standing rule no longer revises the same Memory chapter or writes another identical Remembered line.
 - Back-to-back and parallel This-PC calls no longer reuse a process-global consent id. Late owner results are rejected, completed auto jobs are not offered again, and the phone/host page leaves auto jobs for the paired Linux client.
 - A new model session no longer receives the current user send twice in compact history; repeated identical user lines from silent failed runs collapse to one.
 - An instant dead Cursor wait after a good turn retries that same send (expire a stuck run, then a new session if needed) instead of asking the owner to Send again. A stuck double-dead still shows one Send-again run-error.

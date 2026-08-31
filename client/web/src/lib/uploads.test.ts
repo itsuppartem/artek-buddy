@@ -31,9 +31,14 @@ describe("clipboard paste", () => {
     expect(clipboardShouldClaim(event)).toBe(false);
   });
 
-  it("claims an empty clip so WebKit can fill items after preventDefault", () => {
+  it("does not claim an empty WebKit clip and block native text paste", () => {
     const event = { clipboardData: transfer({ types: [], text: "" }) };
-    expect(clipboardShouldClaim(event)).toBe(true);
+    expect(clipboardShouldClaim(event)).toBe(false);
+  });
+
+  it("does not claim a deferred WebKit text clip", () => {
+    const event = { clipboardData: transfer({ types: ["text/plain"], text: "" }) };
+    expect(clipboardShouldClaim(event)).toBe(false);
   });
 
   it("names an unnamed image clip screenshot-1.png", () => {

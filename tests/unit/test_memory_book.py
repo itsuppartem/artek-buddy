@@ -10,6 +10,7 @@ from artek_buddy.memory_hub import (
     MemoryEntry,
     MemoryHub,
     extract_unwritten_memories,
+    memory_covers,
     similar_memory,
 )
 
@@ -341,6 +342,13 @@ def test_similar_memory_paraphrase_not_a_different_ban() -> None:
     assert not similar_memory("Never open Gmail", "Never open Outlook")
     assert not similar_memory("Never open site-0.example", "Never open site-4.example")
     assert similar_memory("Lives in Cid28f7cdfda", "Lives in Cid28f7cdfdb")
+    assert memory_covers(
+        "Do not ask the owner for permission to work on this bot's computer or browser, "
+        "or to run read-only commands on the owner's paired PC. Do not prompt.",
+        "Don't ask for read permission",
+    )
+    assert not memory_covers("Don't ask for read permission", "Don't ask for write permission")
+    assert not memory_covers("Never open Gmail for work", "Never open Outlook")
 
 
 def test_one_run_does_not_store_paraphrased_read_permission_twice() -> None:
@@ -372,6 +380,35 @@ def test_one_run_does_not_store_paraphrased_read_permission_twice() -> None:
     )
     assert extra == []
     assert len(store.list_live_memory_entries("bot_book")) == 1
+
+
+def test_long_permission_ban_covers_a_shorter_later_restatement() -> None:
+    hub, store = _hub()
+    rule = (
+        "Do not ask the owner for permission to work on this bot's computer or browser, "
+        "or to run read-only commands on the owner's paired PC. Do not prompt."
+    )
+    first = hub.capture(
+        rule,
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_first",
+        slot="bans",
+    )
+    second = hub.capture(
+        "Don't ask for read permission",
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_later",
+        slot="bans",
+    )
+    assert first is not None
+    assert second is None
+    live = store.list_live_memory_entries("bot_book")
+    assert len(live) == 1
+    assert live[0].text == rule
 
 
 @pytest.mark.asyncio

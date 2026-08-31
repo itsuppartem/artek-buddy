@@ -2,8 +2,9 @@
 
 Desktop GUI for the Artek Buddy host. Command: `artek-buddy`.
 Source: `artek_buddy.py` (entrypoint) plus `pairing.py`, `proxy.py`, `ssh_mux.py`,
-`ssh-wrap/`, `web_paths.py`, `notifications.py`, `window.py`, `owner_paths.py`,
-`window_chrome.py`, and `web/`. Version: same as the product (`../VERSION`).
+`ssh-wrap/`, `web_paths.py`, `notifications.py`, `window.py`,
+`clipboard_image.py`, `owner_paths.py`, `window_chrome.py`, and `web/`.
+Version: same as the product (`../VERSION`).
 
 The window is the product shell: pairing, bot list, thread, computer pane. It talks to
 the host through a loopback proxy so the token never sits in the page.
@@ -69,6 +70,8 @@ interactive takeover). Enter sends, Shift+Enter adds a newline in the composer.
 Plus, drop, or Ctrl+V attaches files (including a file-manager copy that only
 puts a path on the clipboard); a screenshot paste and image/video/audio
 show a preview before send and on the file card after send. Download opens the
-system Save dialog. Browse that bot's home with Files on the sandbox desktop.
+system Save dialog. Ordinary Ctrl+V text stays in Message. Bot `http(s)` links
+open in the system browser; their context menu can open or copy the URL. Browse
+that bot's home with Files on the sandbox desktop.
 
 UI pieces for later host stages stay out of the window until those routes exist.
