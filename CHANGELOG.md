@@ -17,6 +17,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Caps Lock during Take control raises letter case on the bot desktop. The overlay does not swallow that key.
 - Ctrl+V in the Linux WebKit window no longer cancels an empty/deferred clipboard event before ordinary text can reach Message. Image, file, and file-manager-path paste still use the attachment path.
 - Chat links open in the owner's system browser from the `.deb`. Right-clicking a link offers Open in browser, Copy URL, and Reply; URL copy falls back for older WebKit clipboard support.
 - A shorter restatement of an already detailed standing rule no longer revises the same Memory chapter or writes another identical Remembered line.
