@@ -257,13 +257,15 @@ sudo dpkg -i artek-buddy-client_0.10.27_all.deb
 sudo apt-get install -f
 ```
 
-`apt-get install -f` pulls: `python3`, `python3-gi`, `gir1.2-gtk-3.0`, WebKitGTK, `xdg-utils`, `libnotify-bin`.
+`apt-get install -f` pulls: `python3`, `python3-gi`, `gir1.2-gtk-3.0`, WebKitGTK, `gir1.2-ayatanaappindicator3-0.1`, `xdg-utils`, and `libnotify-bin`.
 
 Upgrade later with a newer `.deb` of a **different version** (`dpkg -i` the new file). Do not overwrite the same filename in the repo when you bump `VERSION`. Remove with `sudo apt-get remove artek-buddy-client`. Pairing files stay in `~/.config/artek-buddy/` until you delete them.
 
 Release packages leave the pair URL empty. `ARTEK_BAKE_URL=1 client/build-deb.sh` can copy untracked `client/url` into a local package only. Never put a token in that file.
 
 Open **Artek Buddy** from the app menu (or `artek-buddy`).
+
+The installed client stays available through its **Artek Buddy** tray indicator after the window is closed. Use **Open Artek Buddy** to present it again or **Quit** to stop it. On GNOME, the shell must have StatusNotifier/AppIndicator support enabled; if the indicator is not connected, closing the window exits instead of hiding it invisibly.
 
 1. Host URL — `http://<pi-tailscale-ip>:8080` from the owner PC (step 4). Use `http://127.0.0.1:8080` only if the window runs on the Pi itself.
 2. Pairing code from the `pair` command on the Pi.

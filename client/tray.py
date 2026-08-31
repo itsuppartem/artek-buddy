@@ -62,6 +62,13 @@ def create_tray(
 def hide_to_tray(window: object, indicator: object | None) -> bool:
     if indicator is None:
         return False
+    connected = getattr(indicator, "get_property", None)
+    if callable(connected):
+        try:
+            if not bool(connected("connected")):
+                return False
+        except Exception:
+            return False
     hide = getattr(window, "hide", None)
     if not callable(hide):
         return False
