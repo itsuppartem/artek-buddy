@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 CLIENT_DIR = Path(__file__).resolve().parents[2] / "client"
 TRAY = CLIENT_DIR / "tray.py"
+if str(CLIENT_DIR) not in sys.path:
+    sys.path.insert(0, str(CLIENT_DIR))
 
 
 class FakeMenu:
@@ -68,7 +71,11 @@ class FakeIndicatorApi:
 
 class FakeWindow:
     def __init__(self) -> None:
+        self.hidden = False
         self.presented = False
+
+    def hide(self) -> None:
+        self.hidden = True
 
     def deiconify(self) -> None:
         self.presented = True
@@ -110,3 +117,15 @@ def test_tray_indicator_uses_app_icon_and_open_quit_menu() -> None:
     assert window.presented is True
     indicator.menu.items[1].callback(indicator.menu.items[1])
     assert quit_calls == [True]
+
+
+def test_close_hides_only_when_the_tray_is_available() -> None:
+    tray = _tray_module()
+    window = FakeWindow()
+
+    assert tray.hide_to_tray(window, object()) is True
+    assert window.hidden is True
+
+    window.hidden = False
+    assert tray.hide_to_tray(window, None) is False
+    assert window.hidden is False

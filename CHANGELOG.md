@@ -17,6 +17,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- The Linux `.deb` sends one native notification for background replies, failures, owner questions, and takeover instead of dropping the event after the in-window banner. Its tray indicator can reopen or quit the client; closing the window hides it to the tray while indicators are supported.
 - A blocked browser task can ask the owner for one concrete step and resume the same `ask_user` call and `run_id`. Answers stay on the card, duplicates are rejected, and timeout is explicit; no site-specific integration is required.
 - A second `.deb` window that loses an owner-job ACK no longer reports that conflict as the winning client's failure. Claim-capable results carry the winning ACK nonce; queued no-ACK results remain compatible. Thread snapshots expose every queued automatic job instead of hiding parallel work behind one id.
 - Clicking a Models chip uses that model. Tan is the host default, not a local pick that still leaves Grok in use.

@@ -2,7 +2,7 @@
 
 Issue: [#220](https://github.com/itsuppartem/artek-buddy/issues/220). Daily tracker: [#174](https://github.com/itsuppartem/artek-buddy/issues/174). Pad / keys: [#218](https://github.com/itsuppartem/artek-buddy/issues/218) / [PR #219](https://github.com/itsuppartem/artek-buddy/pull/219).
 
-Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, do **2, 3, 5, 7, 11, 12, 15, 25, 26, 27, 28, 29** first.
+Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, do **2, 3, 5, 7, 11, 12, 15, 23, 25, 26, 27, 28, 29** first.
 
 This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packaged `.deb` `--serve`, `ui_web` = host page at 375×812). Do not treat a green check as a substitute for this list.
 
@@ -438,7 +438,10 @@ The computer pane is screen, memory, and routines — not a second file list.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Deb: a finished background chat can raise a desktop notification if notifyOnFinish is on (replied / failed). It does not steal the open chat | [ ] | — |
+| The installed client shows an **Artek Buddy** tray icon. Its menu **Open Artek Buddy** presents the window; **Quit** exits | [ ] | — |
+| Close the window with ×: it hides to the tray and keeps running. Start it again only if the desktop has no indicator support and close therefore exits | [ ] | — |
+| Run `please e2e-slow` in Demo and switch to Research: completion raises exactly one native **Demo replied** notification and does not steal the open chat | [ ] | — |
+| Start `please e2e-slow`, leave Demo open, then hide the window to the tray: completion still raises the native notification. The same completion while Demo is focused stays quiet | [ ] | — |
 | Phone: Turn on alerts from the Home Screen icon. Alerts only while that app is open or still in memory. Kill the icon → no wake | — | [ ] |
 | `notifyOnFinish` off mutes only replied / failed, not «needs you» | [ ] | [ ] |
 

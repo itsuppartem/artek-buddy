@@ -23,6 +23,7 @@ def _desktop_notify(title: str, body: str, urgency: str) -> None:
                 notify,
                 "--app-name=Artek Buddy",
                 f"--urgency={urgency}",
+                "--hint=string:desktop-entry:artek-buddy",
                 *notify_icon_args(),
                 "--",
                 title,

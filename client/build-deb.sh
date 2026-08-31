@@ -48,7 +48,7 @@ mkdir -p "$LIB/web" "$LIB/ssh-wrap" "$BIN" "$APP" "$DOC" "$PIXMAPS" "$DEBIAN"
 
 cp client/artek_buddy.py client/owner_paths.py client/window_chrome.py \
   client/pairing.py client/proxy.py client/notifications.py client/window.py \
-  client/clipboard_image.py client/web_paths.py client/ssh_mux.py "$LIB/"
+  client/clipboard_image.py client/web_paths.py client/ssh_mux.py client/tray.py "$LIB/"
 cp client/ssh-wrap/ssh "$LIB/ssh-wrap/ssh"
 cp client/VERSION "$LIB/VERSION"
 cp client/assets/app-icon.png "$LIB/app-icon.png"
@@ -66,7 +66,7 @@ fi
 chmod 755 "$LIB/artek_buddy.py"
 chmod 644 "$LIB/owner_paths.py" "$LIB/window_chrome.py" \
   "$LIB/pairing.py" "$LIB/proxy.py" "$LIB/notifications.py" "$LIB/window.py" \
-  "$LIB/clipboard_image.py" "$LIB/web_paths.py" "$LIB/ssh_mux.py"
+  "$LIB/clipboard_image.py" "$LIB/web_paths.py" "$LIB/ssh_mux.py" "$LIB/tray.py"
 chmod 755 "$LIB/ssh-wrap/ssh"
 chmod 644 "$LIB/app-icon.png"
 chmod -R a+rX "$LIB/web"
@@ -89,6 +89,7 @@ Terminal=false
 Type=Application
 StartupNotify=true
 StartupWMClass=Artek Buddy
+X-GNOME-UsesNotifications=true
 Categories=Network;Utility;
 EOF
 
@@ -111,7 +112,7 @@ Version: $VERSION
 Section: utils
 Priority: optional
 Architecture: all
-Depends: python3, python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0, xdg-utils, libnotify-bin
+Depends: python3, python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0, gir1.2-ayatanaappindicator3-0.1 | gir1.2-appindicator3-0.1, xdg-utils, libnotify-bin
 Maintainer: Artek Buddy <artek-buddy@local>
 Description: Desktop client for the Artek Buddy host
  Desktop shell for the host HTTP API.

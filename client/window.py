@@ -5,6 +5,7 @@ import webbrowser
 from urllib.parse import urlsplit
 
 from pairing import _log
+from tray import create_tray, hide_to_tray
 from window_chrome import (
     _on_focus_in,
     _on_gtk_active,
@@ -71,6 +72,8 @@ def _open_webkit2(local_url: str) -> bool:
     window.set_default_size(1440, 900)
     apply_window_icon(window)
     window.connect("destroy", lambda *_args: (_unregister_window(window), Gtk.main_quit()))
+    tray = create_tray(window, window.destroy)
+    window.connect("delete-event", lambda *_args: hide_to_tray(window, tray))
     window.connect("focus-in-event", _on_focus_in)
     view = WebKit2.WebView()
     bind_external_links(view, local_url)
