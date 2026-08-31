@@ -84,6 +84,12 @@ class FakeWindow:
         self.presented = True
 
 
+class DisconnectedIndicator:
+    def get_property(self, name: str) -> bool:
+        assert name == "connected"
+        return False
+
+
 def _tray_module():
     assert TRAY.is_file(), "the desktop client has no tray module"
     spec = importlib.util.spec_from_file_location("artek_buddy_tray", TRAY)
@@ -128,4 +134,12 @@ def test_close_hides_only_when_the_tray_is_available() -> None:
 
     window.hidden = False
     assert tray.hide_to_tray(window, None) is False
+    assert window.hidden is False
+
+
+def test_close_exits_when_the_desktop_does_not_display_the_indicator() -> None:
+    tray = _tray_module()
+    window = FakeWindow()
+
+    assert tray.hide_to_tray(window, DisconnectedIndicator()) is False
     assert window.hidden is False

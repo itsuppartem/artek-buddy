@@ -2,7 +2,7 @@
 
 Desktop GUI for the Artek Buddy host. Command: `artek-buddy`.
 Source: `artek_buddy.py` (entrypoint) plus `pairing.py`, `proxy.py`, `ssh_mux.py`,
-`ssh-wrap/`, `web_paths.py`, `notifications.py`, `window.py`,
+`ssh-wrap/`, `web_paths.py`, `notifications.py`, `tray.py`, `window.py`,
 `clipboard_image.py`, `owner_paths.py`, `window_chrome.py`, and `web/`.
 Version: same as the product (`../VERSION`).
 
@@ -40,6 +40,11 @@ version.
 
 Upgrade: install a newer versioned `.deb`. Remove: `sudo apt-get remove artek-buddy-client`.
 Config in `~/.config/artek-buddy` is left behind until you delete it.
+
+The GTK3 client publishes a StatusNotifier/AppIndicator tray icon. Closing the
+window hides it only after the indicator reports that the desktop is displaying
+it. **Open Artek Buddy** presents the same window; **Quit** stops the client and
+its loopback proxy. Without desktop indicator support, close exits normally.
 
 ## Config
 
