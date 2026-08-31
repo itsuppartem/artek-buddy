@@ -118,7 +118,13 @@ export function attentionFromEvent(event: ProductEvent, botName: string): Attent
       event.type === "run.waiting_input"
         ? "The bot is waiting for you."
         : "Take control of the computer.";
-    return makeAlert("takeover", botId, botName, body, at);
+    return makeAlert(
+      event.type === "run.waiting_input" ? "ask" : "takeover",
+      botId,
+      botName,
+      body,
+      at,
+    );
   }
   if (event.type === "thread.ask") {
     const text =

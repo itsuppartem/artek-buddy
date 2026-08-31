@@ -60,6 +60,22 @@ describe("attentionFromEvent", () => {
     ).toBeNull();
   });
 
+  it("treats a parked owner question as an ask", () => {
+    expect(
+      attentionFromEvent(
+        event({
+          type: "run.waiting_input",
+          payload: { question: "Please complete the browser step." },
+        }),
+        "Alpha",
+      ),
+    ).toMatchObject({
+      kind: "ask",
+      title: "Alpha is asking",
+      body: "The bot is waiting for you.",
+    });
+  });
+
   it("builds a failed alert from run.failed", () => {
     const alert = attentionFromEvent(
       event({ type: "run.failed", payload: { error: "boom" } }),
