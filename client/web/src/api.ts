@@ -222,14 +222,21 @@ export const api = {
       return request<ConsentJob>("GET", `/v1/consents/${encodeURIComponent(consentId)}`);
     },
     ack(consentId: string) {
-      return request<OkResponse>("POST", `/v1/consents/${encodeURIComponent(consentId)}/ack`);
+      return request<{ ok: boolean; claim?: string | null }>(
+        "POST",
+        `/v1/consents/${encodeURIComponent(consentId)}/ack`,
+        { claimCapable: true },
+      );
     },
     answer(consentId: string, decision: string) {
       return request<OkResponse>("POST", `/v1/consents/${encodeURIComponent(consentId)}`, {
         decision,
       });
     },
-    uploadFile(consentId: string, input: { name: string; text?: string; contentBase64?: string }) {
+    uploadFile(
+      consentId: string,
+      input: { name: string; text?: string; contentBase64?: string; claim?: string },
+    ) {
       return request<OkResponse>(
         "POST",
         `/v1/consents/${encodeURIComponent(consentId)}/file`,
@@ -250,6 +257,7 @@ export const api = {
         bytes?: number;
         entries?: unknown[];
         error?: string;
+        claim?: string;
       },
     ) {
       return request<OkResponse>(

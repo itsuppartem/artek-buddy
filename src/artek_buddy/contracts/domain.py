@@ -674,12 +674,23 @@ class ConsentAnswerInput(BaseModel):
     decision: str = Field(min_length=1)
 
 
+class ConsentAckInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    claim_capable: bool = False
+
+
+class ConsentAckResponse(OkResponse):
+    claim: str | None = None
+
+
 class ConsentFileInput(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     name: str = Field(min_length=1)
     text: str | None = None
     content_base64: str | None = None
+    claim: str | None = None
 
 
 class ConsentJob(BaseModel):
@@ -713,6 +724,7 @@ class ConsentResultInput(BaseModel):
     bytes: int | None = None
     entries: list[dict[str, Any]] | None = None
     error: str | None = None
+    claim: str | None = None
 
 
 class ThreadSendResult(BaseModel):

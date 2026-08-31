@@ -1748,6 +1748,24 @@ export interface components {
             /** Connections */
             connections: components["schemas"]["Connection"][];
         };
+        /** ConsentAckInput */
+        ConsentAckInput: {
+            /**
+             * Claim Capable
+             * @default false
+             */
+            claim_capable: boolean;
+        };
+        /** ConsentAckResponse */
+        ConsentAckResponse: {
+            /** Claim */
+            claim?: string | null;
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+        };
         /** ConsentAnswerInput */
         ConsentAnswerInput: {
             /** Decision */
@@ -1755,6 +1773,8 @@ export interface components {
         };
         /** ConsentFileInput */
         ConsentFileInput: {
+            /** Claim */
+            claim?: string | null;
             /** Content Base64 */
             content_base64?: string | null;
             /** Name */
@@ -1796,6 +1816,8 @@ export interface components {
         ConsentResultInput: {
             /** Bytes */
             bytes?: number | null;
+            /** Claim */
+            claim?: string | null;
             /** Content Base64 */
             content_base64?: string | null;
             /** Entries */
@@ -4499,7 +4521,11 @@ export interface operations {
                 artek_device?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ConsentAckInput"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -4507,7 +4533,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OkResponse"];
+                    "application/json": components["schemas"]["ConsentAckResponse"];
                 };
             };
             /** @description Validation Error */

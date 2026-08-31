@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError } from "../api";
+import { ApiError, api } from "../api";
 import type { ProductEvent } from "../types";
 import {
   fulfillOwnerJob,
@@ -98,9 +98,7 @@ describe("fulfillOwnerJob", () => {
       path: "notes.txt",
       status: "pending",
     });
-    vi.spyOn(api.consents, "ack").mockRejectedValue(
-      new ApiError("owner job is not queued", 409),
-    );
+    vi.spyOn(api.consents, "ack").mockRejectedValue(new ApiError("owner job is not queued", 409));
     const read = vi.spyOn(api.local, "ownerRead");
     const upload = vi.spyOn(api.consents, "uploadFile");
 
@@ -135,6 +133,27 @@ describe("fulfillOwnerJob", () => {
       stderr: "",
       exitCode: 0,
       error: undefined,
+      claim: "claim-1",
+    });
+  });
+
+  it("reports a real winning-client failure with its claim", async () => {
+    vi.spyOn(api.consents, "get").mockResolvedValue({
+      id: "c1",
+      actionClass: "owner_exec",
+      jobStatus: "queued",
+      command: "pwd",
+      status: "pending",
+    });
+    vi.spyOn(api.consents, "ack").mockResolvedValue({ ok: true, claim: "claim-1" });
+    vi.spyOn(api.local, "ownerExec").mockRejectedValue(new Error("local RPC failed"));
+    const upload = vi.spyOn(api.consents, "uploadResult").mockResolvedValue({ ok: true });
+
+    await expect(fulfillOwnerJob("c1")).rejects.toThrow("local RPC failed");
+
+    expect(upload).toHaveBeenCalledWith("c1", {
+      ok: false,
+      error: "local RPC failed",
       claim: "claim-1",
     });
   });

@@ -43,12 +43,7 @@ import {
   pushComposerChange,
   resetComposerHistory,
 } from "../lib/composer-undo";
-import {
-  fulfillOwnerJob,
-  isAutoOwnerJob,
-  reportOwnerJobError,
-  shouldAutoFulfillOwnerJob,
-} from "../lib/consent";
+import { fulfillOwnerJob, isAutoOwnerJob, shouldAutoFulfillOwnerJob } from "../lib/consent";
 import { copyText } from "../lib/copy-text";
 import { hatchIsOpen, hatchPointerEvents } from "../lib/hatch";
 import { contextLinkUrl, stripMarkdown } from "../lib/markdown";
@@ -489,9 +484,8 @@ export function ShellPage() {
     if (!consentId || fulfilledOwnerJobs.current.has(consentId)) return;
     if (!shouldAutoFulfillOwnerJob(pageSurface())) return;
     fulfilledOwnerJobs.current.add(consentId);
-    void fulfillOwnerJob(consentId).catch((err) => {
+    void fulfillOwnerJob(consentId).catch(() => {
       fulfilledOwnerJobs.current.delete(consentId);
-      void reportOwnerJobError(consentId, err);
     });
   }
 
