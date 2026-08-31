@@ -168,9 +168,7 @@ def test_models_one_commit_and_empty_provider_next_step(
     expect(page.get_by_label("Cursor API key")).to_be_visible(timeout=8_000)
 
 
-def test_models_chip_click_uses_that_model(
-    page: Page, client_url: str, host_url: str
-) -> None:
+def test_models_chip_click_uses_that_model(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, unique_bot("ChipUse"))
     open_models(page)
