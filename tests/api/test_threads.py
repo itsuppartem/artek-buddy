@@ -412,6 +412,41 @@ def test_auto_owner_read_exposes_pending_consent(client, auth_header) -> None:
     assert completed.json()["job_status"] == "completed"
 
 
+def test_thread_snapshot_exposes_every_pending_auto_owner_job(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "ParallelAutoRead")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "e2e-consent-auto-read"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    waiting = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input", timeout=5)
+    first_id = waiting["pending_auto_consent_id"]
+    assert first_id
+
+    store = client.app.state.store
+    bot = store.get_bot(bot_id)
+    assert bot is not None
+    second_id = "cns_parallel_snapshot"
+    store.create_consent_request(
+        second_id,
+        bot_id=bot_id,
+        run_id=run_id,
+        thread_id=bot.thread_id,
+        message_id=None,
+        action_class="owner_read",
+        scope_key="~",
+        summary="List ~ on your computer?",
+        workspace_id=bot.workspace_id,
+        job_status="queued",
+    )
+
+    snapshot = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert snapshot.status_code == 200
+    assert set(snapshot.json()["pending_auto_consent_ids"]) == {first_id, second_id}
+
+
 def test_auto_owner_job_ack_is_single_claim_and_rejects_loser_result(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "AutoAck")["id"]
     sent = client.post(

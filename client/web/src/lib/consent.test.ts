@@ -6,6 +6,7 @@ import {
   isAutoOwnerJob,
   ownerJobHint,
   ownerReadPath,
+  pendingOwnerJobIds,
   shouldAutoFulfillOwnerJob,
 } from "./consent";
 
@@ -86,6 +87,18 @@ describe("shouldAutoFulfillOwnerJob", () => {
   it("leaves auto owner jobs for the desktop client on the host page", () => {
     expect(shouldAutoFulfillOwnerJob("host")).toBe(false);
     expect(shouldAutoFulfillOwnerJob("desktop")).toBe(true);
+  });
+});
+
+describe("pendingOwnerJobIds", () => {
+  it("keeps every queued snapshot job and the old singular fallback", () => {
+    expect(
+      pendingOwnerJobIds({
+        pendingAutoConsentId: "c2",
+        pendingAutoConsentIds: ["c1", "c2"],
+      }),
+    ).toEqual(["c1", "c2"]);
+    expect(pendingOwnerJobIds({ pendingAutoConsentId: "legacy" })).toEqual(["legacy"]);
   });
 });
 
