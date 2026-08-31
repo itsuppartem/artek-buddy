@@ -443,6 +443,7 @@ The computer pane is screen, memory, and routines — not a second file list.
 | Close the window with ×: it hides to the tray and keeps running. Start it again only if the desktop has no indicator support and close therefore exits | [ ] | — |
 | Run `please e2e-slow` in Demo and switch to Research: completion raises exactly one native **Demo replied** notification and does not steal the open chat | [ ] | — |
 | Start `please e2e-slow`, leave Demo open, then hide the window to the tray: completion still raises the native notification. The same completion while Demo is focused stays quiet | [ ] | — |
+| After that background reply, Ubuntu Notifications (calendar flyout) lists **Artek Buddy** with the title and body. A tray / dock badge alone is not enough | [ ] | — |
 | Phone: Turn on alerts from the Home Screen icon. Alerts only while that app is open or still in memory. Kill the icon → no wake | — | [ ] |
 | `notifyOnFinish` off mutes only replied / failed, not «needs you» | [ ] | [ ] |
 
@@ -587,6 +588,7 @@ If time is short, in this order:
 16. **§9 Queue** pending mark, then local Sent while offline
 17. **§15 Stop** on a live turn shows Stopped. A late complete does not land
 18. **§15 dead wait** `please e2e-dead-wait` completes on that send; `please e2e-dead-wait-stuck` still shows Send again
+19. **§23 Notifications** tray Open/Quit, then a hidden `please e2e-slow` leaves an Artek Buddy row in Ubuntu Notifications (not only a badge)
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 
