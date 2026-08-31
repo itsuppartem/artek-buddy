@@ -246,7 +246,7 @@ On **Deb**: stop the `artek-buddy` container for about 30 seconds (or pull the n
 | Ask to hand a long task to a helper / long search: **no** worker card with the full assignment. Lines `Started …` / `Finished …` / `Stopped …` | [ ] | [ ] |
 | Composer **Stop** kills the lead and the workers | [ ] | [ ] |
 | This-PC Allow (read / write this Linux home) works on Deb. Refresh or open a second window while it runs: the same write/exec happens **once** and the losing window does not fail the winner's result | [ ] | — |
-| Back-to-back This-PC read + list return their own results; neither waits on or receives the other job | [ ] | — |
+| Back-to-back This-PC read + list are both ACKed promptly and return their own results; neither waits for the SSE heartbeat or receives the other job | [ ] | — |
 | Phone `/local/owner-*` is **403**. It does not fail an auto job while the paired Deb can claim it | — | [ ] |
 
 ---

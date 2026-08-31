@@ -2583,6 +2583,8 @@ export interface components {
             older_cursor: number | null;
             /** Pending Auto Consent Id */
             pending_auto_consent_id?: string | null;
+            /** Pending Auto Consent Ids */
+            pending_auto_consent_ids?: string[];
             run: components["schemas"]["Run"] | null;
             /** Subagents */
             subagents?: components["schemas"]["Subagent"][];

@@ -470,6 +470,7 @@ class ThreadSnapshot(BaseModel):
     computer: ComputerStatus
     subagents: list[Subagent] = Field(default_factory=list)
     pending_auto_consent_id: str | None = None
+    pending_auto_consent_ids: list[str] = Field(default_factory=list)
 
 
 class ModelCredential(BaseModel):

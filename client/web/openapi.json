@@ -3505,6 +3505,13 @@
             ],
             "title": "Pending Auto Consent Id"
           },
+          "pending_auto_consent_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending Auto Consent Ids",
+            "type": "array"
+          },
           "run": {
             "anyOf": [
               {
