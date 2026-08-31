@@ -484,13 +484,16 @@ def test_release_keeps_view_preview_and_drops_control(
     overlay = page.get_by_test_id("computer-overlay")
     expect(overlay).to_be_visible(timeout=15_000)
     expect(page.get_by_test_id("computer-overlay-holder")).to_contain_text("You have control")
-    expect(overlay.locator("iframe")).to_have_attribute("src", re.compile(r"/control/"))
+    expect(overlay.locator('iframe[src*="/control/"]')).to_have_attribute(
+        "src", re.compile(r"/control/")
+    )
     overlay.get_by_role("button", name="Release").click()
     expect(page.get_by_test_id("computer-overlay-holder")).to_have_count(0)
     expect(overlay.get_by_role("button", name="Take control")).to_be_visible()
     expect(page.get_by_test_id("computer-label")).not_to_contain_text("You have control")
-    expect(overlay.locator("iframe")).to_have_attribute("src", re.compile(r"/view/"))
-    expect(overlay.locator("iframe")).to_have_attribute("src", re.compile(r"view_only=true"))
+    view_frame = overlay.locator('iframe[src*="/view/"]')
+    expect(view_frame).to_have_attribute("src", re.compile(r"/view/"))
+    expect(view_frame).to_have_attribute("src", re.compile(r"view_only=true"))
 
 
 def test_release_keeps_overlay_guest_iframe(page: Page, client_url: str, host_url: str) -> None:
