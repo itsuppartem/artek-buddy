@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from http.client import HTTPConnection
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -168,6 +169,41 @@ def test_oversized_local_json_is_rejected_without_exec(
     assert status == 413
     _no_wildcard_cors(headers)
     assert called == []
+
+
+def test_owner_exec_uses_opt_in_ssh_mux_environment(
+    client_mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proxy = _proxy(client_mod)
+    captured: list[dict[str, str]] = []
+    monkeypatch.setattr(
+        proxy,
+        "owner_exec_environment",
+        lambda env: {**env, "ARTEK_SSH_CONTROL_PATH": "/tmp/artek-test/%C"},
+    )
+    monkeypatch.setattr(
+        proxy.subprocess,
+        "run",
+        lambda *_args, **kwargs: (
+            captured.append(kwargs["env"]) or SimpleNamespace(stdout="", stderr="", returncode=0)
+        ),
+    )
+    body = b'{"command":"ssh owner-host uname"}'
+    with running_proxy(client_mod, tmp_path, monkeypatch) as (httpd, port):
+        origin = f"http://127.0.0.1:{port}"
+        status, _headers = _post_owner_exec(
+            port,
+            {
+                "Host": f"127.0.0.1:{port}",
+                "Origin": origin,
+                "Content-Type": "application/json",
+                "X-Artek-Local-Nonce": httpd.local_nonce,
+            },
+            body,
+        )
+
+    assert status == 200
+    assert captured[0]["ARTEK_SSH_CONTROL_PATH"] == "/tmp/artek-test/%C"
 
 
 def test_status_issues_nonce_only_to_this_origin(

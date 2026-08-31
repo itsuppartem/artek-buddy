@@ -289,6 +289,44 @@ def test_turn_prompt_includes_thread_not_only_last_line(client, auth_header) -> 
     assert prompt.strip() != "continue"
 
 
+def test_new_session_gets_one_resume_brief_from_existing_thread(client, auth_header) -> None:
+    from artek_buddy.main import app
+
+    bot_id = create_bot(client, auth_header, "ResumeBrief")["id"]
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "the current branch is feature/rpc"},
+    )
+    assert first.status_code == 200
+    wait_run(client, auth_header, bot_id, first.json()["run_id"])
+    bot = app.state.store.get_bot(bot_id)
+    assert bot is not None
+    assert bot.cursor_agent_id
+    app.state.runtime.mark_session_fresh(bot.cursor_agent_id)
+
+    resumed = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "continue"},
+    )
+    assert resumed.status_code == 200
+    wait_run(client, auth_header, bot_id, resumed.json()["run_id"])
+    prompt = _last_prompt()
+    assert "<session_resume>" in prompt
+    assert "tool history from the replaced session is unavailable" in prompt
+    assert "the current branch is feature/rpc" in prompt
+
+    next_turn = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "continue once more"},
+    )
+    assert next_turn.status_code == 200
+    wait_run(client, auth_header, bot_id, next_turn.json()["run_id"])
+    assert "<session_resume>" not in _last_prompt()
+
+
 def test_follow_up_starts_a_new_turn(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "Follow")["id"]
     sent = client.post(
@@ -360,6 +398,7 @@ def test_auto_owner_read_exposes_pending_consent(client, auth_header) -> None:
     body = job.json()
     assert body["action_class"] == "owner_read"
     assert body["path"] == "notes.txt"
+    assert body["job_status"] == "queued"
     uploaded = client.post(
         f"/v1/consents/{pending}/file",
         headers=auth_header,
@@ -368,6 +407,50 @@ def test_auto_owner_read_exposes_pending_consent(client, auth_header) -> None:
     assert uploaded.status_code == 200
     finished = wait_run(client, auth_header, bot_id, run_id)
     assert finished["run"]["status"] == "completed"
+    completed = client.get(f"/v1/consents/{pending}", headers=auth_header)
+    assert completed.status_code == 200
+    assert completed.json()["job_status"] == "completed"
+
+
+def test_auto_owner_job_ack_is_single_claim_and_rejects_late_result(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "AutoAck")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "e2e-consent-auto-read"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    snap = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input", timeout=5)
+    consent_id = snap["pending_auto_consent_id"]
+    assert consent_id
+
+    claimed = client.post(f"/v1/consents/{consent_id}/ack", headers=auth_header)
+    assert claimed.status_code == 200
+    duplicate = client.post(f"/v1/consents/{consent_id}/ack", headers=auth_header)
+    assert duplicate.status_code == 409
+    acknowledged = client.get(f"/v1/consents/{consent_id}", headers=auth_header)
+    assert acknowledged.status_code == 200
+    assert acknowledged.json()["job_status"] == "acknowledged"
+
+    uploaded = client.post(
+        f"/v1/consents/{consent_id}/result",
+        headers=auth_header,
+        json={"ok": False, "error": "owner read failed"},
+    )
+    assert uploaded.status_code == 200
+    late = client.post(
+        f"/v1/consents/{consent_id}/result",
+        headers=auth_header,
+        json={"ok": True, "text": "late duplicate"},
+    )
+    assert late.status_code == 409
+
+    finished = wait_run(client, auth_header, bot_id, run_id)
+    assert finished["run"]["status"] == "completed"
+    final_snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert final_snap.status_code == 200
+    assert final_snap.json()["pending_auto_consent_id"] is None
 
 
 def _computer_blocks(payload: dict) -> list[dict]:

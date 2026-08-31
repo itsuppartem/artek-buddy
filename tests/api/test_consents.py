@@ -33,6 +33,8 @@ def test_browse_consent_deny(client, auth_header) -> None:
 def test_missing_consent_is_404(client, auth_header) -> None:
     missing = client.get("/v1/consents/cns_missing", headers=auth_header)
     assert missing.status_code == 404
+    acknowledged = client.post("/v1/consents/cns_missing/ack", headers=auth_header)
+    assert acknowledged.status_code == 404
     answered = client.post(
         "/v1/consents/cns_missing",
         headers=auth_header,

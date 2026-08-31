@@ -23,6 +23,7 @@ from owner_paths import (
     unique_download_dest,
 )
 from pairing import _config_dir, _log, _write_text, pairing_url_allowed
+from ssh_mux import owner_exec_environment
 from web_paths import safe_content_type, web_file_for_request
 from window_chrome import _gtk_choose_save_path, _has_gtk_window, _notify_text
 
@@ -640,6 +641,7 @@ class Handler(BaseHTTPRequestHandler):
                 timeout=OWNER_EXEC_TIMEOUT,
                 text=True,
                 errors="replace",
+                env=owner_exec_environment(),
             )
         except subprocess.TimeoutExpired:
             self._json(

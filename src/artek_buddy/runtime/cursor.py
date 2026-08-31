@@ -181,6 +181,8 @@ class CursorRuntime(RuntimeBase):
         self._agents[agent.agent_id] = agent
         self._locks[agent.agent_id] = asyncio.Lock()
         self.bind_agent_bot(agent.agent_id, bot_id)
+        if role == "lead":
+            self.mark_session_fresh(agent.agent_id)
         if persist_default or self.default_agent_id is None:
             self.default_agent_id = agent.agent_id
             self._save_state(agent.agent_id)
@@ -422,6 +424,14 @@ class CursorRuntime(RuntimeBase):
                     if retry_dead and forced_once and not recycled_once:
                         agent_id = await self._recycle_dead_agent(agent_id, bot_id)
                         agent = self._agents[agent_id]
+                        resume = (
+                            self.build_session_resume(bot_id)
+                            if self.consume_session_fresh(agent_id)
+                            else None
+                        )
+                        if resume:
+                            prompt = f"{resume}\n\n{prompt}"
+                            self.last_prompt = prompt
                         force = False
                         recycled_once = True
                         continue

@@ -221,6 +221,9 @@ export const api = {
     get(consentId: string) {
       return request<ConsentJob>("GET", `/v1/consents/${encodeURIComponent(consentId)}`);
     },
+    ack(consentId: string) {
+      return request<OkResponse>("POST", `/v1/consents/${encodeURIComponent(consentId)}/ack`);
+    },
     answer(consentId: string, decision: string) {
       return request<OkResponse>("POST", `/v1/consents/${encodeURIComponent(consentId)}`, {
         decision,

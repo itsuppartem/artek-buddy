@@ -30,11 +30,12 @@ ICONS="$ROOT/usr/share/icons/hicolor"
 PIXMAPS="$ROOT/usr/share/pixmaps"
 DEBIAN="$ROOT/DEBIAN"
 
-mkdir -p "$LIB/web" "$BIN" "$APP" "$DOC" "$PIXMAPS" "$DEBIAN"
+mkdir -p "$LIB/web" "$LIB/ssh-wrap" "$BIN" "$APP" "$DOC" "$PIXMAPS" "$DEBIAN"
 
 cp client/artek_buddy.py client/owner_paths.py client/window_chrome.py \
   client/pairing.py client/proxy.py client/notifications.py client/window.py \
-  client/web_paths.py "$LIB/"
+  client/web_paths.py client/ssh_mux.py "$LIB/"
+cp client/ssh-wrap/ssh "$LIB/ssh-wrap/ssh"
 cp client/VERSION "$LIB/VERSION"
 cp client/assets/app-icon.png "$LIB/app-icon.png"
 cp -R client/web/dist/. "$LIB/web/"
@@ -51,7 +52,8 @@ fi
 chmod 755 "$LIB/artek_buddy.py"
 chmod 644 "$LIB/owner_paths.py" "$LIB/window_chrome.py" \
   "$LIB/pairing.py" "$LIB/proxy.py" "$LIB/notifications.py" "$LIB/window.py" \
-  "$LIB/web_paths.py"
+  "$LIB/web_paths.py" "$LIB/ssh_mux.py"
+chmod 755 "$LIB/ssh-wrap/ssh"
 chmod 644 "$LIB/app-icon.png"
 chmod -R a+rX "$LIB/web"
 

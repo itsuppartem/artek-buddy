@@ -201,6 +201,7 @@ class ConsentRequest:
     status: str = "pending"
     run_id: str | None = None
     message_id: str | None = None
+    job_status: str | None = None
 
 
 class ConsentHub:
@@ -217,7 +218,6 @@ class ConsentHub:
         self.events = events
         self.settings = settings
         self.auto = auto
-        self.last_request_id: str | None = None
         self._lock = threading.Lock()
         self._waiters: dict[str, threading.Event] = {}
         self._decisions: dict[str, str] = {}
@@ -264,7 +264,6 @@ class ConsentHub:
             return None
         key = (scope_key or "*").strip() or "*"
         request_id = new_id("cns")
-        self.last_request_id = request_id
         if job:
             self._jobs[request_id] = {**job, "action_class": action_class, "scope_key": key}
         blocks = [
@@ -292,6 +291,7 @@ class ConsentHub:
             scope_key=key,
             summary=summary,
             workspace_id=bot.workspace_id,
+            job_status="queued" if job else None,
         )
         waiter = threading.Event()
         with self._lock:
@@ -340,18 +340,17 @@ class ConsentHub:
         detail: str | None = None,
         path: str | None = None,
         job: dict[str, Any] | None = None,
-    ) -> bool:
-        self.last_request_id = None
+    ) -> tuple[bool, str | None]:
         if action_class == CLASS_OWNER_READ:
-            return True
+            return True, None
         key = (scope_key or "*").strip() or "*"
         if self.has_grant(bot_id, action_class, key, device_id):
-            return True
+            return True, None
         mode = self._mode()
         if mode == "allow":
-            return True
+            return True, None
         if mode == "deny":
-            return False
+            return False, None
         request_id = self.offer(
             bot_id=bot_id,
             action_class=action_class,
@@ -364,7 +363,7 @@ class ConsentHub:
             job=job,
         )
         if not request_id:
-            return False
+            return False, None
         with self._lock:
             waiter = self._waiters.get(request_id)
         if waiter is not None:
@@ -375,7 +374,7 @@ class ConsentHub:
                 self.store.mark_run_running(run_id)
             except Exception:
                 log.exception("failed to resume run after consent")
-        return decision in {"once", "always"}
+        return decision in {"once", "always"}, request_id
 
     def answer(
         self, request_id: str, decision: str, device_id: str | None
@@ -429,11 +428,22 @@ class ConsentHub:
         job.setdefault("scope_key", row.scope_key)
         job.setdefault("summary", row.summary)
         job.setdefault("status", row.status)
+        job.setdefault("job_status", row.job_status)
         return job
+
+    def acknowledge_owner_job(self, request_id: str) -> bool:
+        row = self.store.get_consent_request(request_id)
+        if row is None or row.action_class not in OWNER_CLASSES or row.job_status != "queued":
+            return False
+        return bool(self.store.acknowledge_consent_job(request_id))
 
     def put_owner_file(self, request_id: str, name: str, data: bytes) -> bool:
         row = self.store.get_consent_request(request_id)
-        if row is None or row.action_class != CLASS_OWNER_READ:
+        if (
+            row is None
+            or row.action_class != CLASS_OWNER_READ
+            or row.job_status not in {"queued", "acknowledged"}
+        ):
             return False
         with self._lock:
             self._files[request_id] = (name, data)
@@ -444,7 +454,14 @@ class ConsentHub:
 
     def put_owner_result(self, request_id: str, payload: dict[str, Any]) -> bool:
         row = self.store.get_consent_request(request_id)
-        if row is None or row.action_class not in OWNER_CLASSES:
+        if (
+            row is None
+            or row.action_class not in OWNER_CLASSES
+            or row.job_status not in {"queued", "acknowledged"}
+        ):
+            return False
+        final_status = "completed" if payload.get("ok", True) else "failed"
+        if not self.store.finish_consent_job(request_id, final_status):
             return False
         with self._lock:
             self._results[request_id] = dict(payload)
@@ -456,7 +473,12 @@ class ConsentHub:
             file_waiter.set()
         return True
 
-    def take_owner_result(self, request_id: str | None) -> dict[str, Any] | None:
+    def take_owner_result(
+        self,
+        request_id: str | None,
+        *,
+        finalize_timeout: bool = True,
+    ) -> dict[str, Any] | None:
         if not request_id:
             return None
         waiter = threading.Event()
@@ -467,7 +489,15 @@ class ConsentHub:
         waiter.wait(OWNER_RESULT_WAIT)
         with self._lock:
             self._result_waiters.pop(request_id, None)
-            return self._results.pop(request_id, None)
+            found = self._results.pop(request_id, None)
+        if found is None and finalize_timeout:
+            self.timeout_owner_job(request_id)
+        return found
+
+    def timeout_owner_job(self, request_id: str | None) -> bool:
+        if not request_id:
+            return False
+        return bool(self.store.finish_consent_job(request_id, "timed_out"))
 
     def pull_owner_action(
         self,
@@ -485,7 +515,6 @@ class ConsentHub:
         if bot is None:
             return None
         request_id = new_id("cns")
-        self.last_request_id = request_id
         self._jobs[request_id] = {**job, "action_class": action_class, "scope_key": scope_key}
         self.store.create_consent_request(
             request_id,
@@ -497,6 +526,7 @@ class ConsentHub:
             scope_key=scope_key,
             summary=summary,
             workspace_id=bot.workspace_id,
+            job_status="queued",
         )
         if run_id:
             try:
@@ -514,12 +544,14 @@ class ConsentHub:
             if job.get(field):
                 payload[field] = job[field]
         self._publish(bot, ProductEventType.RUN_WAITING_INPUT, payload, run_id)
-        found = self.take_owner_result(request_id)
+        found = self.take_owner_result(request_id, finalize_timeout=False)
         if found is None and action_class == CLASS_OWNER_READ and job.get("kind") != "list":
-            file_found = self.take_owner_file(request_id)
+            file_found = self.take_owner_file(request_id, finalize_timeout=False)
             if file_found is not None:
                 name, data = file_found
                 found = {"ok": True, "name": name, "bytes": len(data), "_data": data}
+        if found is None:
+            self.timeout_owner_job(request_id)
         if run_id:
             try:
                 self.store.mark_run_running(run_id)
@@ -566,7 +598,6 @@ class ConsentHub:
         if bot is None:
             return None
         request_id = new_id("cns")
-        self.last_request_id = request_id
         self._jobs[request_id] = {
             "action_class": CLASS_OWNER_READ,
             "path": path,
@@ -582,6 +613,7 @@ class ConsentHub:
             scope_key=owner_scope(path),
             summary=f"Read {path} from your computer?",
             workspace_id=bot.workspace_id,
+            job_status="queued",
         )
         if run_id:
             try:
@@ -603,7 +635,12 @@ class ConsentHub:
         )
         return request_id
 
-    def take_owner_file(self, request_id: str | None) -> tuple[str, bytes] | None:
+    def take_owner_file(
+        self,
+        request_id: str | None,
+        *,
+        finalize_timeout: bool = True,
+    ) -> tuple[str, bytes] | None:
         if not request_id:
             return None
         waiter = threading.Event()
@@ -616,7 +653,10 @@ class ConsentHub:
         waiter.wait(OWNER_FILE_WAIT)
         with self._lock:
             self._file_waiters.pop(request_id, None)
-            return self._files.pop(request_id, None)
+            found = self._files.pop(request_id, None)
+        if found is None and finalize_timeout:
+            self.timeout_owner_job(request_id)
+        return found
 
     def _publish(
         self, bot: Any, event_type: ProductEventType, payload: dict[str, Any], run_id: str | None

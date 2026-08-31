@@ -113,7 +113,7 @@ class OwnerToolsMixin:
         if not bot_id:
             return {"ok": False, "error": "no active bot"}
         job = {"path": path, "kind": "write", "text": text}
-        denied = self._deny(
+        allowed, request_id = self._consent_gate(
             bot_id,
             CLASS_OWNER_WRITE,
             OWNER_HOME_SCOPE,
@@ -122,8 +122,8 @@ class OwnerToolsMixin:
             path=path,
             job=job,
         )
-        if denied:
-            return denied
+        if not allowed:
+            return {"ok": False, "error": "denied by owner", "denied": True}
         writer = getattr(self.runtime, "owner_file_writer", None)
         if callable(writer):
             try:
@@ -140,6 +140,7 @@ class OwnerToolsMixin:
             scope_key=OWNER_HOME_SCOPE,
             summary=f"Write {path} on your computer?",
             job=job,
+            request_id=request_id,
         )
         if not found:
             return {"ok": False, "error": "no paired client to write that file"}
@@ -207,8 +208,9 @@ class OwnerToolsMixin:
         if not bot_id:
             return {"ok": False, "error": "no active bot"}
         job = {"command": command, "cwd": cwd, "kind": "exec"}
+        request_id: str | None = None
         if not owner_command_is_readonly(command):
-            denied = self._deny(
+            allowed, request_id = self._consent_gate(
                 bot_id,
                 CLASS_OWNER_EXEC,
                 OWNER_HOME_SCOPE,
@@ -216,8 +218,8 @@ class OwnerToolsMixin:
                 detail=f"owner_exec: {command}\ncwd: {cwd}",
                 job=job,
             )
-            if denied:
-                return denied
+            if not allowed:
+                return {"ok": False, "error": "denied by owner", "denied": True}
         runner = getattr(self.runtime, "owner_command_runner", None)
         if callable(runner):
             try:
@@ -234,6 +236,7 @@ class OwnerToolsMixin:
             scope_key=OWNER_HOME_SCOPE,
             summary=f"Run `{command}` on your computer?",
             job=job,
+            request_id=request_id,
         )
         if not found:
             return {"ok": False, "error": "no paired client to run that command"}
