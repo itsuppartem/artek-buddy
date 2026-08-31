@@ -2,7 +2,7 @@
 
 Issue: [#220](https://github.com/itsuppartem/artek-buddy/issues/220). Daily tracker: [#174](https://github.com/itsuppartem/artek-buddy/issues/174). Pad / keys: [#218](https://github.com/itsuppartem/artek-buddy/issues/218) / [PR #219](https://github.com/itsuppartem/artek-buddy/pull/219).
 
-Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, do **2, 3, 5, 7, 11, 12, 25, 26, 27, 28, 29** first.
+Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, do **2, 3, 5, 7, 11, 12, 15, 25, 26, 27, 28, 29** first.
 
 This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packaged `.deb` `--serve`, `ui_web` = host page at 375×812). Do not treat a green check as a substitute for this list.
 
@@ -328,7 +328,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays | [ ] | [ ] |
 | Right-click Reply (Deb) puts a quote in the next user bubble | [ ] | — |
 | `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Open in browser**, **Copy URL**, and Reply; Copy changes to **URL copied** | [ ] | [ ] |
-| Ask card (options or free text) waits; answering continues the turn. A missing / already-answered card does not break the thread | [ ] | [ ] |
+| `please e2e-blocked-browser`: Ask card visibly waits. An option or free-text answer stays on the card and continues the **same run**, without a second user bubble. A second answer is rejected without breaking the thread | [ ] | [ ] |
 | Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks | [ ] | [ ] |
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
@@ -542,7 +542,7 @@ From **inside a chat** on Phone:
 
 | Check | Deb | Phone |
 | --- | :---: | :---: |
-| Ask card (options or free text) waits. Answering continues the turn | [ ] | [ ] |
+| `please e2e-blocked-browser`: Ask card waits. Option or free-text answer continues the same run; no second user bubble. Stop, timeout, and a second answer do not leave a live stale card | [ ] | [ ] |
 | Right-click Reply (Deb) quotes in the next user bubble. Cancel drops the quote | [ ] | — |
 | Load earlier is a bordered button and pulls older messages. After the last page, **Beginning of this chat.** stays. If you were pinned to the bottom, new cards stay in view | [ ] | [ ] |
 

@@ -28,11 +28,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                     "type": "string",
                     "description": "Message text to send to the user (supports markdown).",
                 },
-                "options": {
-                    "type": "array",
-                    "description": "Optional multiple choice option buttons for the user to pick from.",
-                    "items": {"type": "string"},
-                },
             },
             "required": ["text"],
         },
@@ -69,8 +64,11 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="ask_user",
         description=(
-            "Ask the user a question with interactive multiple choice buttons. "
-            "The user will be able to click an option to reply immediately."
+            "Pause this turn and ask the chat owner for one concrete answer or action. "
+            "The answer returns to this tool call so you can continue the same task. "
+            "Use after one blocked locator, API, login, challenge, or owner-only setup step. "
+            "Do not ask for passwords. Use request_takeover instead if the owner must operate "
+            "this bot's desktop."
         ),
         input_schema={
             "type": "object",
@@ -85,12 +83,13 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                 },
                 "options": {
                     "type": "array",
-                    "description": "List of choice options (e.g. ['A — option 1', 'B — option 2']).",
+                    "description": "Optional choice buttons. Omit for a free-text answer.",
                     "items": {"type": "string"},
                 },
             },
-            "required": ["question", "options"],
+            "required": ["question"],
         },
+        lead_only=True,
     ),
     ToolSpec(
         name="remember",

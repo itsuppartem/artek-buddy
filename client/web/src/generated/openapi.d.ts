@@ -1225,6 +1225,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/threads/{bot_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Answer Thread Question */
+        post: operations["answer_thread_question_v1_threads__bot_id__answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/threads/{bot_id}/attachments": {
         parameters: {
             query?: never;
@@ -2486,6 +2503,17 @@ export interface components {
             kind: "text";
             /** Text */
             text: string;
+        };
+        /** ThreadAnswerInput */
+        ThreadAnswerInput: {
+            /** Answer */
+            answer: string;
+            /** Bot Id */
+            bot_id?: string | null;
+            /** Message Id */
+            message_id: string;
+            /** Run Id */
+            run_id: string;
         };
         /** ThreadAttachmentInput */
         ThreadAttachmentInput: {
@@ -5602,6 +5630,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_thread_question_v1_threads__bot_id__answer_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                bot_id: string;
+            };
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadAnswerInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
                 };
             };
             /** @description Validation Error */

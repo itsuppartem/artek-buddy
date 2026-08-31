@@ -2012,12 +2012,21 @@ export function ShellPage() {
               .map((message) => (
                 <MessageView
                   key={message.id}
-                  canAnswer
+                  canAnswer={
+                    thread?.run?.status === "waiting_input" &&
+                    Boolean(message.runId) &&
+                    message.runId === thread.run.id
+                  }
                   message={message}
                   queued={isQueuedMessageId(message.id)}
                   offlineCaption={offlineCaptionText(offlineCaptions, message.id)}
                   runStatus={thread?.run?.status}
-                  onAnswer={(text) => send(text)}
+                  onAnswer={async (text, item) => {
+                    if (!active || !item.runId) {
+                      throw new Error("This question is no longer waiting");
+                    }
+                    await api.threads.answer(active.id, item.runId, item.id, text);
+                  }}
                   onOpenComputer={() => void openOverlay("preview")}
                   onOpenBot={(id) => {
                     void refreshBots().then(() => navigate(`/app/${id}`));

@@ -35,6 +35,8 @@ E2E_LATE_COMPLETE = "pong"
 E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C. [Open docs](https://example.com/artek-buddy)"
 E2E_ASK_QUESTION = "Which city?"
 E2E_ASK_FREE_QUESTION = "What should I call you?"
+E2E_OWNER_HELP_QUESTION = "I cannot continue in the browser. Please complete the blocked step."
+E2E_OWNER_HELP_ANSWER = "I continued after your help."
 E2E_FAIL_ERROR = "scripted fail"
 E2E_FAIL_RAW_ERROR = "run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a"
 E2E_META_TEXT = "Remembered: Prefers short answers without emoji"
@@ -331,14 +333,8 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "e2e-ask-free" in hay:
         return [
-            scripted_blocks(
-                {
-                    "kind": "ask",
-                    "text": E2E_ASK_FREE_QUESTION,
-                    "status": "pending",
-                }
-            ),
-            scripted_finish(""),
+            scripted_tool("ask_user", question=E2E_ASK_FREE_QUESTION),
+            scripted_finish(E2E_OWNER_HELP_ANSWER),
         ]
     if "e2e-ask" in hay:
         return [
@@ -348,7 +344,16 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 options=["Belgrade", "Berlin"],
                 detail=E2E_ASK_DETAIL,
             ),
-            scripted_finish(""),
+            scripted_finish(E2E_OWNER_HELP_ANSWER),
+        ]
+    if "e2e-blocked-browser" in hay:
+        return [
+            scripted_tool(
+                "ask_user",
+                question=E2E_OWNER_HELP_QUESTION,
+                options=["I completed the step", "Stop"],
+            ),
+            scripted_finish(E2E_OWNER_HELP_ANSWER),
         ]
     if "e2e-subagent-hang" in hay:
         return [
@@ -880,7 +885,15 @@ class ScriptedRuntime(RuntimeBase):
                 await asyncio.sleep(0)
                 continue
             if step.tool:
-                tool_result = tools.execute(step.tool, step.args, bound_bot_id=bot_id)
+                if step.tool == "ask_user":
+                    tool_result = await asyncio.to_thread(
+                        tools.execute,
+                        step.tool,
+                        step.args,
+                        bound_bot_id=bot_id,
+                    )
+                else:
+                    tool_result = tools.execute(step.tool, step.args, bound_bot_id=bot_id)
                 self.last_tool_results.append((step.tool, tool_result))
                 for typ, payload in _map_tool_to_events(
                     step.tool, step.tool, step.args, "completed"

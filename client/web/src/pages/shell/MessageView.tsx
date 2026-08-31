@@ -29,7 +29,7 @@ export function MessageView({
   queued?: boolean;
   offlineCaption?: string;
   runStatus?: string;
-  onAnswer: (text: string) => Promise<void>;
+  onAnswer: (text: string, message: ThreadMessage) => Promise<void>;
   onOpenBot: (botId: string) => void;
   onOpenComputer?: () => void;
   onContextMenu?: (event: MouseEvent, message: ThreadMessage) => void;
@@ -167,7 +167,14 @@ export function MessageView({
           );
         }
         if (block.kind === "ask") {
-          return <AskCard key={index} block={block} canAnswer={canAnswer} onAnswer={onAnswer} />;
+          return (
+            <AskCard
+              key={index}
+              block={block}
+              canAnswer={canAnswer}
+              onAnswer={(text) => onAnswer(text, message)}
+            />
+          );
         }
         if (block.kind === "plugin") {
           const raw = "url" in block && block.url ? String(block.url) : "";

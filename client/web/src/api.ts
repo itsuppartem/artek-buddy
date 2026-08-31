@@ -556,6 +556,13 @@ export const api = {
     followUp(botId: string, text: string) {
       return request<OkResponse>("POST", `/v1/threads/${botId}/follow-up`, { text });
     },
+    answer(botId: string, runId: string, messageId: string, answer: string) {
+      return request<OkResponse>("POST", `/v1/threads/${botId}/answer`, {
+        runId,
+        messageId,
+        answer,
+      });
+    },
     markRead(botId: string) {
       return request<OkResponse>("POST", `/v1/threads/${botId}/read`);
     },
