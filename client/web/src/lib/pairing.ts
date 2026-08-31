@@ -7,6 +7,11 @@ export function formatPairingCode(value: string): string {
   return `${raw.slice(0, 4)}-${raw.slice(4)}`;
 }
 
+/** Same Compose exec as README. Deb pairing only; the phone page has no command. */
+export const PAIRING_HOST_COMMAND = "docker exec artek-buddy python -m artek_buddy pair";
+
+export const PAIRING_BODY = "On the Pi, create a pairing code. Type it here, then Pair.";
+
 export type LocalStatus = {
   paired: boolean;
   url: string;

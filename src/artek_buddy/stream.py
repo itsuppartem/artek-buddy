@@ -56,13 +56,7 @@ def _map_tool_to_events(
     # Raw Cursor tools (mcp, read, shell, …) stay off the thread.
     # The chat shows answers, thinking, worker cards, and a few product facts.
     if tname == "remember":
-        content = str(args.get("content") or "").strip()
-        if status == "completed":
-            if args.get("forget"):
-                label = f"Forgot: {content}" if content else "Forgot a saved note"
-            else:
-                label = f"Remembered: {content}" if content else "Remembered a note"
-            return [("thread.meta", {"text": label[:160]})]
+        # Remembered / Forgot come from the tool only when a row actually changed.
         return []
     if tname == "run_subagent":
         sname = str(args.get("name") or "subagent")

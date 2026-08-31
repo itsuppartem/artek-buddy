@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { artifactUrl, formatBytes } from "./files";
+import { artifactUrl, formatBytes, usesBrowserDownload } from "./files";
 
 describe("formatBytes", () => {
   it("formats bytes, KB, and MB", () => {
@@ -14,5 +14,12 @@ describe("formatBytes", () => {
 describe("artifactUrl", () => {
   it("builds a host path and encodes the id", () => {
     expect(artifactUrl("ab/c")).toBe("/v1/artifacts/ab%2Fc");
+  });
+});
+
+describe("usesBrowserDownload", () => {
+  it("uses the browser on the host page, not the Linux save path", () => {
+    expect(usesBrowserDownload("host")).toBe(true);
+    expect(usesBrowserDownload("desktop")).toBe(false);
   });
 });

@@ -1,0 +1,10 @@
+import { describe, expect, it } from "vitest";
+import { saveButtonLabel } from "./save-ack";
+
+describe("saveButtonLabel", () => {
+  it("names idle, saving, and saved", () => {
+    expect(saveButtonLabel("idle")).toBe("Save");
+    expect(saveButtonLabel("saving")).toBe("Saving…");
+    expect(saveButtonLabel("saved")).toBe("Saved");
+  });
+});

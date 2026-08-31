@@ -9,6 +9,7 @@ MAX_NAME = 64
 MAX_WHEN = 280
 MAX_BODY = 16_384
 _SLUG_PIECE = re.compile(r"[^a-z0-9]+")
+_FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 
 
 class BookError(ValueError):
@@ -44,14 +45,42 @@ def normalize_book(name: str, when_to_use: str, body: str) -> tuple[str, str, st
     return title, when, steps, slug
 
 
+def parse_skill_document(raw: str) -> tuple[str, str, str]:
+    text = (raw or "").replace("\r\n", "\n")
+    stripped = text.strip()
+    if not stripped:
+        raise BookError("body cannot be empty")
+    name = ""
+    when = ""
+    match = _FRONTMATTER.match(stripped)
+    if match:
+        for line in match.group(1).splitlines():
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            key = key.strip().lower()
+            value = value.strip().strip("\"'")
+            if key == "name":
+                name = value
+            elif key in {"description", "when_to_use"}:
+                when = value
+    if not name:
+        heading = re.search(r"^#\s+(.+)$", stripped, re.MULTILINE)
+        name = heading.group(1).strip() if heading else ""
+    if not when and name:
+        when = f"When the owner asks for {name}"
+    title, trigger, body, _slug = normalize_book(name, when, stripped)
+    return title, trigger, body
+
+
 def format_book_catalog(books: list[SkillBook]) -> str | None:
     if not books:
         return None
     lines = [
         "<skill_books>",
-        "Playbooks for this chat. The next turn sees names only.",
+        "Skills kept for this chat. The next turn sees names only.",
         "Open a book with open_book before following its steps.",
-        "Teach a new one with save_book. Drop one with forget_book.",
+        "Find and keep a published skill with install_book. Drop one with forget_book.",
     ]
     for book in books:
         lines.append(f"- {book.name} — {book.when_to_use}")

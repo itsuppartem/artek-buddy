@@ -42,7 +42,17 @@ class ChatToolsMixin:
             try:
                 if forget:
                     removed = hub.forget(content, bot_id=bot_id)
-                    return {"ok": True, "forgotten": removed}
+                    if removed:
+                        self._remember_meta(
+                            args,
+                            bound_bot_id,
+                            f"Forgot: {content}" if content else "Forgot a saved note",
+                        )
+                        self._publish_memory_revised(
+                            bound_bot_id,
+                            {"forgotten": True, "text": content[:160]},
+                        )
+                    return {"ok": True, "forgotten": removed, "saved": False}
                 entry = hub.capture(
                     content,
                     kind=kind,
@@ -55,8 +65,24 @@ class ChatToolsMixin:
                 )
                 if entry is None:
                     return {"ok": True, "saved": False}
+                self._remember_meta(
+                    args,
+                    bound_bot_id,
+                    f"Remembered: {entry.text}".strip() or "Remembered a note",
+                )
+                self._publish_memory_revised(
+                    bound_bot_id,
+                    {
+                        "document_id": entry.document_id,
+                        "scope": entry.scope,
+                        "kind": entry.kind,
+                        "section": entry.slot,
+                        "text": (entry.text or "")[:160],
+                    },
+                )
                 return {
                     "ok": True,
+                    "saved": True,
                     "entry_id": entry.id,
                     "document_id": entry.document_id,
                     "scope": entry.scope,
@@ -85,6 +111,21 @@ class ChatToolsMixin:
                     source_run_id=run_id,
                     source_thread_id=thread_id,
                 )
+                self._remember_meta(
+                    args,
+                    bound_bot_id,
+                    f"Remembered: {content}".strip() or "Remembered a note",
+                )
+                self._publish_memory_revised(
+                    bound_bot_id,
+                    {
+                        "document_id": doc.id,
+                        "path": doc.path,
+                        "revision": doc.revision,
+                        "scope": doc.scope.value if hasattr(doc.scope, "value") else str(doc.scope),
+                        "text": content[:160],
+                    },
+                )
                 return {
                     "ok": True,
                     "document_id": doc.id,
@@ -96,6 +137,37 @@ class ChatToolsMixin:
                 log.exception("failed to save memory in remember tool")
                 return {"ok": False, "error": str(exc)}
         return {"ok": True, "saved": False}
+
+    def _publish_memory_revised(self, bound_bot_id: str | None, payload: dict[str, Any]) -> None:
+        bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+        if self.runtime.events is None or self.runtime.store is None or not bot_id:
+            return
+        bot = self.runtime.store.get_bot(bot_id)
+        if bot is None:
+            return
+        event = ProductEvent(
+            id=new_id("evt"),
+            workspace_id=bot.workspace_id,
+            thread_id=bot.thread_id,
+            bot_id=bot.id,
+            seq=self.runtime.events.next_seq(bot.id),
+            type=ProductEventType.MEMORY_REVISED,
+            created_at=isoformat_utc(),
+            payload=payload,
+            run_id=run_id,
+        )
+        self.runtime.events.publish(event)
+
+    def _remember_meta(self, args: dict[str, Any], bound_bot_id: str | None, text: str) -> None:
+        label = (text or "Remembered a note").strip()[:160]
+        if not label:
+            return
+        self._append_bot_blocks(
+            args,
+            bound_bot_id,
+            [{"kind": "meta", "text": label}],
+            mark_sent=False,
+        )
 
     def _append_bot_blocks(
         self,

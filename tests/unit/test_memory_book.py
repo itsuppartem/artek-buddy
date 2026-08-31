@@ -6,7 +6,13 @@ import pytest
 
 from artek_buddy.memory import MAX_AGENT_MEMORY_BYTES, wrap_turn_prompt
 from artek_buddy.memory_book import HostBookRewriter, format_recalled_memory
-from artek_buddy.memory_hub import MemoryEntry, MemoryHub
+from artek_buddy.memory_hub import (
+    MemoryEntry,
+    MemoryHub,
+    extract_unwritten_memories,
+    memory_covers,
+    similar_memory,
+)
 
 
 class _BookStore:
@@ -179,6 +185,63 @@ def test_hub_writes_and_revises_sections_from_a_turn() -> None:
     assert "Europe/Belgrade" in identity.text
 
 
+def test_extract_russian_city_sentences() -> None:
+    belgrade = extract_unwritten_memories("Я живу в Белграде.")
+    assert any("Белград" in item.text for item in belgrade)
+    assert any(item.slot == "identity" for item in belgrade)
+    novi = extract_unwritten_memories("Я живу в Нови-Саде.")
+    assert any("Нови" in item.text for item in novi)
+
+
+def test_remember_city_replaces_the_previous_city() -> None:
+    hub, store = _hub()
+    first = hub.capture(
+        "Lives in Belgrade",
+        kind="place",
+        bot_id="bot_book",
+        source="remember",
+        slot="identity",
+    )
+    second = hub.capture(
+        "Lives in Subotica",
+        kind="place",
+        bot_id="bot_book",
+        source="remember",
+        slot="identity",
+    )
+    assert first is not None
+    assert second is not None
+    identity = store.find_live_memory_entry_by_slot("identity", bot_id="bot_book")
+    assert identity is not None
+    assert "Subotica" in identity.text
+    assert "Belgrade" not in identity.text
+    assert len(store.list_live_memory_entries("bot_book")) == 1
+
+
+def test_remember_replaces_near_matching_city_tokens() -> None:
+    hub, store = _hub()
+    first = hub.capture(
+        "Lives in Cid28f7cdfda",
+        kind="place",
+        bot_id="bot_book",
+        source="remember",
+        slot="identity",
+    )
+    second = hub.capture(
+        "Lives in Cid28f7cdfdb",
+        kind="place",
+        bot_id="bot_book",
+        source="remember",
+        slot="identity",
+    )
+    assert first is not None
+    assert second is not None
+    identity = store.find_live_memory_entry_by_slot("identity", bot_id="bot_book")
+    assert identity is not None
+    assert "Cid28f7cdfdb" in identity.text
+    assert "Cid28f7cdfda" not in identity.text
+
+
 def test_next_turn_prompt_keeps_owner_and_bot_book() -> None:
     hub, _store = _hub()
     hub.capture(
@@ -269,6 +332,104 @@ def test_wrap_turn_prompt_tells_lead_to_revise_book_sections() -> None:
     assert "remember" in wrapped
     assert "section" in wrapped
     assert "one short sentence" not in wrapped
+    assert "once per fact" in wrapped
+    assert "this-chat only" in wrapped
+
+
+def test_similar_memory_paraphrase_not_a_different_ban() -> None:
+    assert similar_memory("Do not ask permission for read", "Don't ask for read permission")
+    assert similar_memory("не спрашивай разрешения на read", "не спрашивай разрешение на read")
+    assert not similar_memory("Never open Gmail", "Never open Outlook")
+    assert not similar_memory("Never open site-0.example", "Never open site-4.example")
+    assert similar_memory("Lives in Cid28f7cdfda", "Lives in Cid28f7cdfdb")
+    assert memory_covers(
+        "Do not ask the owner for permission to work on this bot's computer or browser, "
+        "or to run read-only commands on the owner's paired PC. Do not prompt.",
+        "Don't ask for read permission",
+    )
+    assert not memory_covers("Don't ask for read permission", "Don't ask for write permission")
+    assert not memory_covers("Never open Gmail for work", "Never open Outlook")
+
+
+def test_one_run_does_not_store_paraphrased_read_permission_twice() -> None:
+    hub, store = _hub()
+    first = hub.capture(
+        "Do not ask permission for read",
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_dup",
+        slot="bans",
+    )
+    second = hub.capture(
+        "Don't ask for read permission",
+        kind="preference",
+        scope="user",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_dup",
+    )
+    assert first is not None
+    assert second is None
+    live = store.list_live_memory_entries("bot_book")
+    assert len(live) == 1
+    extra = hub.extract_after_turn(
+        "Do not ask permission for read. Don't ask for read permission.",
+        "run_dup",
+        "bot_book",
+    )
+    assert extra == []
+    assert len(store.list_live_memory_entries("bot_book")) == 1
+
+
+def test_long_permission_ban_covers_a_shorter_later_restatement() -> None:
+    hub, store = _hub()
+    rule = (
+        "Do not ask the owner for permission to work on this bot's computer or browser, "
+        "or to run read-only commands on the owner's paired PC. Do not prompt."
+    )
+    first = hub.capture(
+        rule,
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_first",
+        slot="bans",
+    )
+    second = hub.capture(
+        "Don't ask for read permission",
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_later",
+        slot="bans",
+    )
+    assert first is not None
+    assert second is None
+    live = store.list_live_memory_entries("bot_book")
+    assert len(live) == 1
+    assert live[0].text == rule
+
+
+@pytest.mark.asyncio
+async def test_revise_after_remember_does_not_add_another_row() -> None:
+    hub, store = _hub(rewrite=True)
+    saved = hub.capture(
+        "Do not ask permission for read",
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_dup",
+        slot="bans",
+    )
+    assert saved is not None
+    changed = await hub.revise_after_turn(
+        "Do not ask permission for read",
+        "run_dup",
+        "bot_book",
+    )
+    assert changed == []
+    assert len(store.list_live_memory_entries("bot_book")) == 1
 
 
 @pytest.mark.asyncio

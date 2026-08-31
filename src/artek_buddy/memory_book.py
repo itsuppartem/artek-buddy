@@ -195,8 +195,16 @@ def _fact_clash(old: str, incoming: str) -> bool:
     return any(pattern.search(old) and pattern.search(incoming) for pattern in _FACT_KIND)
 
 
-def scripted_rewrite(_section: str, current: str, turn_text: str, extracted: str) -> str:
-    incoming = _lines(extracted) or _lines(turn_text)
+def facts_contradict(current: str, incoming: str) -> bool:
+    """True when incoming replaces a typed fact (city, name, timezone) in current."""
+    newer = _lines(incoming)
+    return any(_fact_clash(old, new) for old in _lines(current) for new in newer)
+
+
+def scripted_rewrite(_section: str, current: str, _turn_text: str, extracted: str) -> str:
+    incoming = _lines(extracted)
+    if not incoming:
+        return (current or "")[:MAX_SECTION_CHARS]
     kept = [
         line for line in _lines(current) if not any(_fact_clash(line, newer) for newer in incoming)
     ]

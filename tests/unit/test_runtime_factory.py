@@ -53,8 +53,15 @@ def test_scripted_fail_and_default_steps() -> None:
     fail = steps_for_prompt("please e2e-fail now")
     assert fail[-1].status == "failed"
     assert fail[-1].error == E2E_FAIL_ERROR
+    raw = steps_for_prompt("please e2e-fail-raw now")
+    assert raw[-1].status == "failed"
+    assert raw[-1].error == "run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a"
     ok = steps_for_prompt("plain hello")
     assert ok[-1].status == "completed" or ok[-1].result == "ok"
+    late = steps_for_prompt("please e2e-late-complete")
+    assert late[0].delay_s == 2.5
+    assert late[0].ignore_cancel is True
+    assert late[-1].result == "pong"
 
 
 def test_scripted_thread_prompts_force_window_blocks() -> None:
@@ -98,10 +105,30 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert plugin[0].tool == "docs_read"
     asked = steps_for_prompt("please use Docs")
     assert asked[0].tool == "docs_read"
+    listed = steps_for_prompt("please e2e-list-apps")
+    assert listed[0].tool == "list_apps"
+    assert listed[0].args.get("q") == "docs"
+    attached = steps_for_prompt("please e2e-connect-docs")
+    assert attached[0].tool == "connect_app"
+    assert attached[0].args.get("slug") == "docs"
+    mail = steps_for_prompt("please e2e-connect-mail")
+    assert mail[0].tool == "connect_app"
+    assert mail[0].args.get("slug") == "mail"
+    twice = steps_for_prompt("please e2e-remember-twice")
+    assert twice[0].tool == "remember"
+    assert twice[1].tool == "remember"
+    assert twice[0].args.get("content") != twice[1].args.get("content")
 
-    taught = steps_for_prompt("please e2e-save-book")
-    assert taught[0].tool == "save_book"
-    assert taught[0].args["name"] == "Invoice"
+    city = steps_for_prompt("please e2e-identity-city NoviSadTok")
+    assert city[0].tool == "remember"
+    assert city[0].args.get("content") == "Lives in NoviSadTok"
+    assert city[0].args.get("kind") == "place"
+    assert city[0].args.get("section") == "identity"
+
+    taught = steps_for_prompt("please e2e-install-book")
+    assert taught[0].consent is not None
+    assert taught[1].tool == "install_book"
+    assert taught[1].args.get("url")
     ran = steps_for_prompt("please run Invoice")
     assert ran[0].tool == "open_book"
     assert ran[0].args["name"] == "Invoice"

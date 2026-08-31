@@ -1117,6 +1117,24 @@
             "title": "Id",
             "type": "string"
           },
+          "job_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "queued",
+                  "acknowledged",
+                  "completed",
+                  "failed",
+                  "timed_out"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Status"
+          },
           "kind": {
             "anyOf": [
               {
@@ -2229,6 +2247,17 @@
           "text": {
             "title": "Text",
             "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
           }
         },
         "required": [
@@ -7263,6 +7292,77 @@
           }
         },
         "summary": "Answer Consent"
+      }
+    },
+    "/v1/consents/{consent_id}/ack": {
+      "post": {
+        "operationId": "acknowledge_consent_job_v1_consents__consent_id__ack_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "consent_id",
+            "required": true,
+            "schema": {
+              "title": "Consent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "artek_device",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Artek Device"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Acknowledge Consent Job"
       }
     },
     "/v1/consents/{consent_id}/file": {

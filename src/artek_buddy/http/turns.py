@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from artek_buddy.apps import format_apps_context
 from artek_buddy.books import format_book_catalog
 from artek_buddy.bot_asks import (
     ASKED_YOU_MARK,
@@ -39,6 +40,7 @@ from artek_buddy.db.shaping import (
     blocks_text,
     isoformat_utc,
     new_id,
+    owner_visible_error,
     preview_snippet,
     text_blocks,
 )
@@ -110,9 +112,24 @@ def _emit_remembered(
     bot: Bot,
     text: str,
     run_id: str | None,
+    entry: Any | None = None,
 ) -> None:
     label = f"Remembered: {text}".strip() if text else "Remembered a note"
     _emit(events, bot, ProductEventType.THREAD_META, {"text": label[:160]}, run_id=run_id)
+    payload: dict[str, Any] = {"text": (text or "")[:160]}
+    document_id = getattr(entry, "document_id", None) if entry is not None else None
+    if document_id:
+        payload["document_id"] = document_id
+    scope = getattr(entry, "scope", None) if entry is not None else None
+    if scope:
+        payload["scope"] = scope
+    kind = getattr(entry, "kind", None) if entry is not None else None
+    if kind:
+        payload["kind"] = kind
+    slot = getattr(entry, "slot", None) if entry is not None else None
+    if slot:
+        payload["section"] = slot
+    _emit(events, bot, ProductEventType.MEMORY_REVISED, payload, run_id=run_id)
 
 
 def _emit_computer(events: EventHub, bot: Bot, status: ComputerStatus) -> None:
@@ -177,7 +194,7 @@ def _emit_answered_asks(
                 question=question,
             )
             if entry is not None:
-                _emit_remembered(events, bot, entry.text, run_id)
+                _emit_remembered(events, bot, entry.text, run_id, entry=entry)
         except Exception:
             log.exception("failed to capture ask answer in memory")
 
@@ -759,7 +776,10 @@ async def _run_turn(
             log.exception("failed to bind asked turn %s", run.id)
     try:
         page = history.page_messages(bot.thread_id, limit=40)
-        thread_context = compact_thread_context(page.messages)
+        thread_context = compact_thread_context(page.messages, exclude_run_id=run.id)
+        session_resume = (
+            rt.build_session_resume(bot.id) if rt.consume_session_fresh(agent_id) else None
+        )
         inbox_context = _format_inbox(history, bot, inbox_items) if inbox_items else None
         memory_prompt = wrap_turn_prompt(
             text,
@@ -776,6 +796,8 @@ async def _run_turn(
             inbox_context=inbox_context,
             other_bots=format_other_bots(history.list_bots(), bot.id),
             books_context=format_book_catalog(history.list_skill_books(bot.id)),
+            apps_context=format_apps_context(history),
+            session_resume=session_resume,
         )
         async for item in _turn_stream(history, rt, memory_prompt, agent_id, bot):
             if isinstance(item, RunRecord):
@@ -787,9 +809,9 @@ async def _run_turn(
                 status = product_run_status(item.status)
                 reply_text = item.result or draft or ""
                 if status != "completed":
-                    error = item.error or f"run failed: {item.id}"
-                    if not reply_text:
-                        reply_text = error
+                    error = owner_visible_error(item.error, item.id)
+                    if not reply_text or reply_text.strip() == error:
+                        reply_text = ""
                 continue
             if not isinstance(item, ProductStreamEvent):
                 continue
@@ -842,10 +864,14 @@ async def _run_turn(
 
     if status == "cancelled":
         reply_text = ""
+    elif status != "completed":
+        error = owner_visible_error(error, run.id)
+        if has_sent or not reply_text or reply_text.strip() == error:
+            reply_text = ""
     elif has_sent:
-        reply_text = error if status != "completed" else ""
+        reply_text = ""
     elif not reply_text:
-        reply_text = draft or error or ""
+        reply_text = draft or ""
 
     try:
         bot_msg, finished = history.finish_turn(bot, run, reply_text, status, error=error)
@@ -859,6 +885,12 @@ async def _run_turn(
             run_id=run.id,
         )
         return
+
+    persist_status = getattr(finished.status, "value", None) or str(finished.status)
+    if persist_status == "cancelled":
+        status = "cancelled"
+        error = finished.error or "Stopped."
+        bot_msg = None
 
     if bot_msg is not None:
         _emit(
@@ -885,7 +917,7 @@ async def _run_turn(
         if hub is not None:
             try:
                 for entry in await hub.revise_after_turn(text, run.id, bot.id):
-                    _emit_remembered(events, bot, entry.text, run.id)
+                    _emit_remembered(events, bot, entry.text, run.id, entry=entry)
             except Exception:
                 log.exception("failed to extract memory after turn")
     try:

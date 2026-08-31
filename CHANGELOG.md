@@ -3,15 +3,67 @@
 ## Unreleased
 
 ### Added
+- Owner jobs have a short client delivery ACK and a separate queued / acknowledged / terminal lifecycle. A new `.deb` claims a job before touching This PC; older clients may still return a result without ACK.
+- The Linux client can opt into SSH connection reuse with `~/.config/artek-buddy/ssh-mux`. Its private ControlMaster socket never changes `~/.ssh/config`; related small remote checks are batched into one SSH session.
+- A replaced Cursor lead session receives one bounded, redacted resume brief with known workspace, path/branch facts, constraints, and the last visible result.
+- Phone desktop overlay only: the remote screen is a pad (drag moves the pointer, tap left click, two fingers right click). Keyboard opens the phone keyboard. Chats and Chat stay as they were. The host page clears the iPhone notch (`safe-area-inset-top`) and does not leave a second empty strip under the nav.
 - The same Funnel / tailnet URL serves the window. A phone pairs with a code; the device token stays in an httpOnly cookie. Narrow screens stack Chats / Chat / Desktop (iPhone 11 Pro 375×812). iPhone Add to Home Screen plus Turn on alerts (only while that app is open — no background). This-PC files stay on the Linux `.deb`. CI splits `ui` (`.deb`) from `ui_web` / `live_web` (host page).
-- The owner can teach a playbook in the thread (`save_book`). The next turn sees names only; `open_book` loads the steps. A chip fills `please run {name}`. No Settings form.
+- The owner can keep a published skill for this chat (`install_book` from a public URL after Allow). The stored body is the fetched markdown. The next turn sees names only; `open_book` loads the steps. A chip fills `please run {name}`. No Settings form.
 - Models and Plugins Save name a host error instead of staying silent. A row's model is the host default (no second Default list). Cursor exposes reasoning and Fast; Save prefers grok-4.6 extra-high fast when that id is on the list. A Plugins key already on the host at boot shows as Key saved.
 - After an app is connected, a chip above Message fills `please use {name}`. The thread shows that app's result as a card.
+- The lead can search catalog apps (`list_apps`) and attach them (`connect_app`) from chat. Connected names ride in the turn. Login URLs open in the owner's browser, not the bot desktop.
 - Plugins pane: paste a host key, search the catalog, connect or disconnect an app. Only connected apps become tools on the next turn. The window never sees a saved full key.
 - A bot can ask another inbox bot by name or id. This chat shows the ask and a card to that chat. The other bot works in its own thread; only its last message comes back so this bot can answer you. Missing, archived, deleted, empty, and self-asks fail closed.
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Ctrl+V in the Linux WebKit window no longer cancels an empty/deferred clipboard event before ordinary text can reach Message. Image, file, and file-manager-path paste still use the attachment path.
+- Chat links open in the owner's system browser from the `.deb`. Right-clicking a link offers Open in browser, Copy URL, and Reply; URL copy falls back for older WebKit clipboard support.
+- A shorter restatement of an already detailed standing rule no longer revises the same Memory chapter or writes another identical Remembered line.
+- Back-to-back and parallel This-PC calls no longer reuse a process-global consent id. Late owner results are rejected, completed auto jobs are not offered again, and the phone/host page leaves auto jobs for the paired Linux client.
+- A new model session no longer receives the current user send twice in compact history; repeated identical user lines from silent failed runs collapse to one.
+- An instant dead Cursor wait after a good turn retries that same send (expire a stuck run, then a new session if needed) instead of asking the owner to Send again. A stuck double-dead still shows one Send-again run-error.
+- Stop on a live turn writes Stopped. A late model complete from that run does not land as a bot bubble.
+- Release keeps the last guest frame on the overlay until the view-only picture loads. Take control from Sleeping names Waking the desktop… instead of a black void.
+- One click on an inbox row opens that chat. A leftover mouse-up or a late inbox fallback does not land on the previous thread.
+- New memory defaults to This bot with a filled scope control. Delete is Remove. Save acknowledgement uses the create/edit buttons, not a shared Saved name.
+- The closed Plugins hatch does not steal the thread wheel or open from the right edge. One Close dismisses.
+- Plugins Search apps stays open on Enter and keeps catalog scroll where the owner left it.
+- Plugins Connect only marks Connected. The chip fills `please use {name}` on a real click; leftover mouse-up after Connect does not Send.
+- A queued send is marked Waiting for the host until reconnect, then Sent while offline with local time.
+- Dismiss on a needs-you pill only hides it. The open chat stays put.
+- Ctrl+A in Message selects the draft. It does not Send or duplicate the bubble.
+- Plugins pane waits for host key status before showing the paste field, so a leftover key is not a flash of an empty form.
+- Inbox Search with no matches shows empty copy and a Clear control instead of a blank rack.
+- Escape closes Settings and New bot. Composer text and the guest overlay keep their own Escape.
+- Models Cursor has one commit. Empty providers say to paste a key instead of a dead Use this model.
+- Settings Restart… and Stop… confirm once, same as Reset… and Delete chat….
+- File-card Download and Load earlier look like controls. Owner cards still offer Download; the oldest page leaves a beginning line.
+- Inbox Search marks the matching name or preview text so a snippet hit is obvious.
+- A Shift+Enter newline stays a newline in the sent user bubble.
+- Unread is a named tan circle and a bold row, not a hidden 7px square.
+- Message placeholder truncates a long bot name with an ellipsis instead of clipping mid-word.
+- Plugins Search apps filters the catalog as you type. Enter is not required.
+- Phone file-card Download uses the browser, not a Linux `/local/save-artifact` path.
+- A skill chip above Message has ×, and Send consumes it so it does not stick next to screenshot chips.
+- Clicking a skill book card shows a dismissed chip again. There is no need to re-install the skill.
+- A plugin chip above Message has ×. Dismiss hides it and does not send.
+- Plugins Connect on a no-browser catalog app either connects or names the next setup step. It no longer dies on `could not start that connection` with nothing to do.
+- Settings Title keeps the typed role through blur and Save. A host refresh while Edit profile is open no longer empties the field.
+- Routine next-run drops the ISO microsecond fraction and keeps UTC.
+- Settings, Memory, and Routine Save flash **Saved** for about a second, then the form closes. A host error stays under the row.
+- A failed playbook run shows a steps card on success, or one human **The turn failed.** line — not a raw `run failed: run-` id, and not that same line as a bubble plus a red box.
+- Settings, Memory, Routines, ask/file cards, and the computer overlay use the same `@theme` tokens as pairing and the thread. Traffic lights and guest noVNC pixels stay as they were.
+- Create and Settings ask three different questions: Title is a short role, Description is what the bot is for, and Instructions are standing orders (not labelled Prompt). Create now has that Instructions field too.
+- Auth recovery on the host page says **Pair this phone again**, matching the pairing title. The `.deb` still says **Pair this computer again**.
+- Pairing tells the owner where to get a code and what Pair does. The phone page has no token or host-module command. The `.deb` footer is the README Compose exec.
+- Chat that writes the identity book lists that chapter in Computer → Memory. Owner place/person rows are labeled identity, and a later city replaces the old one on the same card.
+- Phone Close on Computer / Models / Plugins returns to the Chat tab with the thread, not a blank Desktop tab.
+- Phone Take control stays held after a pad drag or tap. The overlay caption is not selectable host text, and **Type on the desktop** is a tappable field in the keyboard strip.
+- Release leaves a live view-only preview (not a black overlay) and the Computer pane matches: Take control, not You have control.
+- Offline and Sleeping **Click to start** boot to a view-only Running preview. Take control stays a separate grant.
+- One standing rule in chat writes one Remembered line and one Memory card. A paraphrase in the same turn, or extract after that turn, does not add a twin.
+- Phone desktop typing reaches the guest as UTF-8, so a Russian keyboard is not dropped.
 - The iPhone home-screen hint sits at the top of the host page so it no longer covers Models, New bot, or the composer.
 - Opening a website on the bot desktop no longer also opens the file manager. `open` treats `HTTPS://` like `https://`, and leftover pcmanfm volume autorun is off.
 - The bot desktop starts fluxbox again. Docker tmpfs `/tmp` is noexec, so the old generated startup script never ran and windows had no toolbar or close buttons.
@@ -23,6 +75,7 @@
 - A takeover on another chat shows «needs you», not «replied». The bot stays `waiting_takeover` (same idea as `waiting_input`), and the window does not dismiss that banner during the chat switch. If the takeover event arrives while that chat is open, or the thread stream drops it on switch, the other chat still raises the pill from the parked status.
 
 ### Changed
+- Local `.deb` builds refuse to overwrite an existing package; `ARTEK_BUILD_SUFFIX` creates a distinct filename and Debian version for manual testing.
 - Memory is a book the bot revises from chat: owner sections (identity, tone, contacts, machines, paths) and this-chat standing rules always ride in the next turn. Work notes still match the request. The 3+4 card caps and 200-character Settings cut no longer drop a weeks-grown book.
 - After a turn that saved a section, the host rewrites that section (default model when a key is set) so a newer fact replaces a contradiction instead of stacking both. The book block in the model prompt is 256 KiB.
 - Send while the host is down parks the user bubble and flushes it when health returns, with a «sent while offline» caption. A reconnect banner replaces the red host-error card.

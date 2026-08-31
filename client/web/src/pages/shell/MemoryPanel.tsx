@@ -1,20 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../../api";
+import {
+  defaultMemoryScope,
+  MEMORY_CHANGED_EVENT,
+  memoryChapter,
+  memoryDeleteName,
+  memoryShelf,
+  memoryTitle,
+} from "../../lib/memory";
+import { useSaveAck } from "../../lib/save-ack";
 import type { MemoryDocument } from "../../types";
 import { Button } from "../../ui/button";
-
-export function memoryShelf(path: string): string {
-  return path.match(/^entries\/(owner|work|charter)\//)?.[1] ?? "owner";
-}
-
-export function memoryKind(path: string): string | null {
-  return path.match(/^entries\/(?:(?:owner|work|charter)\/)?([a-z]+)-/)?.[1] ?? null;
-}
-
-export function memoryTitle(document: MemoryDocument): string {
-  const line = document.content.trim().split("\n")[0];
-  return line || memoryKind(document.path) || document.path;
-}
 
 export function MemoryPanel({
   botId,
@@ -26,11 +22,14 @@ export function MemoryPanel({
   const [documents, setDocuments] = useState<MemoryDocument[]>([]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [scope, setScope] = useState<"bot" | "user">("user");
+  const [scope, setScope] = useState<"bot" | "user">(defaultMemoryScope);
   const [content, setContent] = useState("");
   const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
+  const createAck = useSaveAck();
+  const editAck = useSaveAck();
   const factsRef = useRef<HTMLTextAreaElement>(null);
+  const createdCardRef = useRef<HTMLDivElement>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
   async function refresh() {
     setDocuments(await api.memory.list(botId));
@@ -51,46 +50,49 @@ export function MemoryPanel({
     void reload();
     const poll = window.setInterval(() => void reload(), 10000);
     const onChanged = () => void reload();
-    window.addEventListener("artek-memory-changed", onChanged);
+    window.addEventListener(MEMORY_CHANGED_EVENT, onChanged);
     return () => {
       cancelled = true;
       window.clearInterval(poll);
-      window.removeEventListener("artek-memory-changed", onChanged);
+      window.removeEventListener(MEMORY_CHANGED_EVENT, onChanged);
     };
   }, [botId, onLater]);
+
+  useLayoutEffect(() => {
+    if (!createdId) return;
+    createdCardRef.current?.scrollIntoView({ block: "nearest" });
+  }, [createdId, documents]);
 
   async function create() {
     const text = (factsRef.current?.value ?? content).trim();
     if (!text) return;
-    setBusy(true);
-    try {
-      await api.memory.create({
-        scope,
-        botId: scope === "bot" ? botId : undefined,
-        path: `entries/owner/note-${Date.now()}.md`,
-        content: text,
-      });
-      setContent("");
-      setCreating(false);
-      await refresh();
-    } catch (err) {
-      onLater(err instanceof Error ? err.message : "Could not save memory");
-    } finally {
-      setBusy(false);
-    }
+    await createAck.run(
+      async () => {
+        const created = await api.memory.create({
+          scope,
+          botId: scope === "bot" ? botId : undefined,
+          path: `entries/owner/note-${Date.now()}.md`,
+          content: text,
+        });
+        setCreatedId(created.id);
+        await refresh();
+      },
+      () => {
+        setContent("");
+        setCreating(false);
+        setScope(defaultMemoryScope());
+      },
+    );
   }
 
   async function save(document: MemoryDocument) {
-    setBusy(true);
-    try {
-      await api.memory.update(document.id, draft);
-      setEditingId(null);
-      await refresh();
-    } catch (err) {
-      onLater(err instanceof Error ? err.message : "Could not update memory");
-    } finally {
-      setBusy(false);
-    }
+    await editAck.run(
+      async () => {
+        await api.memory.update(document.id, draft);
+        await refresh();
+      },
+      () => setEditingId(null),
+    );
   }
 
   async function remove(document: MemoryDocument) {
@@ -122,15 +124,15 @@ export function MemoryPanel({
     <div>
       <div className="mt-[30px] mb-3 flex items-center justify-between">
         <div>
-          <span className="text-[14px] text-[#85858A]">Memory</span>
-          <div className="mt-0.5 text-[12px] text-[#6C6C70]">
+          <span className="text-[14px] text-mute">Memory</span>
+          <div className="mt-0.5 text-[12px] text-mute">
             Owner, work, and this bot — written from chat
           </div>
         </div>
         <button
           type="button"
           onClick={() => void exportMarkdown()}
-          className="text-[12.5px] text-[#85858A]"
+          className="text-[12.5px] text-mute"
         >
           Export
         </button>
@@ -139,18 +141,18 @@ export function MemoryPanel({
         {documents.map((document) => (
           <div
             key={document.id}
+            ref={document.id === createdId ? createdCardRef : undefined}
             data-testid="memory-doc"
-            className="rounded-xl border border-[#202023] bg-[#0D0D0E] px-3 py-2.5"
+            data-chapter={memoryChapter(document.path) ?? undefined}
+            className="rounded-xl border border-hairline bg-ink px-3 py-2.5"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="line-clamp-2 text-[14.5px] text-[#ECECEE]">
-                  {memoryTitle(document)}
-                </div>
-                <div className="mt-0.5 text-[12px] text-[#6C6C70]">
+                <div className="line-clamp-2 text-[14.5px] text-paper">{memoryTitle(document)}</div>
+                <div className="mt-0.5 text-[12px] text-mute">
                   {memoryShelf(document.path)}
                   {` · ${document.scope === "user" ? "shared" : "this bot"}`}
-                  {memoryKind(document.path) ? ` · ${memoryKind(document.path)}` : ""}
+                  {memoryChapter(document.path) ? ` · ${memoryChapter(document.path)}` : ""}
                   {document.updatedAt ? ` · ${document.updatedAt.slice(0, 10)}` : ""}
                 </div>
               </div>
@@ -161,36 +163,59 @@ export function MemoryPanel({
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   rows={4}
-                  className="w-full resize-none rounded-lg border border-[#202023] bg-[#141416] px-2.5 py-2 text-[13px] text-[#ECECEE] outline-none"
+                  className="w-full resize-none rounded-lg border border-hairline bg-raised px-2.5 py-2 text-[13px] text-paper outline-none"
                 />
-                <div className="mt-2 flex gap-3 text-[12.5px] text-[#85858A]">
-                  <button type="button" disabled={busy} onClick={() => void save(document)}>
-                    Save
+                <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
+                  <button
+                    type="button"
+                    data-testid="memory-edit-save"
+                    aria-live="polite"
+                    disabled={editAck.state !== "idle"}
+                    onClick={() => void save(document)}
+                  >
+                    {editAck.label}
                   </button>
-                  <button type="button" onClick={() => setEditingId(null)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      editAck.cancel();
+                      setEditingId(null);
+                    }}
+                  >
                     Cancel
                   </button>
                 </div>
+                {editAck.error ? (
+                  <p data-testid="memory-save-error" className="mt-2 text-[13px] text-danger">
+                    {editAck.error}
+                  </p>
+                ) : null}
               </div>
             ) : (
               <div className="mt-2">
                 {document.content.includes("\n") ? (
-                  <div className="line-clamp-3 whitespace-pre-wrap text-[12.5px] text-[#9A9AA0]">
+                  <div className="line-clamp-3 whitespace-pre-wrap text-[12.5px] text-mute">
                     {document.content}
                   </div>
                 ) : null}
-                <div className="mt-2 flex gap-3 text-[12.5px] text-[#85858A]">
+                <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
                   <button
                     type="button"
                     onClick={() => {
+                      createAck.cancel();
                       setEditingId(document.id);
                       setDraft(document.content);
                     }}
                   >
                     Edit
                   </button>
-                  <button type="button" onClick={() => void remove(document)}>
-                    Outdated
+                  <button
+                    type="button"
+                    data-testid="memory-remove"
+                    aria-label={memoryDeleteName()}
+                    onClick={() => void remove(document)}
+                  >
+                    {memoryDeleteName()}
                   </button>
                 </div>
               </div>
@@ -199,19 +224,31 @@ export function MemoryPanel({
         ))}
       </div>
       {creating ? (
-        <div className="mt-3 rounded-xl border border-[#202023] bg-[#0D0D0E] p-3">
-          <div className="mb-2 flex gap-2 text-[12.5px] text-[#85858A]">
+        <div className="mt-3 rounded-xl border border-hairline bg-ink p-3">
+          <div
+            className="mb-2 inline-flex rounded-[10px] border border-hairline p-0.5"
+            role="group"
+            aria-label="Memory scope"
+          >
             <button
               type="button"
+              data-testid="memory-scope-bot"
+              aria-pressed={scope === "bot"}
               onClick={() => setScope("bot")}
-              className={scope === "bot" ? "text-[#ECECEE]" : ""}
+              className={`rounded-[8px] px-2.5 py-1 text-[12.5px] ${
+                scope === "bot" ? "bg-tan font-medium text-ink" : "text-mute"
+              }`}
             >
               This bot
             </button>
             <button
               type="button"
+              data-testid="memory-scope-shared"
+              aria-pressed={scope === "user"}
               onClick={() => setScope("user")}
-              className={scope === "user" ? "text-[#ECECEE]" : ""}
+              className={`rounded-[8px] px-2.5 py-1 text-[12.5px] ${
+                scope === "user" ? "bg-tan font-medium text-ink" : "text-mute"
+              }`}
             >
               Shared
             </button>
@@ -222,7 +259,7 @@ export function MemoryPanel({
             onChange={(event) => setContent(event.target.value)}
             placeholder="Facts to remember"
             rows={3}
-            className="mt-2 w-full resize-none rounded-lg border border-[#202023] bg-[#141416] px-2.5 py-2 text-[13px] text-[#ECECEE] outline-none"
+            className="mt-2 w-full resize-none rounded-lg border border-hairline bg-raised px-2.5 py-2 text-[13px] text-paper outline-none"
           />
           <div className="mt-2 flex gap-2">
             <Button
@@ -230,22 +267,42 @@ export function MemoryPanel({
               variant="cream"
               size="sm"
               data-testid="memory-save"
-              disabled={busy}
+              aria-live="polite"
+              disabled={createAck.state !== "idle"}
               onClick={() => void create()}
             >
-              Save
+              {createAck.label}
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setCreating(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                createAck.cancel();
+                setCreating(false);
+              }}
+            >
               Cancel
             </Button>
           </div>
+          {createAck.error ? (
+            <p data-testid="memory-save-error" className="mt-2 text-[13px] text-danger">
+              {createAck.error}
+            </p>
+          ) : null}
         </div>
       ) : (
         <button
           type="button"
           data-testid="new-memory"
-          onClick={() => setCreating(true)}
-          className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-[#7A7A80]"
+          onClick={() => {
+            createAck.cancel();
+            editAck.cancel();
+            setEditingId(null);
+            setScope(defaultMemoryScope());
+            setCreating(true);
+          }}
+          className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-mute"
         >
           + New memory
         </button>

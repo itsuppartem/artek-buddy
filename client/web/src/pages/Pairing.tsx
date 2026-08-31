@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { api } from "../api";
-import { formatPairingCode } from "../lib/pairing";
+import { formatPairingCode, PAIRING_BODY, PAIRING_HOST_COMMAND } from "../lib/pairing";
 import {
   isIosDevice,
   isStandaloneDisplay,
@@ -53,7 +53,7 @@ export function PairingPage({
 
   return (
     <div className="flex h-full flex-col bg-ink text-paper">
-      <div className="flex items-center gap-3 px-4 pt-3">
+      <div className="flex items-center gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top,0px))]">
         {hostPage ? null : <WindowChrome />}
         <img src="/favicon.png" alt="" width={18} height={18} className="rounded-[5px]" />
         <span className="text-[13px] text-mute">Artek Buddy</span>
@@ -75,11 +75,7 @@ export function PairingPage({
           <div className="font-display text-[21px] font-semibold text-paper">
             {hostPage ? "Pair this phone" : "Pair this computer"}
           </div>
-          <p className="mt-2 text-[14px] leading-6 text-mute">
-            {hostPage
-              ? "On the host, mint a pairing code. Enter it here. This page never sees the device token."
-              : "On the host, mint a pairing code. Enter it here. The page never sees the device token."}
-          </p>
+          <p className="mt-2 text-[14px] leading-6 text-mute">{PAIRING_BODY}</p>
           {hostPage ? null : (
             <label className="mt-5 block text-[12.5px] text-mute">
               Host URL
@@ -126,10 +122,14 @@ export function PairingPage({
           <Button type="submit" variant="cream" className="mt-5 w-full" disabled={busy || !code}>
             {busy ? "Pairing…" : "Pair"}
           </Button>
-          <p className="mt-4 text-[12.5px] leading-5 text-mute">
-            Host command:{" "}
-            <span className="font-mono text-paper/70">python -m artek_buddy pair</span>
-          </p>
+          {hostPage ? null : (
+            <p
+              data-testid="pairing-host-command"
+              className="mt-4 text-[12.5px] leading-5 text-mute"
+            >
+              On the Pi: <span className="font-mono text-paper/70">{PAIRING_HOST_COMMAND}</span>
+            </p>
+          )}
         </form>
       </div>
     </div>

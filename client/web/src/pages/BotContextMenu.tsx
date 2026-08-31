@@ -70,10 +70,10 @@ export function BotContextMenu({
           label={bot.unread ? "Mark as read" : "Mark as unread"}
           onSelect={onToggleUnread}
         />
-        <div className="my-1 border-t border-[#343438]" />
+        <div className="my-1 border-t border-hairline" />
         <MenuItem icon={<EditIcon />} label="Edit profile" onSelect={onEdit} />
         <MenuItem icon={<DuplicateIcon />} label="Duplicate" onSelect={onDuplicate} />
-        <div className="my-1 border-t border-[#343438]" />
+        <div className="my-1 border-t border-hairline" />
         <MenuItem icon={<ArchiveIcon />} label="Archive" onSelect={onArchive} />
         <MenuItem icon={<TrashIcon />} label="Delete" tone="danger" onSelect={onDelete} />
       </div>

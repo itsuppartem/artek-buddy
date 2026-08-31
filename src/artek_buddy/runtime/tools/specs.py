@@ -99,6 +99,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             "Call this when the user states a preference, rule, person, path, machine, "
             "project, or correction. Default scope is the shared owner book. "
             "Use scope=bot for standing rules of this chat (bans, wait for go-ahead). "
+            "Call once per fact. A standing rule is this-chat only, not also shared. "
             "Do not store one-off tasks such as opening a tab. "
             "A later note on the same section revises that section; other sections stay. "
             "To erase something, set forget=true with the text to drop."
@@ -145,10 +146,30 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         },
     ),
     ToolSpec(
+        name="install_book",
+        description=(
+            "Install a published skill for this chat from a public http(s) URL. "
+            "The stored body is the fetched markdown, not a summary. "
+            "Use this when the owner asks to find and keep a skill. "
+            "Do not wait for them to dictate the steps. "
+            "Not a memory fact and not a cron routine."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Public http(s) URL of the skill markdown.",
+                },
+            },
+            "required": ["url"],
+        },
+    ),
+    ToolSpec(
         name="save_book",
         description=(
-            "Save or revise a replayable playbook for this chat. "
-            "Use this when the owner teaches a procedure to run again later. "
+            "Revise a skill already kept for this chat. "
+            "Do not use this to add a new skill; call install_book with the document URL. "
             "Not a memory fact and not a cron routine. "
             "name is how they will ask for it. when_to_use is the trigger. "
             "body is the steps."
@@ -188,6 +209,46 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             },
             "required": ["name"],
         },
+    ),
+    ToolSpec(
+        name="list_apps",
+        description=(
+            "Search host catalog apps (GitHub, Mail, Docs, and others). "
+            "Returns slug, name, and whether it is already connected. "
+            "Call this when the owner asks to connect or use an app that is not "
+            "already a tool this turn. Then connect_app(slug). "
+            "Do not set up git or SSH on this computer for a catalog app."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "q": {
+                    "type": "string",
+                    "description": "Search text, e.g. github or mail.",
+                },
+            },
+        },
+        lead_only=True,
+    ),
+    ToolSpec(
+        name="connect_app",
+        description=(
+            "Attach a catalog app to this host so its tools load on the next turn. "
+            "Pass the slug from list_apps. No-auth apps connect immediately. "
+            "Apps that need a login put a card with a URL the owner opens "
+            "(not the bot desktop). Do not mint tokens on this machine."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "slug": {
+                    "type": "string",
+                    "description": "Catalog slug from list_apps, e.g. github or docs.",
+                },
+            },
+            "required": ["slug"],
+        },
+        lead_only=True,
     ),
     ToolSpec(
         name="forget_book",
@@ -262,9 +323,12 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name="run_owner_command",
         description=(
             "Run a shell command on the owner's paired computer, like an SSH session. "
+            "Batch related small remote checks into one command and one SSH session instead of "
+            "calling this tool once per check. "
             "Read-only commands (ls, cat, echo, pwd, uname, …) run without a card. "
             "Commands that can change the PC ask Allow once / Always / Deny once for that bot. "
-            "cwd stays under the owner's home. Without a paired window this fails."
+            "cwd stays under the owner's home. Never copy private keys or edit ~/.ssh/config. "
+            "Without a paired window this fails."
         ),
         input_schema={
             "type": "object",

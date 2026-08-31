@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from tests.api.helpers import create_bot, message_texts, wait_run, wait_thread_has
+import uuid
+
+from tests.api.helpers import create_bot, message_metas, message_texts, wait_run, wait_thread_has
 
 
 def test_ordinary_chat_grows_memory_book_without_panel(client, auth_header) -> None:
@@ -212,3 +214,60 @@ def test_spawn_subagent_writes_started_line(client, auth_header) -> None:
     snap = wait_thread_has(client, auth_header, bot_id, f"Started {E2E_SUBAGENT_NAME}.")
     texts = message_texts(snap)
     assert f"Started {E2E_SUBAGENT_NAME}." in texts
+
+
+def test_remember_twice_writes_one_meta_and_one_row(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "MemOnce")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-remember-twice"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    remembered = [text for text in message_metas(snap) if text.startswith("Remembered:")]
+    assert len(remembered) == 1
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    hits = [
+        item
+        for item in listed.json()["documents"]
+        if "permission" in str(item.get("content") or "").lower()
+        and "read" in str(item.get("content") or "").lower()
+    ]
+    assert len(hits) == 1
+
+
+def test_scripted_identity_city_lists_and_replaces(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "IdCity")["id"]
+    stem = uuid.uuid4().hex[:8]
+    first, second = f"Osijek{stem}", f"Split{stem}"
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": f"please e2e-identity-city {first}"},
+    )
+    assert sent.status_code == 200
+    assert wait_run(client, auth_header, bot_id, sent.json()["run_id"])["run"]["status"] == (
+        "completed"
+    )
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    blob = "\n".join(str(item.get("content") or "") for item in listed.json()["documents"])
+    assert first in blob
+    assert second not in blob
+    later = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": f"please e2e-identity-city {second}"},
+    )
+    assert later.status_code == 200
+    assert wait_run(client, auth_header, bot_id, later.json()["run_id"])["run"]["status"] == (
+        "completed"
+    )
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    blob = "\n".join(str(item.get("content") or "") for item in listed.json()["documents"])
+    assert second in blob
+    assert first not in blob

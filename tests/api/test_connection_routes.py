@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 from fastapi.testclient import TestClient
 from tests.api.helpers import create_bot, wait_thread_has
@@ -182,3 +183,127 @@ def test_lifespan_seeds_plugins_key(client, monkeypatch, auth_header) -> None:
         assert status.json()["configured"] is True
         assert status.json()["last_four"] == "env1"
         assert "ak-env-seed-env1" not in json.dumps(status.json())
+
+
+def _plugin_blocks(snap: dict) -> list[dict]:
+    return [
+        block
+        for message in snap.get("messages") or []
+        for block in message.get("blocks") or []
+        if block.get("kind") == "plugin"
+    ]
+
+
+def wait_plugin_text(client, auth_header, bot_id: str, needle: str, timeout: float = 15.0) -> dict:
+    deadline = time.time() + timeout
+    last: dict = {}
+    while time.time() < deadline:
+        snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+        assert snap.status_code == 200, snap.text
+        last = snap.json()
+        for block in _plugin_blocks(last):
+            blob = f"{block.get('text') or ''} {block.get('url') or ''} {block.get('name') or ''}"
+            if needle.lower() in blob.lower():
+                return last
+        time.sleep(0.1)
+    raise AssertionError(f"{bot_id} never showed plugin {needle!r}: {_plugin_blocks(last)}")
+
+
+def test_connect_app_from_chat_then_use_docs(client, auth_header) -> None:
+    client.post("/v1/connections/key", headers=auth_header, json={"api_key": SECRET})
+    bot = create_bot(client, auth_header, "ChatDocs")
+    sent = client.post(
+        f"/v1/threads/{bot['id']}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-connect-docs"},
+    )
+    assert sent.status_code == 200
+    snap = wait_plugin_text(client, auth_header, bot["id"], "Connected")
+    cards = _plugin_blocks(snap)
+    assert cards[0]["name"] == "Docs"
+    assert not cards[0].get("url")
+
+    used = client.post(
+        f"/v1/threads/{bot['id']}/messages",
+        headers=auth_header,
+        json={"text": "please use Docs"},
+    )
+    assert used.status_code == 200
+    answered = wait_thread_has(client, auth_header, bot["id"], "Subotica")
+    docs = _plugin_blocks(answered)
+    assert docs[-1]["name"] == "Docs"
+    assert "Subotica" in docs[-1]["text"]
+
+    again = client.post(
+        f"/v1/threads/{bot['id']}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-connect-docs"},
+    )
+    assert again.status_code == 200
+    twice = wait_plugin_text(client, auth_header, bot["id"], "already")
+    assert twice
+
+
+def test_list_apps_and_connect_fail_without_key(client, auth_header) -> None:
+    bot = create_bot(client, auth_header, "ChatNoKey")
+    listed = client.post(
+        f"/v1/threads/{bot['id']}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-list-apps"},
+    )
+    assert listed.status_code == 200
+    wait_thread_has(client, auth_header, bot["id"], "paste a key")
+    assert client.get("/v1/connections", headers=auth_header).status_code == 409
+    missing = client.post(
+        f"/v1/threads/{bot['id']}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-connect-docs"},
+    )
+    assert missing.status_code == 200
+    wait_thread_has(client, auth_header, bot["id"], "paste a key")
+
+
+def test_connect_app_oauth_puts_login_url_on_the_card(client, auth_header) -> None:
+    client.post("/v1/connections/key", headers=auth_header, json={"api_key": SECRET})
+    bot = create_bot(client, auth_header, "ChatMail")
+    sent = client.post(
+        f"/v1/threads/{bot['id']}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-connect-mail"},
+    )
+    assert sent.status_code == 200
+    snap = wait_thread_has(client, auth_header, bot["id"], "I'll attach Mail.")
+    cards = _plugin_blocks(snap)
+    assert cards
+    assert cards[0]["name"] == "Mail"
+    assert cards[0].get("url")
+    assert "example.test" in cards[0]["url"]
+    listed = client.get("/v1/connections", headers=auth_header)
+    assert listed.json()["connections"][0]["status"] == "pending"
+
+
+def test_connect_unknown_app_fails_closed(client, auth_header) -> None:
+    client.post("/v1/connections/key", headers=auth_header, json={"api_key": SECRET})
+    bot = create_bot(client, auth_header, "ChatNope")
+    sent = client.post(
+        f"/v1/threads/{bot['id']}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-connect-nope"},
+    )
+    assert sent.status_code == 200
+    wait_thread_has(client, auth_header, bot["id"], "app not found")
+
+
+def test_connect_start_fail_explains_the_next_step(client, auth_header) -> None:
+    client.post("/v1/connections/key", headers=auth_header, json={"api_key": SECRET})
+    failed = client.post(
+        "/v1/connections",
+        headers=auth_header,
+        json={"provider": "needssetup", "redirect_url": "https://window.example/app"},
+    )
+    assert failed.status_code == 502
+    detail = failed.json()["detail"]
+    assert "could not start that connection" in detail
+    assert "finish that setup" in detail
+    assert "try Connect again" in detail
+    assert detail != "could not start that connection"

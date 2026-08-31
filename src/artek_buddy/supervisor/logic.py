@@ -68,6 +68,21 @@ def normalize_keysym(key: str) -> str:
     return value
 
 
+def _ascii_typeable(text: str) -> bool:
+    return all(ch in "\t\n" or 32 <= ord(ch) <= 126 for ch in text)
+
+
+def type_text_command(text: str) -> str:
+    if not text:
+        return "true"
+    if _ascii_typeable(text):
+        return f"xdotool type --delay 12 -- {shell_quote(text)}"
+    return (
+        f"printf '%s' {shell_quote(text)} | xclip -selection clipboard -i"
+        "; xdotool key --clearmodifiers ctrl+v"
+    )
+
+
 def _close_app_command(raw_app: str) -> str:
     # Kill by window class + exact comm. `pkill -f` matches supervisor wrappers.
     if _is_browser_app(raw_app):
@@ -205,8 +220,7 @@ def action_command(actions: list[dict]) -> str:
                 if item.get("double"):
                     parts.append(f"xdotool click {button}")
         elif kind == "type":
-            text = str(item.get("text") or "")
-            parts.append(f"xdotool type --delay 12 -- {shell_quote(text)}")
+            parts.append(type_text_command(str(item.get("text") or "")))
         elif kind == "key":
             key = normalize_keysym(str(item.get("key") or item.get("text") or ""))
             if key:

@@ -191,17 +191,17 @@ async def stop_thread(
 ) -> OkResponse:
     try:
         bot = _require_bot(history, bot_id)
+        cancelled_ids = history.cancel_active_runs(bot_id)
         _cancel_turns(bot_id)
         service = getattr(current_app().state, "subagents", None)
         if service is not None:
             service.stop_all(bot)
-        cancelled_ids = history.cancel_active_runs(bot_id)
         for run_id in cancelled_ids:
             _emit(
                 events,
                 bot,
                 ProductEventType.RUN_CANCELLED,
-                {"run_id": run_id, "status": "cancelled"},
+                {"run_id": run_id, "status": "cancelled", "error": "Stopped."},
                 run_id=run_id,
             )
     except DatabaseUnavailable as err:

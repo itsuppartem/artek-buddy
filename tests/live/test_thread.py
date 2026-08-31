@@ -166,6 +166,38 @@ def test_thread_reply_quote_and_cancel(page: Page, client_url: str, host_url: st
     expect(quoted).to_contain_text("ok")
 
 
+def test_markdown_link_opens_and_has_link_actions(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Links")
+    page.context.grant_permissions(
+        ["clipboard-read", "clipboard-write"],
+        origin=client_url.rstrip("/"),
+    )
+    page.context.route(
+        "https://example.com/**",
+        lambda route: route.fulfill(status=200, content_type="text/html", body="docs"),
+    )
+    send_message(page, "please e2e-markdown-preview", name)
+    link = page.get_by_role("link", name="Open docs", exact=True)
+    expect(link).to_have_attribute("href", "https://example.com/artek-buddy", timeout=15_000)
+
+    with page.expect_popup() as opened:
+        link.click()
+    expect(opened.value).to_have_url("https://example.com/artek-buddy")
+    opened.value.close()
+
+    link.click(button="right")
+    menu = page.get_by_role("menu", name="Message actions")
+    expect(menu.get_by_role("menuitem", name="Open in browser", exact=True)).to_be_visible()
+    copy_url = menu.get_by_role("menuitem", name="Copy URL", exact=True)
+    expect(copy_url).to_be_visible()
+    expect(menu.get_by_role("menuitem", name="Reply", exact=True)).to_be_visible()
+    copy_url.click()
+    expect(menu.get_by_role("menuitem", name="URL copied", exact=True)).to_be_visible()
+    assert page.evaluate("navigator.clipboard.readText()") == "https://example.com/artek-buddy"
+
+
 def test_composer_paste_screenshot_attaches_chip(
     page: Page, client_url: str, host_url: str
 ) -> None:
@@ -195,15 +227,13 @@ def test_composer_paste_text_does_not_attach(page: Page, client_url: str, host_u
     _named(page, client_url, host_url, "TextPaste")
     box = composer(page)
     box.click()
-    box.evaluate(
-        """el => {
-          const data = new DataTransfer();
-          data.setData("text/plain", "hello from the clipboard");
-          const event = new Event("paste", { bubbles: true, cancelable: true });
-          Object.defineProperty(event, "clipboardData", { value: data });
-          el.dispatchEvent(event);
-        }"""
+    page.context.grant_permissions(
+        ["clipboard-read", "clipboard-write"],
+        origin=client_url.rstrip("/"),
     )
+    page.evaluate("navigator.clipboard.writeText('hello from the clipboard')")
+    box.press("Control+V")
+    expect(box).to_have_value("hello from the clipboard")
     expect(page.get_by_test_id("attach-chip")).to_have_count(0)
 
 
@@ -243,6 +273,60 @@ def test_composer_shift_enter_and_undo(page: Page, client_url: str, host_url: st
     expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
 
 
+def test_composer_ctrl_a_does_not_send(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Select")
+    box = composer(page)
+    draft = "keep this draft"
+    box.fill(draft)
+    expect(box).to_have_value(draft)
+    box.press("Control+a")
+    expect(box).to_have_value(draft)
+    selected = box.evaluate("el => el.selectionEnd - el.selectionStart")
+    assert selected == len(draft)
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
+    box.press("Enter")
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').get_by_test_id(
+        "user-text"
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(bubble).to_have_js_property("textContent", draft)
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(1)
+
+
+def test_composer_placeholder_does_not_clip_mid_word(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("ResearchOverflowName")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    box = composer(page)
+    placeholder = box.get_attribute("placeholder") or ""
+    full = f"Message {name}"
+    assert placeholder.startswith("Message ")
+    assert placeholder != "Message Resea"
+    if placeholder != full:
+        assert placeholder.endswith("…")
+        assert not full.startswith(placeholder)
+    else:
+        raise AssertionError(f"long name stayed untruncated: {placeholder}")
+
+
+def test_user_bubble_keeps_shift_enter_newline(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Break")
+    box = composer(page)
+    box.fill("line one")
+    box.press("Shift+Enter")
+    box.type("line two")
+    expect(box).to_have_value("line one\nline two")
+    box.press("Enter")
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').get_by_test_id(
+        "user-text"
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(bubble).to_have_css("white-space", "pre-wrap")
+    expect(bubble).to_have_js_property("textContent", "line one\nline two")
+
+
 def test_load_earlier_messages(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Older")
     other = unique_bot("Other")
@@ -253,6 +337,39 @@ def test_load_earlier_messages(page: Page, client_url: str, host_url: str) -> No
     expect(earlier).to_be_visible(timeout=15_000)
     earlier.click()
     expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible(timeout=15_000)
+
+
+def test_download_and_load_earlier_look_like_controls(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Chrome")
+    with page.expect_file_chooser() as chooser:
+        page.get_by_role("button", name="Attach files").click()
+    chooser.value.set_files({"name": "shot.png", "mimeType": "image/png", "buffer": TINY_PNG})
+    expect(page.get_by_test_id("attach-chip")).to_contain_text("shot.png", timeout=5_000)
+    send_message(page, "my shot", name)
+    user_card = (
+        page.locator('[data-testid="thread-message"][data-role="user"]')
+        .filter(has_text="my shot")
+        .get_by_test_id("file-card")
+    )
+    download = user_card.get_by_test_id("file-download")
+    expect(download).to_be_visible(timeout=8_000)
+    expect(download).to_have_accessible_name("Download shot.png")
+    other = unique_bot("Other")
+    send_message(page, "please e2e-load-earlier", name)
+    create_named_bot(page, other)
+    open_chat(page, name)
+    earlier = page.get_by_test_id("load-earlier")
+    expect(earlier).to_be_visible(timeout=15_000)
+    expect(earlier).to_have_accessible_name("Load earlier messages")
+    earlier.click()
+    expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible(timeout=15_000)
+    leftover = page.get_by_test_id("load-earlier")
+    if leftover.count() and leftover.first.is_visible():
+        leftover.click()
+        expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible()
+    expect(page.get_by_test_id("thread-start")).to_contain_text("Beginning of this chat.")
 
 
 def test_ask_options_custom_and_detail(page: Page, client_url: str, host_url: str) -> None:
@@ -362,6 +479,22 @@ def test_stop_does_not_append_completed_essay(page: Page, client_url: str, host_
     page.wait_for_timeout(3_000)
     expect(page.get_by_test_id("thread").get_by_text("slow done")).to_have_count(0)
     expect(bot_row(page, name)).not_to_contain_text("slow done")
+
+
+def test_stop_late_complete_shows_stopped_and_drops_model_text(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "LateStop")
+    box = composer(page)
+    box.fill("please e2e-late-complete")
+    expect(box).to_have_value("please e2e-late-complete")
+    box.press("Enter")
+    expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("thread-stop").click()
+    expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
+    page.wait_for_timeout(3_000)
+    expect(page.get_by_test_id("thread").get_by_text("pong")).to_have_count(0)
+    expect(bot_row(page, name)).not_to_contain_text("pong")
 
 
 def test_streaming_turn_keeps_last_card_in_view(page: Page, client_url: str, host_url: str) -> None:
@@ -555,6 +688,31 @@ def test_takeover_banner_on_other_chat(page: Page, client_url: str, host_url: st
     expect(banner).to_have_count(0)
 
 
+def test_dismiss_needs_you_keeps_current_chat(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("ParkA")
+    watcher = unique_bot("ParkB")
+    other = unique_bot("ParkC")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    create_named_bot(page, other)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-takeover")
+    expect(box).to_have_value("please e2e-takeover")
+    box.press("Enter")
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    banner = page.get_by_test_id("attention-alert")
+    expect(banner).to_contain_text(f"{speaker} needs you", timeout=15_000)
+    page.get_by_test_id("attention-dismiss").click()
+    expect(banner).to_have_count(0)
+    expect(thread_header(page)).to_contain_text(watcher)
+    expect(thread_header(page)).not_to_contain_text(speaker)
+    expect(thread_header(page)).not_to_contain_text(other)
+    expect(composer(page)).to_have_attribute("placeholder", f"Message {watcher}")
+
+
 def test_notify_off_mutes_replied_not_ask(page: Page, client_url: str, host_url: str) -> None:
     speaker = unique_bot("Mute")
     watcher = unique_bot("Hear")
@@ -623,6 +781,7 @@ def test_offline_send_queues_then_flushes_with_caption(
         has_text=parked
     )
     expect(bubble).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("queued-pending")).to_contain_text("Waiting for the host")
     expect(page.get_by_test_id("offline-sent-caption")).to_have_count(0)
     expect(box).to_have_value("")
     restore_host(page)
@@ -630,6 +789,7 @@ def test_offline_send_queues_then_flushes_with_caption(
     expect(page.get_by_test_id("offline-sent-caption")).to_contain_text(
         "Sent while offline", timeout=20_000
     )
+    expect(page.get_by_test_id("queued-pending")).to_have_count(0)
     expect(page.get_by_test_id("reconnect-banner")).to_have_count(0)
     box.fill(later)
     expect(box).to_have_value(later)
@@ -638,6 +798,43 @@ def test_offline_send_queues_then_flushes_with_caption(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=later)
     ).to_be_visible(timeout=8_000)
     expect(page.get_by_test_id("offline-sent-caption")).to_have_count(1)
+
+
+def test_queued_send_shows_pending_then_local_caption(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Queued")
+    ensure_model(page)
+    expect(thread_header(page)).to_contain_text(name)
+    parked = "queued while unreachable"
+    later = "online after the queue"
+    cut_host(page)
+    box = composer(page)
+    box.fill(parked)
+    expect(box).to_have_value(parked)
+    box.press("Enter")
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+        has_text=parked
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(bubble).to_have_attribute("data-queued", "true")
+    pending = page.get_by_test_id("queued-pending")
+    expect(pending).to_be_visible()
+    expect(pending).to_contain_text("Waiting for the host")
+    expect(page.get_by_test_id("offline-sent-caption")).to_have_count(0)
+    restore_host(page)
+    page.get_by_test_id("reconnect-banner").get_by_role("button", name="Retry connection").click()
+    caption = page.get_by_test_id("offline-sent-caption")
+    expect(caption).to_contain_text("Sent while offline", timeout=20_000)
+    expect(caption).to_contain_text("·")
+    expect(pending).to_have_count(0)
+    box.fill(later)
+    expect(box).to_have_value(later)
+    box.press("Enter")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=later)
+    ).to_be_visible(timeout=8_000)
+    expect(caption).to_have_count(1)
 
 
 def test_auth_error_send_does_not_queue(page: Page, client_url: str, host_url: str) -> None:

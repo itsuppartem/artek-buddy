@@ -3,9 +3,11 @@ from __future__ import annotations
 import pytest
 
 from artek_buddy.connections.broker import (
+    CONNECT_START_ERROR,
     DOCS_TEXT,
     FakeBroker,
     filter_catalog,
+    toolkit_no_auth,
     validate_redirect,
 )
 
@@ -14,7 +16,7 @@ def test_filter_catalog_matches_slug_or_name() -> None:
     broker = FakeBroker()
     items = broker.catalog(None, set())
     slugs = {item.slug for item in items}
-    assert slugs == {"mail", "chat", "issues", "calendar", "docs"}
+    assert slugs == {"mail", "chat", "issues", "calendar", "docs", "needssetup"}
     docs = filter_catalog(items, "DOC")
     assert [item.slug for item in docs] == ["docs"]
     assert filter_catalog(items, "zzz") == []
@@ -48,6 +50,22 @@ def test_fake_broker_mail_needs_complete_then_revoke_drops_tools() -> None:
     assert broker.tool_specs(["mail"]) == []
     missing = broker.execute("mail_inbox", {}, provider="mail", remote_id=started.remote_id, key="")
     assert missing["ok"] is False
+
+
+def test_needssetup_begin_explains_the_next_step() -> None:
+    broker = FakeBroker()
+    with pytest.raises(RuntimeError, match="finish that setup"):
+        broker.begin("needssetup", "https://window.example/app")
+    assert CONNECT_START_ERROR.startswith("could not start that connection.")
+    assert "try Connect again" in CONNECT_START_ERROR
+
+
+def test_toolkit_no_auth_reads_nested_flags() -> None:
+    assert toolkit_no_auth({"no_auth": True}) is True
+    assert toolkit_no_auth({"toolkit": {"slug": "weather", "no_auth": True}}) is True
+    assert toolkit_no_auth({"auth_schemes": ["NO_AUTH"]}) is True
+    assert toolkit_no_auth({"meta": {"no_auth": True}}) is True
+    assert toolkit_no_auth({"slug": "weather", "name": "Weather"}) is False
 
 
 def test_validate_redirect_rejects_empty_and_non_http() -> None:

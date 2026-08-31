@@ -28,7 +28,7 @@ def desktop_create_spec(
         "name": name,
         "Image": image,
         "Hostname": name,
-        "Env": ["DISPLAY=:1", "HOME=/home/artek"],
+        "Env": ["DISPLAY=:1", "HOME=/home/artek", "LANG=C.UTF-8"],
         "Labels": {
             "artek.managed": "true",
             "artek.bot_id": bot_id,

@@ -3,13 +3,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from artek_buddy.db.shaping import product_run_status
+from artek_buddy.db.shaping import TURN_FAILED, owner_visible_error, product_run_status
 
 log = logging.getLogger("artek_buddy")
 
 CURSOR_AUTH_ERROR_HINT = "authentication error"
 CURSOR_AUTH_RECYCLE_AFTER = 3
 CURSOR_INSTANT_FAIL_S = 2.0
+DEAD_WAIT_NEXT_STEP = "The turn failed. Send again — the host will start a new session."
 
 
 def store_error_code(result: Any, run: Any) -> str | None:
@@ -41,12 +42,17 @@ def describe_cursor_wait(result: Any, run: Any) -> tuple[str, str | None, str | 
         return mapped, text or None, None
     code = store_error_code(result, run)
     run_id = getattr(run, "id", "") if run is not None else ""
-    error = code or f"run failed: {run_id}"
+    error = owner_visible_error(code, str(run_id or ""))
     return mapped, text or None, error
 
 
 def is_auth_error(error: str | None) -> bool:
     return CURSOR_AUTH_ERROR_HINT in (error or "").lower()
+
+
+def is_dead_wait_error(error: str | None) -> bool:
+    text = (error or "").strip().lower()
+    return text == TURN_FAILED.lower() or text.startswith("the turn failed")
 
 
 def note_auth_failures(
@@ -56,14 +62,49 @@ def note_auth_failures(
     error: str | None,
     duration_s: float,
 ) -> tuple[int, bool]:
-    """Count instant auth-error waits. Return (new_count, should_recycle)."""
+    """Count instant auth-error waits. Recycle a dead wait (The turn failed, ~0s) immediately."""
     if status == "completed":
         return 0, False
     instant = duration_s < CURSOR_INSTANT_FAIL_S
-    if status == "failed" and is_auth_error(error) and instant:
+    if status == "failed" and instant and is_auth_error(error):
         nxt = consecutive + 1
         return nxt, nxt >= CURSOR_AUTH_RECYCLE_AFTER
+    if status == "failed" and instant and is_dead_wait_error(error):
+        return 0, True
     return consecutive, False
+
+
+def send_local_options(cwd: str, *, force: bool = False) -> dict[str, Any]:
+    """Local send options. `force` expires a stuck run; do not set it on every send."""
+    local: dict[str, Any] = {"cwd": cwd}
+    if force:
+        local["force"] = True
+    return {"local": local}
+
+
+def should_retry_dead_wait(
+    *,
+    streamed: int,
+    status: str,
+    error: str | None,
+    duration_s: float,
+) -> bool:
+    """Retry the same prompt only when wait died instantly and nothing reached the thread."""
+    if streamed > 0:
+        return False
+    _, recycle = note_auth_failures(
+        0,
+        status=status,
+        error=error,
+        duration_s=duration_s,
+    )
+    return recycle and is_dead_wait_error(error)
+
+
+def dead_wait_owner_error(error: str | None, recycle: bool) -> str | None:
+    if recycle and is_dead_wait_error(error):
+        return DEAD_WAIT_NEXT_STEP
+    return error
 
 
 def log_cursor_wait(

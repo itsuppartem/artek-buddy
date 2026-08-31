@@ -355,15 +355,17 @@ function ProviderRow({
                 type="button"
                 role="option"
                 aria-selected={active}
+                aria-current={active ? "true" : undefined}
                 data-model={item.id}
                 onClick={() => setPicked(item.id)}
                 className={`rounded-[8px] border px-2.5 py-1 text-[13px] ${
                   active
-                    ? "border-tan bg-tan text-ink"
+                    ? "border-tan bg-tan font-semibold text-ink ring-2 ring-paper"
                     : "border-hairline bg-paper text-ink hover:bg-raised hover:text-paper"
                 }`}
               >
                 {item.id}
+                {active ? <span className="sr-only"> in use</span> : null}
               </button>
             );
           })
@@ -372,57 +374,58 @@ function ProviderRow({
         )}
       </div>
       {spec.id === "cursor" && row?.hasKey ? (
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <label className="text-[13px] text-mute" htmlFor="models-effort-cursor">
-            Reasoning
-            <select
-              id="models-effort-cursor"
-              data-testid="models-effort-cursor"
-              aria-label="Reasoning"
-              className="ml-2 h-9 rounded-[8px] border border-hairline bg-paper px-2 text-[13px] text-ink"
-              value={effort}
-              onChange={(event) => onEffort(event.target.value)}
-            >
-              {EFFORTS.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 text-[13px] text-paper">
-            <input
-              type="checkbox"
-              data-testid="models-fast-cursor"
-              aria-label="Fast"
-              checked={fast}
-              onChange={(event) => onFast(event.target.checked)}
-            />
-            Fast
-          </label>
-          <Button
-            type="button"
-            variant="cream"
-            size="sm"
-            data-testid="models-save-settings-cursor"
-            disabled={!using}
-            onClick={() => onUse(using)}
-          >
-            Save
-          </Button>
+        <div className="mt-3 flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-[13px] text-mute" htmlFor="models-effort-cursor">
+              Reasoning
+              <select
+                id="models-effort-cursor"
+                data-testid="models-effort-cursor"
+                aria-label="Reasoning"
+                className="ml-2 h-9 rounded-[8px] border border-hairline bg-paper px-2 text-[13px] text-ink"
+                value={effort}
+                onChange={(event) => onEffort(event.target.value)}
+              >
+                {EFFORTS.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5 text-[13px] text-paper">
+              <input
+                type="checkbox"
+                data-testid="models-fast-cursor"
+                aria-label="Fast"
+                checked={fast}
+                onChange={(event) => onFast(event.target.checked)}
+              />
+              Fast
+            </label>
+          </div>
+          <p className="text-[12.5px] text-mute">
+            Reasoning is how long the model may think. Fast prefers a quicker reply.
+          </p>
         </div>
       ) : null}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="mt-2"
-        data-testid={`models-use-${spec.id}`}
-        disabled={!picked && !using}
-        onClick={() => onUse(picked || using)}
-      >
-        Use this model
-      </Button>
+      {!models.length && !row?.hasKey ? (
+        <p className="mt-2 text-[13px] text-mute" data-testid={`models-empty-${spec.id}`}>
+          Paste a key on this row to load models.
+        </p>
+      ) : models.length ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-2"
+          data-testid={`models-use-${spec.id}`}
+          disabled={!picked && !using}
+          onClick={() => onUse(picked || using)}
+        >
+          Use this model
+        </Button>
+      ) : null}
     </section>
   );
 }
