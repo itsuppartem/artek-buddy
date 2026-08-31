@@ -118,7 +118,7 @@ Version: $VERSION
 Section: utils
 Priority: optional
 Architecture: all
-Depends: python3, python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0, gir1.2-ayatanaappindicator3-0.1 | gir1.2-appindicator3-0.1, xdg-utils, libnotify-bin
+Depends: python3, python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0, gir1.2-ayatanaappindicator3-0.1 | gir1.2-appindicator3-0.1, gir1.2-notify-0.7, xdg-utils, libnotify-bin
 Maintainer: Artek Buddy <artek-buddy@local>
 Description: Desktop client for the Artek Buddy host
  Desktop shell for the host HTTP API.

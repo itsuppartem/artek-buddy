@@ -38,6 +38,7 @@ def test_deb_script_installs_artek_icon() -> None:
     assert "clipboard_image.py" in text
     assert "web_paths.py" in text
     assert "gir1.2-ayatanaappindicator3-0.1" in text
+    assert "gir1.2-notify-0.7" in text
     assert "X-GNOME-UsesNotifications=true" in text
     assert 'sys.argv[0] = "artek-buddy"' in text
     assert "update-desktop-database" in text
@@ -51,7 +52,76 @@ def test_bundled_icon_path_finds_source_tree(client_mod) -> None:
     assert icon.name in {"app-icon.png", "artek-buddy.png"}
 
 
-def test_notify_passes_bundled_icon(client_mod, monkeypatch) -> None:
+class _FakeNote:
+    def __init__(self, title: str, body: str, icon: str) -> None:
+        self.title = title
+        self.body = body
+        self.icon = icon
+        self.hints: dict[str, str] = {}
+        self.urgency = None
+        self.shown = False
+
+    def set_hint_string(self, key: str, value: str) -> None:
+        self.hints[key] = value
+
+    def set_urgency(self, value: object) -> None:
+        self.urgency = value
+
+    def show(self) -> None:
+        self.shown = True
+
+
+class _FakeNotify:
+    Urgency = type("Urgency", (), {"LOW": 0, "NORMAL": 1, "CRITICAL": 2})()
+    notes: list[_FakeNote] = []
+    app_name: str | None = None
+
+    @classmethod
+    def reset(cls) -> None:
+        cls.notes = []
+        cls.app_name = None
+
+    @classmethod
+    def is_initted(cls) -> bool:
+        return cls.app_name is not None
+
+    @classmethod
+    def init(cls, name: str) -> bool:
+        cls.app_name = name
+        return True
+
+    class Notification:
+        @staticmethod
+        def new(title: str, body: str, icon: str) -> _FakeNote:
+            note = _FakeNote(title, body, icon)
+            _FakeNotify.notes.append(note)
+            return note
+
+
+def test_desktop_notify_keeps_libnotify_handle_for_gnome_list(client_mod, monkeypatch) -> None:
+    # GNOME destroys a matched-app source when notify-send leaves the bus.
+    notify_mod = sys.modules["notifications"]
+    _FakeNotify.reset()
+    ran: list[object] = []
+    monkeypatch.delenv("ARTEK_BUDDY_NOTIFY", raising=False)
+    monkeypatch.setattr(notify_mod, "_libnotify_api", lambda: _FakeNotify)
+    monkeypatch.setattr(notify_mod.subprocess, "run", lambda *a, **k: ran.append(a))
+    monkeypatch.setattr(notify_mod.subprocess, "Popen", lambda *a, **k: ran.append(a))
+    monkeypatch.setattr(notify_mod, "_apply_urgency", lambda *_args: None)
+    client_mod._desktop_notify("Demo replied", "hello", "normal")
+    assert _FakeNotify.app_name == "Artek Buddy"
+    assert len(_FakeNotify.notes) == 1
+    note = _FakeNotify.notes[0]
+    assert note.shown
+    assert note.title == "Demo replied"
+    assert note.hints.get("desktop-entry") == "artek-buddy"
+    assert str(note.icon).endswith(".png")
+    assert note.urgency == _FakeNotify.Urgency.NORMAL
+    assert ran == []
+    assert note in notify_mod._ACTIVE_NOTES
+
+
+def test_notify_send_fallback_omits_desktop_entry(client_mod, monkeypatch) -> None:
     seen: dict[str, list[str]] = {}
 
     def fake_run(cmd, **_kwargs):
@@ -60,6 +130,7 @@ def test_notify_passes_bundled_icon(client_mod, monkeypatch) -> None:
 
     notify_mod = sys.modules["notifications"]
     monkeypatch.delenv("ARTEK_BUDDY_NOTIFY", raising=False)
+    monkeypatch.setattr(notify_mod, "_libnotify_api", lambda: None)
     monkeypatch.setattr(notify_mod.shutil, "which", lambda _name: "/usr/bin/notify-send")
     monkeypatch.setattr(notify_mod.subprocess, "run", fake_run)
     monkeypatch.setattr(notify_mod, "_apply_urgency", lambda *_args: None)
@@ -68,7 +139,8 @@ def test_notify_passes_bundled_icon(client_mod, monkeypatch) -> None:
     icon_args = [item for item in cmd if str(item).startswith("--icon=")]
     assert icon_args
     assert icon_args[0].endswith(".png")
-    assert "--hint=string:desktop-entry:artek-buddy" in cmd
+    assert "--app-name=Artek Buddy" in cmd
+    assert "--hint=string:desktop-entry:artek-buddy" not in cmd
 
 
 class _FakeGLib:

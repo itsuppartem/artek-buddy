@@ -47,6 +47,8 @@ it. **Open Artek Buddy** presents the same window; **Quit** stops the client and
 its loopback proxy. Without desktop indicator support, close exits normally.
 The process names itself `artek-buddy` so the dock matches `artek-buddy.desktop`
 and the packaged mark, not a generic `artek_buddy.py` gear.
+Background alerts stay in the desktop notification list as **Artek Buddy**
+while the client is running (libnotify from this process).
 
 ## Config
 
