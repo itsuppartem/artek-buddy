@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../../api";
-import { MODEL_PROVIDERS, maskedKey } from "../../lib/models";
+import { MODEL_PROVIDERS, maskedKey, modelChipSelected } from "../../lib/models";
 import type { ModelCredential, ModelCredentialList, ModelInfo } from "../../types";
 import { Button } from "../../ui/button";
 import { IconClose } from "../../ui/icons";
@@ -258,7 +258,6 @@ function ProviderRow({
   const keyId = `models-key-${spec.id}`;
   const saving = busy === "save";
   const loading = busy === "retry" || saving;
-  const [picked, setPicked] = useState("");
   const showKeyField = !(row?.hasKey && !draft);
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -348,7 +347,7 @@ function ProviderRow({
       >
         {models.length ? (
           models.map((item) => {
-            const active = (picked || using) === item.id;
+            const active = modelChipSelected(using, item.id);
             return (
               <button
                 key={item.id}
@@ -357,7 +356,7 @@ function ProviderRow({
                 aria-selected={active}
                 aria-current={active ? "true" : undefined}
                 data-model={item.id}
-                onClick={() => setPicked(item.id)}
+                onClick={() => onUse(item.id)}
                 className={`rounded-[8px] border px-2.5 py-1 text-[13px] ${
                   active
                     ? "border-tan bg-tan font-semibold text-ink ring-2 ring-paper"
@@ -420,8 +419,8 @@ function ProviderRow({
           size="sm"
           className="mt-2"
           data-testid={`models-use-${spec.id}`}
-          disabled={!picked && !using}
-          onClick={() => onUse(picked || using)}
+          disabled={!using}
+          onClick={() => onUse(using)}
         >
           Use this model
         </Button>
