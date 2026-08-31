@@ -43,7 +43,12 @@ import {
   pushComposerChange,
   resetComposerHistory,
 } from "../lib/composer-undo";
-import { fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/consent";
+import {
+  fulfillOwnerJob,
+  isAutoOwnerJob,
+  reportOwnerJobError,
+  shouldAutoFulfillOwnerJob,
+} from "../lib/consent";
 import { hatchIsOpen, hatchPointerEvents } from "../lib/hatch";
 import { stripMarkdown } from "../lib/markdown";
 import { dispatchMemoryChanged } from "../lib/memory";
@@ -480,14 +485,7 @@ export function ShellPage() {
 
   function startOwnerFulfill(consentId: string) {
     if (!consentId || fulfilledOwnerJobs.current.has(consentId)) return;
-    if (pageSurface() === "host") {
-      fulfilledOwnerJobs.current.add(consentId);
-      void reportOwnerJobError(
-        consentId,
-        new Error("This-PC files need the Linux app, not the phone browser."),
-      );
-      return;
-    }
+    if (!shouldAutoFulfillOwnerJob(pageSurface())) return;
     fulfilledOwnerJobs.current.add(consentId);
     void fulfillOwnerJob(consentId).catch((err) => {
       fulfilledOwnerJobs.current.delete(consentId);

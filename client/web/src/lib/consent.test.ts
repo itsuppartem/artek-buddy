@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProductEvent } from "../types";
-import { isAutoOwnerJob, ownerJobHint, ownerReadPath } from "./consent";
+import { isAutoOwnerJob, ownerJobHint, ownerReadPath, shouldAutoFulfillOwnerJob } from "./consent";
 
 function event(over: Partial<ProductEvent> & Pick<ProductEvent, "type">): ProductEvent {
   return {
@@ -68,5 +68,12 @@ describe("isAutoOwnerJob", () => {
         }),
       ),
     ).toBeNull();
+  });
+});
+
+describe("shouldAutoFulfillOwnerJob", () => {
+  it("leaves auto owner jobs for the desktop client on the host page", () => {
+    expect(shouldAutoFulfillOwnerJob("host")).toBe(false);
+    expect(shouldAutoFulfillOwnerJob("desktop")).toBe(true);
   });
 });

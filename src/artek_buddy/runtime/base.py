@@ -54,6 +54,7 @@ class RuntimeBase:
         self._last_device: str | None = None
         self._bot_by_agent: dict[str, str] = {}
         self._messages_sent_in_turn: set[str] = set()
+        self._fresh_sessions: set[str] = set()
 
     def set_turn_device(self, device_id: str | None) -> None:
         self._last_device = device_id if device_id and device_id != "host" else None
@@ -66,6 +67,47 @@ class RuntimeBase:
             return
         with self._turn_lock:
             self._bot_by_agent[agent_id] = bot_id
+
+    def mark_session_fresh(self, agent_id: str | None) -> None:
+        if not agent_id:
+            return
+        with self._turn_lock:
+            self._fresh_sessions.add(agent_id)
+
+    def consume_session_fresh(self, agent_id: str | None) -> bool:
+        if not agent_id:
+            return False
+        with self._turn_lock:
+            if agent_id not in self._fresh_sessions:
+                return False
+            self._fresh_sessions.remove(agent_id)
+        return True
+
+    def build_session_resume(self, bot_id: str | None) -> str | None:
+        if not bot_id or self.store is None:
+            return None
+        try:
+            from artek_buddy.memory import format_memory_context, format_session_resume
+
+            bot = self.store.get_bot(bot_id)
+            if bot is None:
+                return None
+            page = self.store.page_messages(bot.thread_id, limit=40)
+            if self.memory is not None:
+                memory_context = self.memory.context_for_turn(
+                    bot.id, "current work repository path branch"
+                )
+            else:
+                memory_context = format_memory_context(self.store.memory_for_agent(bot.id))
+            return format_session_resume(
+                home_cwd=self.home_cwd(bot.id),
+                bot=bot,
+                memory_context=memory_context,
+                messages=page.messages,
+            )
+        except Exception:
+            log.exception("failed to build fresh-session resume")
+            return None
 
     def set_current_turn_context(
         self,

@@ -688,6 +688,7 @@ class ConsentJob(BaseModel):
     id: Id
     action_class: str
     status: str = "pending"
+    job_status: Literal["queued", "acknowledged", "completed", "failed", "timed_out"] | None = None
     path: str | None = None
     command: str | None = None
     cwd: str | None = None

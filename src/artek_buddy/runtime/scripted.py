@@ -666,6 +666,8 @@ class ScriptedRuntime(RuntimeBase):
         agent_id = f"sa-{self._seq}"
         self._agents[agent_id] = {"name": name, "role": role}
         self.bind_agent_bot(agent_id, bot_id)
+        if role == "lead":
+            self.mark_session_fresh(agent_id)
         if persist_default or self.default_agent_id is None:
             self.default_agent_id = agent_id
             self._save_state(agent_id)
