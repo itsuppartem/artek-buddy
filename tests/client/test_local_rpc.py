@@ -206,6 +206,38 @@ def test_owner_exec_uses_opt_in_ssh_mux_environment(
     assert captured[0]["ARTEK_SSH_CONTROL_PATH"] == "/tmp/artek-test/%C"
 
 
+def test_read_thread_withdraws_only_that_bots_native_notification(
+    client_mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proxy = _proxy(client_mod)
+    dismissed: list[str] = []
+    monkeypatch.setattr(proxy, "_desktop_dismiss", lambda tag: dismissed.append(tag) or True)
+    body = b'{"tag":"artek-buddy:bot-a"}'
+
+    with running_proxy(client_mod, tmp_path, monkeypatch) as (httpd, port):
+        origin = f"http://127.0.0.1:{port}"
+        conn = HTTPConnection("127.0.0.1", port, timeout=5)
+        try:
+            conn.request(
+                "POST",
+                "/local/notify-dismiss",
+                body=body,
+                headers={
+                    "Host": f"127.0.0.1:{port}",
+                    "Origin": origin,
+                    "Content-Type": "application/json",
+                    "X-Artek-Local-Nonce": httpd.local_nonce,
+                },
+            )
+            response = conn.getresponse()
+            response.read()
+        finally:
+            conn.close()
+
+    assert response.status == 200
+    assert dismissed == ["artek-buddy:bot-a"]
+
+
 def test_status_issues_nonce_only_to_this_origin(
     client_mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

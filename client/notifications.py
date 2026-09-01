@@ -3,12 +3,14 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import threading
 
 from pairing import _log
 from window_chrome import _apply_urgency, bundled_icon_path, notify_icon_args
 
 _ACTIVE_NOTES: list[object] = []
 _ACTIVE_BY_TAG: dict[str, object] = {}
+_NOTIFY_LOCK = threading.RLock()
 
 _URGENCY_ATTR = {
     "low": "LOW",
@@ -38,22 +40,24 @@ def _desktop_notify(title: str, body: str, urgency: str, tag: str = "") -> None:
     _show_notify_send(title, body, urgency)
 
 
-def _close_tagged_note(tag: str) -> None:
+def _desktop_dismiss(tag: str) -> bool:
     if not tag:
-        return
-    previous = _ACTIVE_BY_TAG.pop(tag, None)
-    if previous is None:
-        return
-    closer = getattr(previous, "close", None)
-    if callable(closer):
+        return False
+    with _NOTIFY_LOCK:
+        previous = _ACTIVE_BY_TAG.pop(tag, None)
+        if previous is None:
+            return False
+        closer = getattr(previous, "close", None)
+        if callable(closer):
+            try:
+                closer()
+            except Exception:
+                pass
         try:
-            closer()
-        except Exception:
+            _ACTIVE_NOTES.remove(previous)
+        except ValueError:
             pass
-    try:
-        _ACTIVE_NOTES.remove(previous)
-    except ValueError:
-        pass
+        return True
 
 
 def _show_libnotify(title: str, body: str, urgency: str, tag: str = "") -> bool:
@@ -64,29 +68,38 @@ def _show_libnotify(title: str, body: str, urgency: str, tag: str = "") -> bool:
         needs_init = not api.is_initted() if hasattr(api, "is_initted") else True
         if needs_init and not api.init("Artek Buddy"):
             return False
-        icon = bundled_icon_path()
-        icon_name = str(icon) if icon is not None else "artek-buddy"
-        note = api.Notification.new(title, body, icon_name)
-        urgency_enum = getattr(api, "Urgency", None)
-        level = getattr(urgency_enum, _URGENCY_ATTR.get(urgency, "NORMAL"), None)
-        setter = getattr(note, "set_urgency", None)
-        if callable(setter) and level is not None:
-            setter(level)
-        hint = getattr(note, "set_hint_string", None)
-        if callable(hint):
-            hint("desktop-entry", "artek-buddy")
-        _close_tagged_note(tag)
-        note.show()
-        _ACTIVE_NOTES.append(note)
-        if tag:
-            _ACTIVE_BY_TAG[tag] = note
-        if len(_ACTIVE_NOTES) > 20:
-            extra = _ACTIVE_NOTES[:-12]
-            del _ACTIVE_NOTES[:-12]
-            for stale in extra:
-                for key, held in list(_ACTIVE_BY_TAG.items()):
-                    if held is stale:
-                        _ACTIVE_BY_TAG.pop(key, None)
+        with _NOTIFY_LOCK:
+            icon = bundled_icon_path()
+            icon_name = str(icon) if icon is not None else "artek-buddy"
+            note = _ACTIVE_BY_TAG.get(tag) if tag else None
+            if note is not None:
+                updater = getattr(note, "update", None)
+                if callable(updater):
+                    updater(title, body, icon_name)
+                else:
+                    _desktop_dismiss(tag)
+                    note = None
+            if note is None:
+                note = api.Notification.new(title, body, icon_name)
+                _ACTIVE_NOTES.append(note)
+                if tag:
+                    _ACTIVE_BY_TAG[tag] = note
+            urgency_enum = getattr(api, "Urgency", None)
+            level = getattr(urgency_enum, _URGENCY_ATTR.get(urgency, "NORMAL"), None)
+            setter = getattr(note, "set_urgency", None)
+            if callable(setter) and level is not None:
+                setter(level)
+            hint = getattr(note, "set_hint_string", None)
+            if callable(hint):
+                hint("desktop-entry", "artek-buddy")
+            note.show()
+            if len(_ACTIVE_NOTES) > 20:
+                extra = _ACTIVE_NOTES[:-12]
+                del _ACTIVE_NOTES[:-12]
+                for stale in extra:
+                    for key, held in list(_ACTIVE_BY_TAG.items()):
+                        if held is stale:
+                            _ACTIVE_BY_TAG.pop(key, None)
         return True
     except Exception as exc:
         _log(f"libnotify failed: {type(exc).__name__}")

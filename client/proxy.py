@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
-from notifications import _desktop_notify
+from notifications import _desktop_dismiss, _desktop_notify
 from owner_paths import (
     _owner_path_status,
     inspect_owner_path,
@@ -260,6 +260,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/local/notify":
             self._local_notify()
             return
+        if path == "/local/notify-dismiss":
+            self._local_notify_dismiss()
+            return
         if path == "/local/owner-read":
             self._local_owner_read()
             return
@@ -452,6 +455,27 @@ class Handler(BaseHTTPRequestHandler):
             urgency = "normal"
         tag = _notify_text(payload.get("tag"), 80)
         _desktop_notify(title, body, urgency, tag)
+        self._json(200, {"ok": True})
+
+    def _local_notify_dismiss(self) -> None:
+        if not self._local_only():
+            self.send_error(403)
+            return
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length) if length else b"{}"
+        try:
+            payload = json.loads(raw.decode("utf-8") or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._json(400, {"ok": False, "error": "invalid json"})
+            return
+        if not isinstance(payload, dict):
+            self._json(400, {"ok": False, "error": "invalid json"})
+            return
+        tag = _notify_text(payload.get("tag"), 80)
+        if not tag:
+            self._json(400, {"ok": False, "error": "tag required"})
+            return
+        _desktop_dismiss(tag)
         self._json(200, {"ok": True})
 
     def _local_owner_read(self) -> None:

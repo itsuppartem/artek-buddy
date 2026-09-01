@@ -70,26 +70,35 @@ def _open_webkit2(local_url: str) -> bool:
     from gi.repository import Gtk, WebKit2
 
     identify_desktop_app()
-    window = Gtk.Window(title="Artek Buddy")
-    window.set_default_size(1440, 900)
-    apply_window_icon(window)
-    window.connect("destroy", lambda *_args: (_unregister_window(window), Gtk.main_quit()))
-    tray = create_tray(window, lambda: window.destroy())
-    window.connect("delete-event", lambda *_args: hide_to_tray(window, tray))
-    window.connect("focus-in-event", _on_focus_in)
-    view = WebKit2.WebView()
-    bind_external_links(view, local_url)
-    try:
-        from clipboard_image import bind_webkit_paste
 
-        bind_webkit_paste(view)
-    except Exception:
-        pass
-    view.load_uri(local_url)
-    window.add(view)
-    _register_window(window)
-    window.show_all()
-    Gtk.main()
+    def on_activate(app: Gtk.Application) -> None:
+        existing = app.get_active_window()
+        if existing is not None:
+            existing.present()
+            return
+        window = Gtk.ApplicationWindow(application=app, title="Artek Buddy")
+        window.set_default_size(1440, 900)
+        apply_window_icon(window)
+        window.connect("destroy", lambda *_args: _unregister_window(window))
+        tray = create_tray(window, lambda: window.destroy())
+        window.connect("delete-event", lambda *_args: hide_to_tray(window, tray))
+        window.connect("focus-in-event", _on_focus_in)
+        view = WebKit2.WebView()
+        bind_external_links(view, local_url)
+        try:
+            from clipboard_image import bind_webkit_paste
+
+            bind_webkit_paste(view)
+        except Exception:
+            pass
+        view.load_uri(local_url)
+        window.add(view)
+        _register_window(window)
+        window.show_all()
+
+    app = Gtk.Application(application_id="local.artek.buddy")
+    app.connect("activate", on_activate)
+    app.run(None)
     return True
 
 

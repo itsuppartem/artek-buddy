@@ -167,6 +167,11 @@ export const api = {
     }) {
       return request<{ ok: boolean }>("POST", "/local/notify", input).catch(() => ({ ok: false }));
     },
+    dismissNotify(tag: string) {
+      return request<{ ok: boolean }>("POST", "/local/notify-dismiss", { tag }).catch(() => ({
+        ok: false,
+      }));
+    },
     ownerRead(path: string) {
       return request<{
         ok: boolean;

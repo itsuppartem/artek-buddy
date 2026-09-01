@@ -3,7 +3,6 @@ import type { ProductEvent } from "../types";
 import {
   allowAlert,
   attentionFingerprint,
-  attentionFromBotChange,
   attentionFromEvent,
   attentionFromParkedBot,
   type BotAlertSnapshot,
@@ -12,6 +11,7 @@ import {
   parkedAttentionForView,
   rememberShownAlert,
   shouldClearAttentionForView,
+  shouldConsiderEventForAttention,
   shouldCountThreadRead,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
@@ -30,6 +30,21 @@ function event(over: Partial<ProductEvent> & Pick<ProductEvent, "type">): Produc
     payload: {},
     ...over,
   };
+}
+
+function completedEvent(text = "Done", runId = "run-1", eventId = "e1"): ProductEvent {
+  return event({
+    id: eventId,
+    type: "run.completed",
+    runId,
+    payload: {
+      message: {
+        id: "msg-1",
+        role: "bot",
+        blocks: [{ kind: "text", text }],
+      },
+    },
+  });
 }
 
 describe("shouldSendDesktopAlert", () => {
@@ -106,6 +121,24 @@ describe("nativeNotifyTag", () => {
 });
 
 describe("attentionFromEvent", () => {
+  it("uses only the workspace stream as the canonical attention source", () => {
+    expect(shouldConsiderEventForAttention("workspace")).toBe(true);
+    expect(shouldConsiderEventForAttention("thread")).toBe(false);
+    expect(shouldConsiderEventForAttention("poll")).toBe(false);
+  });
+
+  it("deduplicates one occurrence without suppressing a later identical reply", () => {
+    const first = attentionFromEvent(completedEvent("Same answer", "run-1", "evt-a"), "Alpha");
+    const duplicate = attentionFromEvent(completedEvent("Same answer", "run-1", "evt-a"), "Alpha");
+    const later = attentionFromEvent(completedEvent("Same answer", "run-2", "evt-b"), "Alpha");
+    expect(first).not.toBeNull();
+    expect(duplicate).not.toBeNull();
+    expect(later).not.toBeNull();
+    if (!first || !duplicate || !later) return;
+    expect(attentionFingerprint(first)).toBe(attentionFingerprint(duplicate));
+    expect(attentionFingerprint(first)).not.toBe(attentionFingerprint(later));
+  });
+
   it("does not treat auto owner jobs as takeover", () => {
     expect(
       attentionFromEvent(
@@ -123,15 +156,68 @@ describe("attentionFromEvent", () => {
       attentionFromEvent(
         event({
           type: "run.waiting_input",
-          payload: { question: "Please complete the browser step." },
+          payload: { text: "Please complete the browser step.", messageId: "msg-ask" },
         }),
         "Alpha",
       ),
     ).toMatchObject({
       kind: "ask",
       title: "Alpha is asking",
-      body: "The bot is waiting for you.",
+      body: "Please complete the browser step.",
     });
+  });
+
+  it("notifies only when completion created a new owner-visible final message", () => {
+    expect(attentionFromEvent(completedEvent("Fresh final answer"), "Alpha")).toMatchObject({
+      kind: "replied",
+      body: "Fresh final answer",
+    });
+    expect(
+      attentionFromEvent(
+        event({
+          type: "run.completed",
+          runId: "run-silent",
+          payload: { message: null },
+        }),
+        "Alpha",
+      ),
+    ).toBeNull();
+  });
+
+  it("does not turn an intermediate text event into a native alert", () => {
+    expect(
+      attentionFromEvent(
+        event({
+          type: "thread.message.created",
+          payload: {
+            message: {
+              id: "msg-progress",
+              role: "bot",
+              blocks: [{ kind: "text", text: "Still working" }],
+            },
+          },
+        }),
+        "Alpha",
+      ),
+    ).toBeNull();
+  });
+
+  it("does not duplicate ask attention from the ask-card message event", () => {
+    expect(
+      attentionFromEvent(
+        event({
+          type: "thread.message.created",
+          payload: {
+            message: {
+              id: "msg-ask",
+              role: "bot",
+              blocks: [{ kind: "ask", text: "Pick one", status: "pending" }],
+            },
+          },
+        }),
+        "Alpha",
+      ),
+    ).toBeNull();
   });
 
   it("builds a failed alert from run.failed", () => {
@@ -145,9 +231,9 @@ describe("attentionFromEvent", () => {
 
 describe("allowAlert", () => {
   it("honors notifyOnFinish only for replied and failed", () => {
-    const replied = attentionFromEvent(event({ type: "run.completed" }), "Alpha");
+    const replied = attentionFromEvent(completedEvent(), "Alpha");
     const ask = attentionFromEvent(
-      event({ type: "thread.ask", payload: { text: "Pick one" } }),
+      event({ type: "run.waiting_input", payload: { text: "Pick one" } }),
       "Alpha",
     );
     expect(replied && allowAlert(replied, false)).toBe(false);
@@ -193,7 +279,7 @@ describe("shouldReplaceAttention", () => {
       "Need",
     );
     const replied = attentionFromEvent(
-      event({ type: "run.completed", createdAt: "2026-01-01T00:00:01Z" }),
+      { ...completedEvent(), createdAt: "2026-01-01T00:00:01Z" },
       "Need",
     );
     expect(takeover?.title).toBe("Need needs you");
@@ -202,84 +288,12 @@ describe("shouldReplaceAttention", () => {
   });
 
   it("replaces replied with a later takeover", () => {
-    const replied = attentionFromEvent(event({ type: "run.completed" }), "Need");
+    const replied = attentionFromEvent(completedEvent(), "Need");
     const takeover = attentionFromEvent(
       event({ type: "computer.takeover.requested", createdAt: "2026-01-01T00:00:02Z" }),
       "Need",
     );
     expect(replied && takeover && shouldReplaceAttention(replied, takeover)).toBe(true);
-  });
-});
-
-describe("attentionFromBotChange", () => {
-  it("raises takeover when the bot enters waiting_takeover", () => {
-    const alert = attentionFromBotChange(
-      botSnap({ status: "running" }),
-      botSnap({
-        status: "waiting_takeover",
-        unread: true,
-        preview: "need you",
-        updatedAt: "2026-01-01T00:00:02Z",
-      }),
-    );
-    expect(alert?.kind).toBe("takeover");
-    expect(alert?.title).toBe("Need needs you");
-  });
-
-  it("does not emit replied while the bot stays waiting_takeover", () => {
-    expect(
-      attentionFromBotChange(
-        botSnap({ status: "waiting_takeover", unread: false }),
-        botSnap({
-          status: "waiting_takeover",
-          unread: true,
-          preview: "need you",
-          updatedAt: "2026-01-01T00:00:02Z",
-        }),
-      ),
-    ).toBeNull();
-  });
-
-  it("treats running to idle unread as replied even if the preview is a takeover reason", () => {
-    const alert = attentionFromBotChange(
-      botSnap({ status: "running" }),
-      botSnap({
-        status: "idle",
-        unread: true,
-        preview: "Pass the site check, then Release.",
-        updatedAt: "2026-01-01T00:00:02Z",
-      }),
-    );
-    expect(alert?.kind).toBe("replied");
-    expect(alert?.title).toBe("Need replied");
-  });
-
-  it("does not treat auto waiting_input as asking", () => {
-    expect(
-      attentionFromBotChange(
-        botSnap({ status: "running", preview: "working" }),
-        botSnap({
-          status: "waiting_input",
-          unread: true,
-          preview: "Remembered: Work robot RN-017MINE: repo /home/nsys",
-          updatedAt: "2026-01-01T00:00:02Z",
-        }),
-      ),
-    ).toBeNull();
-  });
-
-  it("does not alert on a Remembered preview after the turn", () => {
-    expect(
-      attentionFromBotChange(
-        botSnap({ status: "running", unread: false }),
-        botSnap({
-          status: "idle",
-          unread: true,
-          preview: "Remembered: Work robot RN-017MINE: repo /home/nsys",
-          updatedAt: "2026-01-01T00:00:02Z",
-        }),
-      ),
-    ).toBeNull();
   });
 });
 
@@ -394,31 +408,15 @@ describe("shouldWatchBackgroundBot", () => {
 });
 
 describe("rememberShownAlert", () => {
-  it("does not consume the parked key when the same kind is still in the debounce window", () => {
+  it("does not suppress distinct final answers that finish close together", () => {
     const seen = new Set<string>();
-    const recentKindAt = new Map<string, number>([["bot-a:takeover", 1_000]]);
-    expect(
-      rememberShownAlert(seen, recentKindAt, "bot-a:takeover:parked", "bot-a:takeover", 4_000),
-    ).toBe("skip");
-    expect(seen.has("bot-a:takeover:parked")).toBe(false);
-  });
-
-  it("can show the same parked key after the debounce window", () => {
-    const seen = new Set<string>();
-    const recentKindAt = new Map<string, number>([["bot-a:takeover", 1_000]]);
-    expect(
-      rememberShownAlert(seen, recentKindAt, "bot-a:takeover:parked", "bot-a:takeover", 10_000),
-    ).toBe("show");
-    expect(seen.has("bot-a:takeover:parked")).toBe(true);
-    expect(recentKindAt.get("bot-a:takeover")).toBe(10_000);
+    expect(rememberShownAlert(seen, "event-a")).toBe("show");
+    expect(rememberShownAlert(seen, "event-b")).toBe("show");
+    expect(seen).toEqual(new Set(["event-a", "event-b"]));
   });
 
   it("skips a key that already showed", () => {
     const seen = new Set<string>(["bot-a:takeover:parked"]);
-    const recentKindAt = new Map<string, number>();
-    expect(
-      rememberShownAlert(seen, recentKindAt, "bot-a:takeover:parked", "bot-a:takeover", 20_000),
-    ).toBe("skip");
-    expect(recentKindAt.size).toBe(0);
+    expect(rememberShownAlert(seen, "bot-a:takeover:parked")).toBe("skip");
   });
 });

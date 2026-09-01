@@ -22,6 +22,29 @@ def test_scripted_turn_happy(client, auth_header) -> None:
     assert "bot" in roles
 
 
+def test_completed_event_carries_only_the_new_final_message(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "NotifyFinal")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "hello"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    wait_run(client, auth_header, bot_id, run_id)
+    completed = [
+        event
+        for event in client.app.state.hub.replay(bot_id)
+        if event.type.value == "run.completed" and event.run_id == run_id
+    ]
+    assert len(completed) == 1
+    message = completed[0].payload["message"]
+    assert message["role"] == "bot"
+    assert any(
+        block.get("kind") == "text" and block.get("text") == "ok" for block in message["blocks"]
+    )
+
+
 def test_scripted_turn_fail(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "ScriptedFail")["id"]
     sent = client.post(
