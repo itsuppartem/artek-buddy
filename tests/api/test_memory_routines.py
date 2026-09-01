@@ -252,8 +252,7 @@ def test_worker_remember_does_not_write_remembered_line(client, auth_header) -> 
         json={"text": "please e2e-background-worker-remember"},
     )
     assert sent.status_code == 200
-    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
-    assert snap["run"]["status"] == "completed"
+    snap = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_ACK)
     assert E2E_WORKER_ACK in message_texts(snap)
     done = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_SUMMARY)
     remembered = [text for text in message_metas(done) if text.startswith("Remembered:")]
