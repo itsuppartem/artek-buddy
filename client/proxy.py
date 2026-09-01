@@ -18,6 +18,7 @@ from urllib.parse import urlencode, urlsplit
 from notifications import _desktop_dismiss, _desktop_notify
 from owner_paths import (
     _owner_path_status,
+    inspect_owner_exec_writes,
     inspect_owner_path,
     owner_downloads_dir,
     unique_download_dest,
@@ -662,6 +663,10 @@ class Handler(BaseHTTPRequestHandler):
         cwd, err = inspect_owner_path(str(payload.get("cwd") or "~"), must_exist=True, as_dir=True)
         if cwd is None:
             self._json(_owner_path_status(err), {"ok": False, "error": f"cwd: {err}"})
+            return
+        write_err = inspect_owner_exec_writes(command)
+        if write_err:
+            self._json(_owner_path_status(write_err), {"ok": False, "error": write_err})
             return
         try:
             # Loopback owner-exec is the paired .deb talking to this PC, not the

@@ -206,6 +206,32 @@ def test_owner_exec_uses_opt_in_ssh_mux_environment(
     assert captured[0]["ARTEK_SSH_CONTROL_PATH"] == "/tmp/artek-test/%C"
 
 
+def test_owner_exec_write_outside_home_does_not_run_subprocess(
+    client_mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proxy = _proxy(client_mod)
+    called: list[int] = []
+    monkeypatch.setattr(proxy.subprocess, "run", lambda *_a, **_k: called.append(1))
+    dest = tmp_path.parent / f"artek-outside-{tmp_path.name}.patch"
+    body = json.dumps({"command": f"git show --output={dest} HEAD", "cwd": "~"}).encode()
+    with running_proxy(client_mod, tmp_path, monkeypatch) as (httpd, port):
+        origin = f"http://127.0.0.1:{port}"
+        status, headers = _post_owner_exec(
+            port,
+            {
+                "Host": f"127.0.0.1:{port}",
+                "Origin": origin,
+                "Content-Type": "application/json",
+                "X-Artek-Local-Nonce": httpd.local_nonce,
+            },
+            body,
+        )
+    assert status == 403
+    _no_wildcard_cors(headers)
+    assert called == []
+    assert not dest.exists()
+
+
 def test_read_thread_withdraws_only_that_bots_native_notification(
     client_mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
