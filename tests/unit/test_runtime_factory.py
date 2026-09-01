@@ -139,6 +139,13 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert twice[0].tool == "remember"
     assert twice[1].tool == "remember"
     assert twice[0].args.get("content") != twice[1].args.get("content")
+    thrice = steps_for_prompt("please e2e-remember-same-thrice")
+    assert [step.tool for step in thrice[:3]] == ["remember", "remember", "remember"]
+    worker_remember = steps_for_prompt("please e2e-background-worker-remember")
+    assert worker_remember[0].tool == "spawn_subagent"
+    assert worker_remember[0].args.get("task") == "please e2e-worker-remember-rule"
+    rule = steps_for_prompt("please e2e-worker-remember-rule")
+    assert rule[0].tool == "remember"
 
     city = steps_for_prompt("please e2e-identity-city NoviSadTok")
     assert city[0].tool == "remember"
