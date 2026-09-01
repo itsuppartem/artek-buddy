@@ -97,6 +97,7 @@ import {
   splitQueryMatch,
 } from "../lib/sidebar";
 import {
+  canAnswerOwnerPrompt,
   isHiddenLiveDraft,
   isRawRunFailedMessage,
   isToolNoise,
@@ -2084,11 +2085,7 @@ export function ShellPage() {
               .map((message) => (
                 <MessageView
                   key={message.id}
-                  canAnswer={
-                    thread?.run?.status === "waiting_input" &&
-                    Boolean(message.runId) &&
-                    message.runId === thread.run.id
-                  }
+                  canAnswer={canAnswerOwnerPrompt(message, thread?.run)}
                   message={message}
                   queued={isQueuedMessageId(message.id)}
                   offlineCaption={offlineCaptionText(offlineCaptions, message.id)}

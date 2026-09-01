@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ComputerStatus, ProductEvent, Run, ThreadSnapshot } from "../types";
 import {
+  canAnswerOwnerPrompt,
   isComputerStatusEvent,
   isHiddenLiveDraft,
   isLiveMessageId,
@@ -83,6 +84,48 @@ describe("live message ids", () => {
         createdAt: "2026-01-01T00:00:00Z",
       }),
     ).toBe(true);
+  });
+});
+
+describe("canAnswerOwnerPrompt", () => {
+  it("keeps a pending worker consent card answerable after the lead run ends", () => {
+    const message = {
+      id: "m-consent",
+      threadId: "t",
+      seq: 1,
+      role: "bot" as const,
+      blocks: [
+        {
+          kind: "ask" as const,
+          text: "Open example.com?",
+          consentId: "c1",
+          status: "pending",
+        },
+      ],
+      runId: "sub_worker",
+      createdAt: "2026-01-01T00:00:00Z",
+    };
+    expect(canAnswerOwnerPrompt(message, run({ status: "completed" }))).toBe(true);
+    expect(
+      canAnswerOwnerPrompt(
+        { ...message, blocks: [{ ...message.blocks[0], status: "answered" }] },
+        run({ status: "completed" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("still requires the parked lead run for an owner question", () => {
+    const message = {
+      id: "m-ask",
+      threadId: "t",
+      seq: 1,
+      role: "bot" as const,
+      blocks: [{ kind: "ask" as const, text: "Which city?", status: "pending" }],
+      runId: "run1",
+      createdAt: "2026-01-01T00:00:00Z",
+    };
+    expect(canAnswerOwnerPrompt(message, run({ status: "waiting_input" }))).toBe(true);
+    expect(canAnswerOwnerPrompt(message, run({ status: "completed" }))).toBe(false);
   });
 });
 
