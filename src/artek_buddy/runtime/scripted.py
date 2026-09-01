@@ -48,6 +48,12 @@ E2E_CHILD_NAME = "Spawned pal"
 E2E_CHILD_ARCHIVED = "Old pal"
 E2E_SUBAGENT_NAME = "Researcher"
 E2E_SUBAGENT_TASK = "please e2e-slow now"
+E2E_WORKER_ACK = "Working in the background."
+E2E_WORKER_STATUS = "Still working."
+E2E_WORKER_STEER_ACK = "Got it. I'll apply that next."
+E2E_WORKER_SUMMARY = "The background job is done."
+E2E_WORKER_RESULT = "blocked work finished"
+E2E_WORKER_BLOCK_S = 10.0
 E2E_ASK_READY = "I am ready to answer. The city is Subotica."
 E2E_ASK_ANSWER = "They said the city is Subotica."
 E2E_OLDER_PREFIX = "e2e-old-"
@@ -354,6 +360,38 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 options=["I completed the step", "Stop"],
             ),
             scripted_finish(E2E_OWNER_HELP_ANSWER),
+        ]
+    if "a background worker finished" in hay:
+        return [scripted_finish(E2E_WORKER_SUMMARY)]
+    if "e2e-background-worker-chat" in hay:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name=E2E_SUBAGENT_NAME,
+                task="please e2e-worker-block",
+            ),
+            scripted_finish(E2E_WORKER_ACK),
+        ]
+    if "e2e-worker-status" in hay:
+        return [
+            scripted_tool("inspect_subagent", ref=E2E_SUBAGENT_NAME),
+            scripted_finish(E2E_WORKER_STATUS),
+        ]
+    if "e2e-worker-steer" in hay:
+        return [
+            scripted_tool(
+                "steer_subagent",
+                ref=E2E_SUBAGENT_NAME,
+                text="use path B",
+            ),
+            scripted_finish(E2E_WORKER_STEER_ACK),
+        ]
+    if "e2e-worker-block" in hay:
+        return [
+            scripted_tool("list_subagents"),
+            scripted_delay(E2E_WORKER_BLOCK_S),
+            scripted_tool("list_subagents"),
+            scripted_finish(E2E_WORKER_RESULT),
         ]
     if "e2e-subagent-hang" in hay:
         return [
@@ -740,6 +778,7 @@ class ScriptedRuntime(RuntimeBase):
         agent_id = await self.ensure_session(session_id, bot_id=bot_id, role=role)
         self.bind_agent_bot(agent_id, bot_id)
         self.last_prompt = prompt
+        self.last_tool_results = []
         hay = _user_tail(prompt).lower()
         if "e2e-dead-wait-stuck" in hay:
             run_id = new_id("run")
@@ -918,6 +957,13 @@ class ScriptedRuntime(RuntimeBase):
                 status = step.status or "completed"
                 result = step.result if step.result is not None else result
                 error = step.error
+                if "e2e-worker-block" in hay:
+                    notes = [hay]
+                    for _name, tool_result in self.last_tool_results:
+                        if isinstance(tool_result, dict):
+                            notes.append(str(tool_result.get("lead_clarification") or ""))
+                    if "path b" in "\n".join(notes).lower():
+                        result = "path B done"
         yield RunRecord(
             id=run_id,
             agent_id=agent_id,

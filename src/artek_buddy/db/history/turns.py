@@ -144,8 +144,10 @@ class TurnsMixin:
                     )
                     conn.execute(
                         """
-                        INSERT INTO turn_inbox (id, bot_id, message_id, text, reply_to_id, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s)
+                        INSERT INTO turn_inbox (
+                            id, bot_id, message_id, text, reply_to_id, created_at, kind
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, 'owner')
                         """,
                         (new_id("inb"), bot.id, msg_id, inbox_body, reply_to_id, now),
                     )
@@ -212,6 +214,50 @@ class TurnsMixin:
         if user is None or run is None:
             raise RuntimeError("failed to persist turn")
         return self._with_replies([user])[0], run, queued_turn
+
+    def record_worker_stop(
+        self,
+        bot: Bot,
+        *,
+        model_provider: str | None = None,
+        model_id: str | None = None,
+    ) -> Run:
+        now = isoformat_utc()
+        run_id = new_id("run")
+        task_id = new_id("tsk")
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO runs (
+                    id, bot_id, thread_id, task_id, status, trigger,
+                    model_provider, model_id, error, result, started_at, completed_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, 'user',
+                    %s, %s, %s, NULL, %s, %s
+                )
+                """,
+                (
+                    run_id,
+                    bot.id,
+                    bot.thread_id,
+                    task_id,
+                    RunStatus.cancelled.value,
+                    model_provider,
+                    model_id,
+                    "Stopped.",
+                    now,
+                    now,
+                ),
+            )
+            conn.execute(
+                "UPDATE bots SET status = %s, updated_at = %s WHERE id = %s",
+                ("idle", now, bot.id),
+            )
+            conn.commit()
+        run = self._get_run(run_id)
+        if run is None:
+            raise RuntimeError("failed to persist worker stop")
+        return run
 
     def begin_turn(
         self,

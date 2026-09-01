@@ -671,14 +671,39 @@ def test_user_stop_during_generate_shows_stopped_and_no_later_card(
 
 
 def test_subagent_stop_while_running(page: Page, client_url: str, host_url: str) -> None:
-    from artek_buddy.runtime.scripted import E2E_SUBAGENT_NAME
+    from artek_buddy.runtime.scripted import E2E_WORKER_ACK
 
     name = _named(page, client_url, host_url, "Worker")
-    send_message(page, "please e2e-subagent-hang", name)
+    send_message(page, "please e2e-background-worker-chat", name)
+    expect(page.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
     expect(page.get_by_test_id("subagent-card")).to_have_count(0)
-    expect(page.get_by_text(f"Started {E2E_SUBAGENT_NAME}.")).to_be_visible(timeout=15_000)
+    expect(page.get_by_text("Started Researcher.")).to_have_count(0)
+    expect(composer(page)).to_be_enabled()
     page.get_by_test_id("thread-stop").click()
     expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
+
+
+def test_background_worker_keeps_composer_and_one_summary(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    from artek_buddy.runtime.scripted import (
+        E2E_WORKER_ACK,
+        E2E_WORKER_STATUS,
+        E2E_WORKER_SUMMARY,
+    )
+
+    name = _named(page, client_url, host_url, "BgChat")
+    send_message(page, "please e2e-background-worker-chat", name)
+    expect(page.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+    expect(page.get_by_test_id("thread-stop")).to_be_visible()
+    expect(composer(page)).to_be_enabled()
+    send_message(page, "please e2e-worker-status", name)
+    expect(page.get_by_text(E2E_WORKER_STATUS)).to_be_visible(timeout=8_000)
+    expect(page.get_by_text(E2E_WORKER_SUMMARY)).to_be_visible(timeout=20_000)
+    expect(page.get_by_text(E2E_WORKER_SUMMARY)).to_have_count(1)
+    expect(page.get_by_text("blocked work finished")).to_have_count(0)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
 
 
 def test_takeover_banner_on_other_chat(page: Page, client_url: str, host_url: str) -> None:

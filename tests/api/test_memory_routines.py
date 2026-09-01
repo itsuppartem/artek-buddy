@@ -199,8 +199,8 @@ def test_subagents_empty_and_missing_stop(client, auth_header) -> None:
     assert steered.status_code == 404
 
 
-def test_spawn_subagent_writes_started_line(client, auth_header) -> None:
-    from artek_buddy.runtime.scripted import E2E_SUBAGENT_NAME
+def test_spawn_subagent_does_not_write_started_line(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_SUBAGENT_NAME, E2E_WORKER_SUMMARY
 
     bot_id = create_bot(client, auth_header, "WorkerStep")["id"]
     sent = client.post(
@@ -211,9 +211,14 @@ def test_spawn_subagent_writes_started_line(client, auth_header) -> None:
     assert sent.status_code == 200
     snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
     assert snap["run"]["status"] == "completed"
-    snap = wait_thread_has(client, auth_header, bot_id, f"Started {E2E_SUBAGENT_NAME}.")
-    texts = message_texts(snap)
-    assert f"Started {E2E_SUBAGENT_NAME}." in texts
+    assert f"Started {E2E_SUBAGENT_NAME}." not in message_texts(snap)
+    listed = client.get(f"/v1/bots/{bot_id}/subagents", headers=auth_header)
+    assert listed.status_code == 200
+    assert listed.json()["subagents"]
+    done = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_SUMMARY)
+    texts = message_texts(done)
+    assert texts.count(E2E_WORKER_SUMMARY) == 1
+    assert not any(text.startswith(("Started ", "Finished ", "Stopped ")) for text in texts)
 
 
 def test_remember_twice_writes_one_meta_and_one_row(client, auth_header) -> None:

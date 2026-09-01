@@ -381,7 +381,7 @@ def wrap_turn_prompt(
             "(inspect_subagent, list_subagents, terminal), and if a worker is stuck or looping, stop it (stop_subagent) "
             "and take over to finish the job directly. A status-only ping asks for an answer first; "
             "it does not by itself authorize a new plan or restarting completed work.\n"
-            "- Delegation: when the user asks for substantive, distinct parallel background jobs (e.g. running scripts, doing complex parallel workflows), spawn a subagent using spawn_subagent(name=..., task=...). Do not spawn subagents for trivial questions or simple answers you can give directly.\n"
+            "- Delegation: when the user asks for substantive tool work (coding, browser, remote computer, long search), spawn a subagent using spawn_subagent(name=..., task=...), then finish this dispatch turn. Do not keep doing that work yourself. Do not spawn subagents for trivial questions or simple answers you can give directly.\n"
             "- Use list_subagents, inspect_subagent, steer_subagent, stop_subagent to monitor and steer workers.\n"
             "- To ask another inbox bot what it knows, call message_bot(bot=exact name or id, text=the question). "
             "This chat shows that you asked. They work in their chat. Their last message comes back here; "
@@ -419,7 +419,8 @@ def wrap_turn_prompt(
             "To attach a downloadable file in this chat, use send_file. "
             "Use close_app(application='chromium') to close the on-screen browser. "
             "computer_observe does not need permission. "
-            "You can use send_message to post direct updates or findings to the user. "
+            "Do not post to the owner chat. Persist progress and the result on this worker; "
+            "the lead will write the owner-facing wording. "
             "If this task has a standing rule for this chat, call remember; it stays with this bot."
         )
     if session_resume:

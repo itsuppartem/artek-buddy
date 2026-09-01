@@ -216,6 +216,9 @@ async def stop_thread(
 ) -> OkResponse:
     try:
         bot = _require_bot(history, bot_id)
+        had_workers = any(
+            item.status in {"queued", "running"} for item in history.list_subagents(bot.id)
+        )
         cancelled_ids = history.cancel_active_runs(bot_id)
         question_hub = getattr(current_app().state, "consent", None)
         if question_hub is not None:
@@ -224,6 +227,8 @@ async def stop_thread(
         service = getattr(current_app().state, "subagents", None)
         if service is not None:
             service.stop_all(bot)
+        if not cancelled_ids and had_workers:
+            cancelled_ids = [history.record_worker_stop(bot).id]
         for run_id in cancelled_ids:
             _emit(
                 events,

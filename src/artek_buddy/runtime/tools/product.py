@@ -21,16 +21,32 @@ from artek_buddy.runtime.tools.owner import OwnerToolsMixin
 from artek_buddy.runtime.tools.specs import TOOL_SPECS, ToolSpec
 from artek_buddy.runtime.tools.subagents import SubagentToolsMixin
 
+WORKER_ONLY_TOOLS = frozenset(
+    {
+        "send_file",
+        "read_owner_file",
+        "write_owner_file",
+        "list_owner_dir",
+        "run_owner_command",
+        "open_path",
+        "launch_app",
+        "close_app",
+        "computer_observe",
+        "computer_act",
+        "browser_act",
+    }
+)
+
 
 class ProductToolsCore:
     def __init__(self, runtime: Any) -> None:
         self.runtime = runtime
 
     def specs(self, role: str = "lead") -> list[ToolSpec]:
-        extra = self._connected_specs()
+        extra = self._connected_specs() if role == "subagent" else []
         if role == "subagent":
             return [spec for spec in TOOL_SPECS if not spec.lead_only] + extra
-        return list(TOOL_SPECS) + extra
+        return [spec for spec in TOOL_SPECS if spec.name not in WORKER_ONLY_TOOLS]
 
     def _connected_specs(self) -> list[ToolSpec]:
         store = getattr(self.runtime, "store", None)
@@ -225,6 +241,12 @@ class ProductToolsCore:
             result = handler(args or {}, bound_bot_id)
             if not isinstance(result, dict):
                 return result
+            role = self.runtime.resolve_turn_role()
+            if role == "subagent":
+                note = self._take_worker_clarification(bound_bot_id)
+                if note:
+                    result = {**result, **note}
+                return result
             steer = self._take_owner_steer(bound_bot_id)
             if steer:
                 result = {**result, **steer}
@@ -256,6 +278,29 @@ class ProductToolsCore:
             log.exception("failed to drain mid-turn owner message")
             return None
         return format_owner_steer(items or [])
+
+    def _take_worker_clarification(self, bound_bot_id: str | None) -> dict[str, Any] | None:
+        store = getattr(self.runtime, "store", None)
+        take = getattr(store, "take_new_clarifications", None)
+        if not callable(take):
+            return None
+        _bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+        if not run_id:
+            return None
+        try:
+            note = take(run_id)
+        except Exception:
+            log.exception("failed to drain worker clarification")
+            return None
+        if not note:
+            return None
+        return {
+            "lead_clarification": note,
+            "owner_instruction": (
+                "The lead sent a correction. Apply it after this tool. "
+                "Do not restart the current side effect."
+            ),
+        }
 
 
 class ProductTools(
