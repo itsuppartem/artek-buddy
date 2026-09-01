@@ -147,9 +147,8 @@ def _owner_exec_write_targets(command: str) -> list[str]:
     text = (command or "").strip()
     if not text:
         return []
-    parts = [part.strip() for part in re.split(r"\s*(?:&&|\|\||[;\n|])\s*", text) if part.strip()]
     found: list[str] = []
-    for part in parts:
+    for part in _shell_segments(text):
         try:
             tokens = shlex.split(part, posix=True)
         except ValueError:
@@ -157,6 +156,29 @@ def _owner_exec_write_targets(command: str) -> list[str]:
         if tokens:
             found.extend(_git_find_write_targets(tokens))
     return found
+
+
+def _shell_segments(text: str) -> list[str]:
+    """Split on &&, ||, ;, |, and newlines without a nested-space regex."""
+    parts: list[str] = []
+    start = 0
+    index = 0
+    length = len(text)
+    while index < length:
+        pair = text[index : index + 2]
+        char = text[index]
+        if pair in {"&&", "||"} or char in ";|\n":
+            chunk = text[start:index].strip()
+            if chunk:
+                parts.append(chunk)
+            index += 2 if pair in {"&&", "||"} else 1
+            start = index
+            continue
+        index += 1
+    chunk = text[start:].strip()
+    if chunk:
+        parts.append(chunk)
+    return parts
 
 
 def _git_find_write_targets(tokens: list[str]) -> list[str]:
