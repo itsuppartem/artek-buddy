@@ -17,6 +17,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Guest Files is Thunar without volume watching. Leftover pcmanfm is killed at box start so it does not keep covering the desktop.
 - A long `Remembered:` clock line is a one-row preview. Click it to open that Memory card with the full text.
 - Host-page Take control follows the pointer in use: a desktop browser uses the `.deb` overlay; a phone keeps the pad.
 - Linux `.deb` Ctrl+V attaches a screenshot even when the clipboard also has a `file://` path. Ctrl+Z / Ctrl+Shift+Z undo and redo Message.

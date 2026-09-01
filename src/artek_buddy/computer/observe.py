@@ -18,6 +18,7 @@ GENERIC_TITLES = frozenset(
         "xterm",
         "terminal",
         "pcmanfm",
+        "thunar",
         "files",
         "n/a",
         "(null)",

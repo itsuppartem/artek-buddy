@@ -434,7 +434,7 @@ The computer pane is screen, memory, and routines — not a second file list.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Take control → fluxbox / right-click **Files** (PCManFM) opens that bot’s home | [ ] | [ ] |
+| Take control → fluxbox / right-click **Files** opens that bot’s home. Closing it stays closed; it does not pop over the browser on its own. Opening a site still must not also open Files | [ ] | [ ] |
 | `launch_app` / menu Browser and Terminal still work next to Files | [ ] | [ ] |
 
 ---
