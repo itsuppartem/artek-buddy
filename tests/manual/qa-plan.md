@@ -143,13 +143,11 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 | Plugins → key → Save → **Key saved** + last four. Key field gone. Full key never on the page | [ ] | [ ] |
 | Wheel the thread with Plugins closed: hatch stays shut. Open Plugins, one Close, pane is gone | [ ] | [ ] |
 | Search apps filters as you type (no Enter needed). Enter does **not** close the pane. Catalog scroll stays put | [ ] | [ ] |
-| Search → Connect a simple app (no browser) → Connected. No new user bubble. Composer stays empty | [ ] | [ ] |
-| Chip click fills `please use {name}` and still does not Send | [ ] | [ ] |
+| Search → Connect a simple app (no browser) → Connected. No new user bubble. Composer stays empty. No chip above Message | [ ] | [ ] |
 | If Connect cannot start, a human line under the pane says what to do next (not a dead Connect and not only `could not start that connection`) | [ ] | [ ] |
-| Or chat `please e2e-connect-docs` (scripted host) / «подключи Docs» — **plugin-card**, not git setup | [ ] | [ ] |
-| Chip above Message has **×**. Click = `please use {name}`, no auto-Send. × hides the chip and does not send | [ ] | [ ] |
-| Send → thread **plugin-card** (name + result) | [ ] | [ ] |
-| Disconnect / Remove → chip gone; next turn has no that tool | [ ] | [ ] |
+| Or chat `please e2e-connect-docs` (scripted host) / «подключи Docs» — **plugin-card**, not git setup. Still no chip | [ ] | [ ] |
+| Ask the connected app (`please e2e-plugin-docs` / `please use Docs` on a scripted host, or a real task after GitHub Connect) — the bot calls the tools; thread **plugin-card** (name + result) | [ ] | [ ] |
+| Disconnect / Remove → next turn has no that tool | [ ] | [ ] |
 | If Connect opens a browser tab, Finish after login marks Connected | [ ] | [ ] |
 
 ---
@@ -579,7 +577,7 @@ If time is short, in this order:
 2. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated)
 3. **§4 Skill from the web**
 4. **§5 Bot asks bot**
-5. **§6 Plugins** (pane Connect or chat attach)
+5. **§6 Plugins** (pane Connect or chat attach; no chip; the bot uses the app)
 6. **§7 Desktop** + **§7a Hands on the guest** (Release keeps the picture; Sleeping → Take control shows Waking the desktop…)
 7. **§11 Phone chrome** + **§29 Computer must not blank**
 8. **§12 Pad and Cyrillic**
