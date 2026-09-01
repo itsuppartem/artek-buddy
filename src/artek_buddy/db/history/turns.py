@@ -475,6 +475,9 @@ class TurnsMixin:
             conn.commit()
         return self._run_from_row(row) if row else None
 
+    def get_run(self, run_id: str) -> Run | None:
+        return self._get_run(run_id)
+
     def _run_from_row(self, row: dict[str, Any]) -> Run:
         return Run(
             id=row["id"],
@@ -509,40 +512,49 @@ class TurnsMixin:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                UPDATE runs SET status = 'waiting_input' WHERE id = %s
+                UPDATE runs SET status = 'waiting_input'
+                WHERE id = %s
+                  AND status IN ('queued', 'leased', 'running')
                 RETURNING *
                 """,
                 (run_id,),
             ).fetchone()
+            if row is None:
+                conn.commit()
+                return None
             conn.execute(
                 """
                 UPDATE bots SET status = 'waiting_input', updated_at = %s
-                WHERE id = (SELECT bot_id FROM runs WHERE id = %s)
+                WHERE id = %s
                 """,
-                (now, run_id),
+                (now, row["bot_id"]),
             )
             conn.commit()
-        return self._run_from_row(row) if row else None
+        return self._run_from_row(row)
 
     def mark_run_running(self, run_id: str) -> Run | None:
         now = isoformat_utc()
         with self._conn() as conn:
             row = conn.execute(
                 """
-                UPDATE runs SET status = 'running' WHERE id = %s AND status IN ('waiting_input', 'waiting_takeover')
+                UPDATE runs SET status = 'running'
+                WHERE id = %s AND status IN ('waiting_input', 'waiting_takeover')
                 RETURNING *
                 """,
                 (run_id,),
             ).fetchone()
+            if row is None:
+                conn.commit()
+                return None
             conn.execute(
                 """
                 UPDATE bots SET status = 'running', updated_at = %s
-                WHERE id = (SELECT bot_id FROM runs WHERE id = %s)
+                WHERE id = %s
                 """,
-                (now, run_id),
+                (now, row["bot_id"]),
             )
             conn.commit()
-        return self._run_from_row(row) if row else None
+        return self._run_from_row(row)
 
     def mark_run_waiting_takeover(self, run_id: str) -> Run | None:
         now = isoformat_utc()

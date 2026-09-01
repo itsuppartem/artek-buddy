@@ -571,6 +571,33 @@ class ConsentHub:
                 pending.cancelled = True
                 pending.waiter.set()
 
+    def cancel_owner_jobs(self, run_ids: list[str]) -> None:
+        wanted = [item for item in run_ids if item]
+        if not wanted:
+            return
+        finder = getattr(self.store, "owner_job_ids_for_runs", None)
+        request_ids: list[str] = []
+        if callable(finder):
+            try:
+                request_ids = list(finder(wanted) or [])
+            except Exception:
+                log.exception("failed to list owner jobs for cancel")
+                request_ids = []
+        payload = {"ok": False, "error": "Stopped."}
+        for request_id in request_ids:
+            try:
+                self.store.finish_consent_job(request_id, "failed")
+            except Exception:
+                log.exception("failed to finish owner job on cancel")
+            with self._lock:
+                self._results[request_id] = dict(payload)
+                waiter = self._result_waiters.get(request_id)
+                file_waiter = self._file_waiters.get(request_id)
+            if waiter is not None:
+                waiter.set()
+            if file_waiter is not None:
+                file_waiter.set()
+
     def get_job(self, request_id: str) -> dict[str, Any] | None:
         row = self.store.get_consent_request(request_id)
         if row is None:

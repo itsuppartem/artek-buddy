@@ -213,16 +213,27 @@ async def stop_thread(
     bot_id: str,
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
+    rt: AgentRuntime = Depends(runtime),
 ) -> OkResponse:
     try:
         bot = _require_bot(history, bot_id)
-        had_workers = any(
-            item.status in {"queued", "running"} for item in history.list_subagents(bot.id)
-        )
+        workers = [
+            item.id
+            for item in history.list_subagents(bot.id)
+            if item.status in {"queued", "running"}
+        ]
+        had_workers = bool(workers)
         cancelled_ids = history.cancel_active_runs(bot_id)
+        stop_ids = list(dict.fromkeys([*cancelled_ids, *workers]))
+        mark = getattr(rt, "mark_runs_cancelled", None)
+        if callable(mark):
+            mark(stop_ids)
         question_hub = getattr(current_app().state, "consent", None)
         if question_hub is not None:
-            question_hub.cancel_questions(cancelled_ids)
+            question_hub.cancel_questions(stop_ids)
+            cancel_jobs = getattr(question_hub, "cancel_owner_jobs", None)
+            if callable(cancel_jobs):
+                cancel_jobs(stop_ids)
         _cancel_turns(bot_id)
         service = getattr(current_app().state, "subagents", None)
         if service is not None:

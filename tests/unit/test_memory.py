@@ -36,7 +36,7 @@ def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
     worker = wrap_turn_prompt("do the long job", None, role="subagent")
     assert "spawn_subagent" in lead
     assert "finish this dispatch turn" in lead
-    assert "run_owner_command" not in lead
+    assert "You do not have run_owner_command" in lead
     assert "Do not post to the owner chat" in worker
     assert "does not appear in the owner thread" in worker
     assert "You do not have send_message" in worker
