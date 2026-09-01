@@ -89,6 +89,22 @@ def test_open_https_uses_browser_not_file_manager() -> None:
         assert "artek-browser" in cmd, path
         assert "xdg-open" not in cmd, path
         assert "pcmanfm" not in cmd, path
+        assert "thunar" not in cmd, path
+
+
+def test_launch_files_opens_thunar_home() -> None:
+    cmd = action_command([{"kind": "launch", "application": "files"}])
+    assert "thunar" in cmd
+    assert "/home/artek" in cmd
+    assert "pcmanfm" not in cmd
+
+
+def test_close_files_kills_thunar_and_leftover_pcmanfm() -> None:
+    cmd = _close_app_command("files")
+    assert "thunar" in cmd
+    assert "pcmanfm" in cmd
+    assert "pkill -x" in cmd
+    assert "pkill -f" not in cmd
 
 
 def test_open_local_path_still_uses_xdg_open() -> None:

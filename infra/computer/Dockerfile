@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     x11vnc \
     fluxbox \
     xterm \
-    pcmanfm \
+    thunar \
     xdotool \
     x11-utils \
     x11-xserver-utils \

@@ -17,6 +17,23 @@ def test_start_disables_pcmanfm_volume_autorun() -> None:
     text = (ROOT / "infra" / "computer" / "start.sh").read_text(encoding="utf-8")
     assert "autorun=0" in text
     assert "mount_on_startup=0" in text
+    assert "mount_removable=0" in text
+    assert "pkill -x pcmanfm" in text
+    assert "misc-volume-management" in text
+    assert "thunar --daemon" not in text
+    assert "s/pcmanfm\\.desktop/thunar.desktop/g" in text
+
+
+def test_guest_files_image_is_thunar_not_pcmanfm() -> None:
+    dockerfile = (ROOT / "infra" / "computer" / "Dockerfile").read_text(encoding="utf-8")
+    menu = (ROOT / "infra" / "computer" / "fluxbox.menu").read_text(encoding="utf-8")
+    mime = (ROOT / "infra" / "computer" / "mimeapps.list").read_text(encoding="utf-8")
+    assert "thunar" in dockerfile
+    assert "pcmanfm" not in dockerfile
+    assert "thunar /home/artek" in menu
+    assert "pcmanfm" not in menu
+    assert "inode/directory=thunar.desktop" in mime
+    assert "pcmanfm.desktop" not in mime
 
 
 def test_fluxbox_starts_from_usr_not_a_tmp_script() -> None:
