@@ -186,6 +186,16 @@ export function shouldConsiderEventForAttention(source: "workspace" | "thread" |
   return source === "workspace";
 }
 
+export function desktopWindowFocused(input: {
+  gtkActive: boolean | null;
+  pageHidden: boolean;
+  browserFocused: boolean;
+}): boolean {
+  if (input.pageHidden) return false;
+  if (input.gtkActive === null) return input.browserFocused;
+  return input.gtkActive;
+}
+
 export function shouldSendDesktopAlert(input: {
   windowFocused: boolean;
   viewingBotId: string | null;
@@ -193,9 +203,7 @@ export function shouldSendDesktopAlert(input: {
   pageHidden?: boolean;
 }): boolean {
   if (input.viewingBotId !== input.alertBotId) return true;
-  // Looking at the OS notification list blurs the window but does not hide
-  // the open chat. That is not "left the thread" and must not re-notify.
-  return input.pageHidden === true;
+  return input.windowFocused === false || input.pageHidden === true;
 }
 
 export function shouldCountThreadRead(input: {

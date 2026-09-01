@@ -8,10 +8,10 @@ from pairing import _log
 from tray import create_tray, hide_to_tray
 from window_chrome import (
     _on_focus_in,
-    _on_gtk_active,
     _register_window,
     _unregister_window,
     apply_window_icon,
+    bind_window_active,
     identify_desktop_app,
 )
 
@@ -100,6 +100,7 @@ def _open_webkit2(local_url: str) -> bool:
         window.connect("focus-in-event", _on_focus_in)
         view = WebKit2.WebView()
         bind_external_links(view, local_url)
+        bind_window_active(view, window)
         try:
             from clipboard_image import bind_webkit_paste
 
@@ -134,10 +135,10 @@ def _open_webkit6(local_url: str) -> bool:
             Gtk.Window.set_default_icon_name("artek-buddy")
         except Exception:
             pass
-        window.connect("notify::is-active", _on_gtk_active)
         window.connect("destroy", lambda *_args: _unregister_window(window))
         view = WebKit.WebView()
         bind_external_links(view, local_url)
+        bind_window_active(view, window)
         try:
             from clipboard_image import bind_webkit_paste
 

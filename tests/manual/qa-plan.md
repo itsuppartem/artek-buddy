@@ -449,8 +449,8 @@ The computer pane is screen, memory, and routines — not a second file list.
 | Click the Artek Buddy launcher three times: GTK3 presents one existing window / tray process. It does not create three hidden clients or three subscriptions | [ ] | — |
 | Run `please e2e-slow` in Demo and switch to Research: completion raises exactly one native **Demo replied** notification and does not steal the open chat | [ ] | — |
 | Run `research a city` in Demo and switch to Research: one pending question raises exactly one **Demo is asking** row, not one row for the ask card plus another for `waiting_input` | [ ] | — |
-| Start `please e2e-slow`, leave Demo open, then hide the window to the tray: completion still raises the native notification. The same completion while Demo is focused stays quiet | [ ] | — |
-| Leave Demo on screen and open the Ubuntu notification list: a later Demo reply does not stack an alert or become read. Close the list so Demo is focused: the unread pin clears and Demo's native row is withdrawn | [ ] | — |
+| Start `please e2e-slow`, leave Demo open, then switch to another app (window still mapped) or hide it to the tray: completion still raises the native notification. The same completion while Demo is focused stays quiet | [ ] | — |
+| Leave Demo on screen and open the Ubuntu notification list: an already shown Demo row is not posted again and Demo does not become read. A new Demo reply while the window is unfocused still posts one native row. Close the list so Demo is focused: the unread pin clears and Demo's native row is withdrawn | [ ] | — |
 | Dismiss a GNOME row without opening Demo: the chat stays unread. Opening Demo reads it; merely viewing the calendar flyout does not | [ ] | — |
 | Ubuntu Notifications lists **Artek Buddy** with title and final body. Two results from Demo update one row; a result from Research keeps a separate row | [ ] | — |
 | Intermediate text/progress, a silent completion after old text, `Remembered:` / `Forgot:`, This-PC auto work, worker cards, and relaunch/replay do not raise **is asking** / **replied** | [ ] | [ ] |
@@ -598,7 +598,7 @@ If time is short, in this order:
 16. **§9 Queue** pending mark, then local Sent while offline
 17. **§15 Stop** on a live turn shows Stopped. A late complete does not land
 18. **§15 dead wait** after 60+ minutes idle, the first live Send completes without a red line; scripted `please e2e-dead-wait` completes on that send and `please e2e-dead-wait-stuck` still shows one terminal error
-19. **§23 Notifications** launch three times → one client; hidden `please e2e-slow` → one Artek Buddy row, and opening that chat withdraws it
+19. **§23 Notifications** launch three times → one client; unfocused or hidden `please e2e-slow` → one Artek Buddy row, and opening that chat withdraws it
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 
