@@ -4,14 +4,36 @@ export DISPLAY="${DISPLAY:-:1}"
 export HOME="${HOME:-/home/artek}"
 AGENT_HOME="$HOME"
 mkdir -p "$AGENT_HOME" "$AGENT_HOME/.local/bin" "$AGENT_HOME/.config" /tmp/artek /tmp/.X11-unix /tmp/fluxbox-home
-# Leftover homes may have pcmanfm autorun=1, which pops a window for every mount.
+# Leftover homes may still have pcmanfm volume watching, which pops a window on every mount.
 mkdir -p "$AGENT_HOME/.config/pcmanfm/default"
 conf="$AGENT_HOME/.config/pcmanfm/default/pcmanfm.conf"
 if [ -f "$conf" ]; then
-  sed -i 's/^autorun=.*/autorun=0/;s/^mount_on_startup=.*/mount_on_startup=0/' "$conf"
+  sed -i 's/^autorun=.*/autorun=0/;s/^mount_on_startup=.*/mount_on_startup=0/;s/^mount_removable=.*/mount_removable=0/' "$conf"
+  grep -q '^mount_removable=' "$conf" || printf '\n%s\n' 'mount_removable=0' >> "$conf"
 else
-  printf '%s\n' '[volume]' 'mount_on_startup=0' 'autorun=0' > "$conf"
+  printf '%s\n' '[volume]' 'mount_on_startup=0' 'autorun=0' 'mount_removable=0' > "$conf"
 fi
+rm -f "$AGENT_HOME/.config/autostart/pcmanfm.desktop" \
+  "$AGENT_HOME/.config/autostart/pcmanfm-desktop.desktop"
+pkill -x pcmanfm >/dev/null 2>&1 || true
+if [ -f "$AGENT_HOME/.config/mimeapps.list" ]; then
+  sed -i 's/pcmanfm\.desktop/thunar.desktop/g' "$AGENT_HOME/.config/mimeapps.list"
+fi
+# Guest Files is Thunar without volume watching or a desktop daemon.
+mkdir -p "$AGENT_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
+printf '%s\n' \
+  '<?xml version="1.0" encoding="UTF-8"?>' \
+  '<channel name="thunar" version="1.0">' \
+  '  <property name="misc-volume-management" type="bool" value="false"/>' \
+  '</channel>' > "$AGENT_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/thunar.xml"
+printf '%s\n' \
+  '<?xml version="1.0" encoding="UTF-8"?>' \
+  '<channel name="thunar-volman" version="1.0">' \
+  '  <property name="automount-drives" type="bool" value="false"/>' \
+  '  <property name="automount-media" type="bool" value="false"/>' \
+  '  <property name="autobrowse" type="bool" value="false"/>' \
+  '  <property name="autoopen" type="bool" value="false"/>' \
+  '</channel>' > "$AGENT_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/thunar-volman.xml"
 export PATH="$AGENT_HOME/.local/bin:/usr/local/bin:$PATH"
 export NPM_CONFIG_PREFIX="$AGENT_HOME/.local"
 export PIP_USER=1

@@ -96,7 +96,15 @@ def _close_app_command(raw_app: str) -> str:
             "done"
         )
     if _is_files_app(raw_app):
-        raw_app = "pcmanfm"
+        return (
+            "for cls in Thunar thunar PCManFM pcmanfm; do "
+            'ids=$(xdotool search --onlyvisible --class "$cls" 2>/dev/null || true); '
+            'for id in $ids; do xdotool windowkill "$id" 2>/dev/null || true; done; '
+            "done; "
+            "for comm in thunar pcmanfm; do "
+            'pkill -x "$comm" >/dev/null 2>&1 || true; '
+            "done"
+        )
     safe = re.sub(r"[^A-Za-z0-9._+-]", "", raw_app.strip())
     if not safe:
         return "true"
@@ -251,12 +259,14 @@ def action_command(actions: list[dict]) -> str:
             if _is_browser_app(raw_app):
                 app = "artek-browser"
             elif _is_files_app(raw_app):
-                app = "pcmanfm"
+                app = "thunar"
             elif _is_terminal_app(raw_app):
                 app = "xterm"
             else:
                 app = raw_app
             uri = str(item.get("uri") or item.get("url") or "").strip()
+            if not uri and app == "thunar":
+                uri = "/home/artek"
             if uri:
                 parts.append(
                     f"nohup {shell_quote(app)} {shell_quote(uri)} >/tmp/artek/launch.log 2>&1 &"
