@@ -2815,6 +2815,11 @@
       },
       "Subagent": {
         "properties": {
+          "activity_seq": {
+            "default": 0,
+            "title": "Activity Seq",
+            "type": "integer"
+          },
           "bot_id": {
             "minLength": 1,
             "title": "Bot Id",
@@ -2865,6 +2870,39 @@
           "index": {
             "title": "Index",
             "type": "integer"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "last_activity_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity Kind"
+          },
+          "last_tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tool Name"
           },
           "name": {
             "title": "Name",
@@ -2934,6 +2972,11 @@
             "minLength": 1,
             "title": "Thread Id",
             "type": "string"
+          },
+          "tool_running": {
+            "default": false,
+            "title": "Tool Running",
+            "type": "boolean"
           },
           "updated_at": {
             "title": "Updated At",

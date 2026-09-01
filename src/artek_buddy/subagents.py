@@ -30,6 +30,7 @@ class SubagentService:
         self.loop: asyncio.AbstractEventLoop | None = None
         self.tasks: dict[str, asyncio.Task[Any]] = {}
         self._wake_lead: Any = None
+        self._cancelled: set[str] = set()
 
     def bind(
         self,
@@ -63,13 +64,49 @@ class SubagentService:
     def list_for(self, bot: Bot) -> list[Subagent]:
         return self.store.list_subagents(bot.id)
 
-    def stop(self, bot: Bot, ref: str) -> Subagent:
+    def is_cancelled(self, sub_id: str) -> bool:
+        if sub_id in self._cancelled:
+            return True
+        found = self.store.get_subagent(sub_id)
+        return found is not None and found.status not in {"queued", "running"}
+
+    def stop(
+        self,
+        bot: Bot,
+        ref: str,
+        *,
+        owner: bool = True,
+        inspected_activity_seq: int | None = None,
+    ) -> Subagent:
         found = self.inspect(bot, ref)
+        if not owner:
+            if found.tool_running:
+                raise SubagentError("worker has a tool in flight")
+            if inspected_activity_seq is None:
+                raise SubagentError("inspect the worker before stop")
+            if int(inspected_activity_seq) != found.activity_seq:
+                raise SubagentError("worker activity advanced since inspect")
+        self._cancelled.add(found.id)
         task = self.tasks.get(found.id)
         if task and not task.done():
             task.cancel()
-        updated = self.store.update_subagent(found.id, status="cancelled", error="stopped")
+        updated = self.store.cancel_subagent_row(
+            found.id,
+            owner=owner,
+            inspected_activity_seq=inspected_activity_seq,
+        )
         if updated is None:
+            live = self.store.get_subagent(found.id)
+            if live is not None and live.status == "cancelled":
+                self._cancelled.add(found.id)
+                return live
+            self._cancelled.discard(found.id)
+            if live is None:
+                raise SubagentError("subagent not found")
+            if not owner:
+                if live.tool_running:
+                    raise SubagentError("worker has a tool in flight")
+                raise SubagentError("worker activity advanced since inspect")
             raise SubagentError("subagent not found")
         self._emit(bot, updated)
         return updated
@@ -153,6 +190,8 @@ class SubagentService:
                 )
                 or record
             )
+            self.store.record_subagent_activity(sub_id, kind="run_started")
+            record = self.store.get_subagent(sub_id) or record
             self._emit(live, record)
             self.runtime.set_current_turn_context(
                 live.id,
@@ -199,6 +238,8 @@ class SubagentService:
                     draft = accumulate(draft, item.payload)
                     if draft:
                         record = self.store.update_subagent(sub_id, progress=draft) or record
+                        self.store.record_subagent_activity(sub_id, kind="text")
+                        record = self.store.get_subagent(sub_id) or record
                         self._emit(live, record)
             if not result:
                 result = draft or ""
@@ -240,6 +281,11 @@ class SubagentService:
             "index": record.index,
             "error": record.error,
             "clarifications": record.clarifications,
+            "last_activity_at": record.last_activity_at,
+            "activity_seq": record.activity_seq,
+            "last_activity_kind": record.last_activity_kind,
+            "last_tool_name": record.last_tool_name,
+            "tool_running": record.tool_running,
         }
 
     def _emit(self, bot: Bot, record: Subagent) -> None:

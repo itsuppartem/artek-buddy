@@ -418,6 +418,11 @@ class Subagent(BaseModel):
     result: str | None = None
     error: str | None = None
     clarifications: str | None = None
+    last_activity_at: str | None = None
+    activity_seq: int = 0
+    last_activity_kind: str | None = None
+    last_tool_name: str | None = None
+    tool_running: bool = False
     created_at: str
     updated_at: str
 

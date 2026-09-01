@@ -66,6 +66,7 @@ from artek_buddy.runtime import (
     RunRecord,
     runtime_kind,
 )
+from artek_buddy.runtime.owner_intent import classify_owner_intent
 from artek_buddy.stream import accumulate
 from artek_buddy.uploads import (
     UploadError,
@@ -404,8 +405,8 @@ def _format_inbox(
 ) -> str:
     lines = [
         "The user sent these messages while you were working. They were not injected mid-turn. Apply them now.",
-        "- If a message asks about progress, status, or a worker (e.g. 'еще делаешь?', 'сверил?', 'как там?'): check the actual state immediately (using inspect_subagent, list_subagents, or shell), give a quick direct update, and if a worker is stuck or failing, stop it (stop_subagent) and finish or fix the task directly.",
-        "- If a message refines or corrects a worker's task: steer it immediately with steer_subagent.",
+        "- If a message asks about progress, status, or a worker (e.g. 'еще делаешь?', 'сверил?', 'как там?'): check the actual host activity immediately (using inspect_subagent, list_subagents). Empty progress is no text update, not idle. Give a quick direct update. Do not call stop_subagent or restart_subagent on a status-only ping.",
+        "- If a message refines or corrects a worker's task: steer it immediately with steer_subagent. Keep the same worker id. Do not stop and spawn a replacement.",
         "- If a message gives new substantive parallel tasks: spawn a subagent if appropriate, or execute directly.",
     ]
     for index, item in enumerate(items, start=1):
@@ -756,6 +757,9 @@ async def _run_turn(
     rt.clear_active_turn(run_id=run.id)
     agent_id = session_id or bot.cursor_agent_id
     rt.set_current_turn_context(bot.id, run.id, bot.thread_id, agent_id=agent_id, role="lead")
+    set_intent = getattr(rt, "set_owner_intent", None)
+    if callable(set_intent):
+        set_intent(run.id, classify_owner_intent(text))
     request_id = current_request_id() or mint_request_id()
     bind_turn(
         run.id,

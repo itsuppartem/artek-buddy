@@ -39,7 +39,10 @@ def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
     assert "run_owner_command" not in lead
     assert "Do not post to the owner chat" in worker
     assert "does not appear in the owner thread" in worker
-    assert "send_message" not in worker
+    assert "You do not have send_message" in worker
+    assert worker.count("send_message") == 1
+    assert "no text update" in lead
+    assert "status-only ping must inspect" in lead
 
 
 def test_wrap_turn_prompt_keeps_user_tail() -> None:

@@ -1,7 +1,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
+
+TurnRole = Literal["lead", "subagent"]
+ActivityKind = Literal["run_started", "tool_started", "tool_finished", "text", "clarification"]
+
+
+@dataclass(frozen=True)
+class TurnContext:
+    bot_id: str
+    run_id: str
+    thread_id: str
+    role: TurnRole = "lead"
+    agent_id: str | None = None
+
+
+@dataclass
+class ToolTurnBox:
+    agent_id: str | None = None
+    turn: TurnContext | None = None
 
 
 @dataclass

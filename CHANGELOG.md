@@ -17,6 +17,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- A background worker that emits no assistant text is no longer treated as idle. Host-owned activity (tool start/finish, sequence, last tool) is what status inspects; a status ping cannot stop or replace that worker, and a stale inspect cannot Stop it. Explicit window Stop still cancels it and admits no new worker tools.
 - Native `.deb` alerts follow GTK `is-active` via loopback `window_active`, not WebKit `hasFocus`. Switching to another app no longer stays silent, and the open chat is not marked read while that window is inactive.
 - Right-click a chat message offers **Copy** for that text. Link rows still have Open in browser and Copy URL.
 - An unfocused Linux `.deb` still raises one native row when the open chat finishes. WebKitGTK does not treat “another app is in front” as a hidden page; GTK `is-active` now drives that, and opening the OS list does not re-notify an already shown event.

@@ -29,7 +29,7 @@ from artek_buddy.runtime.cursor_wait import (
     should_retry_dead_wait,
 )
 from artek_buddy.runtime.tools import ProductTools
-from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord
+from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord, ToolTurnBox
 from artek_buddy.stream import map_cursor_event
 
 log = logging.getLogger("artek_buddy")
@@ -119,8 +119,14 @@ class CursorRuntime(RuntimeBase):
     def model(self) -> ModelSelection:
         return self.model_selection()
 
-    def _custom_tools(self, bot_id: str | None = None, role: str = "lead") -> dict[str, CustomTool]:
+    def _custom_tools(
+        self,
+        bot_id: str | None = None,
+        role: str = "lead",
+        box: ToolTurnBox | None = None,
+    ) -> dict[str, CustomTool]:
         registry = ProductTools(self)
+        holder = box or ToolTurnBox()
         tools: dict[str, CustomTool] = {}
         for spec in registry.specs(role):
 
@@ -129,8 +135,14 @@ class CursorRuntime(RuntimeBase):
                 context: Any,
                 *,
                 name: str = spec.name,
+                bound_box: ToolTurnBox = holder,
             ) -> dict[str, Any]:
-                return registry.execute(name, args, bound_bot_id=bot_id)
+                frozen = bound_box.turn
+                if frozen is None and bound_box.agent_id:
+                    frozen = self.resolve_turn(bot_id, agent_id=bound_box.agent_id)
+                if frozen is None:
+                    frozen = self.resolve_turn(bot_id)
+                return registry.execute(name, args, bound_bot_id=bot_id, turn=frozen)
 
             tools[spec.name] = CustomTool(
                 execute=execute,
@@ -139,19 +151,26 @@ class CursorRuntime(RuntimeBase):
             )
         return tools
 
-    def _local(self, bot_id: str | None = None, role: str = "lead") -> LocalAgentOptions:
-        return LocalAgentOptions(
+    def _local(
+        self,
+        bot_id: str | None = None,
+        role: str = "lead",
+        box: ToolTurnBox | None = None,
+    ) -> tuple[ToolTurnBox, LocalAgentOptions]:
+        holder = box or ToolTurnBox()
+        return holder, LocalAgentOptions(
             cwd=self.home_cwd(bot_id),
-            custom_tools=self._custom_tools(bot_id, role=role),
+            custom_tools=self._custom_tools(bot_id, role=role, box=holder),
         )
 
-    def _agent_options(self, bot_id: str | None = None, role: str = "lead") -> AgentOptions:
-        # resume() JSON-encodes options. A raw dict with a live
-        # LocalAgentOptions is not serializable; AgentOptions.to_json() is.
-        return AgentOptions(
+    def _agent_options(
+        self, bot_id: str | None = None, role: str = "lead"
+    ) -> tuple[ToolTurnBox, AgentOptions]:
+        box, local = self._local(bot_id, role=role)
+        return box, AgentOptions(
             api_key=self.settings.cursor_api_key,
             model=self.model,
-            local=self._local(bot_id, role=role),
+            local=local,
         )
 
     async def start(self) -> None:
@@ -193,15 +212,17 @@ class CursorRuntime(RuntimeBase):
         bot_id: str | None,
         role: str,
     ) -> str:
+        box, local = self._local(bot_id, role)
         agent = await self.client.agents.create(
             model=self.model,
             api_key=self.settings.cursor_api_key,
             name=name,
-            local=self._local(bot_id, role=role),
+            local=local,
         )
         self._agents[agent.agent_id] = agent
         self._locks[agent.agent_id] = asyncio.Lock()
         self.bind_agent_bot(agent.agent_id, bot_id)
+        self.register_tool_box(agent.agent_id, box)
         if role == "lead":
             self.mark_session_fresh(agent.agent_id)
         if persist_default or self.default_agent_id is None:
@@ -236,15 +257,15 @@ class CursorRuntime(RuntimeBase):
             return agent_id
         if agent_id:
             try:
-                agent = await self.client.agents.resume(
-                    agent_id, self._agent_options(bot_id, role=role)
-                )
+                box, options = self._agent_options(bot_id, role=role)
+                agent = await self.client.agents.resume(agent_id, options)
                 live_id = agent.agent_id or agent_id
                 if self.session_foreign_to_bot(live_id, bot_id):
                     return await self._create_session(name, False, bot_id, role)
                 self._agents[live_id] = agent
                 self._locks.setdefault(live_id, asyncio.Lock())
                 self.bind_agent_bot(live_id, bot_id)
+                self.register_tool_box(live_id, box)
                 log.info("resumed agent %s", live_id)
                 return live_id
             except Exception:

@@ -54,6 +54,8 @@ E2E_WORKER_STEER_ACK = "Got it. I'll apply that next."
 E2E_WORKER_SUMMARY = "The background job is done."
 E2E_WORKER_RESULT = "blocked work finished"
 E2E_WORKER_BLOCK_S = 10.0
+E2E_WORKER_ACTIVITY_TOOLS = 20
+E2E_WORKER_ACTIVITY_HOLD_S = 8.0
 E2E_ASK_READY = "I am ready to answer. The city is Subotica."
 E2E_ASK_ANSWER = "They said the city is Subotica."
 E2E_OLDER_PREFIX = "e2e-old-"
@@ -397,6 +399,37 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "a background worker finished" in hay:
         return [scripted_finish(E2E_WORKER_SUMMARY)]
+    if "e2e-worker-activity-no-text" in hay:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name=E2E_SUBAGENT_NAME,
+                task="please e2e-worker-tools-no-text",
+            ),
+            scripted_finish(E2E_WORKER_ACK),
+        ]
+    if "e2e-worker-tools-no-text" in hay:
+        return [
+            *[scripted_tool("list_subagents") for _ in range(E2E_WORKER_ACTIVITY_TOOLS)],
+            scripted_delay(E2E_WORKER_ACTIVITY_HOLD_S),
+            scripted_finish("tools without text finished"),
+        ]
+    if "e2e-worker-false-idle" in hay:
+        return [
+            scripted_tool("inspect_subagent", ref=E2E_SUBAGENT_NAME),
+            scripted_tool("stop_subagent", ref=E2E_SUBAGENT_NAME),
+            scripted_finish(E2E_WORKER_STATUS),
+        ]
+    if "e2e-worker-stale-stop" in hay:
+        return [
+            scripted_tool("inspect_subagent", ref=E2E_SUBAGENT_NAME),
+            scripted_tool(
+                "stop_subagent",
+                ref=E2E_SUBAGENT_NAME,
+                inspected_activity_seq=0,
+            ),
+            scripted_finish(E2E_WORKER_STATUS),
+        ]
     if "e2e-background-worker-chat" in hay:
         return [
             scripted_tool(

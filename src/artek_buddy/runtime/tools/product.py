@@ -20,6 +20,8 @@ from artek_buddy.runtime.tools.computer import ComputerToolsMixin
 from artek_buddy.runtime.tools.owner import OwnerToolsMixin
 from artek_buddy.runtime.tools.specs import TOOL_SPECS, ToolSpec
 from artek_buddy.runtime.tools.subagents import SubagentToolsMixin
+from artek_buddy.runtime.types import TurnContext
+from artek_buddy.runtime.worker_activity import touch_worker_activity
 
 WORKER_ONLY_TOOLS = frozenset(
     {
@@ -230,39 +232,124 @@ class ProductToolsCore:
         name: str,
         args: dict[str, Any] | None = None,
         bound_bot_id: str | None = None,
+        turn: TurnContext | None = None,
     ) -> dict[str, Any]:
         started = time.monotonic()
         result: dict[str, Any] | None = None
+        ctx = turn or self._resolve_turn(bound_bot_id)
+        if ctx is None:
+            return {"ok": False, "error": "no turn context"}
+        apply = getattr(self.runtime, "apply_callback_context", None)
+        reset = getattr(self.runtime, "reset_callback_context", None)
+        tokens = apply(ctx) if callable(apply) else None
+        activity_started = False
         try:
+            if ctx.role == "subagent" and self._worker_cancelled(ctx.run_id):
+                return {"ok": False, "error": "worker was cancelled"}
+            blocked = self._block_status_replace(name, ctx)
+            if blocked is not None:
+                return blocked
+            if ctx.role == "subagent":
+                touch_worker_activity(
+                    self.runtime,
+                    ctx.run_id,
+                    kind="tool_started",
+                    tool_name=name,
+                    tool_running=True,
+                )
+                activity_started = True
             handler = getattr(self, f"_exec_{name}", None)
             if handler is None:
-                result = self._run_connected_tool(name, args or {}, bound_bot_id)
+                result = self._run_connected_tool(name, args or {}, bound_bot_id or ctx.bot_id)
                 return result
-            result = handler(args or {}, bound_bot_id)
+            result = handler(args or {}, bound_bot_id or ctx.bot_id)
             if not isinstance(result, dict):
                 return result
-            role = self.runtime.resolve_turn_role()
-            if role == "subagent":
-                note = self._take_worker_clarification(bound_bot_id)
+            if ctx.role == "subagent":
+                note = self._take_worker_clarification(bound_bot_id or ctx.bot_id)
                 if note:
                     result = {**result, **note}
                 return result
-            steer = self._take_owner_steer(bound_bot_id)
+            steer = self._take_owner_steer(bound_bot_id or ctx.bot_id)
             if steer:
                 result = {**result, **steer}
             return result
         finally:
-            bot_id, run_id, thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+            if activity_started:
+                touch_worker_activity(
+                    self.runtime,
+                    ctx.run_id,
+                    kind="tool_finished",
+                    tool_name=name,
+                    tool_running=False,
+                )
             runtime = getattr(getattr(self.runtime, "settings", None), "agent_runtime", None)
             log_tool(
                 name,
                 result if isinstance(result, dict) else None,
                 latency_ms=int((time.monotonic() - started) * 1000),
                 runtime=runtime,
-                bot_id=bot_id,
-                turn_id=run_id,
-                thread_id=thread_id,
+                bot_id=ctx.bot_id,
+                turn_id=ctx.run_id,
+                thread_id=ctx.thread_id,
             )
+            if tokens is not None and callable(reset):
+                reset(tokens)
+
+    def _resolve_turn(self, bound_bot_id: str | None) -> TurnContext | None:
+        resolve = getattr(self.runtime, "resolve_turn", None)
+        if callable(resolve):
+            found = resolve(bound_bot_id)
+            if found is not None:
+                return found
+        bot_id, run_id, thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+        if not bot_id or not run_id:
+            return None
+        role = self.runtime.resolve_turn_role(bound_bot_id)
+        turn_role = role if role in {"lead", "subagent"} else "lead"
+        return TurnContext(
+            bot_id=bot_id,
+            run_id=run_id,
+            thread_id=thread_id or "",
+            role=turn_role,
+        )
+
+    def _worker_cancelled(self, run_id: str) -> bool:
+        service = getattr(self.runtime, "subagents", None)
+        check = getattr(service, "is_cancelled", None) if service is not None else None
+        if callable(check):
+            try:
+                return bool(check(run_id))
+            except Exception:
+                log.exception("failed to read worker cancel state")
+                return False
+        store = getattr(self.runtime, "store", None)
+        getter = getattr(store, "get_subagent", None) if store is not None else None
+        if not callable(getter):
+            return False
+        try:
+            record = getter(run_id)
+        except Exception:
+            log.exception("failed to read worker row")
+            return False
+        return record is not None and record.status not in {"queued", "running"}
+
+    def _block_status_replace(self, name: str, ctx: TurnContext) -> dict[str, Any] | None:
+        if name not in {"stop_subagent", "restart_subagent"}:
+            return None
+        intent_for = getattr(self.runtime, "owner_intent_for", None)
+        intent = intent_for(ctx.run_id) if callable(intent_for) else "other"
+        if intent == "status":
+            return {
+                "ok": False,
+                "error": "status-only message cannot stop or replace a worker",
+            }
+        if intent == "correction":
+            return {
+                "ok": False,
+                "error": "use steer_subagent to correct a worker; do not replace it",
+            }
+        return None
 
     def _take_owner_steer(self, bound_bot_id: str | None) -> dict[str, Any] | None:
         store = getattr(self.runtime, "store", None)

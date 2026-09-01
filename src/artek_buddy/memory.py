@@ -138,6 +138,25 @@ def format_subagent_context(rows: list[Any]) -> str | None:
         task = _row_field(item, "task")
         ident = _row_field(item, "id")
         lines.append(f"{index}. {name} ({ident}) [{status}] — {task}")
+        progress = _row_field(item, "progress")
+        if not (progress or "").strip():
+            lines.append("   text: no text update")
+        kind = _row_field(item, "last_activity_kind")
+        seq = _row_field(item, "activity_seq")
+        tool = _row_field(item, "last_tool_name")
+        running = _row_field(item, "tool_running")
+        when = _row_field(item, "last_activity_at")
+        if kind or seq or running:
+            bits = [f"seq={seq or 0}"]
+            if kind:
+                bits.append(str(kind))
+            if tool:
+                bits.append(str(tool))
+            if when:
+                bits.append(str(when))
+            if running:
+                bits.append("tool in flight")
+            lines.append("   activity: " + " ".join(bits))
         notes = _row_field(item, "clarifications")
         if notes:
             lines.append(f"   notes: {notes}")
@@ -377,10 +396,15 @@ def wrap_turn_prompt(
             "Use request_takeover only when the owner must operate this bot's desktop; then stop until Release.\n"
             "- If a tool result includes owner_follow_up, the owner messaged you during this turn. Apply it immediately. Do not finish the old plan first.\n"
             "- When checking progress or if the user asks status (e.g. 'ты завис?', 'еще делаешь?', 'как там?'): "
-            "you can reply immediately with send_message (e.g. 'Да, сейчас сверю...'), inspect workers/processes "
-            "(inspect_subagent, list_subagents, terminal), and if a worker is stuck or looping, stop it (stop_subagent) "
-            "and take over to finish the job directly. A status-only ping asks for an answer first; "
-            "it does not by itself authorize a new plan or restarting completed work.\n"
+            "answer from host activity, not from blank progress text. "
+            "Empty progress means no text update was persisted, not that the worker is idle. "
+            "inspect_subagent / list_subagents return last_activity_at, activity_seq, last_tool_name, and tool_running. "
+            "If a tool is in flight or activity_seq has moved, keep that worker. "
+            "A status-only ping must inspect and answer. It must not call stop_subagent or restart_subagent "
+            "and must not spawn a replacement. "
+            "A correction uses steer_subagent on the same worker id. "
+            "stop_subagent requires inspected_activity_seq from the latest inspect; the host rejects Stop "
+            "while a tool is running or if activity advanced.\n"
             "- Delegation: when the user asks for substantive tool work (coding, browser, remote computer, long search), spawn a subagent using spawn_subagent(name=..., task=...), then finish this dispatch turn. Do not keep doing that work yourself. Do not spawn subagents for trivial questions or simple answers you can give directly.\n"
             "- Use list_subagents, inspect_subagent, steer_subagent, stop_subagent to monitor and steer workers.\n"
             "- To ask another inbox bot what it knows, call message_bot(bot=exact name or id, text=the question). "
@@ -421,7 +445,8 @@ def wrap_turn_prompt(
             "To attach a downloadable file in this chat, use send_file. "
             "Use close_app(application='chromium') to close the on-screen browser. "
             "computer_observe does not need permission. "
-            "Do not post to the owner chat. Persist progress and the result on this worker; "
+            "Do not post to the owner chat. You do not have send_message; it is not in your catalog. "
+            "Persist progress and the result on this worker; "
             "the lead will write the owner-facing wording. "
             "If this task has a standing rule for this chat, call remember; it stays with this bot "
             "and does not appear in the owner thread."
