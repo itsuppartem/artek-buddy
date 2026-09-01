@@ -30,6 +30,7 @@ export function ComputerPane({
   onRetryScreen,
   onScreenFrameLoad,
   onLater,
+  memoryFocusFact = null,
 }: {
   bot: Bot;
   computer: ComputerStatus | null;
@@ -47,6 +48,7 @@ export function ComputerPane({
   onRetryScreen: () => void;
   onScreenFrameLoad: (event: SyntheticEvent<HTMLIFrameElement>) => void;
   onLater: (text: string) => void;
+  memoryFocusFact?: string | null;
 }) {
   const mode = computer?.mode || bot.computerMode;
   const label = computerLabel(mode, bot.name);
@@ -288,7 +290,7 @@ export function ComputerPane({
           )}
         </div>
       </div>
-      <MemoryPanel botId={bot.id} onLater={onLater} />
+      <MemoryPanel botId={bot.id} focusFact={memoryFocusFact} onLater={onLater} />
       <RoutinesPanel botId={bot.id} onLater={onLater} />
     </div>
   );

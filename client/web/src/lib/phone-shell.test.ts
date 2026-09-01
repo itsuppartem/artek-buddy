@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { nextPhoneTab, phoneTabAfterPanel, shouldUsePhoneShell } from "./phone-shell";
+import {
+  nextPhoneTab,
+  phoneTabAfterPanel,
+  shouldUsePhoneDeskControls,
+  shouldUsePhoneShell,
+} from "./phone-shell";
 
 describe("phone shell tabs", () => {
   it("opens chat after picking a bot and desk after Computer", () => {
@@ -22,5 +27,10 @@ describe("phone shell tabs", () => {
     expect(shouldUsePhoneShell(812, 375)).toBe(true);
     expect(shouldUsePhoneShell(1280, 720)).toBe(false);
     expect(shouldUsePhoneShell(1280, 800)).toBe(false);
+  });
+
+  it("uses the phone pad only when there is no mouse desktop", () => {
+    expect(shouldUsePhoneDeskControls(true)).toBe(false);
+    expect(shouldUsePhoneDeskControls(false)).toBe(true);
   });
 });

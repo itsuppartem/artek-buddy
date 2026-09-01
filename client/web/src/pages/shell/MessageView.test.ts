@@ -70,4 +70,56 @@ describe("MessageView", () => {
     expect(html).toMatch(/<a\b[^>]*href="https:\/\/example\.test\/authorize\?app=github"/);
     expect(html).not.toMatch(/<button[^>]*plugin-connect-open/);
   });
+
+  it("turns Remembered into a Memory button and leaves Using as plain meta", () => {
+    const long =
+      "Remembered: RN-1935 P1 (biometric absent when Mesa not in boot syslog): stop. Do not change code, rebuild, reboot the phone, or pick error-vs-witness until the owner says so.";
+    const remembered: ThreadMessage = {
+      id: "msg-remember",
+      threadId: "thr-remember",
+      runId: "run-remember",
+      role: "bot",
+      seq: 1,
+      createdAt: "2026-09-01T00:00:00Z",
+      blocks: [{ kind: "meta", text: long }],
+    };
+    const using: ThreadMessage = {
+      id: "msg-using",
+      threadId: "thr-using",
+      runId: "run-using",
+      role: "bot",
+      seq: 2,
+      createdAt: "2026-09-01T00:00:00Z",
+      blocks: [{ kind: "meta", text: "Using grok-4.0 - Extra high." }],
+    };
+
+    const rememberedHtml = renderToStaticMarkup(
+      createElement(MessageView, {
+        canAnswer: false,
+        message: remembered,
+        onAnswer: async () => undefined,
+        onOpenBot: vi.fn(),
+        onOpenMemory: vi.fn(),
+      }),
+    );
+    const usingHtml = renderToStaticMarkup(
+      createElement(MessageView, {
+        canAnswer: false,
+        message: using,
+        onAnswer: async () => undefined,
+        onOpenBot: vi.fn(),
+        onOpenMemory: vi.fn(),
+      }),
+    );
+
+    expect(rememberedHtml).toContain("Open in Memory");
+    expect(rememberedHtml).toContain("data-memory-line");
+    expect(rememberedHtml).toContain("Remembered: RN-1935");
+    expect(rememberedHtml).toMatch(
+      /<span class="min-w-0 truncate">Remembered: RN-1935[^<]*…<\/span>/,
+    );
+    expect(usingHtml).toContain("Using grok-4.0 - Extra high.");
+    expect(usingHtml).not.toContain("Open in Memory");
+    expect(usingHtml).not.toContain("<button");
+  });
 });

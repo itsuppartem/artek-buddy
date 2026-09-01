@@ -9,7 +9,12 @@ if str(CLIENT) not in sys.path:
 
 from clipboard_image import (
     attach_image_script,
+    clipboard_text_is_file_ref,
+    composer_redo_script,
+    composer_undo_script,
+    is_ctrl_shift_z,
     is_ctrl_v,
+    is_ctrl_z,
     should_inject_clipboard_image,
 )
 
@@ -21,12 +26,26 @@ def test_ctrl_v_is_the_paste_chord() -> None:
     assert is_ctrl_v(ord("c"), True) is False
 
 
-def test_inject_only_when_clipboard_is_an_image_without_text() -> None:
+def test_ctrl_z_is_the_undo_chord() -> None:
+    assert is_ctrl_z(ord("z"), True, False) is True
+    assert is_ctrl_z(ord("z"), True, True) is False
+    assert is_ctrl_z(ord("z"), False, False) is False
+    assert is_ctrl_shift_z(ord("z"), True, True) is True
+    assert is_ctrl_shift_z(ord("z"), True, False) is False
+
+
+def test_inject_screenshot_even_when_clip_has_a_file_uri() -> None:
     png = b"\x89PNG"
     assert should_inject_clipboard_image(png, "") is True
     assert should_inject_clipboard_image(png, "   ") is True
+    assert should_inject_clipboard_image(png, "file:///tmp/Screenshot.png") is True
+    assert should_inject_clipboard_image(png, "/home/artek/Pictures/shot.png") is True
+    assert should_inject_clipboard_image(png, "copy\nfile:///tmp/Screenshot.png") is True
     assert should_inject_clipboard_image(png, "hello") is False
     assert should_inject_clipboard_image(None, "") is False
+    assert clipboard_text_is_file_ref("file:///tmp/Screenshot.png") is True
+    assert clipboard_text_is_file_ref("copy\nfile:///tmp/Screenshot.png") is True
+    assert clipboard_text_is_file_ref("hello") is False
 
 
 def test_script_calls_the_window_hook_with_png_bytes() -> None:
@@ -35,3 +54,5 @@ def test_script_calls_the_window_hook_with_png_bytes() -> None:
     assert "screenshot-1.png" in script
     assert "image/png" in script
     assert "YWJj" in script
+    assert "__artekComposerUndo" in composer_undo_script()
+    assert "__artekComposerRedo" in composer_redo_script()

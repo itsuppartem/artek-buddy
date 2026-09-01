@@ -74,6 +74,7 @@ import {
   nextPhoneTab,
   type PhoneTab,
   phoneTabAfterPanel,
+  shouldUsePhoneDeskControls,
   shouldUsePhoneShell,
 } from "../lib/phone-shell";
 import { ownerRunError } from "../lib/run-error";
@@ -108,6 +109,7 @@ import {
 import {
   addPendingFiles,
   clipboardFilePaths,
+  clipboardPrefersImage,
   clipboardShouldClaim,
   droppedFiles,
   filesFromAttachedPayload,
@@ -198,6 +200,12 @@ export function ShellPage() {
       ? false
       : shouldUsePhoneShell(window.innerWidth, window.innerHeight),
   );
+  const [phoneDesk, setPhoneDesk] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : shouldUsePhoneDeskControls(window.matchMedia("(hover: hover) and (pointer: fine)").matches),
+  );
+  const [memoryFocusFact, setMemoryFocusFact] = useState<string | null>(null);
   const [alertOffer, setAlertOffer] = useState<"hide" | "ask" | "ready">(() =>
     shouldOfferWebAlerts({
       surface: pageSurface(),
@@ -1289,12 +1297,30 @@ export function ShellPage() {
   useEffect(() => {
     const win = window as Window & {
       __artekAttachPastedImage?: (contentBase64: string, type: string, name: string) => void;
+      __artekComposerUndo?: () => void;
+      __artekComposerRedo?: () => void;
     };
     win.__artekAttachPastedImage = (contentBase64, type, name) => {
       queueFilesRef.current(filesFromAttachedPayload([{ name, type, contentBase64 }]));
     };
+    win.__artekComposerUndo = () => {
+      const next = composerUndo(draftHistory.current);
+      if (!next) return;
+      draftHistory.current = next.history;
+      setDraft(next.value);
+      window.requestAnimationFrame(() => sizeComposer());
+    };
+    win.__artekComposerRedo = () => {
+      const next = composerRedo(draftHistory.current);
+      if (!next) return;
+      draftHistory.current = next.history;
+      setDraft(next.value);
+      window.requestAnimationFrame(() => sizeComposer());
+    };
     return () => {
       delete win.__artekAttachPastedImage;
+      delete win.__artekComposerUndo;
+      delete win.__artekComposerRedo;
     };
   }, []);
 
@@ -1326,10 +1352,12 @@ export function ShellPage() {
       queueFiles(files);
       return;
     }
-    const paths = clipboardFilePaths(wrapped);
-    if (paths.length) {
-      attachLocalPaths(paths);
-      return;
+    if (!clipboardPrefersImage(wrapped)) {
+      const paths = clipboardFilePaths(wrapped);
+      if (paths.length) {
+        attachLocalPaths(paths);
+        return;
+      }
     }
     const epoch = filesEpoch.current;
     void readClipboardFiles(wrapped).then((extra) => {
@@ -1567,11 +1595,17 @@ export function ShellPage() {
   useLayoutEffect(() => {
     function apply() {
       setPhoneShell(shouldUsePhoneShell(window.innerWidth, window.innerHeight));
+      setPhoneDesk(
+        shouldUsePhoneDeskControls(window.matchMedia("(hover: hover) and (pointer: fine)").matches),
+      );
     }
     apply();
+    const mouseDesktop = window.matchMedia("(hover: hover) and (pointer: fine)");
+    mouseDesktop.addEventListener("change", apply);
     window.addEventListener("resize", apply);
     window.addEventListener("orientationchange", apply);
     return () => {
+      mouseDesktop.removeEventListener("change", apply);
       window.removeEventListener("resize", apply);
       window.removeEventListener("orientationchange", apply);
     };
@@ -2079,6 +2113,11 @@ export function ShellPage() {
                     await api.threads.answer(active.id, item.runId, item.id, text);
                   }}
                   onOpenComputer={() => void openOverlay("preview")}
+                  onOpenMemory={(fact) => {
+                    setMemoryFocusFact(fact);
+                    setPanel("computer");
+                    if (phoneShell) setPhoneTab(nextPhoneTab("open-desk"));
+                  }}
                   onOpenBot={(id) => {
                     void refreshBots().then(() => navigate(`/app/${id}`));
                   }}
@@ -2310,6 +2349,7 @@ export function ShellPage() {
                   onRetryScreen={retryScreen}
                   onScreenFrameLoad={onScreenFrameLoad}
                   onLater={setLater}
+                  memoryFocusFact={memoryFocusFact}
                 />
               ) : null}
             </div>
@@ -2473,7 +2513,7 @@ export function ShellPage() {
         onRetry={retryScreen}
         onScreenFrameLoad={onScreenFrameLoad}
         onScreenError={(message) => setScreenError(message)}
-        phone={phoneShell}
+        phone={phoneDesk}
       />
     </div>
   );

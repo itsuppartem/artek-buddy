@@ -165,6 +165,14 @@ export function clipboardShouldClaim(event: { clipboardData?: DataTransfer | nul
   return clipboardHasAttachable(event);
 }
 
+export function clipboardPrefersImage(event: { clipboardData?: DataTransfer | null }): boolean {
+  const data = event.clipboardData;
+  if (!data) return false;
+  const types = Array.from(data.types || []);
+  if (types.some((type) => isMediaClipboardType(type))) return true;
+  return clipboardItems(data).some((item) => isMediaClipboardType(item.type));
+}
+
 export function filesFromAttachedPayload(
   files: { name: string; type?: string; contentBase64: string }[],
 ): File[] {

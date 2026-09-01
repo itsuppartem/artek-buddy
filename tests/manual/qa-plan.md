@@ -16,6 +16,7 @@ This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packag
 | GitHub Release `.deb` | **Old.** Do not use it for this pass. |
 | Linux | Window **built from this tree** (`client/build-deb.sh`, optionally `ARTEK_BAKE_URL=1` for a local URL). Wide shell, about 1280×720, three columns. |
 | Phone | Home Screen on the **same host URL**. After a UI change, fully kill the icon and open it again. Viewport is iPhone 11 Pro: **375×812** CSS pixels (notch + home indicator). |
+| Host page on a computer | Same `:8080` URL in a desktop browser (mouse). Take control is the `.deb` overlay (pointer into the screen, no pad), even if the window is narrow. |
 
 One demo: Linux first, then the phone. A cell with an em dash means that check does not apply on that surface (still read the note).
 
@@ -106,6 +107,7 @@ Computer → Memory: the **identity** chapter updated while that pane is open (n
 | One detailed standing rule followed by a shorter restatement (`please e2e-remember-twice` on a scripted host) → **one** Remembered line and one Memory card. Reading This PC afterward does not repeat it | [ ] | [ ] |
 | Same standing rule three times (`please e2e-remember-same-thrice`) → still **one** Remembered line. A worker `remember` (`please e2e-background-worker-remember`) saves the card and does **not** print Remembered in the thread | [ ] | [ ] |
 | **+ New memory** defaults to **This bot** (filled segment). Save flashes Saved and keeps the card in view. Delete is **Remove**, not Outdated | [ ] | [ ] |
+| A long `Remembered:` clock line is one short row. Click it (`please e2e-remember`) opens Memory on that card with the full text. `Using …` is not a button | [ ] | [ ] |
 
 ---
 
@@ -182,14 +184,14 @@ Team:
 | --- | --- | --- |
 | Second bot on the same desk sees `{name} is using the computer`; Take / Restart / Stop / Reset are grey | [ ] | [ ] |
 
-Phone Take control on the current `develop` page is still a desktop overlay. Pad / keys / Cyrillic are §12. **You still owe §7a on both surfaces.**
+Take control on the **host page** follows the pointer in use, not only width: a desktop browser is the `.deb` overlay (no pad); a phone keeps the pad / Keyboard (§12). **You still owe §7a on both surfaces.**
 
 
 ## 7a. Hands on the guest (do not skip)
 
 A preview is not enough. You must **drive** the box and **read** what opened.
 
-On **Deb**: Take control, real mouse and keyboard.
+On **Deb** (and the host URL in a desktop browser): Take control, real mouse and keyboard. No pad.
 
 On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; tap clicks at the dot). Then Keyboard.
 
@@ -198,6 +200,7 @@ On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; t
 | After Allow on «открой https://example.com», the **guest** shows Example Domain (heading / title), not a black tile and not only a chat card | [ ] | [ ] |
 | You can **read** the address bar or tab title. It is example.com (or the site you allowed), not a leftover Google / Files window | [ ] | [ ] |
 | Take control: pointer moves in the guest. A click lands where you aimed (address bar, a link, a button) | [ ] | [ ] |
+| Host URL in a desktop browser: Take control has no pad and no Keyboard button; the pointer goes into the screen like Deb | [ ] | — |
 | Phone: drag on the pad moves the beige dot across the 1280×800 picture; it does not jump under the finger. After a drag or tap the overlay still shows **Release**, not Take control | — | [ ] |
 | Type `hello` into a guest field (address bar or input). The letters appear **in the guest**, not only in our Message box | [ ] | [ ] |
 | After pad or keyboard input, the guest picture updates within a couple of seconds. A freeze over ~5s is a fail | [ ] | [ ] |
@@ -326,7 +329,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | --- | --- | --- |
 | Enter sends. Shift+Enter inserts a newline (Deb) and that break stays in the sent bubble. Phone return key follows the on-screen keyboard. Ctrl+A selects the draft and does not Send; Enter then sends one copy | [ ] | [ ] |
 | Message placeholder stays readable: full name, or `Message …` with an ellipsis — not a clipped mid-word (`Message Resea`) | [ ] | [ ] |
-| Deb: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo) | [ ] | — |
+| Deb WebKit: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo), not only Chromium `--serve` | [ ] | — |
 | Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays | [ ] | [ ] |
 | Right-click Reply (Deb) puts a quote in the next user bubble | [ ] | — |
 | `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Open in browser**, **Copy URL**, and Reply; Copy changes to **URL copied** | [ ] | [ ] |
@@ -506,7 +509,7 @@ Do this on **both** surfaces. Phone has no Linux file-manager paste.
 
 | Check | Deb | Phone |
 | --- | :---: | :---: |
-| Ctrl+V (Deb) or paste (Phone, if the OS allows) a **screenshot** → chip `screenshot-1.png` (or the file name) + preview. Composer text stays empty | [ ] | [ ] |
+| Ctrl+V (Deb) or paste (Phone, if the OS allows) a **screenshot** → chip `screenshot-1.png` (or the file name) + preview. Composer text stays empty. Still works when the clip also has a `file://` path | [ ] | [ ] |
 | Paste ordinary text → **no** chip, the text lands in Message | [ ] | [ ] |
 | Plus / Attach picks a file → chip. Image / video / audio show a preview before Send | [ ] | [ ] |
 | Drop a file onto Message attaches it (Deb) | [ ] | — |
@@ -578,7 +581,7 @@ Out of this pass: collaboration (#154–#169) and research tickets (#98, #100).
 If time is short, in this order:
 
 1. **§2 Models**
-2. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated). Same rule thrice / worker remember → one Remembered line or none from the worker
+2. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated). Click a long Remembered line → that Memory card. Same rule thrice / worker remember → one Remembered line or none from the worker
 3. **§4 Skill from the web**
 4. **§5 Bot asks bot**
 5. **§6 Plugins** (pane Connect or chat attach; no chip; the bot uses the app). `please e2e-connect-mail` / GitHub **Open to connect** opens the owner browser
