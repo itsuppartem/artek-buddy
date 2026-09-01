@@ -111,6 +111,16 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert blocked[-1].result == E2E_WORKER_RESULT
     status = steps_for_prompt("please e2e-worker-status")
     assert status[-1].result == E2E_WORKER_STATUS
+    activity = steps_for_prompt("please e2e-worker-activity-no-text")
+    assert activity[0].tool == "spawn_subagent"
+    assert activity[0].args["task"] == "please e2e-worker-tools-no-text"
+    tools_only = steps_for_prompt("please e2e-worker-tools-no-text")
+    assert sum(1 for step in tools_only if step.tool == "list_subagents") == 20
+    false_idle = steps_for_prompt("please e2e-worker-false-idle")
+    assert false_idle[0].tool == "inspect_subagent"
+    assert false_idle[1].tool == "stop_subagent"
+    stale = steps_for_prompt("please e2e-worker-stale-stop")
+    assert stale[1].args.get("inspected_activity_seq") == 0
     steered = steps_for_prompt("please e2e-worker-steer use path B")
     assert steered[0].tool == "steer_subagent"
     assert steered[-1].result == E2E_WORKER_STEER_ACK

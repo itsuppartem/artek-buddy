@@ -533,7 +533,11 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="inspect_subagent",
-        description="Read a worker's reasoning, stage, and result. ref is the index, name, or id.",
+        description=(
+            "Read a worker's status, text progress, and host activity. "
+            "Empty progress means no text update, not idle. "
+            "ref is the index, name, or id."
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -548,10 +552,20 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="stop_subagent",
-        description="Stop a running worker.",
+        description=(
+            "Stop a running worker. After inspect, pass inspected_activity_seq. "
+            "The host rejects Stop while a tool is running, if activity advanced, "
+            "or on a status-only owner message. The window Stop control is immediate."
+        ),
         input_schema={
             "type": "object",
-            "properties": {"ref": {"type": "string"}},
+            "properties": {
+                "ref": {"type": "string"},
+                "inspected_activity_seq": {
+                    "type": "integer",
+                    "description": "activity_seq from the latest inspect_subagent.",
+                },
+            },
             "required": ["ref"],
         },
         lead_only=True,

@@ -90,3 +90,58 @@ def test_browse_deny_leaves_chromium_down(page: Page, client_url: str, host_url:
     page.get_by_test_id("ask-option").filter(has_text="Deny").click()
     time.sleep(5)
     assert _chromium_running() == before
+
+
+def test_real_worker_id_survives_status_ping(page: Page, client_url: str, host_url: str) -> None:
+    name = _ensure_paired(page, client_url, host_url)
+    send_message(
+        page,
+        "Spawn one background worker to wait two minutes with a remote command loop. "
+        "Finish your own turn after spawn. Do not wait yourself.",
+        name,
+    )
+    snapshot = None
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        snapshot = page.evaluate(
+            """async (botName) => {
+                const listed = await fetch('/v1/bots').then((r) => r.json());
+                const bot = (listed.bots || []).find((item) => item.name === botName);
+                if (!bot) return null;
+                return fetch('/v1/threads/' + bot.id).then((r) => r.json());
+            }""",
+            name,
+        )
+        workers = [
+            item
+            for item in (snapshot or {}).get("subagents") or []
+            if item.get("status") in {"queued", "running"}
+        ]
+        if workers:
+            worker_id = workers[0]["id"]
+            send_message(page, "what is happening", name)
+            later = None
+            status_deadline = time.time() + 180
+            while time.time() < status_deadline:
+                later = page.evaluate(
+                    """async (botName) => {
+                        const listed = await fetch('/v1/bots').then((r) => r.json());
+                        const bot = (listed.bots || []).find((item) => item.name === botName);
+                        if (!bot) return null;
+                        return fetch('/v1/threads/' + bot.id).then((r) => r.json());
+                    }""",
+                    name,
+                )
+                run = (later or {}).get("run") or {}
+                if run.get("status") in {"completed", "failed", "cancelled"}:
+                    break
+                time.sleep(1)
+            still = [
+                item for item in (later or {}).get("subagents") or [] if item.get("id") == worker_id
+            ]
+            assert still, later
+            assert still[0]["id"] == worker_id
+            assert still[0]["status"] in {"queued", "running"}
+            return
+        time.sleep(2)
+    pytest.skip("model did not spawn a background worker")

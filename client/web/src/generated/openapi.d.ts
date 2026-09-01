@@ -2406,6 +2406,11 @@ export interface components {
         };
         /** Subagent */
         Subagent: {
+            /**
+             * Activity Seq
+             * @default 0
+             */
+            activity_seq: number;
             /** Bot Id */
             bot_id: string;
             /** Clarifications */
@@ -2420,6 +2425,12 @@ export interface components {
             id: string;
             /** Index */
             index: number;
+            /** Last Activity At */
+            last_activity_at?: string | null;
+            /** Last Activity Kind */
+            last_activity_kind?: string | null;
+            /** Last Tool Name */
+            last_tool_name?: string | null;
             /** Name */
             name: string;
             /** Parent Run Id */
@@ -2439,6 +2450,11 @@ export interface components {
             thinking?: string | null;
             /** Thread Id */
             thread_id: string;
+            /**
+             * Tool Running
+             * @default false
+             */
+            tool_running: boolean;
             /** Updated At */
             updated_at: string;
         };

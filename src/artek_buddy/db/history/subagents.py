@@ -15,6 +15,10 @@ from artek_buddy.db.shaping import (
 
 log = logging.getLogger("artek_buddy")
 
+ACTIVITY_KINDS = frozenset(
+    {"run_started", "tool_started", "tool_finished", "text", "clarification"}
+)
+
 
 class SubagentsMixin:
     def create_subagent(
@@ -163,6 +167,11 @@ class SubagentsMixin:
             assignments.append("thinking = NULL")
             assignments.append("result = NULL")
             assignments.append("error = NULL")
+            assignments.append("last_activity_at = NULL")
+            assignments.append("activity_seq = 0")
+            assignments.append("last_activity_kind = NULL")
+            assignments.append("last_tool_name = NULL")
+            assignments.append("tool_running = FALSE")
         values.append(subagent_id)
         with self._conn() as conn:
             row = conn.execute(
@@ -188,6 +197,17 @@ class SubagentsMixin:
             result=row.get("result"),
             error=row.get("error"),
             clarifications=row.get("clarifications"),
+            last_activity_at=(
+                parse_iso(row["last_activity_at"]) if row.get("last_activity_at") else None
+            ),
+            activity_seq=(
+                int(row["activity_seq"] or 0) if row.get("activity_seq") is not None else 0
+            ),
+            last_activity_kind=row.get("last_activity_kind"),
+            last_tool_name=row.get("last_tool_name"),
+            tool_running=(
+                bool(row["tool_running"]) if row.get("tool_running") is not None else False
+            ),
             created_at=parse_iso(row["created_at"]),
             updated_at=parse_iso(row["updated_at"]),
         )
@@ -201,7 +221,11 @@ class SubagentsMixin:
             return None
         previous = (found.clarifications or "").strip()
         merged = f"{previous}\n{note}".strip() if previous else note
-        return self.update_subagent(subagent_id, clarifications=merged)
+        updated = self.update_subagent(subagent_id, clarifications=merged)
+        if updated is not None:
+            self.record_subagent_activity(subagent_id, kind="clarification")
+            return self.get_subagent(subagent_id)
+        return updated
 
     def take_new_clarifications(self, subagent_id: str) -> str | None:
         found = self.get_subagent(subagent_id)
@@ -217,3 +241,76 @@ class SubagentsMixin:
         note = blob[prior:].strip()
         seen[subagent_id] = len(blob)
         return note or None
+
+    def record_subagent_activity(
+        self,
+        subagent_id: str,
+        *,
+        kind: str,
+        tool_name: str | None = None,
+        tool_running: bool | None = None,
+    ) -> Subagent | None:
+        if kind not in ACTIVITY_KINDS:
+            return self.get_subagent(subagent_id)
+        name = (tool_name or "").strip()[:80] or None
+        now = isoformat_utc()
+        assignments = [
+            "updated_at = %s",
+            "last_activity_at = %s",
+            "activity_seq = activity_seq + 1",
+            "last_activity_kind = %s",
+        ]
+        values: list[Any] = [now, now, kind]
+        if name is not None:
+            assignments.append("last_tool_name = %s")
+            values.append(name)
+        if tool_running is not None:
+            assignments.append("tool_running = %s")
+            values.append(tool_running)
+        values.append(subagent_id)
+        with self._conn() as conn:
+            row = conn.execute(
+                f"""
+                UPDATE subagents SET {", ".join(assignments)}
+                WHERE id = %s AND status IN ('queued', 'running')
+                RETURNING *
+                """,
+                values,
+            ).fetchone()
+            conn.commit()
+        return self._subagent_from_row(row) if row else None
+
+    def cancel_subagent_row(
+        self,
+        subagent_id: str,
+        *,
+        owner: bool,
+        inspected_activity_seq: int | None,
+    ) -> Subagent | None:
+        now = isoformat_utc()
+        if owner:
+            query = """
+                UPDATE subagents
+                SET status = 'cancelled', error = 'stopped', tool_running = FALSE,
+                    updated_at = %s
+                WHERE id = %s AND status IN ('queued', 'running')
+                RETURNING *
+            """
+            params: tuple[Any, ...] = (now, subagent_id)
+        else:
+            if inspected_activity_seq is None:
+                return None
+            query = """
+                UPDATE subagents
+                SET status = 'cancelled', error = 'stopped', tool_running = FALSE,
+                    updated_at = %s
+                WHERE id = %s AND status IN ('queued', 'running')
+                  AND tool_running IS NOT TRUE
+                  AND activity_seq = %s
+                RETURNING *
+            """
+            params = (now, subagent_id, int(inspected_activity_seq))
+        with self._conn() as conn:
+            row = conn.execute(query, params).fetchone()
+            conn.commit()
+        return self._subagent_from_row(row) if row else None
