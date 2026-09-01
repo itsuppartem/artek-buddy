@@ -484,9 +484,7 @@ class CursorRuntime(RuntimeBase):
             forced_once = False
             bridge_restarted_once = False
             try:
-                agent_id, agent, _lock = await self._agent(
-                    session_id, bot_id=bot_id, role=role
-                )
+                agent_id, agent, _lock = await self._agent(session_id, bot_id=bot_id, role=role)
                 self._stream_locks.setdefault(agent_id, stream_lock)
                 cwd = self.home_cwd(bot_id or self.resolve_turn_context()[0])
                 self.last_prompt = prompt
