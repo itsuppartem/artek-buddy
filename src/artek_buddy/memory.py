@@ -423,7 +423,8 @@ def wrap_turn_prompt(
             "computer_observe does not need permission. "
             "Do not post to the owner chat. Persist progress and the result on this worker; "
             "the lead will write the owner-facing wording. "
-            "If this task has a standing rule for this chat, call remember; it stays with this bot."
+            "If this task has a standing rule for this chat, call remember; it stays with this bot "
+            "and does not appear in the owner thread."
         )
     if session_resume:
         parts.append(session_resume)
