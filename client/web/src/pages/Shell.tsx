@@ -13,6 +13,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { abortableDelay, api, classifyError, isLiveTurn, type ShellErrorKind } from "../api";
 import {
   type AttentionAlert,
+  alertKeysToRemember,
   allowAlert,
   answeredAskBody,
   attentionFingerprint,
@@ -417,8 +418,18 @@ export function ShellPage() {
       }
       return;
     }
+    const surfaced = showBanner || showNative || showWeb;
+    if (!surfaced) return;
     if (rememberShownAlert(seenAlertKeys.current, key) === "skip") return;
-    seenAlertKeys.current.add(fingerprint);
+    for (const item of alertKeysToRemember({
+      key,
+      fingerprint,
+      botId: next.botId,
+      kind: next.kind,
+      surfaced: true,
+    })) {
+      seenAlertKeys.current.add(item);
+    }
     if (seenAlertKeys.current.size > 250) {
       const oldest = seenAlertKeys.current.values().next().value;
       if (oldest) seenAlertKeys.current.delete(oldest);
@@ -585,9 +596,6 @@ export function ShellPage() {
       setBots((list) =>
         list.map((item) => (item.id === bot.id ? { ...item, status: "waiting_takeover" } : item)),
       );
-      if (opts?.source === "workspace") {
-        seenAlertKeys.current.add(`${bot.id}:takeover:parked`);
-      }
       void refreshBotsRef.current().catch(() => undefined);
     }
     if (incoming.type === "run.completed" || incoming.type === "run.failed") {
