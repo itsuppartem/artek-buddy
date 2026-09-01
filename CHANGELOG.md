@@ -17,6 +17,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- An unfocused Linux `.deb` still raises one native row when the open chat finishes. WebKitGTK does not treat “another app is in front” as a hidden page; GTK `is-active` now drives that, and opening the OS list does not re-notify an already shown event.
 - Guest Files is Thunar without volume watching. Leftover pcmanfm is killed at box start so it does not keep covering the desktop.
 - A long `Remembered:` clock line is a one-row preview. Click it to open that Memory card with the full text.
 - Host-page Take control follows the pointer in use: a desktop browser uses the `.deb` overlay; a phone keeps the pad.

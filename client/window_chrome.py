@@ -199,7 +199,49 @@ def _on_focus_in(*_args: object) -> bool:
     return False
 
 
-def _on_gtk_active(window: object, *_args: object) -> None:
-    is_active = getattr(window, "is_active", None)
-    if callable(is_active) and is_active():
-        _apply_urgency(False)
+def window_active_script(active: bool) -> str:
+    flag = "true" if active else "false"
+    return (
+        "if (typeof window.__artekSetWindowActive === 'function') {"
+        f" window.__artekSetWindowActive({flag}); "
+        "}"
+    )
+
+
+def _run_active_script(view: object, script: str) -> None:
+    runner = getattr(view, "run_javascript", None)
+    if not callable(runner):
+        runner = getattr(view, "evaluate_javascript", None)
+    if not callable(runner):
+        return
+    try:
+        runner(script, None, None, None)
+    except TypeError:
+        try:
+            runner(script)
+        except Exception:
+            return
+    except Exception:
+        return
+
+
+def bind_window_active(view: object, window: object) -> None:
+    def push(*_args: object) -> None:
+        is_active = getattr(window, "is_active", None)
+        active = bool(is_active()) if callable(is_active) else True
+        if active:
+            _apply_urgency(False)
+        _run_active_script(view, window_active_script(active))
+
+    connect_w = getattr(window, "connect", None)
+    if callable(connect_w):
+        connect_w("notify::is-active", push)
+    connect_v = getattr(view, "connect", None)
+    if not callable(connect_v):
+        return
+    for name in ("load-changed", "load-finished"):
+        try:
+            connect_v(name, push)
+            break
+        except Exception:
+            continue

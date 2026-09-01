@@ -18,6 +18,7 @@ import {
   answeredAskBody,
   attentionFingerprint,
   attentionFromEvent,
+  desktopWindowFocused,
   isHistoricalEvent,
   nativeNotifyTag,
   parkedAttentionForView,
@@ -284,6 +285,7 @@ export function ShellPage() {
   const inboxPointerDown = useRef<string | null>(null);
   const botsRef = useRef<Bot[]>([]);
   const windowFocusedRef = useRef(true);
+  const gtkActiveRef = useRef<boolean | null>(null);
   const [windowFocused, setWindowFocused] = useState(true);
   const [pageHidden, setPageHidden] = useState(false);
   const shellOpenedAt = useRef(Date.now());
@@ -331,21 +333,34 @@ export function ShellPage() {
   }, [bots]);
 
   useEffect(() => {
-    function syncFocus() {
+    function applyFocus() {
       const hidden = document.hidden;
-      const focused = document.visibilityState === "visible" && document.hasFocus();
+      const focused = desktopWindowFocused({
+        gtkActive: gtkActiveRef.current,
+        pageHidden: hidden,
+        browserFocused: document.visibilityState === "visible" && document.hasFocus(),
+      });
       windowFocusedRef.current = focused;
       setWindowFocused(focused);
       setPageHidden(hidden);
     }
-    syncFocus();
-    window.addEventListener("focus", syncFocus);
-    window.addEventListener("blur", syncFocus);
-    document.addEventListener("visibilitychange", syncFocus);
+    function onGtkActive(active: boolean | number) {
+      gtkActiveRef.current = Boolean(active);
+      applyFocus();
+    }
+    applyFocus();
+    window.addEventListener("focus", applyFocus);
+    window.addEventListener("blur", applyFocus);
+    document.addEventListener("visibilitychange", applyFocus);
+    const win = window as Window & {
+      __artekSetWindowActive?: (active: boolean | number) => void;
+    };
+    win.__artekSetWindowActive = onGtkActive;
     return () => {
-      window.removeEventListener("focus", syncFocus);
-      window.removeEventListener("blur", syncFocus);
-      document.removeEventListener("visibilitychange", syncFocus);
+      window.removeEventListener("focus", applyFocus);
+      window.removeEventListener("blur", applyFocus);
+      document.removeEventListener("visibilitychange", applyFocus);
+      delete win.__artekSetWindowActive;
     };
   }, []);
 
@@ -1299,6 +1314,7 @@ export function ShellPage() {
       __artekAttachPastedImage?: (contentBase64: string, type: string, name: string) => void;
       __artekComposerUndo?: () => void;
       __artekComposerRedo?: () => void;
+      __artekSetWindowActive?: (active: boolean | number) => void;
     };
     win.__artekAttachPastedImage = (contentBase64, type, name) => {
       queueFilesRef.current(filesFromAttachedPayload([{ name, type, contentBase64 }]));

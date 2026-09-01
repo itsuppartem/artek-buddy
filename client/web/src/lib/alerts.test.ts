@@ -7,6 +7,7 @@ import {
   attentionFromEvent,
   attentionFromParkedBot,
   type BotAlertSnapshot,
+  desktopWindowFocused,
   isHistoricalEvent,
   nativeNotifyTag,
   parkedAttentionForView,
@@ -62,7 +63,7 @@ describe("shouldSendDesktopAlert", () => {
     ).toBe(true);
   });
 
-  it("does not treat looking at the OS alert list as leaving the open chat", () => {
+  it("alerts the open chat when the window is unfocused even if the page is still visible", () => {
     expect(
       shouldSendDesktopAlert({
         windowFocused: false,
@@ -70,10 +71,10 @@ describe("shouldSendDesktopAlert", () => {
         viewingBotId: "bot-a",
         alertBotId: "bot-a",
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("alerts the open chat only when the window is hidden", () => {
+  it("alerts the open chat when the window is hidden", () => {
     expect(
       shouldSendDesktopAlert({
         windowFocused: false,
@@ -82,6 +83,29 @@ describe("shouldSendDesktopAlert", () => {
         alertBotId: "bot-a",
       }),
     ).toBe(true);
+  });
+});
+
+describe("desktopWindowFocused", () => {
+  it("uses the browser focus only when GTK has not spoken", () => {
+    expect(desktopWindowFocused({ gtkActive: null, pageHidden: false, browserFocused: true })).toBe(
+      true,
+    );
+    expect(
+      desktopWindowFocused({ gtkActive: null, pageHidden: false, browserFocused: false }),
+    ).toBe(false);
+  });
+
+  it("treats an inactive GTK window as unfocused even when WebKit still reports hasFocus", () => {
+    expect(
+      desktopWindowFocused({ gtkActive: false, pageHidden: false, browserFocused: true }),
+    ).toBe(false);
+  });
+
+  it("is unfocused while the page is hidden", () => {
+    expect(desktopWindowFocused({ gtkActive: true, pageHidden: true, browserFocused: true })).toBe(
+      false,
+    );
   });
 });
 
