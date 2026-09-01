@@ -157,6 +157,22 @@ class ConsentsMixin:
             conn.commit()
         return [str(row["id"]) for row in rows]
 
+    def owner_job_ids_for_runs(self, run_ids: list[str]) -> list[str]:
+        ids = [item for item in run_ids if item]
+        if not ids:
+            return []
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT id FROM consent_requests
+                WHERE run_id = ANY(%s)
+                  AND job_status IN ('queued', 'acknowledged')
+                """,
+                (ids,),
+            ).fetchall()
+            conn.commit()
+        return [str(row["id"]) for row in rows]
+
     def acknowledge_consent_job(self, request_id: str) -> bool:
         with self._conn() as conn:
             row = conn.execute(

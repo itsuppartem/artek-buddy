@@ -248,6 +248,7 @@ On **Deb**: stop the `artek-buddy` container for about 30 seconds (or pull the n
 | Paste a screenshot into Message → chip `screenshot-1.png` (or the file name). Ordinary text is not an attachment | [ ] | [ ] |
 | Scripted `please e2e-background-worker-chat`: one **Working in the background.**, Message stays usable, **Stop** stays up, **no** worker card and **no** `Started …` / `Finished …` / `Stopped …` lines. `please e2e-worker-status` answers **Still working.** Then exactly one **The background job is done.** | [ ] | [ ] |
 | Scripted `please e2e-worker-activity-no-text`: status (`please e2e-worker-status` or `please e2e-worker-false-idle`) keeps the **same** worker. Empty progress is not treated as idle; **Stop** is only the window control, not a status ping. | [ ] | [ ] |
+| Scripted `please e2e-lead-owner-ssh`: the lead turn finishes without grinding This-PC SSH. A following Send is a new run. Window **Stop** then Send is also a new turn, not a silent queue on a cancelled run | [ ] | [ ] |
 | Composer **Stop** while only the worker is running writes **Stopped.** and cancels that work | [ ] | [ ] |
 | This-PC Allow (read / write this Linux home) works on Deb. Refresh or open a second window while it runs: the same write/exec happens **once** and the losing window does not fail the winner's result | [ ] | — |
 | Back-to-back This-PC read + list are both ACKed promptly and return their own results; neither waits for the SSE heartbeat or receives the other job | [ ] | — |
@@ -341,7 +342,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
 | Failed / cancelled run shows a run-error, not a silent hole. After 60+ minutes idle, the first live Cursor Send may restart its local bridge but still completes on that Send with no red line. Scripted `please e2e-dead-wait` proves the bounded hidden retry (bot `ok`, no Send-again); `please e2e-dead-wait-stuck` still shows one terminal error | [ ] | [ ] |
 | A follow-up while `waiting_takeover` starts a turn (does not only enqueue) | [ ] | [ ] |
-| Stop keeps the run cancelled: a late complete does not append the essay (scripted `please e2e-late-complete` or a live Cursor turn). **Stopped.** is one `run-error` line. Queued owner lines survive Stop and prepend to the next send | [ ] | [ ] |
+| Stop keeps the run cancelled: a late complete does not append the essay (scripted `please e2e-late-complete` or a live Cursor turn). **Stopped.** is one `run-error` line. Queued owner lines survive Stop and prepend to the **next** send. Stop must not leave a running zombie; `please e2e-lead-owner-ssh` then another Send is a new run | [ ] | [ ] |
 
 ---
 
@@ -591,7 +592,7 @@ If time is short, in this order:
 8. **§12 Pad and Cyrillic**
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
-11. **§10 workers** `please e2e-background-worker-chat` then status; Message stays usable; one final result. `please e2e-worker-activity-no-text` then status keeps the same worker. **This-PC** back-to-back read/list and one Allow action exactly once on Deb
+11. **§10 workers** `please e2e-background-worker-chat` then status; Message stays usable; one final result. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. **This-PC** back-to-back read/list and one Allow action exactly once on Deb
 12. **§1 / §21 Escape** on Settings and New bot
 13. **§14 Inbox** Search empty + one click opens that row
 14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Plugin **Open to connect** is the same kind of link

@@ -56,7 +56,13 @@ class _ConsentStore:
             scope_key="~",
             summary="Read notes.txt from your computer?",
             job_status="queued",
+            run_id="run_1",
         )
+
+    def owner_job_ids_for_runs(self, run_ids: list[str]) -> list[str]:
+        if "run_1" in run_ids:
+            return ["cns_1"]
+        return []
 
     def finish_consent_job(self, _request_id: str, _job_status: str) -> bool:
         return True
@@ -272,3 +278,27 @@ def test_claim_capable_ack_rejects_a_result_without_the_claim() -> None:
     assert store.row.job_status == "acknowledged"
     assert hub.put_owner_result("cns_1", {"ok": True}, claim=claim) is True
     assert store.row.job_status == "completed"
+
+
+def test_cancel_owner_jobs_wakes_result_wait(monkeypatch) -> None:
+    monkeypatch.setattr(consent_mod, "OWNER_RESULT_WAIT", 5)
+    hub = ConsentHub(_ConsentStore())
+    started = threading.Event()
+    found: list[object] = []
+
+    def wait() -> None:
+        started.set()
+        found.append(hub.take_owner_result("cns_1", finalize_timeout=False))
+
+    worker = threading.Thread(target=wait)
+    worker.start()
+    assert started.wait(1)
+    time.sleep(0.05)
+    hub.cancel_owner_jobs(["run_1"])
+    worker.join(1)
+    assert not worker.is_alive()
+    assert found
+    result = found[0]
+    assert isinstance(result, dict)
+    assert result.get("ok") is False
+    assert result.get("error") == "Stopped."

@@ -10,6 +10,7 @@ from artek_buddy.runtime.scripted import (
     E2E_CHILD_ARCHIVED,
     E2E_FAIL_ERROR,
     E2E_HANG_S,
+    E2E_LEAD_OWNER_SSH,
     E2E_META_TEXT,
     E2E_OLDER_COUNT,
     E2E_SUBAGENT_NAME,
@@ -114,6 +115,9 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     activity = steps_for_prompt("please e2e-worker-activity-no-text")
     assert activity[0].tool == "spawn_subagent"
     assert activity[0].args["task"] == "please e2e-worker-tools-no-text"
+    lead_ssh = steps_for_prompt("please e2e-lead-owner-ssh")
+    assert lead_ssh[0].tool == "run_owner_command"
+    assert lead_ssh[-1].result == E2E_LEAD_OWNER_SSH
     tools_only = steps_for_prompt("please e2e-worker-tools-no-text")
     assert sum(1 for step in tools_only if step.tool == "list_subagents") == 20
     false_idle = steps_for_prompt("please e2e-worker-false-idle")

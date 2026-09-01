@@ -38,6 +38,14 @@ WORKER_ONLY_TOOLS = frozenset(
         "browser_act",
     }
 )
+LEAD_FORBIDDEN_OWNER_TOOLS = frozenset(
+    {
+        "read_owner_file",
+        "write_owner_file",
+        "list_owner_dir",
+        "run_owner_command",
+    }
+)
 
 
 class ProductToolsCore:
@@ -244,8 +252,15 @@ class ProductToolsCore:
         tokens = apply(ctx) if callable(apply) else None
         activity_started = False
         try:
-            if ctx.role == "subagent" and self._worker_cancelled(ctx.run_id):
-                return {"ok": False, "error": "worker was cancelled"}
+            if self._turn_cancelled(ctx):
+                if ctx.role == "subagent":
+                    return {"ok": False, "error": "worker was cancelled"}
+                return {"ok": False, "error": "turn was cancelled"}
+            if ctx.role != "subagent" and name in LEAD_FORBIDDEN_OWNER_TOOLS:
+                return {
+                    "ok": False,
+                    "error": f"lead cannot use {name}; spawn_subagent for This-PC work",
+                }
             blocked = self._block_status_replace(name, ctx)
             if blocked is not None:
                 return blocked
@@ -313,6 +328,18 @@ class ProductToolsCore:
             thread_id=thread_id or "",
             role=turn_role,
         )
+
+    def _turn_cancelled(self, ctx: TurnContext) -> bool:
+        check = getattr(self.runtime, "is_run_cancelled", None)
+        if callable(check):
+            try:
+                if check(ctx.run_id):
+                    return True
+            except Exception:
+                log.exception("failed to read run cancel state")
+        if ctx.role == "subagent" and self._worker_cancelled(ctx.run_id):
+            return True
+        return False
 
     def _worker_cancelled(self, run_id: str) -> bool:
         service = getattr(self.runtime, "subagents", None)

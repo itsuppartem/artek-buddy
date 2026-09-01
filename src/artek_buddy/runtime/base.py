@@ -57,6 +57,7 @@ class RuntimeBase:
         self._bot_by_agent: dict[str, str] = {}
         self._messages_sent_in_turn: set[str] = set()
         self._fresh_sessions: set[str] = set()
+        self._cancelled_runs: set[str] = set()
 
     def set_turn_device(self, device_id: str | None) -> None:
         self._last_device = device_id if device_id and device_id != "host" else None
@@ -101,6 +102,39 @@ class RuntimeBase:
                 return False
             self._fresh_sessions.remove(agent_id)
         return True
+
+    def mark_runs_cancelled(self, run_ids: list[str]) -> None:
+        ids = [item for item in run_ids if item]
+        if not ids:
+            return
+        with self._turn_lock:
+            self._cancelled_runs.update(ids)
+
+    def is_run_cancelled(self, run_id: str | None) -> bool:
+        if not run_id:
+            return False
+        with self._turn_lock:
+            if run_id in self._cancelled_runs:
+                return True
+        store = self.store
+        getter = getattr(store, "get_run", None)
+        if not callable(getter):
+            return False
+        try:
+            row = getter(run_id)
+        except Exception:
+            log.exception("failed to read run cancel state")
+            return False
+        if row is None:
+            return False
+        status = getattr(row.status, "value", None) or str(row.status)
+        return status not in {
+            "queued",
+            "leased",
+            "running",
+            "waiting_input",
+            "waiting_takeover",
+        }
 
     def build_session_resume(self, bot_id: str | None) -> str | None:
         if not bot_id or self.store is None:

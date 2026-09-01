@@ -56,6 +56,7 @@ E2E_WORKER_RESULT = "blocked work finished"
 E2E_WORKER_BLOCK_S = 10.0
 E2E_WORKER_ACTIVITY_TOOLS = 20
 E2E_WORKER_ACTIVITY_HOLD_S = 8.0
+E2E_LEAD_OWNER_SSH = "Lead must not hold This-PC SSH."
 E2E_ASK_READY = "I am ready to answer. The city is Subotica."
 E2E_ASK_ANSWER = "They said the city is Subotica."
 E2E_OLDER_PREFIX = "e2e-old-"
@@ -387,6 +388,11 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 detail=E2E_ASK_DETAIL,
             ),
             scripted_finish(E2E_OWNER_HELP_ANSWER),
+        ]
+    if "e2e-lead-owner-ssh" in hay:
+        return [
+            scripted_tool("run_owner_command", command="sleep 120"),
+            scripted_finish(E2E_LEAD_OWNER_SSH),
         ]
     if "e2e-blocked-browser" in hay:
         return [
