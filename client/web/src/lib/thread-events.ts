@@ -403,16 +403,12 @@ export function canAnswerOwnerPrompt(
 ): boolean {
   const pendingConsent = message.blocks.some(
     (block) =>
-      block.kind === "ask" &&
-      Boolean(block.consentId) &&
-      (block.status ?? "pending") === "pending",
+      block.kind === "ask" && Boolean(block.consentId) && (block.status ?? "pending") === "pending",
   );
   if (pendingConsent) {
     return true;
   }
-  return (
-    run?.status === "waiting_input" && Boolean(message.runId) && message.runId === run.id
-  );
+  return run?.status === "waiting_input" && Boolean(message.runId) && message.runId === run.id;
 }
 
 export function isToolNoise(message: ThreadMessage): boolean {
