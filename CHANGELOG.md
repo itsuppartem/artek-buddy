@@ -40,7 +40,7 @@
 - A shorter restatement of an already detailed standing rule no longer revises the same Memory chapter or writes another identical Remembered line.
 - Back-to-back and parallel This-PC calls no longer reuse a process-global consent id. Late owner results are rejected, completed auto jobs are not offered again, and the phone/host page leaves auto jobs for the paired Linux client.
 - A new model session no longer receives the current user send twice in compact history; repeated identical user lines from silent failed runs collapse to one.
-- An instant dead Cursor wait after a good turn retries that same send (expire a stuck run, then a new session if needed) instead of asking the owner to Send again. A stuck double-dead still shows one Send-again run-error.
+- An instant dead Cursor wait after a good turn retries that same send: it expires a stuck run, then restarts the poisoned local SDK bridge and resumes the same chat if needed. A successful recovery no longer asks the owner to Send again.
 - Stop on a live turn writes Stopped. A late model complete from that run does not land as a bot bubble.
 - Release keeps the last guest frame on the overlay until the view-only picture loads. Take control from Sleeping names Waking the desktop… instead of a black void.
 - One click on an inbox row opens that chat. A leftover mouse-up or a late inbox fallback does not land on the previous thread.

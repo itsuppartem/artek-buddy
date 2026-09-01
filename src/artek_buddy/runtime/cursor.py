@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -86,10 +86,18 @@ class CursorRuntime(RuntimeBase):
         settings: Settings,
         store: Any | None = None,
         computers: Any | None = None,
+        *,
+        bridge_launcher: Callable[[], Awaitable[AsyncClient]] | None = None,
     ) -> None:
         super().__init__(settings, store=store, computers=computers)
         self.client = client
+        self._bridge_launcher = bridge_launcher
+        self._bridge_condition = asyncio.Condition()
+        self._bridge_epoch = 0
+        self._bridge_restart_pending = False
+        self._bridge_users = 0
         self._locks: dict[str, asyncio.Lock] = {}
+        self._stream_locks: dict[str, asyncio.Lock] = {}
         self._auth_fails = 0
         self.bridge_recycles = 0
 
@@ -172,6 +180,19 @@ class CursorRuntime(RuntimeBase):
         bot_id: str | None = None,
         role: str = "lead",
     ) -> str:
+        await self._enter_bridge()
+        try:
+            return await self._create_session(name, persist_default, bot_id, role)
+        finally:
+            await self._leave_bridge()
+
+    async def _create_session(
+        self,
+        name: str,
+        persist_default: bool,
+        bot_id: str | None,
+        role: str,
+    ) -> str:
         agent = await self.client.agents.create(
             model=self.model,
             api_key=self.settings.cursor_api_key,
@@ -196,13 +217,21 @@ class CursorRuntime(RuntimeBase):
         bot_id: str | None = None,
         role: str = "lead",
     ) -> str:
+        await self._enter_bridge()
+        try:
+            return await self._ensure_session(agent_id, name, bot_id, role)
+        finally:
+            await self._leave_bridge()
+
+    async def _ensure_session(
+        self,
+        agent_id: str | None,
+        name: str,
+        bot_id: str | None,
+        role: str,
+    ) -> str:
         if self.session_foreign_to_bot(agent_id, bot_id):
-            return await self.create_session(
-                name=name,
-                persist_default=False,
-                bot_id=bot_id,
-                role=role,
-            )
+            return await self._create_session(name, False, bot_id, role)
         if agent_id and agent_id in self._agents:
             return agent_id
         if agent_id:
@@ -212,12 +241,7 @@ class CursorRuntime(RuntimeBase):
                 )
                 live_id = agent.agent_id or agent_id
                 if self.session_foreign_to_bot(live_id, bot_id):
-                    return await self.create_session(
-                        name=name,
-                        persist_default=False,
-                        bot_id=bot_id,
-                        role=role,
-                    )
+                    return await self._create_session(name, False, bot_id, role)
                 self._agents[live_id] = agent
                 self._locks.setdefault(live_id, asyncio.Lock())
                 self.bind_agent_bot(live_id, bot_id)
@@ -225,11 +249,11 @@ class CursorRuntime(RuntimeBase):
                 return live_id
             except Exception:
                 log.exception("resume failed, creating a new agent")
-        return await self.create_session(
-            name=name,
-            persist_default=self.default_agent_id is None,
-            bot_id=bot_id,
-            role=role,
+        return await self._create_session(
+            name,
+            self.default_agent_id is None,
+            bot_id,
+            role,
         )
 
     async def _agent(
@@ -238,7 +262,12 @@ class CursorRuntime(RuntimeBase):
         bot_id: str | None = None,
         role: str = "lead",
     ) -> tuple[str, Any, asyncio.Lock]:
-        agent_id = await self.ensure_session(session_id, bot_id=bot_id, role=role)
+        agent_id = await self._ensure_session(
+            session_id,
+            "artek-buddy",
+            bot_id,
+            role,
+        )
         self.bind_agent_bot(agent_id, bot_id)
         agent = self._agents.get(agent_id)
         if agent is None:
@@ -256,6 +285,101 @@ class CursorRuntime(RuntimeBase):
                 await result
         except Exception:
             log.exception("failed to close cursor agent")
+
+    async def _enter_bridge(self) -> int:
+        async with self._bridge_condition:
+            while self._bridge_restart_pending:
+                await self._bridge_condition.wait()
+            self._bridge_users += 1
+            return self._bridge_epoch
+
+    async def _leave_bridge(self) -> None:
+        async with self._bridge_condition:
+            self._bridge_users = max(0, self._bridge_users - 1)
+            self._bridge_condition.notify_all()
+
+    async def _restart_bridge(
+        self,
+        expected_epoch: int,
+        agent_id: str,
+        bot_id: str | None,
+        role: str,
+    ) -> tuple[str, Any, int]:
+        """Replace the SDK process after active turns drain, then resume this chat."""
+        owns_restart = False
+        async with self._bridge_condition:
+            while self._bridge_restart_pending and self._bridge_epoch == expected_epoch:
+                await self._bridge_condition.wait()
+            if self._bridge_epoch == expected_epoch:
+                self._bridge_restart_pending = True
+                while self._bridge_users:
+                    await self._bridge_condition.wait()
+                owns_restart = True
+            else:
+                self._bridge_users += 1
+                current_epoch = self._bridge_epoch
+
+        if not owns_restart:
+            try:
+                live = await self._ensure_session(agent_id, "artek-buddy", bot_id, role)
+                return live, self._agents[live], current_epoch
+            except Exception:
+                await self._leave_bridge()
+                raise
+
+        if self._bridge_launcher is None:
+            async with self._bridge_condition:
+                self._bridge_restart_pending = False
+                self._bridge_condition.notify_all()
+            raise AgentRuntimeError("Cursor bridge cannot be restarted")
+
+        try:
+            log.warning("restarting cursor bridge after dead wait agent_id=%s", agent_id)
+            old_agents = list({id(agent): agent for agent in self._agents.values()}.values())
+            self._agents.clear()
+            for old_agent in old_agents:
+                await self._close_agent(old_agent)
+            await self.client.aclose()
+            self.client = await self._bridge_launcher()
+            live = await self._ensure_session(agent_id, "artek-buddy", bot_id, role)
+            if live != agent_id:
+                self.default_agent_id = live
+                self._save_state(live)
+                if bot_id and self.store is not None and hasattr(self.store, "attach_agent"):
+                    self.store.attach_agent(bot_id, live)
+        except Exception:
+            async with self._bridge_condition:
+                self._bridge_restart_pending = False
+                self._bridge_condition.notify_all()
+            raise
+
+        async with self._bridge_condition:
+            self._bridge_epoch += 1
+            current_epoch = self._bridge_epoch
+            self._bridge_users += 1
+            self._bridge_restart_pending = False
+            self._auth_fails = 0
+            self.bridge_recycles += 1
+            self._bridge_condition.notify_all()
+        return live, self._agents[live], current_epoch
+
+    async def aclose(self) -> None:
+        async with self._bridge_condition:
+            while self._bridge_restart_pending:
+                await self._bridge_condition.wait()
+            self._bridge_restart_pending = True
+            while self._bridge_users:
+                await self._bridge_condition.wait()
+        try:
+            agents = list({id(agent): agent for agent in self._agents.values()}.values())
+            self._agents.clear()
+            for agent in agents:
+                await self._close_agent(agent)
+            await self.client.aclose()
+        finally:
+            async with self._bridge_condition:
+                self._bridge_restart_pending = False
+                self._bridge_condition.notify_all()
 
     async def _cancel_stale_runs(self, agent_id: str) -> None:
         list_runs = getattr(self.client, "list_runs", None)
@@ -286,27 +410,6 @@ class CursorRuntime(RuntimeBase):
                 log.warning("cancelled stale cursor run %s on %s", rid, agent_id)
             except Exception:
                 log.exception("failed to cancel stale cursor run %s", rid)
-
-    async def _recycle_dead_agent(self, burned_id: str, bot_id: str | None) -> str:
-        log.warning("recycling cursor agent %s", burned_id)
-        burned = self._agents.pop(burned_id, None)
-        self._locks.pop(burned_id, None)
-        if burned is not None:
-            await self._close_agent(burned)
-        self._auth_fails = 0
-        self.bridge_recycles += 1
-        live = await self.create_session(
-            name="artek-buddy",
-            persist_default=True,
-            bot_id=bot_id,
-            role="lead",
-        )
-        if bot_id and self.store is not None and hasattr(self.store, "attach_agent"):
-            try:
-                self.store.attach_agent(bot_id, live)
-            except Exception:
-                log.exception("failed to attach recycled agent")
-        return live
 
     async def _attempt_send(
         self,
@@ -371,15 +474,22 @@ class CursorRuntime(RuntimeBase):
         bot_id: str | None = None,
         role: str = "lead",
     ) -> AsyncIterator[ProductStreamEvent | RunRecord]:
-        agent_id, agent, lock = await self._agent(session_id, bot_id=bot_id, role=role)
-        cwd = self.home_cwd(bot_id or self.resolve_turn_context()[0])
-        self.last_prompt = prompt
-        async with lock:
+        lock_key = session_id or f"{role}:{bot_id or 'default'}"
+        stream_lock = self._stream_locks.setdefault(lock_key, asyncio.Lock())
+        async with stream_lock:
+            bridge_epoch = await self._enter_bridge()
+            bridge_held = True
             run = None
             force = False
             forced_once = False
-            recycled_once = False
+            bridge_restarted_once = False
             try:
+                agent_id, agent, _lock = await self._agent(
+                    session_id, bot_id=bot_id, role=role
+                )
+                self._stream_locks.setdefault(agent_id, stream_lock)
+                cwd = self.home_cwd(bot_id or self.resolve_turn_context()[0])
+                self.last_prompt = prompt
                 while True:
                     await self._cancel_stale_runs(agent_id)
                     try:
@@ -428,9 +538,17 @@ class CursorRuntime(RuntimeBase):
                         force = True
                         forced_once = True
                         continue
-                    if retry_dead and forced_once and not recycled_once:
-                        agent_id = await self._recycle_dead_agent(agent_id, bot_id)
-                        agent = self._agents[agent_id]
+                    if retry_dead and forced_once and not bridge_restarted_once:
+                        await self._leave_bridge()
+                        bridge_held = False
+                        agent_id, agent, bridge_epoch = await self._restart_bridge(
+                            bridge_epoch,
+                            agent_id,
+                            bot_id,
+                            role,
+                        )
+                        bridge_held = True
+                        self._stream_locks.setdefault(agent_id, stream_lock)
                         resume = (
                             self.build_session_resume(bot_id)
                             if self.consume_session_fresh(agent_id)
@@ -440,12 +558,23 @@ class CursorRuntime(RuntimeBase):
                             prompt = f"{resume}\n\n{prompt}"
                             self.last_prompt = prompt
                         force = False
-                        recycled_once = True
+                        bridge_restarted_once = True
                         continue
-                    if recycle and not recycled_once:
-                        await self._recycle_dead_agent(agent_id, bot_id)
-                        recycled_once = True
-                    error_code = dead_wait_owner_error(attempt.error, recycle or recycled_once)
+                    if recycle and not bridge_restarted_once:
+                        await self._leave_bridge()
+                        bridge_held = False
+                        agent_id, agent, bridge_epoch = await self._restart_bridge(
+                            bridge_epoch,
+                            agent_id,
+                            bot_id,
+                            role,
+                        )
+                        bridge_held = True
+                        self._stream_locks.setdefault(agent_id, stream_lock)
+                        bridge_restarted_once = True
+                    error_code = dead_wait_owner_error(
+                        attempt.error, recycle or bridge_restarted_once
+                    )
                     yield RunRecord(
                         id=str(getattr(attempt.run, "id", "")),
                         agent_id=agent_id,
@@ -469,16 +598,23 @@ class CursorRuntime(RuntimeBase):
             except asyncio.CancelledError:
                 await _cancel_cursor_run(run)
                 raise
+            finally:
+                if bridge_held:
+                    await self._leave_bridge()
 
     async def list_models(self) -> list[dict[str, Any]]:
-        models = await self.client.models.list()
-        payload: list[dict[str, Any]] = []
-        for model in models:
-            item: dict[str, Any] = {"id": model.id}
-            variants = getattr(model, "variants", None)
-            if variants:
-                item["variants"] = [
-                    getattr(variant, "id", None) or str(variant) for variant in variants
-                ]
-            payload.append(item)
-        return payload
+        await self._enter_bridge()
+        try:
+            models = await self.client.models.list()
+            payload: list[dict[str, Any]] = []
+            for model in models:
+                item: dict[str, Any] = {"id": model.id}
+                variants = getattr(model, "variants", None)
+                if variants:
+                    item["variants"] = [
+                        getattr(variant, "id", None) or str(variant) for variant in variants
+                    ]
+                payload.append(item)
+            return payload
+        finally:
+            await self._leave_bridge()
