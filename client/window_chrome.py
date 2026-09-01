@@ -10,6 +10,7 @@ DESKTOP_WM_CLASS = "Artek Buddy"
 
 _WINDOW_LOCK = threading.Lock()
 _GTK_WINDOWS: list[object] = []
+_WINDOW_ACTIVE: bool | None = None
 
 
 def _has_gtk_window() -> bool:
@@ -165,11 +166,28 @@ def _register_window(window: object) -> None:
 
 
 def _unregister_window(window: object) -> None:
+    global _WINDOW_ACTIVE
     with _WINDOW_LOCK:
         try:
             _GTK_WINDOWS.remove(window)
         except ValueError:
             pass
+        if not _GTK_WINDOWS:
+            _WINDOW_ACTIVE = None
+
+
+def gtk_window_active() -> bool | None:
+    """GTK-thread cache. Safe to read from the loopback HTTP worker."""
+    with _WINDOW_LOCK:
+        if not _GTK_WINDOWS:
+            return None
+        return _WINDOW_ACTIVE
+
+
+def remember_window_active(active: bool) -> None:
+    global _WINDOW_ACTIVE
+    with _WINDOW_LOCK:
+        _WINDOW_ACTIVE = bool(active)
 
 
 def _apply_urgency(urgent: bool) -> None:
@@ -229,6 +247,7 @@ def bind_window_active(view: object, window: object) -> None:
     def push(*_args: object) -> None:
         is_active = getattr(window, "is_active", None)
         active = bool(is_active()) if callable(is_active) else True
+        remember_window_active(active)
         if active:
             _apply_urgency(False)
         _run_active_script(view, window_active_script(active))
@@ -236,6 +255,11 @@ def bind_window_active(view: object, window: object) -> None:
     connect_w = getattr(window, "connect", None)
     if callable(connect_w):
         connect_w("notify::is-active", push)
+        for name in ("focus-out-event", "focus-in-event"):
+            try:
+                connect_w(name, push)
+            except Exception:
+                continue
     connect_v = getattr(view, "connect", None)
     if not callable(connect_v):
         return

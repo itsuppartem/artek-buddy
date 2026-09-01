@@ -100,6 +100,7 @@ def _open_webkit2(local_url: str) -> bool:
         window.connect("focus-in-event", _on_focus_in)
         view = WebKit2.WebView()
         bind_external_links(view, local_url)
+        _register_window(window)
         bind_window_active(view, window)
         try:
             from clipboard_image import bind_webkit_paste
@@ -138,6 +139,7 @@ def _open_webkit6(local_url: str) -> bool:
         window.connect("destroy", lambda *_args: _unregister_window(window))
         view = WebKit.WebView()
         bind_external_links(view, local_url)
+        _register_window(window)
         bind_window_active(view, window)
         try:
             from clipboard_image import bind_webkit_paste

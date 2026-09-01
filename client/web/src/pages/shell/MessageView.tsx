@@ -18,6 +18,16 @@ export function replyExcerpt(message: ThreadMessage): string {
   return text && "text" in text ? text.text : "Message";
 }
 
+export function messageCopyText(message: ThreadMessage): string {
+  const parts: string[] = [];
+  for (const block of message.blocks) {
+    if ("text" in block && typeof block.text === "string" && block.text.trim()) {
+      parts.push(block.text);
+    }
+  }
+  return parts.join("\n\n").trim();
+}
+
 export function MessageView({
   canAnswer,
   message,

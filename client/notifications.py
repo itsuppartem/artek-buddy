@@ -93,6 +93,7 @@ def _show_libnotify(title: str, body: str, urgency: str, tag: str = "") -> bool:
             if callable(hint):
                 hint("desktop-entry", "artek-buddy")
             note.show()
+            _log("notify show")
             if len(_ACTIVE_NOTES) > 20:
                 extra = _ACTIVE_NOTES[:-12]
                 del _ACTIVE_NOTES[:-12]

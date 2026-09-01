@@ -17,6 +17,8 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Native `.deb` alerts follow GTK `is-active` via loopback `window_active`, not WebKit `hasFocus`. Switching to another app no longer stays silent, and the open chat is not marked read while that window is inactive.
+- Right-click a chat message offers **Copy** for that text. Link rows still have Open in browser and Copy URL.
 - An unfocused Linux `.deb` still raises one native row when the open chat finishes. WebKitGTK does not treat “another app is in front” as a hidden page; GTK `is-active` now drives that, and opening the OS list does not re-notify an already shown event.
 - Guest Files is Thunar without volume watching. Leftover pcmanfm is killed at box start so it does not keep covering the desktop.
 - A long `Remembered:` clock line is a one-row preview. Click it to open that Memory card with the full text.

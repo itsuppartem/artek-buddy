@@ -7,7 +7,14 @@ CLIENT = Path(__file__).resolve().parents[2] / "client"
 if str(CLIENT) not in sys.path:
     sys.path.insert(0, str(CLIENT))
 
-from window_chrome import bind_window_active, window_active_script
+from window_chrome import (
+    _register_window,
+    _unregister_window,
+    bind_window_active,
+    gtk_window_active,
+    remember_window_active,
+    window_active_script,
+)
 
 
 def test_window_active_script_calls_the_page_hook() -> None:
@@ -54,3 +61,16 @@ def test_bind_window_active_pushes_gtk_is_active_into_the_page() -> None:
     scripts.clear()
     load(view, object())
     assert any("__artekSetWindowActive(true)" in item for item in scripts)
+
+
+def test_gtk_window_active_is_a_cache_not_a_cross_thread_widget_read() -> None:
+    window = object()
+    _register_window(window)
+    try:
+        remember_window_active(False)
+        assert gtk_window_active() is False
+        remember_window_active(True)
+        assert gtk_window_active() is True
+    finally:
+        _unregister_window(window)
+    assert gtk_window_active() is None

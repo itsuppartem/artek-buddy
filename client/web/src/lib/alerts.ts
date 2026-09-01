@@ -206,13 +206,38 @@ export function shouldSendDesktopAlert(input: {
   return input.windowFocused === false || input.pageHidden === true;
 }
 
+export function shouldSendNativeAlert(input: {
+  gtkWindowActive: boolean | null;
+  windowFocused: boolean;
+  viewingBotId: string | null;
+  alertBotId: string;
+  pageHidden?: boolean;
+}): boolean {
+  if (input.viewingBotId !== input.alertBotId) return true;
+  if (input.gtkWindowActive === false) return true;
+  if (input.gtkWindowActive === true) return input.pageHidden === true;
+  return shouldSendDesktopAlert({
+    windowFocused: input.windowFocused,
+    viewingBotId: input.viewingBotId,
+    alertBotId: input.alertBotId,
+    pageHidden: input.pageHidden,
+  });
+}
+
 export function shouldCountThreadRead(input: {
   viewingBotId: string | null | undefined;
   chatId: string;
   windowFocused: boolean;
   pageHidden: boolean;
+  gtkWindowActive?: boolean | null;
 }): boolean {
-  return input.viewingBotId === input.chatId && input.windowFocused && !input.pageHidden;
+  const focused =
+    input.gtkWindowActive === false
+      ? false
+      : input.gtkWindowActive === true
+        ? true
+        : input.windowFocused;
+  return input.viewingBotId === input.chatId && focused && !input.pageHidden;
 }
 
 export function nativeNotifyTag(botId: string): string {

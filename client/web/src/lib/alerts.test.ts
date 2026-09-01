@@ -18,6 +18,7 @@ import {
   shouldCountThreadRead,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
+  shouldSendNativeAlert,
   shouldStickDismissOnView,
   shouldWatchBackgroundBot,
 } from "./alerts";
@@ -109,6 +110,53 @@ describe("desktopWindowFocused", () => {
   });
 });
 
+describe("shouldSendNativeAlert", () => {
+  it("posts for the open chat when GTK says the window is inactive even if WebKit still hasFocus", () => {
+    expect(
+      shouldSendNativeAlert({
+        gtkWindowActive: false,
+        windowFocused: true,
+        pageHidden: false,
+        viewingBotId: "bot-a",
+        alertBotId: "bot-a",
+      }),
+    ).toBe(true);
+  });
+
+  it("stays quiet for the open chat while the GTK window is focused", () => {
+    expect(
+      shouldSendNativeAlert({
+        gtkWindowActive: true,
+        windowFocused: true,
+        pageHidden: false,
+        viewingBotId: "bot-a",
+        alertBotId: "bot-a",
+      }),
+    ).toBe(false);
+  });
+
+  it("uses browser focus when there is no GTK window", () => {
+    expect(
+      shouldSendNativeAlert({
+        gtkWindowActive: null,
+        windowFocused: true,
+        pageHidden: false,
+        viewingBotId: "bot-a",
+        alertBotId: "bot-a",
+      }),
+    ).toBe(false);
+    expect(
+      shouldSendNativeAlert({
+        gtkWindowActive: null,
+        windowFocused: false,
+        pageHidden: false,
+        viewingBotId: "bot-a",
+        alertBotId: "bot-a",
+      }),
+    ).toBe(true);
+  });
+});
+
 describe("shouldCountThreadRead", () => {
   it("counts a chat as read only while that thread is focused on screen", () => {
     expect(
@@ -133,6 +181,15 @@ describe("shouldCountThreadRead", () => {
         chatId: "bot-a",
         windowFocused: true,
         pageHidden: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldCountThreadRead({
+        viewingBotId: "bot-a",
+        chatId: "bot-a",
+        windowFocused: true,
+        pageHidden: false,
+        gtkWindowActive: false,
       }),
     ).toBe(false);
   });

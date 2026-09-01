@@ -178,6 +178,24 @@ def test_thread_reply_quote_and_cancel(page: Page, client_url: str, host_url: st
     expect(quoted).to_contain_text("ok")
 
 
+def test_message_right_click_copies_text(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Clip")
+    page.context.grant_permissions(
+        ["clipboard-read", "clipboard-write"],
+        origin=client_url.rstrip("/"),
+    )
+    send_message(page, "copy this line", name)
+    bubble = page.get_by_test_id("user-text").filter(has_text="copy this line")
+    expect(bubble).to_be_visible(timeout=8_000)
+    bubble.click(button="right", timeout=8_000)
+    menu = page.get_by_role("menu", name="Message actions")
+    expect(menu.get_by_role("menuitem", name="Copy", exact=True)).to_be_visible()
+    expect(menu.get_by_role("menuitem", name="Copy URL")).to_have_count(0)
+    menu.get_by_role("menuitem", name="Copy", exact=True).click()
+    expect(menu.get_by_role("menuitem", name="Copied", exact=True)).to_be_visible()
+    assert page.evaluate("navigator.clipboard.readText()") == "copy this line"
+
+
 def test_markdown_link_opens_and_has_link_actions(
     page: Page, client_url: str, host_url: str
 ) -> None:
@@ -201,6 +219,7 @@ def test_markdown_link_opens_and_has_link_actions(
 
     link.click(button="right")
     menu = page.get_by_role("menu", name="Message actions")
+    expect(menu.get_by_role("menuitem", name="Copy", exact=True)).to_be_visible()
     expect(menu.get_by_role("menuitem", name="Open in browser", exact=True)).to_be_visible()
     copy_url = menu.get_by_role("menuitem", name="Copy URL", exact=True)
     expect(copy_url).to_be_visible()

@@ -271,6 +271,7 @@ def test_status_issues_nonce_only_to_this_origin(
             denied.close()
     assert good.status == 200
     assert payload["nonce"] == httpd.local_nonce
+    assert payload["window_active"] is None
     assert bad.status == 403
     assert missing.status == 200
     assert missing_body["nonce"] == httpd.local_nonce

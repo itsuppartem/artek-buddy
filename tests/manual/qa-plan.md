@@ -331,8 +331,8 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Message placeholder stays readable: full name, or `Message …` with an ellipsis — not a clipped mid-word (`Message Resea`) | [ ] | [ ] |
 | Deb WebKit: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo), not only Chromium `--serve` | [ ] | — |
 | Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays | [ ] | [ ] |
-| Right-click Reply (Deb) puts a quote in the next user bubble | [ ] | — |
-| `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Open in browser**, **Copy URL**, and Reply; Copy changes to **URL copied** | [ ] | [ ] |
+| Right-click Reply (Deb) puts a quote in the next user bubble. **Copy** copies that message; on a link, **Copy URL** is still there | [ ] | — |
+| `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Copy**, **Open in browser**, **Copy URL**, and Reply; Copy URL changes to **URL copied** | [ ] | [ ] |
 | `please e2e-blocked-browser`: Ask card visibly waits. An option or free-text answer stays on the card and continues the **same run**, without a second user bubble. A second answer is rejected without breaking the thread | [ ] | [ ] |
 | Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks | [ ] | [ ] |
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
@@ -449,7 +449,7 @@ The computer pane is screen, memory, and routines — not a second file list.
 | Click the Artek Buddy launcher three times: GTK3 presents one existing window / tray process. It does not create three hidden clients or three subscriptions | [ ] | — |
 | Run `please e2e-slow` in Demo and switch to Research: completion raises exactly one native **Demo replied** notification and does not steal the open chat | [ ] | — |
 | Run `research a city` in Demo and switch to Research: one pending question raises exactly one **Demo is asking** row, not one row for the ask card plus another for `waiting_input` | [ ] | — |
-| Start `please e2e-slow`, leave Demo open, then switch to another app (window still mapped) or hide it to the tray: completion still raises the native notification. The same completion while Demo is focused stays quiet | [ ] | — |
+| Start `please e2e-slow`, leave Demo open, then switch to another app (window still mapped) or hide it to the tray: completion still raises the native notification. The same completion while Demo is focused stays quiet. Native attention follows the GTK window, not whether WebKit still thinks the page has focus | [ ] | — |
 | Leave Demo on screen and open the Ubuntu notification list: an already shown Demo row is not posted again and Demo does not become read. A new Demo reply while the window is unfocused still posts one native row. Close the list so Demo is focused: the unread pin clears and Demo's native row is withdrawn | [ ] | — |
 | Dismiss a GNOME row without opening Demo: the chat stays unread. Opening Demo reads it; merely viewing the calendar flyout does not | [ ] | — |
 | Ubuntu Notifications lists **Artek Buddy** with title and final body. Two results from Demo update one row; a result from Research keeps a separate row | [ ] | — |
