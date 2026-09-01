@@ -68,6 +68,23 @@ class RuntimeBase:
         with self._turn_lock:
             self._bot_by_agent[agent_id] = bot_id
 
+    def session_foreign_to_bot(self, agent_id: str | None, bot_id: str | None) -> bool:
+        if not agent_id or not bot_id:
+            return False
+        with self._turn_lock:
+            bound = self._bot_by_agent.get(agent_id)
+        if bound and bound != bot_id:
+            return True
+        store = self.store
+        getter = getattr(store, "get_bot_by_agent", None) if store is not None else None
+        if getter is None:
+            return False
+        try:
+            owner = getter(agent_id)
+        except Exception:
+            return False
+        return owner is not None and getattr(owner, "id", None) != bot_id
+
     def mark_session_fresh(self, agent_id: str | None) -> None:
         if not agent_id:
             return

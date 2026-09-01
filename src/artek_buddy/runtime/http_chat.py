@@ -43,16 +43,16 @@ class HttpChatRuntime(RuntimeBase):
         bot_id: str | None = None,
         role: str = "lead",
     ) -> str:
-        if agent_id and agent_id in self._agents:
-            self.bind_agent_bot(agent_id, bot_id)
-            return agent_id
-        if self.default_agent_id:
+        if self.session_foreign_to_bot(agent_id, bot_id):
             return await self.create_session(
                 name=name,
                 persist_default=False,
                 bot_id=bot_id,
                 role=role,
             )
+        if agent_id and agent_id in self._agents:
+            self.bind_agent_bot(agent_id, bot_id)
+            return agent_id
         return await self.create_session(
             name=name,
             persist_default=self.default_agent_id is None,

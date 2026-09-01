@@ -17,11 +17,9 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
-<<<<<<< HEAD
+- Each inbox chat keeps its own model session. A bot without a stored id no longer inherits the host default (or another chat). Two chats can run at the same time.
 - Connected catalog apps attach as tools on the lead as well as a worker. The window no longer pins a chip above Message after Connect.
-=======
 - Re-asserting a standing rule (or a worker calling `remember`) no longer floods the thread with `Remembered:` clock lines. One new fact this turn can print once; a worker save stays in Memory only.
->>>>>>> origin/develop
 - Switching away from a chat that parked while it was open still raises «needs you». The window no longer consumes that pill just because you were looking at the speaker (`please e2e-takeover`).
 - Native attention now has one workspace-event source: only a new final reply, failure, owner question, or takeover can alert. Polling, replay, intermediate/status text, and silent completion cannot re-notify an old line. Reading requires the focused chat and withdraws its row; GNOME dismissal alone does not read it. One libnotify object/id is updated per bot, and GTK3 relaunch activates the existing client instead of adding subscribers.
 - A `Remembered:` memory line no longer raises **is asking** (or a finish alert). Auto owner-tool `waiting_input` is not treated as an owner question.
