@@ -38,6 +38,7 @@ def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
     assert "finish this dispatch turn" in lead
     assert "run_owner_command" not in lead
     assert "Do not post to the owner chat" in worker
+    assert "does not appear in the owner thread" in worker
     assert "send_message" not in worker
 
 

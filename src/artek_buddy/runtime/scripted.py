@@ -283,6 +283,40 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish("I'll remember that."),
         ]
+    if "e2e-remember-same-thrice" in hay:
+        rule = "There is no YouTrack API token. Do not search for one or call YouTrack REST."
+        return [
+            scripted_tool("remember", content=rule, kind="rule", section="do_not"),
+            scripted_tool("remember", content=rule, kind="rule", section="do_not"),
+            scripted_tool(
+                "remember",
+                content=rule + " Commenting needs the already-logged-in Chromium issue tab.",
+                kind="rule",
+                section="do_not",
+            ),
+            scripted_finish("I'll remember that."),
+        ]
+    if "e2e-background-worker-remember" in hay:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name=E2E_SUBAGENT_NAME,
+                task="please e2e-worker-remember-rule",
+            ),
+            scripted_finish(E2E_WORKER_ACK),
+        ]
+    if "e2e-worker-remember-rule" in hay:
+        return [
+            scripted_tool(
+                "remember",
+                content=(
+                    "There is no YouTrack API token. Do not search for one or call YouTrack REST."
+                ),
+                kind="rule",
+                section="do_not",
+            ),
+            scripted_finish("rule stored"),
+        ]
     if "e2e-remember-twice" in hay:
         return [
             scripted_tool(
