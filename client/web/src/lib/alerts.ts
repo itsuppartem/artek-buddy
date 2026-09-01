@@ -5,6 +5,7 @@ export type AttentionKind = "replied" | "ask" | "takeover" | "failed";
 
 export type AttentionAlert = {
   kind: AttentionKind;
+  occurrenceId: string;
   botId: string;
   title: string;
   body: string;
@@ -21,9 +22,7 @@ export type BotAlertSnapshot = {
   updatedAt: string;
 };
 
-const busyStatus = new Set(["queued", "leased", "running", "waiting_input", "waiting_takeover"]);
 const watchBackgroundStatus = new Set(["queued", "leased", "running", "waiting_takeover"]);
-const ALERT_KIND_WINDOW_MS = 8_000;
 
 const urgencyByKind: Record<AttentionKind, AttentionAlert["urgency"]> = {
   replied: "normal",
@@ -31,12 +30,6 @@ const urgencyByKind: Record<AttentionKind, AttentionAlert["urgency"]> = {
   takeover: "critical",
   failed: "critical",
 };
-
-const quietPreview = /^(Remembered:|Forgot:|Remembered a note\b|Forgot a saved note\b)/i;
-
-function isQuietPreview(preview: string): boolean {
-  return quietPreview.test(preview.trim());
-}
 
 function clip(text: string, max = 180): string {
   const clean = stripMarkdown(text).replace(/\s+/g, " ").trim();
@@ -46,6 +39,7 @@ function clip(text: string, max = 180): string {
 
 function makeAlert(
   kind: AttentionKind,
+  occurrenceId: string,
   botId: string,
   botName: string,
   body: string,
@@ -60,6 +54,7 @@ function makeAlert(
   };
   return {
     kind,
+    occurrenceId,
     botId,
     title: titles[kind],
     body: clip(body),
@@ -74,18 +69,19 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function pendingAskText(payload: Record<string, unknown>): string | null {
-  const message = asRecord(payload.message) ?? payload;
+function finalReplyText(payload: Record<string, unknown>): string | null {
+  const message = asRecord(payload.message);
+  if (message?.role !== "bot") return null;
   const blocks = message.blocks;
   if (!Array.isArray(blocks)) return null;
+  const texts: string[] = [];
   for (const raw of blocks) {
     const block = asRecord(raw);
-    if (block?.kind !== "ask") continue;
-    if (block.status === "answered") continue;
-    const text = typeof block.text === "string" ? block.text : "";
-    return text || "Choose an option";
+    if (block?.kind !== "text" || typeof block.text !== "string") continue;
+    const text = block.text.trim();
+    if (text) texts.push(text);
   }
-  return null;
+  return texts.length ? texts.join("\n") : null;
 }
 
 export function answeredAskBody(event: ProductEvent): string | null {
@@ -107,11 +103,12 @@ export function attentionFromEvent(event: ProductEvent, botName: string): Attent
   const botId = event.botId;
   const at = event.createdAt;
   if (event.type === "run.completed") {
-    return makeAlert("replied", botId, botName, "", at);
+    const reply = finalReplyText(event.payload);
+    return reply ? makeAlert("replied", event.runId || event.id, botId, botName, reply, at) : null;
   }
   if (event.type === "run.failed") {
     const error = typeof event.payload.error === "string" ? event.payload.error : "";
-    return makeAlert("failed", botId, botName, error, at);
+    return makeAlert("failed", event.runId || event.id, botId, botName, error, at);
   }
   if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
     if (
@@ -122,33 +119,34 @@ export function attentionFromEvent(event: ProductEvent, botName: string): Attent
     }
     const body =
       event.type === "run.waiting_input"
-        ? "The bot is waiting for you."
+        ? typeof event.payload.text === "string"
+          ? event.payload.text
+          : "The bot is waiting for you."
         : "Take control of the computer.";
     return makeAlert(
       event.type === "run.waiting_input" ? "ask" : "takeover",
+      event.type === "run.waiting_input" && typeof event.payload.messageId === "string"
+        ? event.payload.messageId
+        : event.runId || event.id,
       botId,
       botName,
       body,
       at,
     );
   }
-  if (event.type === "thread.ask") {
-    const text =
-      (typeof event.payload.text === "string" && event.payload.text) ||
-      (typeof event.payload.question === "string" && event.payload.question) ||
-      "";
-    return makeAlert("ask", botId, botName, text, at);
-  }
-  if (event.type === "thread.message.created") {
-    const ask = pendingAskText(event.payload);
-    if (ask) return makeAlert("ask", botId, botName, ask, at);
-  }
   return null;
 }
 
 export function attentionFromParkedBot(bot: BotAlertSnapshot): AttentionAlert | null {
   if (bot.status !== "waiting_takeover") return null;
-  return makeAlert("takeover", bot.id, bot.name, "Take control of the computer.", bot.updatedAt);
+  return makeAlert(
+    "takeover",
+    bot.updatedAt,
+    bot.id,
+    bot.name,
+    "Take control of the computer.",
+    bot.updatedAt,
+  );
 }
 
 export function parkedAttentionForView(
@@ -173,42 +171,19 @@ export function parkedAttentionForView(
   return best;
 }
 
-export function attentionFromBotChange(
-  prev: BotAlertSnapshot,
-  next: BotAlertSnapshot,
-): AttentionAlert | null {
-  if (prev.id !== next.id) return null;
-  const name = next.name;
-  const at = next.updatedAt;
-  if (next.status === "waiting_takeover" && prev.status !== "waiting_takeover") {
-    return makeAlert("takeover", next.id, name, "Take control of the computer.", at);
-  }
-  // Auto owner jobs use waiting_input with no ask card. Real questions arrive
-  // as thread.ask / ask blocks / non-auto run.waiting_input.
-  const leftBusy = busyStatus.has(prev.status) && !busyStatus.has(next.status);
-  const becameUnread = next.unread && !prev.unread;
-  if (isQuietPreview(next.preview)) return null;
-  if (next.status === "error" && (leftBusy || becameUnread)) {
-    return makeAlert("failed", next.id, name, next.preview, at);
-  }
-  if (leftBusy && next.unread) {
-    return makeAlert("replied", next.id, name, next.preview, at);
-  }
-  if (becameUnread && !busyStatus.has(next.status)) {
-    return makeAlert("replied", next.id, name, next.preview, at);
-  }
-  return null;
-}
-
 export function allowAlert(alert: AttentionAlert, notifyOnFinish: boolean): boolean {
   if (alert.kind === "replied" || alert.kind === "failed") return notifyOnFinish;
   return true;
 }
 
 export function attentionFingerprint(
-  alert: Pick<AttentionAlert, "botId" | "kind" | "body">,
+  alert: Pick<AttentionAlert, "botId" | "kind" | "occurrenceId">,
 ): string {
-  return `${alert.botId}:${alert.kind}:${alert.body}`;
+  return `${alert.botId}:${alert.kind}:${alert.occurrenceId}`;
+}
+
+export function shouldConsiderEventForAttention(source: "workspace" | "thread" | "poll"): boolean {
+  return source === "workspace";
 }
 
 export function shouldSendDesktopAlert(input: {
@@ -244,19 +219,9 @@ export function shouldWatchBackgroundBot(
   return botId !== viewingBotId && watchBackgroundStatus.has(status);
 }
 
-export function rememberShownAlert(
-  seen: Set<string>,
-  recentKindAt: Map<string, number>,
-  key: string,
-  kindKey: string,
-  now: number,
-  windowMs = ALERT_KIND_WINDOW_MS,
-): "show" | "skip" {
+export function rememberShownAlert(seen: Set<string>, key: string): "show" | "skip" {
   if (seen.has(key)) return "skip";
-  const last = recentKindAt.get(kindKey) ?? 0;
-  if (now - last < windowMs) return "skip";
   seen.add(key);
-  recentKindAt.set(kindKey, now);
   return "show";
 }
 

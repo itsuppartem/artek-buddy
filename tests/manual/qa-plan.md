@@ -308,7 +308,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Search filters inbox (and Archived) by name / preview. A name or preview hit is marked. No matches: empty copy plus Clear Search; clear restores the list | [ ] | [ ] |
 | Click a row opens **that** chat on the first click (not the previous one). After Research, one click Lead → header and composer are Lead. Same after a third bot | [ ] | [ ] |
 | Switching chats does not blank the thread or jump inbox order under the pointer | [ ] | [ ] |
-| Opening a focused chat marks it read. Looking at the OS notification list does **not**. A reply while that chat is focused on screen does not leave the unread pin | [ ] | [ ] |
+| Opening a chat in the focused window marks it read. Looking at or dismissing an OS notification does **not**. A reply while that chat is focused on screen does not leave the unread pin | [ ] | [ ] |
 | Unread pin is a tan circle named Unread (not a hidden 7px square). The name is bold | [ ] | [ ] |
 | Right-click (Deb) / long-press if offered (Phone): Pin / Unpin, Mark as unread (sticks until you leave and open again), Edit profile, Duplicate, Archive, Delete | [ ] | [ ] |
 | Empty inbox: Restore from Archived, or create a first bot | [ ] | [ ] |
@@ -441,11 +441,14 @@ The computer pane is screen, memory, and routines — not a second file list.
 | Show Applications lists **Artek Buddy** with the packaged mark. After launch, the dock shows that mark and name, not `artek_buddy.py` or a generic gear | [ ] | — |
 | The installed client shows an **Artek Buddy** tray icon. Its menu **Open Artek Buddy** presents the window; **Quit** exits | [ ] | — |
 | Close the window with ×: it hides to the tray and keeps running. Start it again only if the desktop has no indicator support and close therefore exits | [ ] | — |
+| Click the Artek Buddy launcher three times: GTK3 presents one existing window / tray process. It does not create three hidden clients or three subscriptions | [ ] | — |
 | Run `please e2e-slow` in Demo and switch to Research: completion raises exactly one native **Demo replied** notification and does not steal the open chat | [ ] | — |
+| Run `research a city` in Demo and switch to Research: one pending question raises exactly one **Demo is asking** row, not one row for the ask card plus another for `waiting_input` | [ ] | — |
 | Start `please e2e-slow`, leave Demo open, then hide the window to the tray: completion still raises the native notification. The same completion while Demo is focused stays quiet | [ ] | — |
-| Leave Demo open and focused, open the Ubuntu notification list (window blurs, Demo still visible): a later Demo reply does **not** stack more native **is asking** / **replied** rows, and the inbox unread pin stays until you look at the Demo thread again | [ ] | — |
-| After that background reply, Ubuntu Notifications (calendar flyout) lists **Artek Buddy** with the title and body. A tray / dock badge alone is not enough. Two replies from the same bot replace one row instead of stacking five | [ ] | — |
-| A `Remembered:` / `Forgot:` line, or a This-PC auto read/command, does **not** raise **is asking** or a native alert | [ ] | [ ] |
+| Leave Demo on screen and open the Ubuntu notification list: a later Demo reply does not stack an alert or become read. Close the list so Demo is focused: the unread pin clears and Demo's native row is withdrawn | [ ] | — |
+| Dismiss a GNOME row without opening Demo: the chat stays unread. Opening Demo reads it; merely viewing the calendar flyout does not | [ ] | — |
+| Ubuntu Notifications lists **Artek Buddy** with title and final body. Two results from Demo update one row; a result from Research keeps a separate row | [ ] | — |
+| Intermediate text/progress, a silent completion after old text, `Remembered:` / `Forgot:`, This-PC auto work, worker cards, and relaunch/replay do not raise **is asking** / **replied** | [ ] | [ ] |
 | Phone: Turn on alerts from the Home Screen icon. Alerts only while that app is open or still in memory. Kill the icon → no wake | — | [ ] |
 | `notifyOnFinish` off mutes only replied / failed, not «needs you» | [ ] | [ ] |
 
@@ -590,7 +593,7 @@ If time is short, in this order:
 16. **§9 Queue** pending mark, then local Sent while offline
 17. **§15 Stop** on a live turn shows Stopped. A late complete does not land
 18. **§15 dead wait** `please e2e-dead-wait` completes on that send; `please e2e-dead-wait-stuck` still shows Send again
-19. **§23 Notifications** tray Open/Quit, then a hidden `please e2e-slow` leaves an Artek Buddy row in Ubuntu Notifications (not only a badge)
+19. **§23 Notifications** launch three times → one client; hidden `please e2e-slow` → one Artek Buddy row, and opening that chat withdraws it
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
 

@@ -909,7 +909,11 @@ async def _run_turn(
         events,
         bot,
         final_type,
-        {"run": finished.model_dump(mode="json"), "error": error},
+        {
+            "run": finished.model_dump(mode="json"),
+            "error": error,
+            "message": bot_msg.model_dump(mode="json") if bot_msg is not None else None,
+        },
         run_id=finished.id,
     )
     if status == "completed":

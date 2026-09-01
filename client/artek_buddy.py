@@ -14,6 +14,7 @@ _CLIENT_DIR = Path(__file__).resolve().parent
 if str(_CLIENT_DIR) not in sys.path:
     sys.path.insert(0, str(_CLIENT_DIR))
 
+from notifications import _desktop_dismiss as _desktop_dismiss
 from notifications import _desktop_notify as _desktop_notify
 from owner_paths import _owner_path_status as _owner_path_status
 from owner_paths import inspect_owner_path as inspect_owner_path

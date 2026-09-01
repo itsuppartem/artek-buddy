@@ -16,13 +16,13 @@ import {
   allowAlert,
   answeredAskBody,
   attentionFingerprint,
-  attentionFromBotChange,
   attentionFromEvent,
   isHistoricalEvent,
   nativeNotifyTag,
   parkedAttentionForView,
   rememberShownAlert,
   shouldClearAttentionForView,
+  shouldConsiderEventForAttention,
   shouldCountThreadRead,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
@@ -270,7 +270,6 @@ export function ShellPage() {
   const seenAlertKeys = useRef(new Set<string>());
   const dismissedAlerts = useRef(new Set<string>());
   const stickToLatest = useRef(true);
-  const recentKindAt = useRef(new Map<string, number>());
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
   const botIdRef = useRef<string | undefined>(undefined);
@@ -285,7 +284,11 @@ export function ShellPage() {
   const previousViewingRef = useRef<string | null>(null);
   const refreshBotsRef = useRef<() => Promise<Bot[]>>(async () => []);
   const considerEventRef = useRef<
-    (incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) => void
+    (
+      incoming: ProductEvent,
+      bot: Bot,
+      opts?: { live?: boolean; source?: "thread" | "workspace" },
+    ) => void
   >(() => undefined);
   const [contextMenu, setContextMenu] = useState<{
     bot: Bot;
@@ -355,6 +358,9 @@ export function ShellPage() {
     heldUnreadIds.current.delete(id);
     patchBotUnread(id, false);
     void api.threads.markRead(id).catch(() => undefined);
+    if (pageSurface() === "desktop") {
+      void api.local.dismissNotify(nativeNotifyTag(id));
+    }
   }
 
   useEffect(() => {
@@ -381,8 +387,6 @@ export function ShellPage() {
       seenAlertKeys.current.add(fingerprint);
       return;
     }
-    const kindKey = `${next.botId}:${next.kind}`;
-    const now = Date.now();
     const viewing = activeIdRef.current || botIdRef.current || null;
     const hidden = typeof document !== "undefined" && document.hidden;
     const surface = pageSurface();
@@ -416,15 +420,7 @@ export function ShellPage() {
       }
       return;
     }
-    if (
-      rememberShownAlert(seenAlertKeys.current, recentKindAt.current, key, kindKey, now) === "skip"
-    ) {
-      if (!key.endsWith(":parked")) {
-        seenAlertKeys.current.add(key);
-        seenAlertKeys.current.add(fingerprint);
-      }
-      return;
-    }
+    if (rememberShownAlert(seenAlertKeys.current, key) === "skip") return;
     seenAlertKeys.current.add(fingerprint);
     if (seenAlertKeys.current.size > 250) {
       const oldest = seenAlertKeys.current.values().next().value;
@@ -468,7 +464,6 @@ export function ShellPage() {
   function flushHeldWebAlerts() {
     if (typeof document === "undefined" || !document.hidden) return;
     const viewing = activeIdRef.current || botIdRef.current || null;
-    const now = Date.now();
     for (const [id, held] of [...pendingAlerts.current.entries()]) {
       if (
         !shouldShowWebNotification({
@@ -480,13 +475,8 @@ export function ShellPage() {
         continue;
       }
       pendingAlerts.current.delete(id);
-      rememberShownAlert(
-        seenAlertKeys.current,
-        recentKindAt.current,
-        held.key,
-        `${held.alert.botId}:${held.alert.kind}`,
-        now,
-      );
+      rememberShownAlert(seenAlertKeys.current, held.key);
+      seenAlertKeys.current.add(attentionFingerprint(held.alert));
       raiseWebNotification(held.alert);
     }
   }
@@ -534,6 +524,9 @@ export function ShellPage() {
     if (alert) {
       dismissedAlerts.current.add(attentionFingerprint(alert));
       pendingAlerts.current.delete(alert.botId);
+      if (pageSurface() === "desktop") {
+        void api.local.dismissNotify(nativeNotifyTag(alert.botId));
+      }
     }
     setAttention(null);
   }
@@ -547,16 +540,30 @@ export function ShellPage() {
     });
   }
 
-  function considerEvent(incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) {
+  function considerEvent(
+    incoming: ProductEvent,
+    bot: Bot,
+    opts?: { live?: boolean; source?: "thread" | "workspace" },
+  ) {
     const granted = isAutoOwnerJob(incoming);
     if (granted) startOwnerFulfill(granted.consentId);
     dispatchMemoryChanged(incoming.type);
     if (!opts?.live && isHistoricalEvent(incoming, shellOpenedAt.current)) return;
-    const next = attentionFromEvent(incoming, bot.name);
+    const next = shouldConsiderEventForAttention(opts?.source ?? "thread")
+      ? attentionFromEvent(incoming, bot.name)
+      : null;
     const answered = answeredAskBody(incoming);
     if (answered) {
-      dismissedAlerts.current.add(`${bot.id}:ask:${answered}`);
+      const held = pendingAlerts.current.get(bot.id);
+      if (held?.alert.kind === "ask") {
+        dismissedAlerts.current.add(attentionFingerprint(held.alert));
+      }
       pendingAlerts.current.delete(bot.id);
+      setAttention((current) => {
+        if (current?.botId !== bot.id || current.kind !== "ask") return current;
+        dismissedAlerts.current.add(attentionFingerprint(current));
+        return null;
+      });
     }
     flushHeldAlerts();
     if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
@@ -581,7 +588,9 @@ export function ShellPage() {
       setBots((list) =>
         list.map((item) => (item.id === bot.id ? { ...item, status: "waiting_takeover" } : item)),
       );
-      raiseParkedAlerts();
+      if (opts?.source === "workspace") {
+        seenAlertKeys.current.add(`${bot.id}:takeover:parked`);
+      }
       void refreshBotsRef.current().catch(() => undefined);
     }
     if (incoming.type === "run.completed" || incoming.type === "run.failed") {
@@ -650,25 +659,6 @@ export function ShellPage() {
 
   async function refreshBots() {
     const list = await api.bots.list();
-    const prev = prevBotsRef.current;
-    if (prev.size) {
-      for (const next of list) {
-        const before = prev.get(next.id);
-        if (!before) continue;
-        const alert = attentionFromBotChange(before, next);
-        if (alert) {
-          const updated = Date.parse(next.updatedAt);
-          if (
-            !freshBotIds.current.has(next.id) &&
-            Number.isFinite(updated) &&
-            updated < shellOpenedAt.current
-          ) {
-            continue;
-          }
-          dispatchAlert(alert, `${next.id}:${alert.kind}:${next.updatedAt}`, next.notifyOnFinish);
-        }
-      }
-    }
     const viewing = activeIdRef.current || botIdRef.current;
     if (
       viewing &&
@@ -683,7 +673,7 @@ export function ShellPage() {
       const open = list.find((item) => item.id === viewing);
       if (open?.unread) {
         open.unread = false;
-        void api.threads.markRead(viewing).catch(() => undefined);
+        markOpenThreadRead(viewing);
       }
     }
     prevBotsRef.current = new Map(list.map((item) => [item.id, item]));
@@ -1081,7 +1071,7 @@ export function ShellPage() {
               applyThreadEvent(event, setSnapshot, setComputer);
             }
             const bot = botsRef.current.find((item) => item.id === active.id) ?? active;
-            considerEvent(event, bot);
+            considerEvent(event, bot, { source: "thread" });
             if (leftChat) break;
             if (event.type === "run.completed" || event.type === "run.failed") {
               void refreshBotsRef.current().catch(() => undefined);
@@ -1132,7 +1122,9 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             retryMs = 250;
             const bot = botsRef.current.find((item) => item.id === event.botId);
-            if (bot) considerEventRef.current(event, bot, { live: true });
+            if (bot) {
+              considerEventRef.current(event, bot, { live: true, source: "workspace" });
+            }
           }
         } catch (err) {
           if (abort.signal.aborted) break;

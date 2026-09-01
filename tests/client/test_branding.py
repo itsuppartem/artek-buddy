@@ -60,6 +60,8 @@ class _FakeNote:
         self.hints: dict[str, str] = {}
         self.urgency = None
         self.shown = False
+        self.closed = False
+        self.updates: list[tuple[str, str, str]] = []
 
     def set_hint_string(self, key: str, value: str) -> None:
         self.hints[key] = value
@@ -69,6 +71,15 @@ class _FakeNote:
 
     def show(self) -> None:
         self.shown = True
+
+    def update(self, title: str, body: str, icon: str) -> None:
+        self.title = title
+        self.body = body
+        self.icon = icon
+        self.updates.append((title, body, icon))
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class _FakeNotify:
@@ -119,6 +130,46 @@ def test_desktop_notify_keeps_libnotify_handle_for_gnome_list(client_mod, monkey
     assert note.urgency == _FakeNotify.Urgency.NORMAL
     assert ran == []
     assert note in notify_mod._ACTIVE_NOTES
+
+
+def test_same_bot_updates_one_libnotify_notification(client_mod, monkeypatch) -> None:
+    notify_mod = sys.modules["notifications"]
+    _FakeNotify.reset()
+    notify_mod._ACTIVE_NOTES.clear()
+    notify_mod._ACTIVE_BY_TAG.clear()
+    monkeypatch.delenv("ARTEK_BUDDY_NOTIFY", raising=False)
+    monkeypatch.setattr(notify_mod, "_libnotify_api", lambda: _FakeNotify)
+    monkeypatch.setattr(notify_mod, "_apply_urgency", lambda *_args: None)
+
+    client_mod._desktop_notify("Demo replied", "first", "normal", "artek-buddy:bot-a")
+    client_mod._desktop_notify("Demo replied", "second", "normal", "artek-buddy:bot-a")
+
+    assert len(_FakeNotify.notes) == 1
+    assert _FakeNotify.notes[0].body == "second"
+    assert len(_FakeNotify.notes[0].updates) == 1
+    assert not _FakeNotify.notes[0].closed
+
+
+def test_different_bots_keep_separate_notifications_and_read_withdraws_one(
+    client_mod, monkeypatch
+) -> None:
+    notify_mod = sys.modules["notifications"]
+    _FakeNotify.reset()
+    notify_mod._ACTIVE_NOTES.clear()
+    notify_mod._ACTIVE_BY_TAG.clear()
+    monkeypatch.delenv("ARTEK_BUDDY_NOTIFY", raising=False)
+    monkeypatch.setattr(notify_mod, "_libnotify_api", lambda: _FakeNotify)
+    monkeypatch.setattr(notify_mod, "_apply_urgency", lambda *_args: None)
+
+    client_mod._desktop_notify("Alpha replied", "one", "normal", "artek-buddy:alpha")
+    client_mod._desktop_notify("Beta replied", "two", "normal", "artek-buddy:beta")
+    assert len(_FakeNotify.notes) == 2
+
+    assert client_mod._desktop_dismiss("artek-buddy:alpha") is True
+    assert _FakeNotify.notes[0].closed
+    assert not _FakeNotify.notes[1].closed
+    assert "artek-buddy:alpha" not in notify_mod._ACTIVE_BY_TAG
+    assert "artek-buddy:beta" in notify_mod._ACTIVE_BY_TAG
 
 
 def test_notify_send_fallback_omits_desktop_entry(client_mod, monkeypatch) -> None:

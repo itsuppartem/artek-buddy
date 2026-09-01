@@ -730,10 +730,15 @@ def test_deb_background_reply_posts_one_native_notification(
     page: Page, client_url: str, host_url: str
 ) -> None:
     native_requests = []
+    dismiss_requests = []
     page.on(
         "request",
         lambda request: (
-            native_requests.append(request) if request.url.endswith("/local/notify") else None
+            native_requests.append(request)
+            if request.url.endswith("/local/notify")
+            else dismiss_requests.append(request)
+            if request.url.endswith("/local/notify-dismiss")
+            else None
         ),
     )
     speaker = unique_bot("Native")
@@ -741,6 +746,8 @@ def test_deb_background_reply_posts_one_native_notification(
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, speaker)
     create_named_bot(page, watcher)
+    speaker_id = bot_row(page, speaker).get_attribute("data-bot-id")
+    assert speaker_id
     open_chat(page, speaker)
     box = composer(page)
     box.fill("please e2e-slow")
@@ -751,6 +758,11 @@ def test_deb_background_reply_posts_one_native_notification(
 
     assert len(native_requests) == 1
     assert native_requests[0].post_data_json["title"] == f"{speaker} replied"
+    assert native_requests[0].post_data_json["tag"] == f"artek-buddy:{speaker_id}"
+
+    open_chat(page, speaker)
+    expect(bot_row(page, speaker).get_by_test_id("unread-dot")).to_have_count(0)
+    assert dismiss_requests[-1].post_data_json["tag"] == f"artek-buddy:{speaker_id}"
 
 
 def test_notify_off_mutes_replied_not_ask(page: Page, client_url: str, host_url: str) -> None:
