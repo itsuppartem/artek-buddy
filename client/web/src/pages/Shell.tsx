@@ -76,7 +76,6 @@ import {
   phoneTabAfterPanel,
   shouldUsePhoneShell,
 } from "../lib/phone-shell";
-import { hidePluginSlug, pluginAskDraft, visiblePluginApps } from "../lib/plugins-ask";
 import { ownerRunError } from "../lib/run-error";
 import {
   embeddableScreenUrl,
@@ -161,7 +160,6 @@ import { ComputerPane } from "./shell/ComputerPane";
 import { CreateBotForm } from "./shell/CreateBotForm";
 import { MessageView, replyExcerpt } from "./shell/MessageView";
 import { ModelsPane } from "./shell/ModelsPane";
-import { PluginsAsk } from "./shell/PluginsAsk";
 import { PluginsPane } from "./shell/PluginsPane";
 
 type Panel = "computer" | "settings" | "create" | "models" | "plugins" | null;
@@ -224,8 +222,6 @@ export function ShellPage() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
-  const [pluginApps, setPluginApps] = useState<{ slug: string; name: string }[]>([]);
-  const [hiddenPluginSlugs, setHiddenPluginSlugs] = useState<Record<string, string[]>>({});
   const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
   const panelAfterSettings = useRef<"computer" | null>(null);
   const panelAfterCreate = useRef<"computer" | null>(null);
@@ -740,28 +736,6 @@ export function ShellPage() {
     setPanel("plugins");
   }
 
-  async function refreshPlugins() {
-    try {
-      const status = await api.connections.status();
-      if (!status.configured) {
-        setPluginApps([]);
-        return;
-      }
-      const listed = await api.connections.list();
-      setPluginApps(
-        (listed.connections ?? [])
-          .filter((row) => row.status === "connected")
-          .map((row) => ({ slug: row.provider, name: row.displayName })),
-      );
-    } catch {
-      setPluginApps([]);
-    }
-  }
-
-  useEffect(() => {
-    void refreshPlugins();
-  }, []);
-
   function persistQueue(next: QueuedSend[]): QueuedSend[] {
     try {
       writeStoredList(window.localStorage, OFFLINE_QUEUE_KEY, next);
@@ -1086,7 +1060,6 @@ export function ShellPage() {
             if (event.type === "run.completed" || event.type === "run.failed") {
               void refreshBotsRef.current().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
-              void refreshPlugins();
             }
           }
         } catch (err) {
@@ -2170,15 +2143,6 @@ export function ShellPage() {
                 </button>
               </div>
             ) : null}
-            <PluginsAsk
-              apps={visiblePluginApps(pluginApps, hiddenPluginSlugs, active?.id)}
-              disabled={!active}
-              onAsk={(name) => writeDraft(pluginAskDraft(name))}
-              onDismiss={(slug) => {
-                if (!active) return;
-                setHiddenPluginSlugs((map) => hidePluginSlug(map, active.id, slug));
-              }}
-            />
             {pendingFiles.length ? (
               <div className="mb-2 flex flex-wrap items-end gap-2">
                 {pendingFiles.map((item) => (
@@ -2291,10 +2255,6 @@ export function ShellPage() {
                   onClose={() => {
                     setPanel(null);
                     if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
-                    void refreshPlugins();
-                  }}
-                  onAppsChange={() => {
-                    void refreshPlugins();
                   }}
                 />
               ) : null}

@@ -14,6 +14,8 @@ def test_format_apps_context_without_key() -> None:
     assert "connect_app" in text
     assert "Plugins" in text
     assert "git" in text.lower()
+    assert "yourself" in text.lower()
+    assert "chip" in text.lower()
 
 
 def test_format_apps_context_lists_connected_names_only() -> None:
@@ -34,10 +36,12 @@ def test_format_apps_context_lists_connected_names_only() -> None:
     assert "Inbox is empty" not in text
     assert "list_apps" in text
     assert "connect_app" in text
+    assert "yourself" in text.lower()
     wrapped = wrap_turn_prompt("hello", None, role="lead", apps_context=text)
     assert "<host_apps>" in wrapped
     assert "Docs" in wrapped
     assert "SECRET" not in wrapped
+    assert "chip" in wrapped.lower()
 
 
 def test_lead_prompt_names_list_and_connect_apps() -> None:
@@ -45,3 +49,5 @@ def test_lead_prompt_names_list_and_connect_apps() -> None:
     assert "list_apps" in wrapped
     assert "connect_app" in wrapped
     assert "git" in wrapped.lower()
+    assert "yourself" in wrapped.lower()
+    assert "chip" in wrapped.lower()
