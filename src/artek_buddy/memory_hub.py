@@ -345,6 +345,12 @@ def _memory_pieces(text: str) -> set[str]:
     }
 
 
+def _same_memory_fact(left: str, right: str) -> bool:
+    return bool(
+        similar_memory(left, right) or memory_covers(left, right) or memory_covers(right, left)
+    )
+
+
 def memory_covers(existing: str, candidate: str) -> bool:
     """True when a longer saved rule already contains a shorter restatement."""
     if bool(_NEGATED_RULE.search(existing or "")) != bool(_NEGATED_RULE.search(candidate or "")):
@@ -436,9 +442,21 @@ class MemoryHub:
         self._captures: dict[str, int] = {}
         self._slots: dict[str, set[str]] = {}
         self._bodies: dict[str, list[str]] = {}
+        self._announced: dict[str, list[str]] = {}
 
     def captured_during(self, run_id: str | None) -> bool:
         return bool(run_id and self._captures.get(run_id, 0) > 0)
+
+    def should_announce_remembered(self, run_id: str | None, text: str) -> bool:
+        body = (text or "").strip()
+        if not body:
+            return False
+        key = run_id or ""
+        for prior in self._announced.get(key, []):
+            if _same_memory_fact(prior, body):
+                return False
+        self._announced.setdefault(key, []).append(body)
+        return True
 
     def slots_during(self, run_id: str | None) -> set[str]:
         if not run_id:
@@ -483,11 +501,11 @@ class MemoryHub:
             body = ready
         if run_id:
             for prior in self._bodies.get(run_id, []):
-                if similar_memory(prior, body) or memory_covers(prior, body):
+                if _same_memory_fact(prior, body):
                     self._mark_capture(run_id, section, body)
                     return None
         for live in self.store.list_live_memory_entries(bot_id=bot_id):
-            if not (similar_memory(live.text, body) or memory_covers(live.text, body)):
+            if not _same_memory_fact(live.text, body):
                 continue
             if facts_contradict(live.text, body):
                 merged = scripted_rewrite(section, live.text, "", body)
@@ -507,23 +525,23 @@ class MemoryHub:
             return None
         previous = self.store.find_live_memory_entry_by_slot(section, scope=scope, bot_id=bot_id)
         if previous is not None:
-            if (
-                similar_memory(previous.text, body) or memory_covers(previous.text, body)
-            ) and not facts_contradict(previous.text, body):
+            if _same_memory_fact(previous.text, body) and not facts_contradict(previous.text, body):
                 self._mark_capture(run_id, section, body)
                 return None
-            merged = scripted_rewrite(section, previous.text, "", body)
-            if merged == previous.text:
+            merge_slot = facts_contradict(previous.text, body) or section not in {"bans", "do_not"}
+            if merge_slot:
+                merged = scripted_rewrite(section, previous.text, "", body)
+                if merged == previous.text:
+                    self._mark_capture(run_id, section, body)
+                    return None
+                updated = self._revise(previous, merged, run_id, thread_id)
                 self._mark_capture(run_id, section, body)
-                return None
-            updated = self._revise(previous, merged, run_id, thread_id)
-            self._mark_capture(run_id, section, body)
-            if updated is not None:
-                try:
-                    self.gateway.capture(updated, self.user_id, bot_id)
-                except Exception:
-                    log.exception("memory gateway capture failed")
-            return updated
+                if updated is not None:
+                    try:
+                        self.gateway.capture(updated, self.user_id, bot_id)
+                    except Exception:
+                        log.exception("memory gateway capture failed")
+                return updated
         entry = self.store.create_memory_entry(
             text=body,
             kind=kind,

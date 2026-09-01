@@ -221,6 +221,51 @@ def test_spawn_subagent_does_not_write_started_line(client, auth_header) -> None
     assert not any(text.startswith(("Started ", "Finished ", "Stopped ")) for text in texts)
 
 
+def test_remember_same_rule_thrice_writes_one_meta(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "MemThrice")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-remember-same-thrice"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    remembered = [text for text in message_metas(snap) if text.startswith("Remembered:")]
+    assert len(remembered) == 1
+    assert "YouTrack" in remembered[0]
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    hits = [
+        item for item in listed.json()["documents"] if "YouTrack" in str(item.get("content") or "")
+    ]
+    assert len(hits) == 1
+
+
+def test_worker_remember_does_not_write_remembered_line(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_WORKER_ACK, E2E_WORKER_SUMMARY
+
+    bot_id = create_bot(client, auth_header, "MemWorker")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-background-worker-remember"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    assert E2E_WORKER_ACK in message_texts(snap)
+    done = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_SUMMARY)
+    remembered = [text for text in message_metas(done) if text.startswith("Remembered:")]
+    assert remembered == []
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    hits = [
+        item for item in listed.json()["documents"] if "YouTrack" in str(item.get("content") or "")
+    ]
+    assert len(hits) == 1
+
+
 def test_remember_twice_writes_one_meta_and_one_row(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "MemOnce")["id"]
     sent = client.post(

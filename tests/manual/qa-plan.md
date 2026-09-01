@@ -104,6 +104,7 @@ Computer → Memory: the **identity** chapter updated while that pane is open (n
 | «Привет» / `hello` does not rewrite identity | [ ] | [ ] |
 | Memory pane identity chapter has the new city only | [ ] | [ ] |
 | One detailed standing rule followed by a shorter restatement (`please e2e-remember-twice` on a scripted host) → **one** Remembered line and one Memory card. Reading This PC afterward does not repeat it | [ ] | [ ] |
+| Same standing rule three times (`please e2e-remember-same-thrice`) → still **one** Remembered line. A worker `remember` (`please e2e-background-worker-remember`) saves the card and does **not** print Remembered in the thread | [ ] | [ ] |
 | **+ New memory** defaults to **This bot** (filled segment). Save flashes Saved and keeps the card in view. Delete is **Remove**, not Outdated | [ ] | [ ] |
 
 ---
@@ -576,7 +577,7 @@ Out of this pass: collaboration (#154–#169) and research tickets (#98, #100).
 If time is short, in this order:
 
 1. **§2 Models**
-2. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated)
+2. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated). Same rule thrice / worker remember → one Remembered line or none from the worker
 3. **§4 Skill from the web**
 4. **§5 Bot asks bot**
 5. **§6 Plugins** (pane Connect or chat attach)
