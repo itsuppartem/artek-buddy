@@ -242,8 +242,8 @@ On **Deb**: stop the `artek-buddy` container for about 30 seconds (or pull the n
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Paste a screenshot into Message → chip `screenshot-1.png` (or the file name). Ordinary text is not an attachment | [ ] | [ ] |
-| Ask to hand a long task to a helper / long search: **no** worker card with the full assignment. Lines `Started …` / `Finished …` / `Stopped …` | [ ] | [ ] |
-| Composer **Stop** kills the lead and the workers | [ ] | [ ] |
+| Scripted `please e2e-background-worker-chat`: one **Working in the background.**, Message stays usable, **Stop** stays up, **no** worker card and **no** `Started …` / `Finished …` / `Stopped …` lines. `please e2e-worker-status` answers **Still working.** Then exactly one **The background job is done.** | [ ] | [ ] |
+| Composer **Stop** while only the worker is running writes **Stopped.** and cancels that work | [ ] | [ ] |
 | This-PC Allow (read / write this Linux home) works on Deb. Refresh or open a second window while it runs: the same write/exec happens **once** and the losing window does not fail the winner's result | [ ] | — |
 | Back-to-back This-PC read + list are both ACKed promptly and return their own results; neither waits for the SSE heartbeat or receives the other job | [ ] | — |
 | Phone `/local/owner-*` is **403**. It does not fail an auto job while the paired Deb can claim it | — | [ ] |
@@ -585,7 +585,7 @@ If time is short, in this order:
 8. **§12 Pad and Cyrillic**
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
-11. **§10 This-PC** back-to-back read/list and one Allow action exactly once on Deb
+11. **§10 workers** `please e2e-background-worker-chat` then status; Message stays usable; one final result. **This-PC** back-to-back read/list and one Allow action exactly once on Deb
 12. **§1 / §21 Escape** on Settings and New bot
 13. **§14 Inbox** Search empty + one click opens that row
 14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL

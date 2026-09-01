@@ -96,7 +96,14 @@ async def lifespan(app: FastAPI):
             runtime.consent = consent
             app.state.consent = consent
             subagents = SubagentService(store, runtime)
-            subagents.bind(app.state.hub, asyncio.get_running_loop())
+
+            def wake_lead(bot):
+                asyncio.create_task(
+                    _kick_inbox(store, runtime, app.state.hub, bot),
+                    name=f"inbox-wake-{bot.id}",
+                )
+
+            subagents.bind(app.state.hub, asyncio.get_running_loop(), wake_lead=wake_lead)
             runtime.subagents = subagents
             runtime.events = app.state.hub
             runtime.loop = asyncio.get_running_loop()

@@ -202,3 +202,18 @@ class SubagentsMixin:
         previous = (found.clarifications or "").strip()
         merged = f"{previous}\n{note}".strip() if previous else note
         return self.update_subagent(subagent_id, clarifications=merged)
+
+    def take_new_clarifications(self, subagent_id: str) -> str | None:
+        found = self.get_subagent(subagent_id)
+        if found is None:
+            return None
+        blob = found.clarifications or ""
+        seen: dict[str, int] = getattr(self, "_clarification_seen", None) or {}
+        if not hasattr(self, "_clarification_seen"):
+            self._clarification_seen = seen
+        prior = seen.get(subagent_id, 0)
+        if len(blob) <= prior:
+            return None
+        note = blob[prior:].strip()
+        seen[subagent_id] = len(blob)
+        return note or None

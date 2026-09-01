@@ -31,6 +31,16 @@ def test_wrap_turn_prompt_lead_mentions_takeover_and_slim_observe() -> None:
     assert "connect_app" in wrapped
 
 
+def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
+    lead = wrap_turn_prompt("hi", None, role="lead")
+    worker = wrap_turn_prompt("do the long job", None, role="subagent")
+    assert "spawn_subagent" in lead
+    assert "finish this dispatch turn" in lead
+    assert "run_owner_command" not in lead
+    assert "Do not post to the owner chat" in worker
+    assert "send_message" not in worker
+
+
 def test_wrap_turn_prompt_keeps_user_tail() -> None:
     wrapped = wrap_turn_prompt("remember this city", "Belgrade is the capital")
     assert wrapped.endswith("remember this city")

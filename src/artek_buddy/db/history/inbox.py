@@ -19,17 +19,19 @@ class InboxMixin:
     def enqueue_inbox(
         self,
         bot_id: str,
-        message_id: str,
+        message_id: str | None,
         text: str,
         reply_to_id: str | None = None,
+        *,
+        kind: str = "owner",
     ) -> None:
         with self._conn() as conn:
             conn.execute(
                 """
-                INSERT INTO turn_inbox (id, bot_id, message_id, text, reply_to_id, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO turn_inbox (id, bot_id, message_id, text, reply_to_id, created_at, kind)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
-                (new_id("inb"), bot_id, message_id, text, reply_to_id, isoformat_utc()),
+                (new_id("inb"), bot_id, message_id, text, reply_to_id, isoformat_utc(), kind),
             )
             conn.commit()
 
@@ -47,26 +49,49 @@ class InboxMixin:
             conn.execute("DELETE FROM turn_inbox WHERE bot_id = %s", (bot_id,))
             conn.commit()
 
-    def drain_inbox(self, bot_id: str) -> list[dict[str, str | None]]:
+    def drain_inbox(
+        self,
+        bot_id: str,
+        *,
+        kind: str | None = "owner",
+    ) -> list[dict[str, str | None]]:
         with self._conn() as conn:
             with conn.transaction():
-                rows = conn.execute(
-                    """
-                    SELECT id, message_id, text, reply_to_id
-                    FROM turn_inbox
-                    WHERE bot_id = %s
-                    ORDER BY created_at ASC
-                    FOR UPDATE
-                    """,
-                    (bot_id,),
-                ).fetchall()
-                if rows:
-                    conn.execute("DELETE FROM turn_inbox WHERE bot_id = %s", (bot_id,))
+                if kind is None:
+                    rows = conn.execute(
+                        """
+                        SELECT id, message_id, text, reply_to_id, kind
+                        FROM turn_inbox
+                        WHERE bot_id = %s
+                        ORDER BY created_at ASC
+                        FOR UPDATE
+                        """,
+                        (bot_id,),
+                    ).fetchall()
+                    if rows:
+                        conn.execute("DELETE FROM turn_inbox WHERE bot_id = %s", (bot_id,))
+                else:
+                    rows = conn.execute(
+                        """
+                        SELECT id, message_id, text, reply_to_id, kind
+                        FROM turn_inbox
+                        WHERE bot_id = %s AND kind = %s
+                        ORDER BY created_at ASC
+                        FOR UPDATE
+                        """,
+                        (bot_id, kind),
+                    ).fetchall()
+                    if rows:
+                        conn.execute(
+                            "DELETE FROM turn_inbox WHERE bot_id = %s AND kind = %s",
+                            (bot_id, kind),
+                        )
         return [
             {
                 "message_id": row["message_id"],
                 "text": row["text"],
                 "reply_to_id": row["reply_to_id"],
+                "kind": row["kind"] if "kind" in row else "owner",
             }
             for row in rows
         ]
@@ -100,7 +125,7 @@ class InboxMixin:
                     return None
                 rows = conn.execute(
                     """
-                    SELECT id, message_id, text, reply_to_id
+                    SELECT id, message_id, text, reply_to_id, kind
                     FROM turn_inbox
                     WHERE bot_id = %s
                     ORDER BY created_at ASC
@@ -149,6 +174,7 @@ class InboxMixin:
                     "message_id": row["message_id"],
                     "text": row["text"],
                     "reply_to_id": row["reply_to_id"],
+                    "kind": row["kind"] if "kind" in row else "owner",
                 }
                 for row in rows
             ],

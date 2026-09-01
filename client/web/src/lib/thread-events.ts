@@ -397,6 +397,20 @@ export function isHiddenLiveDraft(message: ThreadMessage): boolean {
   return isLiveMessageId(message.id);
 }
 
+export function canAnswerOwnerPrompt(
+  message: ThreadMessage,
+  run: { id: string; status: string } | null | undefined,
+): boolean {
+  const pendingConsent = message.blocks.some(
+    (block) =>
+      block.kind === "ask" && Boolean(block.consentId) && (block.status ?? "pending") === "pending",
+  );
+  if (pendingConsent) {
+    return true;
+  }
+  return run?.status === "waiting_input" && Boolean(message.runId) && message.runId === run.id;
+}
+
 export function isToolNoise(message: ThreadMessage): boolean {
   if (message.id.startsWith("tool:") || message.id.startsWith("comp:")) return true;
   if (message.id.startsWith("subagent:")) return true;

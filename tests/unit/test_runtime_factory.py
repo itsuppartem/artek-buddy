@@ -13,6 +13,12 @@ from artek_buddy.runtime.scripted import (
     E2E_META_TEXT,
     E2E_OLDER_COUNT,
     E2E_SUBAGENT_NAME,
+    E2E_WORKER_ACK,
+    E2E_WORKER_BLOCK_S,
+    E2E_WORKER_RESULT,
+    E2E_WORKER_STATUS,
+    E2E_WORKER_STEER_ACK,
+    E2E_WORKER_SUMMARY,
     steps_for_prompt,
 )
 from artek_buddy.runtime.types import AgentRuntimeError
@@ -95,6 +101,21 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     worker = steps_for_prompt("please e2e-subagent")
     assert worker[0].tool == "spawn_subagent"
     assert worker[0].args["name"] == E2E_SUBAGENT_NAME
+
+    dispatched = steps_for_prompt("please e2e-background-worker-chat")
+    assert dispatched[0].tool == "spawn_subagent"
+    assert dispatched[0].args["task"] == "please e2e-worker-block"
+    assert dispatched[1].result == E2E_WORKER_ACK
+    blocked = steps_for_prompt("please e2e-worker-block")
+    assert blocked[1].delay_s == E2E_WORKER_BLOCK_S
+    assert blocked[-1].result == E2E_WORKER_RESULT
+    status = steps_for_prompt("please e2e-worker-status")
+    assert status[-1].result == E2E_WORKER_STATUS
+    steered = steps_for_prompt("please e2e-worker-steer use path B")
+    assert steered[0].tool == "steer_subagent"
+    assert steered[-1].result == E2E_WORKER_STEER_ACK
+    done = steps_for_prompt("A background worker finished.\nresult: blocked work finished")
+    assert done[0].result == E2E_WORKER_SUMMARY
 
     ask = steps_for_prompt("please e2e-ask-bot KnowsPeer | what city do you know")
     assert ask[0].tool == "message_bot"

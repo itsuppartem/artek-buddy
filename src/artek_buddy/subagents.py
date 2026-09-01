@@ -29,11 +29,17 @@ class SubagentService:
         self.events: EventHub | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
         self.tasks: dict[str, asyncio.Task[Any]] = {}
-        self._step_status: dict[str, str] = {}
+        self._wake_lead: Any = None
 
-    def bind(self, events: EventHub, loop: asyncio.AbstractEventLoop) -> None:
+    def bind(
+        self,
+        events: EventHub,
+        loop: asyncio.AbstractEventLoop,
+        wake_lead: Any = None,
+    ) -> None:
         self.events = events
         self.loop = loop
+        self._wake_lead = wake_lead
 
     def spawn(self, bot: Bot, name: str, task: str, parent_run_id: str | None = None) -> Subagent:
         task_text = (task or "").strip()
@@ -91,10 +97,8 @@ class SubagentService:
         updated = self.store.append_clarification(found.id, note)
         if updated is None:
             raise SubagentError("subagent not found")
-        queued = self.store.update_subagent(updated.id, status="queued") or updated
-        self._emit(bot, queued)
-        self._schedule(queued.id, self._run(bot, queued.id, mode="steer"))
-        return queued
+        self._emit(bot, updated)
+        return updated
 
     def stop_all(self, bot: Bot) -> None:
         for item in self.store.list_subagents(bot.id):
@@ -201,6 +205,7 @@ class SubagentService:
             final = self.store.update_subagent(sub_id, status=status, result=result, error=error)
             if final:
                 self._emit(live, final)
+                self._notify_lead(live, final)
         except asyncio.CancelledError:
             current = self.tasks.get(sub_id)
             if current is not None and current is not asyncio.current_task():
@@ -213,11 +218,13 @@ class SubagentService:
             updated = self.store.update_subagent(sub_id, status="cancelled", error="stopped")
             if updated:
                 self._emit(live, updated)
+                self._notify_lead(live, updated)
         except Exception as exc:
             log.exception("subagent %s failed", sub_id)
             updated = self.store.update_subagent(sub_id, status="failed", error=str(exc))
             if updated:
                 self._emit(live, updated)
+                self._notify_lead(live, updated)
         finally:
             self.runtime.clear_active_turn(run_id=sub_id)
 
@@ -249,43 +256,26 @@ class SubagentService:
                 run_id=record.parent_run_id,
             )
             self.events.publish(event)
-        self._emit_step(bot, record)
 
-    def _emit_step(self, bot: Bot, record: Subagent) -> None:
-        if record.status == "running":
-            text = f"Started {record.name}."
-        elif record.status == "completed":
-            text = f"Finished {record.name}."
-        elif record.status == "failed":
-            text = f"{record.name} failed."
-        elif record.status == "cancelled":
-            text = f"Stopped {record.name}."
-        else:
+    def _notify_lead(self, bot: Bot, record: Subagent) -> None:
+        if record.status not in {"completed", "failed"}:
             return
-        if self._step_status.get(record.id) == record.status:
-            return
-        self._step_status[record.id] = record.status
-        try:
-            msg = self.store.append_bot_message(
-                bot,
-                [{"kind": "text", "text": text}],
-                run_id=record.parent_run_id,
-            )
-        except Exception:
-            log.exception("failed to append subagent step")
-            return
-        if self.events is None:
-            return
-        self.events.publish(
-            ProductEvent(
-                id=new_id("evt"),
-                workspace_id=bot.workspace_id,
-                thread_id=bot.thread_id,
-                bot_id=bot.id,
-                seq=self.events.next_seq(bot.id),
-                type=ProductEventType.THREAD_MESSAGE_CREATED,
-                created_at=isoformat_utc(),
-                payload={"message": msg.model_dump(mode="json")},
-                run_id=record.parent_run_id,
-            )
+        excerpt = (record.result or record.error or record.status).strip()[:400]
+        text = (
+            f"A background worker finished.\n"
+            f"name: {record.name}\n"
+            f"status: {record.status}\n"
+            f"result: {excerpt}\n"
+            "Write one concise owner-facing result. Do not repeat the task or reasoning."
         )
+        try:
+            self.store.enqueue_inbox(bot.id, None, text, kind="worker_result")
+        except Exception:
+            log.exception("failed to enqueue worker result")
+            return
+        wake = self._wake_lead
+        if callable(wake):
+            try:
+                wake(bot)
+            except Exception:
+                log.exception("failed to wake lead after worker")

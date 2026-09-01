@@ -31,6 +31,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             },
             "required": ["text"],
         },
+        lead_only=True,
     ),
     ToolSpec(
         name="send_file",
