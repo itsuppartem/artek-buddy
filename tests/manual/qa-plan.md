@@ -315,6 +315,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Empty inbox: Restore from Archived, or create a first bot | [ ] | [ ] |
 | Create: Name (inbox), Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team / Private. Focusing Name does not mint a bot; only Create does. Escape closes New bot the same as × | [ ] | [ ] |
 | Duplicate makes a second bot. Delete removes that bot; optional purge memories | [ ] | [ ] |
+| Two inbox chats keep separate model sessions: a send in one does not continue the other chat's history, and both can run at the same time | [ ] | [ ] |
 | Inbox order is pinned first, then created. A later message does not jump a row | [ ] | [ ] |
 
 ---

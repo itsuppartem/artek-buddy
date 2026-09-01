@@ -88,7 +88,7 @@ async def create_bot(
     rt: AgentRuntime = Depends(runtime),
     history: HistoryStore = Depends(store),
 ) -> Bot:
-    agent_id = await rt.create_session(name=body.name, persist_default=True)
+    agent_id = await rt.create_session(name=body.name, persist_default=False)
     try:
         bot = history.create_bot(
             name=body.name,
