@@ -6,6 +6,12 @@ import {
   pluginCatalogScrollAfterUpdate,
   pluginSearchShouldPreventDefault,
 } from "../../lib/plugins-catalog";
+import {
+  nextPluginsFetchGen,
+  pluginsFetchIsCurrent,
+  pluginsHttpClearsSavedKey,
+  pluginsKeyMissingStatus,
+} from "../../lib/plugins-key";
 import type { Connection, ConnectionCatalogItem, ConnectionKeyStatus } from "../../types";
 import { Button } from "../../ui/button";
 import { IconClose } from "../../ui/icons";
@@ -27,6 +33,7 @@ export function PluginsPane({
   const [error, setError] = useState("");
   const catalogRef = useRef<HTMLDivElement>(null);
   const catalogScroll = useRef(0);
+  const mutateGen = useRef(0);
   const configured = Boolean(status?.configured);
   const ready = status !== null;
   const showKeyField = ready && (!configured || replace);
@@ -43,7 +50,9 @@ export function PluginsPane({
   }, [query, items]);
 
   async function refresh() {
+    const started = mutateGen.current;
     const next = await api.connections.status();
+    if (!pluginsFetchIsCurrent(started, mutateGen.current)) return;
     setStatus(next);
     if (!next.configured) {
       setItems([]);
@@ -52,11 +61,16 @@ export function PluginsPane({
     }
     try {
       const catalog = await api.connections.catalog("");
+      if (!pluginsFetchIsCurrent(started, mutateGen.current)) return;
       setItems(catalog.items ?? []);
-      setRows((await api.connections.list()).connections ?? []);
+      const listed = await api.connections.list();
+      if (!pluginsFetchIsCurrent(started, mutateGen.current)) return;
+      setRows(listed.connections ?? []);
       setError("");
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
+      if (!pluginsFetchIsCurrent(started, mutateGen.current)) return;
+      if (err instanceof ApiError && pluginsHttpClearsSavedKey(err.status)) {
+        setStatus(pluginsKeyMissingStatus());
         setItems([]);
         setRows([]);
         return;
@@ -72,13 +86,18 @@ export function PluginsPane({
       return;
     }
     setBusy("save");
+    mutateGen.current = nextPluginsFetchGen(mutateGen.current);
+    const gen = mutateGen.current;
     try {
-      setStatus(await api.connections.setKey(apiKey));
+      const saved = await api.connections.setKey(apiKey);
+      if (!pluginsFetchIsCurrent(gen, mutateGen.current)) return;
+      setStatus(saved);
       setDraft("");
       setReplace(false);
       await refresh();
       onAppsChange?.();
     } catch (err) {
+      if (!pluginsFetchIsCurrent(gen, mutateGen.current)) return;
       setError(err instanceof Error ? err.message : "Could not save the key.");
     } finally {
       setBusy("");
@@ -87,14 +106,20 @@ export function PluginsPane({
 
   async function remove() {
     setBusy("remove");
+    mutateGen.current = nextPluginsFetchGen(mutateGen.current);
+    const gen = mutateGen.current;
     try {
       await api.connections.clearKey();
-      setStatus({ configured: false, lastFour: null });
+      if (!pluginsFetchIsCurrent(gen, mutateGen.current)) return;
+      setStatus(pluginsKeyMissingStatus());
       setItems([]);
       setRows([]);
       setReplace(false);
       setError("");
       onAppsChange?.();
+    } catch (err) {
+      if (!pluginsFetchIsCurrent(gen, mutateGen.current)) return;
+      setError(err instanceof Error ? err.message : "Could not remove the key.");
     } finally {
       setBusy("");
     }

@@ -17,6 +17,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Plugins Remove still forgets the key after a login tab. An in-flight catalog load no longer puts Key saved back on an empty Search apps list.
 - **Open to connect** on a plugin login card is a real `http(s)` link, so the Linux `.deb` opens the owner browser the same way a markdown link does. Plugins Connect and right-click **Open in browser** still open that browser when `window.open` is dropped.
 - Each inbox chat keeps its own model session. A bot without a stored id no longer inherits the host default (or another chat). Two chats can run at the same time.
 - Connected catalog apps attach as tools on the lead as well as a worker. The window no longer pins a chip above Message after Connect.

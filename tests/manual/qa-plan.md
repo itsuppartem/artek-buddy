@@ -149,7 +149,7 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 | Or chat `please e2e-connect-docs` (scripted host) / «подключи Docs» — **plugin-card**, not git setup. Still no chip | [ ] | [ ] |
 | `please e2e-connect-mail` (or GitHub from chat): **Open to connect** on the card opens the owner browser / a tab. Not the bot desktop. Right-click can Copy URL | [ ] | [ ] |
 | Ask the connected app (`please e2e-plugin-docs` / `please use Docs` on a scripted host, or a real task after GitHub Connect) — the bot calls the tools; thread **plugin-card** (name + result) | [ ] | [ ] |
-| Disconnect / Remove → next turn has no that tool | [ ] | [ ] |
+| Disconnect / Remove → next turn has no that tool. Remove after **Open to connect** shows Paste a key (not Key saved with an empty catalog) | [ ] | [ ] |
 | If Connect opens a browser tab, Finish after login marks Connected | [ ] | [ ] |
 
 ---
