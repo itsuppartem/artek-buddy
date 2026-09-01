@@ -9,10 +9,11 @@ CONNECT_REDIRECT = "https://window.example/app"
 def format_apps_context(store: Any) -> str:
     lines = [
         "<host_apps>",
-        "Connected apps already have tools this turn. Search with list_apps(q). "
-        "Attach with connect_app(slug). If a card has a login URL, the owner opens it "
-        "(not the bot desktop), then Finish in Plugins if needed. "
-        "Do not create git, SSH, or tokens on this computer for a catalog app.",
+        "Connected apps already have tools this turn. Call those tools yourself "
+        "when the task needs them; do not wait for a chip or a please-use line. "
+        "Search with list_apps(q). Attach with connect_app(slug). If a card has a "
+        "login URL, the owner opens it (not the bot desktop), then Finish in Plugins "
+        "if needed. Do not create git, SSH, or tokens on this computer for a catalog app.",
     ]
     getter = getattr(store, "raw_connection_key", None) if store is not None else None
     if getter is None or not getter():

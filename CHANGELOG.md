@@ -10,14 +10,18 @@
 - The same Funnel / tailnet URL serves the window. A phone pairs with a code; the device token stays in an httpOnly cookie. Narrow screens stack Chats / Chat / Desktop (iPhone 11 Pro 375×812). iPhone Add to Home Screen plus Turn on alerts (only while that app is open — no background). This-PC files stay on the Linux `.deb`. CI splits `ui` (`.deb`) from `ui_web` / `live_web` (host page).
 - The owner can keep a published skill for this chat (`install_book` from a public URL after Allow). The stored body is the fetched markdown. The next turn sees names only; the agent calls `open_book` itself when the description matches the task. No Settings form or owner trigger.
 - Models and Plugins Save name a host error instead of staying silent. A row's model is the host default (no second Default list). Cursor exposes reasoning and Fast; Save prefers grok-4.6 extra-high fast when that id is on the list. A Plugins key already on the host at boot shows as Key saved.
-- After an app is connected, a chip above Message fills `please use {name}`. The thread shows that app's result as a card.
+- After an app is connected, the lead and a worker already have that app's tools this turn and call them themselves. The thread shows that app's result as a card. There is no chip above Message.
 - The lead can search catalog apps (`list_apps`) and attach them (`connect_app`) from chat. Connected names ride in the turn. Login URLs open in the owner's browser, not the bot desktop.
 - Plugins pane: paste a host key, search the catalog, connect or disconnect an app. Only connected apps become tools on the next turn. The window never sees a saved full key.
 - A bot can ask another inbox bot by name or id. This chat shows the ask and a card to that chat. The other bot works in its own thread; only its last message comes back so this bot can answer you. Missing, archived, deleted, empty, and self-asks fail closed.
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+<<<<<<< HEAD
+- Connected catalog apps attach as tools on the lead as well as a worker. The window no longer pins a chip above Message after Connect.
+=======
 - Re-asserting a standing rule (or a worker calling `remember`) no longer floods the thread with `Remembered:` clock lines. One new fact this turn can print once; a worker save stays in Memory only.
+>>>>>>> origin/develop
 - Switching away from a chat that parked while it was open still raises «needs you». The window no longer consumes that pill just because you were looking at the speaker (`please e2e-takeover`).
 - Native attention now has one workspace-event source: only a new final reply, failure, owner question, or takeover can alert. Polling, replay, intermediate/status text, and silent completion cannot re-notify an old line. Reading requires the focused chat and withdraws its row; GNOME dismissal alone does not read it. One libnotify object/id is updated per bot, and GTK3 relaunch activates the existing client instead of adding subscribers.
 - A `Remembered:` memory line no longer raises **is asking** (or a finish alert). Auto owner-tool `waiting_input` is not treated as an owner question.
@@ -40,7 +44,7 @@
 - New memory defaults to This bot with a filled scope control. Delete is Remove. Save acknowledgement uses the create/edit buttons, not a shared Saved name.
 - The closed Plugins hatch does not steal the thread wheel or open from the right edge. One Close dismisses.
 - Plugins Search apps stays open on Enter and keeps catalog scroll where the owner left it.
-- Plugins Connect only marks Connected. The chip fills `please use {name}` on a real click; leftover mouse-up after Connect does not Send.
+- Plugins Connect only marks Connected. Leftover mouse-up after Connect does not Send.
 - A queued send is marked Waiting for the host until reconnect, then Sent while offline with local time.
 - Dismiss on a needs-you pill only hides it. The open chat stays put.
 - Ctrl+A in Message selects the draft. It does not Send or duplicate the bubble.
@@ -57,7 +61,6 @@
 - Plugins Search apps filters the catalog as you type. Enter is not required.
 - Phone file-card Download uses the browser, not a Linux `/local/save-artifact` path.
 - Skill-book procedures and controls stay internal to the agent. Historical skill blocks are hidden and omitted from inbox/reply excerpts; successful install/open/forget no longer persists a card or adds a chip above Message.
-- A plugin chip above Message has ×. Dismiss hides it and does not send.
 - Plugins Connect on a no-browser catalog app either connects or names the next setup step. It no longer dies on `could not start that connection` with nothing to do.
 - Settings Title keeps the typed role through blur and Save. A host refresh while Edit profile is open no longer empties the field.
 - Routine next-run drops the ISO microsecond fraction and keeps UTC.
