@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { ThreadMessage } from "../../types";
-import { MessageView } from "./MessageView";
+import { MessageView, messageCopyText } from "./MessageView";
 
 describe("MessageView", () => {
   it("keeps historical skill-book bodies out of the owner thread", () => {
@@ -121,5 +121,33 @@ describe("MessageView", () => {
     expect(usingHtml).toContain("Using grok-4.0 - Extra high.");
     expect(usingHtml).not.toContain("Open in Memory");
     expect(usingHtml).not.toContain("<button");
+  });
+});
+
+describe("messageCopyText", () => {
+  it("joins text blocks so a right-click Copy has something to put on the clipboard", () => {
+    const user: ThreadMessage = {
+      id: "m-user",
+      threadId: "t",
+      runId: null,
+      role: "user",
+      seq: 1,
+      createdAt: "2026-09-01T12:00:00Z",
+      blocks: [{ kind: "text", text: "copy this line" }],
+      replyToId: null,
+      replyTo: null,
+    };
+    expect(messageCopyText(user)).toBe("copy this line");
+    expect(
+      messageCopyText({
+        ...user,
+        role: "bot",
+        blocks: [
+          { kind: "text", text: "First" },
+          { kind: "text", text: "Second" },
+        ],
+      }),
+    ).toBe("First\n\nSecond");
+    expect(messageCopyText({ ...user, blocks: [] })).toBe("");
   });
 });

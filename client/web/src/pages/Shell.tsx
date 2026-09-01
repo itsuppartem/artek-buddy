@@ -28,6 +28,7 @@ import {
   shouldCountThreadRead,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
+  shouldSendNativeAlert,
   shouldStickDismissOnView,
   shouldWatchBackgroundBot,
 } from "../lib/alerts";
@@ -161,7 +162,7 @@ import { BotSettings } from "./shell/BotSettings";
 import { ComputerOverlay } from "./shell/ComputerOverlay";
 import { ComputerPane } from "./shell/ComputerPane";
 import { CreateBotForm } from "./shell/CreateBotForm";
-import { MessageView, replyExcerpt } from "./shell/MessageView";
+import { MessageView, messageCopyText, replyExcerpt } from "./shell/MessageView";
 import { ModelsPane } from "./shell/ModelsPane";
 import { PluginsPane } from "./shell/PluginsPane";
 
@@ -385,22 +386,52 @@ export function ShellPage() {
     }
   }
 
+  async function readGtkWindowActive(): Promise<boolean | null> {
+    if (pageSurface() !== "desktop") return gtkActiveRef.current;
+    try {
+      const status = await api.local.status();
+      if (status.windowActive === true || status.windowActive === false) {
+        gtkActiveRef.current = status.windowActive;
+        const hidden = typeof document !== "undefined" && document.hidden;
+        const focused = desktopWindowFocused({
+          gtkActive: status.windowActive,
+          pageHidden: hidden,
+          browserFocused:
+            typeof document !== "undefined" &&
+            document.visibilityState === "visible" &&
+            document.hasFocus(),
+        });
+        windowFocusedRef.current = focused;
+        setWindowFocused(focused);
+        setPageHidden(hidden);
+        return status.windowActive;
+      }
+    } catch {
+      /* loopback down */
+    }
+    return gtkActiveRef.current;
+  }
+
   useEffect(() => {
     if (!botId) return;
-    if (
-      !shouldCountThreadRead({
-        viewingBotId: botId,
-        chatId: botId,
-        windowFocused,
-        pageHidden,
-      })
-    ) {
-      return;
-    }
-    markOpenThreadRead(botId);
+    void (async () => {
+      const gtkWindowActive = await readGtkWindowActive();
+      if (
+        !shouldCountThreadRead({
+          viewingBotId: botId,
+          chatId: botId,
+          windowFocused,
+          pageHidden,
+          gtkWindowActive,
+        })
+      ) {
+        return;
+      }
+      markOpenThreadRead(botId);
+    })();
   }, [botId, windowFocused, pageHidden]);
 
-  function dispatchAlert(next: AttentionAlert, key: string, notifyOnFinish: boolean) {
+  async function dispatchAlert(next: AttentionAlert, key: string, notifyOnFinish: boolean) {
     if (!allowAlert(next, notifyOnFinish)) return;
     const fingerprint = attentionFingerprint(next);
     if (seenAlertKeys.current.has(key) || seenAlertKeys.current.has(fingerprint)) return;
@@ -409,6 +440,8 @@ export function ShellPage() {
       seenAlertKeys.current.add(fingerprint);
       return;
     }
+    const gtkWindowActive = await readGtkWindowActive();
+    if (seenAlertKeys.current.has(key) || seenAlertKeys.current.has(fingerprint)) return;
     const viewing = activeIdRef.current || botIdRef.current || null;
     const hidden = typeof document !== "undefined" && document.hidden;
     const surface = pageSurface();
@@ -419,7 +452,8 @@ export function ShellPage() {
     });
     const showNative =
       surface === "desktop" &&
-      shouldSendDesktopAlert({
+      shouldSendNativeAlert({
+        gtkWindowActive,
         windowFocused: windowFocusedRef.current && !hidden,
         viewingBotId: viewing,
         alertBotId: next.botId,
@@ -518,7 +552,7 @@ export function ShellPage() {
     for (const [id, held] of [...pendingAlerts.current.entries()]) {
       if (id === viewing) continue;
       pendingAlerts.current.delete(id);
-      dispatchAlert(held.alert, held.key, held.notifyOnFinish);
+      void dispatchAlert(held.alert, held.key, held.notifyOnFinish);
     }
   }
 
@@ -541,7 +575,7 @@ export function ShellPage() {
     );
     if (!next) return;
     const source = botsRef.current.find((bot) => bot.id === next.botId);
-    dispatchAlert(next, `${next.botId}:${next.kind}:parked`, source?.notifyOnFinish ?? true);
+    void dispatchAlert(next, `${next.botId}:${next.kind}:parked`, source?.notifyOnFinish ?? true);
   }
 
   function openBot(id: string) {
@@ -598,7 +632,7 @@ export function ShellPage() {
       });
     }
     flushHeldAlerts();
-    if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
+    if (next) void dispatchAlert(next, incoming.id, bot.notifyOnFinish);
     if (incoming.type === "run.started") {
       const running = { ...bot, status: "running" };
       botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? running : item));
@@ -676,6 +710,7 @@ export function ShellPage() {
         chatId: viewing,
         windowFocused,
         pageHidden,
+        gtkWindowActive: gtkActiveRef.current,
       });
     if (lookingAtThread && shouldClearAttentionForView(attention, viewing)) {
       if (shouldStickDismissOnView(attention, viewing, previousViewingRef.current)) {
@@ -689,6 +724,7 @@ export function ShellPage() {
   async function refreshBots() {
     const list = await api.bots.list();
     const viewing = activeIdRef.current || botIdRef.current;
+    const gtkWindowActive = await readGtkWindowActive();
     if (
       viewing &&
       !heldUnreadIds.current.has(viewing) &&
@@ -697,6 +733,7 @@ export function ShellPage() {
         chatId: viewing,
         windowFocused: windowFocusedRef.current,
         pageHidden: typeof document !== "undefined" && document.hidden,
+        gtkWindowActive,
       })
     ) {
       const open = list.find((item) => item.id === viewing);
@@ -2376,7 +2413,19 @@ export function ShellPage() {
           <MessageContextMenu
             position={messageMenu.position}
             url={messageMenu.url}
+            canCopy={Boolean(messageCopyText(messageMenu.message))}
             onClose={() => setMessageMenu(null)}
+            onCopy={async () => {
+              const text = messageCopyText(messageMenu.message);
+              if (!text) return false;
+              const copied = await copyText(text);
+              if (!copied) {
+                errorKindRef.current = "action";
+                setErrorKind("action");
+                setError("Could not copy. Select the text instead.");
+              }
+              return copied;
+            }}
             onCopyUrl={async () => {
               if (!messageMenu.url) return false;
               const copied = await copyText(messageMenu.url);

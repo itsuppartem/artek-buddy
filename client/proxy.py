@@ -25,7 +25,7 @@ from owner_paths import (
 from pairing import _config_dir, _log, _write_text, pairing_url_allowed
 from ssh_mux import owner_exec_environment
 from web_paths import safe_content_type, web_file_for_request
-from window_chrome import _gtk_choose_save_path, _has_gtk_window, _notify_text
+from window_chrome import _gtk_choose_save_path, _has_gtk_window, _notify_text, gtk_window_active
 
 WEB_ROOTS = (
     Path("/usr/lib/artek-buddy-client/web"),
@@ -331,7 +331,15 @@ class Handler(BaseHTTPRequestHandler):
         token = self.server.token  # type: ignore[attr-defined]
         url = self.server.upstream  # type: ignore[attr-defined]
         nonce = getattr(self.server, "local_nonce", "") or ""
-        self._json(200, {"paired": bool(token), "url": url, "nonce": nonce})
+        self._json(
+            200,
+            {
+                "paired": bool(token),
+                "url": url,
+                "nonce": nonce,
+                "window_active": gtk_window_active(),
+            },
+        )
 
     def _local_pair(self) -> None:
         if not self._local_only():
