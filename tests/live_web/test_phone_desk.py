@@ -19,6 +19,10 @@ def test_host_page_desktop_overlay_is_a_phone_pad(page: Page, host_url: str) -> 
         "data-state", "running", timeout=20_000
     )
     expect(page.get_by_test_id("computer-overlay")).to_have_count(0)
+    mouse_desktop = page.evaluate(
+        "() => window.matchMedia('(hover: hover) and (pointer: fine)').matches"
+    )
+    assert mouse_desktop is False
     page.get_by_role("button", name="Take control").click()
     overlay = page.get_by_test_id("computer-overlay")
     expect(overlay).to_be_visible(timeout=20_000)

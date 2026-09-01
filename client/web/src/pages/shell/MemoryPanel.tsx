@@ -8,15 +8,18 @@ import {
   memoryShelf,
   memoryTitle,
 } from "../../lib/memory";
+import { memoryDocMatchesRemembered } from "../../lib/remembered-line";
 import { useSaveAck } from "../../lib/save-ack";
 import type { MemoryDocument } from "../../types";
 import { Button } from "../../ui/button";
 
 export function MemoryPanel({
   botId,
+  focusFact = null,
   onLater,
 }: {
   botId: string;
+  focusFact?: string | null;
   onLater: (text: string) => void;
 }) {
   const [documents, setDocuments] = useState<MemoryDocument[]>([]);
@@ -29,6 +32,7 @@ export function MemoryPanel({
   const editAck = useSaveAck();
   const factsRef = useRef<HTMLTextAreaElement>(null);
   const createdCardRef = useRef<HTMLDivElement>(null);
+  const focusCardRef = useRef<HTMLDivElement>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
 
   async function refresh() {
@@ -62,6 +66,11 @@ export function MemoryPanel({
     if (!createdId) return;
     createdCardRef.current?.scrollIntoView({ block: "nearest" });
   }, [createdId, documents]);
+
+  useLayoutEffect(() => {
+    if (!focusFact) return;
+    focusCardRef.current?.scrollIntoView({ block: "nearest" });
+  }, [focusFact, documents]);
 
   async function create() {
     const text = (factsRef.current?.value ?? content).trim();
@@ -138,90 +147,104 @@ export function MemoryPanel({
         </button>
       </div>
       <div className="flex flex-col gap-2">
-        {documents.map((document) => (
-          <div
-            key={document.id}
-            ref={document.id === createdId ? createdCardRef : undefined}
-            data-testid="memory-doc"
-            data-chapter={memoryChapter(document.path) ?? undefined}
-            className="rounded-xl border border-hairline bg-ink px-3 py-2.5"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="line-clamp-2 text-[14.5px] text-paper">{memoryTitle(document)}</div>
-                <div className="mt-0.5 text-[12px] text-mute">
-                  {memoryShelf(document.path)}
-                  {` · ${document.scope === "user" ? "shared" : "this bot"}`}
-                  {memoryChapter(document.path) ? ` · ${memoryChapter(document.path)}` : ""}
-                  {document.updatedAt ? ` · ${document.updatedAt.slice(0, 10)}` : ""}
-                </div>
-              </div>
-            </div>
-            {editingId === document.id ? (
-              <div className="mt-2">
-                <textarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  rows={4}
-                  className="w-full resize-none rounded-lg border border-hairline bg-raised px-2.5 py-2 text-[13px] text-paper outline-none"
-                />
-                <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
-                  <button
-                    type="button"
-                    data-testid="memory-edit-save"
-                    aria-live="polite"
-                    disabled={editAck.state !== "idle"}
-                    onClick={() => void save(document)}
-                  >
-                    {editAck.label}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      editAck.cancel();
-                      setEditingId(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-                {editAck.error ? (
-                  <p data-testid="memory-save-error" className="mt-2 text-[13px] text-danger">
-                    {editAck.error}
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <div className="mt-2">
-                {document.content.includes("\n") ? (
-                  <div className="line-clamp-3 whitespace-pre-wrap text-[12.5px] text-mute">
-                    {document.content}
+        {documents.map((document) => {
+          const focused = Boolean(
+            focusFact && memoryDocMatchesRemembered(document.content, focusFact),
+          );
+          return (
+            <div
+              key={document.id}
+              ref={focused ? focusCardRef : document.id === createdId ? createdCardRef : undefined}
+              data-testid="memory-doc"
+              data-memory-focus={focused ? "1" : undefined}
+              data-chapter={memoryChapter(document.path) ?? undefined}
+              className={`rounded-xl border bg-ink px-3 py-2.5 ${
+                focused ? "border-tan" : "border-hairline"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="line-clamp-2 text-[14.5px] text-paper">
+                    {memoryTitle(document)}
                   </div>
-                ) : null}
-                <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      createAck.cancel();
-                      setEditingId(document.id);
-                      setDraft(document.content);
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="memory-remove"
-                    aria-label={memoryDeleteName()}
-                    onClick={() => void remove(document)}
-                  >
-                    {memoryDeleteName()}
-                  </button>
+                  <div className="mt-0.5 text-[12px] text-mute">
+                    {memoryShelf(document.path)}
+                    {` · ${document.scope === "user" ? "shared" : "this bot"}`}
+                    {memoryChapter(document.path) ? ` · ${memoryChapter(document.path)}` : ""}
+                    {document.updatedAt ? ` · ${document.updatedAt.slice(0, 10)}` : ""}
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
-        ))}
+              {editingId === document.id ? (
+                <div className="mt-2">
+                  <textarea
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    rows={4}
+                    className="w-full resize-none rounded-lg border border-hairline bg-raised px-2.5 py-2 text-[13px] text-paper outline-none"
+                  />
+                  <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
+                    <button
+                      type="button"
+                      data-testid="memory-edit-save"
+                      aria-live="polite"
+                      disabled={editAck.state !== "idle"}
+                      onClick={() => void save(document)}
+                    >
+                      {editAck.label}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        editAck.cancel();
+                        setEditingId(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {editAck.error ? (
+                    <p data-testid="memory-save-error" className="mt-2 text-[13px] text-danger">
+                      {editAck.error}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="mt-2">
+                  {focused || document.content.includes("\n") ? (
+                    <div
+                      className={`whitespace-pre-wrap text-[12.5px] text-mute ${
+                        focused ? "" : "line-clamp-3"
+                      }`}
+                    >
+                      {document.content}
+                    </div>
+                  ) : null}
+                  <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        createAck.cancel();
+                        setEditingId(document.id);
+                        setDraft(document.content);
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="memory-remove"
+                      aria-label={memoryDeleteName()}
+                      onClick={() => void remove(document)}
+                    >
+                      {memoryDeleteName()}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
       {creating ? (
         <div className="mt-3 rounded-xl border border-hairline bg-ink p-3">

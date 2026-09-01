@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { clipboardHasAttachable, clipboardShouldClaim, nameClipboardFile } from "./uploads";
+import {
+  clipboardHasAttachable,
+  clipboardPrefersImage,
+  clipboardShouldClaim,
+  nameClipboardFile,
+} from "./uploads";
 
 function transfer(partial: {
   files?: File[];
@@ -39,6 +44,18 @@ describe("clipboard paste", () => {
   it("does not claim a deferred WebKit text clip", () => {
     const event = { clipboardData: transfer({ types: ["text/plain"], text: "" }) };
     expect(clipboardShouldClaim(event)).toBe(false);
+  });
+
+  it("still claims a screenshot when the clip also has a file URI", () => {
+    const event = {
+      clipboardData: transfer({
+        types: ["image/png", "text/uri-list", "text/plain"],
+        text: "file:///home/artek/Pictures/Screenshot.png",
+      }),
+    };
+    expect(clipboardHasAttachable(event)).toBe(true);
+    expect(clipboardShouldClaim(event)).toBe(true);
+    expect(clipboardPrefersImage(event)).toBe(true);
   });
 
   it("names an unnamed image clip screenshot-1.png", () => {

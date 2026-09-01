@@ -47,6 +47,18 @@ def _named(page: Page, client_url: str, host_url: str, prefix: str) -> str:
     return name
 
 
+def test_remembered_line_opens_memory_card(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "RemOpen")
+    send_message(page, "please e2e-remember", name)
+    line = page.get_by_role("button", name="Open in Memory")
+    expect(line).to_be_visible(timeout=15_000)
+    expect(line).to_contain_text("Remembered:")
+    line.click()
+    card = page.locator('[data-testid="memory-doc"][data-memory-focus="1"]')
+    expect(card).to_be_visible(timeout=8_000)
+    expect(card).to_contain_text("Prefers short answers without emoji")
+
+
 def test_thread_blocks_render_and_child_opens_other_chat(
     page: Page, client_url: str, host_url: str
 ) -> None:
@@ -223,6 +235,33 @@ def test_composer_paste_screenshot_attaches_chip(
     expect(box).to_have_value("")
 
 
+def test_composer_paste_screenshot_with_file_uri_attaches_chip(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    _named(page, client_url, host_url, "ShotUri")
+    box = composer(page)
+    box.click()
+    png_b64 = base64.b64encode(TINY_PNG).decode("ascii")
+    box.evaluate(
+        """(el, b64) => {
+          const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+          const file = new File([bytes], "", { type: "image/png" });
+          const data = new DataTransfer();
+          data.items.add(file);
+          data.setData("text/uri-list", "file:///tmp/Screenshot.png");
+          data.setData("text/plain", "file:///tmp/Screenshot.png");
+          const event = new Event("paste", { bubbles: true, cancelable: true });
+          Object.defineProperty(event, "clipboardData", { value: data });
+          el.dispatchEvent(event);
+        }""",
+        png_b64,
+    )
+    chip = page.get_by_test_id("attach-chip")
+    expect(chip).to_contain_text("screenshot-1.png", timeout=5_000)
+    expect(page.get_by_test_id("attach-preview")).to_be_visible(timeout=5_000)
+    expect(box).to_have_value("")
+
+
 def test_composer_paste_text_does_not_attach(page: Page, client_url: str, host_url: str) -> None:
     _named(page, client_url, host_url, "TextPaste")
     box = composer(page)
@@ -270,6 +309,16 @@ def test_composer_shift_enter_and_undo(page: Page, client_url: str, host_url: st
     expect(box).to_have_value("line one\nline two")
     box.press("Control+z")
     expect(box).not_to_have_value("line one\nline two")
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
+
+
+def test_composer_ctrl_z_undoes_the_draft(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Undo")
+    box = composer(page)
+    box.fill("hello undo")
+    expect(box).to_have_value("hello undo")
+    box.press("Control+z")
+    expect(box).to_have_value("")
     expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
 
 

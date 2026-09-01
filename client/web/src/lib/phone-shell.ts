@@ -24,3 +24,8 @@ export function shouldUsePhoneShell(width: number, height = width): boolean {
   }
   return height <= PHONE_LANDSCAPE_MAX_HEIGHT_PX && width < DESKTOP_MIN_WIDTH_PX;
 }
+
+/** Pad when the pointer is coarse. A mouse desktop uses the .deb overlay even if the window is narrow. */
+export function shouldUsePhoneDeskControls(mouseDesktop: boolean): boolean {
+  return !mouseDesktop;
+}

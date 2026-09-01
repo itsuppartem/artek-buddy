@@ -3,14 +3,49 @@
 from __future__ import annotations
 
 import base64
+import re
+
+_FILE_REF = re.compile(
+    r"(?is)^(file:/|https?://\S+\.(?:png|jpe?g|webp|gif)(?:\s|$)|~?/[\w./-]+\.(?:png|jpe?g|webp|gif)\s*$)"
+)
 
 
 def is_ctrl_v(keyval: int, ctrl: bool) -> bool:
     return bool(ctrl) and int(keyval) in {ord("v"), ord("V"), 118, 86}
 
 
+def is_ctrl_z(keyval: int, ctrl: bool, shift: bool) -> bool:
+    return bool(ctrl) and not shift and int(keyval) in {ord("z"), ord("Z"), 122, 90}
+
+
+def is_ctrl_shift_z(keyval: int, ctrl: bool, shift: bool) -> bool:
+    return bool(ctrl) and shift and int(keyval) in {ord("z"), ord("Z"), 122, 90}
+
+
+_GNOME_CLIP_ACTIONS = {"copy", "cut", "link"}
+
+
+def clipboard_text_is_file_ref(text: str | None) -> bool:
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    if "file:" in raw.lower():
+        return True
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    if not lines:
+        return False
+    if lines[0].lower() in _GNOME_CLIP_ACTIONS and len(lines) > 1:
+        return clipboard_text_is_file_ref("\n".join(lines[1:]))
+    return bool(_FILE_REF.match(lines[0]))
+
+
 def should_inject_clipboard_image(png: bytes | None, text: str | None) -> bool:
-    return bool(png) and not (text or "").strip()
+    if not png:
+        return False
+    raw = (text or "").strip()
+    if not raw:
+        return True
+    return clipboard_text_is_file_ref(raw)
 
 
 def attach_image_script(png: bytes) -> str:
@@ -22,18 +57,69 @@ def attach_image_script(png: bytes) -> str:
     )
 
 
+def composer_undo_script() -> str:
+    return "if (typeof window.__artekComposerUndo === 'function') { window.__artekComposerUndo(); }"
+
+
+def composer_redo_script() -> str:
+    return "if (typeof window.__artekComposerRedo === 'function') { window.__artekComposerRedo(); }"
+
+
+def _pixbuf_png(image: object) -> bytes | None:
+    ok, buf = image.save_to_bufferv("png", [], [])  # type: ignore[attr-defined]
+    if not ok or not buf:
+        return None
+    return bytes(buf)
+
+
+def _selection_png(clipboard: object, name: str) -> bytes | None:
+    try:
+        from gi.repository import Gdk
+    except Exception:
+        return None
+    intern = getattr(Gdk, "Atom", None)
+    if intern is None or not hasattr(intern, "intern"):
+        return None
+    atom = intern.intern(name, False)
+    getter = getattr(clipboard, "wait_for_contents", None)
+    if not callable(getter):
+        return None
+    payload = getter(atom)
+    if payload is None:
+        return None
+    data = getattr(payload, "get_data", None)
+    if not callable(data):
+        return None
+    raw = data()
+    return bytes(raw) if raw else None
+
+
 def read_gtk3_clipboard() -> tuple[bytes | None, str]:
     from gi.repository import Gdk, Gtk
 
     clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
     text = clipboard.wait_for_text() or ""
     image = clipboard.wait_for_image()
-    if image is None:
-        return None, text
-    ok, buf = image.save_to_bufferv("png", [], [])
-    if not ok or not buf:
-        return None, text
-    return bytes(buf), text
+    png = _pixbuf_png(image) if image is not None else None
+    if png is None:
+        png = _selection_png(clipboard, "image/png") or _selection_png(clipboard, "image/jpeg")
+    return png, text
+
+
+def _run_script(view: object, script: str) -> bool:
+    runner = getattr(view, "run_javascript", None)
+    if not callable(runner):
+        return False
+    try:
+        runner(script, None, None, None)
+    except TypeError:
+        try:
+            runner(script)
+        except Exception:
+            return False
+    except Exception:
+        return False
+    return True
 
 
 def bind_webkit_paste(view: object) -> None:
@@ -43,11 +129,18 @@ def bind_webkit_paste(view: object) -> None:
         return
 
     control = int(getattr(getattr(Gdk, "ModifierType", None), "CONTROL_MASK", 4))
+    shift = int(getattr(getattr(Gdk, "ModifierType", None), "SHIFT_MASK", 1))
 
     def on_key(_widget: object, event: object) -> bool:
         state = int(getattr(event, "state", 0) or 0)
         keyval = int(getattr(event, "keyval", 0) or 0)
-        if not is_ctrl_v(keyval, bool(state & control)):
+        ctrl = bool(state & control)
+        shifted = bool(state & shift)
+        if is_ctrl_z(keyval, ctrl, shifted):
+            return _run_script(view, composer_undo_script())
+        if is_ctrl_shift_z(keyval, ctrl, shifted):
+            return _run_script(view, composer_redo_script())
+        if not is_ctrl_v(keyval, ctrl):
             return False
         try:
             png, text = read_gtk3_clipboard()
@@ -55,20 +148,7 @@ def bind_webkit_paste(view: object) -> None:
             return False
         if not should_inject_clipboard_image(png, text) or png is None:
             return False
-        script = attach_image_script(png)
-        runner = getattr(view, "run_javascript", None)
-        if not callable(runner):
-            return False
-        try:
-            runner(script, None, None, None)
-        except TypeError:
-            try:
-                runner(script)
-            except Exception:
-                return False
-        except Exception:
-            return False
-        return True
+        return _run_script(view, attach_image_script(png))
 
     connect = getattr(view, "connect", None)
     if callable(connect):

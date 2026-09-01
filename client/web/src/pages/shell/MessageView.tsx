@@ -1,6 +1,11 @@
 import type { MouseEvent } from "react";
 import { ChatMarkdown } from "../../lib/chat-markdown";
 import { stripMarkdown } from "../../lib/markdown";
+import {
+  rememberedFact,
+  rememberedLineKind,
+  rememberedLinePreview,
+} from "../../lib/remembered-line";
 import { isHiddenLiveDraft } from "../../lib/thread-events";
 import type { ThreadMessage } from "../../types";
 import { Button } from "../../ui/button";
@@ -21,6 +26,7 @@ export function MessageView({
   runStatus,
   onAnswer,
   onOpenBot,
+  onOpenMemory,
   onOpenComputer,
   onContextMenu,
 }: {
@@ -31,6 +37,7 @@ export function MessageView({
   runStatus?: string;
   onAnswer: (text: string, message: ThreadMessage) => Promise<void>;
   onOpenBot: (botId: string) => void;
+  onOpenMemory?: (fact: string) => void;
   onOpenComputer?: () => void;
   onContextMenu?: (event: MouseEvent, message: ThreadMessage) => void;
 }) {
@@ -57,6 +64,26 @@ export function MessageView({
       ) : null}
       {message.blocks.map((block, index) => {
         if (block.kind === "meta") {
+          const kind = rememberedLineKind(block.text);
+          const fact = rememberedFact(block.text);
+          if (kind && fact && onOpenMemory) {
+            return (
+              <div key={index} className="flex justify-center py-1">
+                <button
+                  type="button"
+                  data-testid="meta-block"
+                  data-memory-line={kind}
+                  aria-label="Open in Memory"
+                  title={block.text}
+                  onClick={() => onOpenMemory(fact)}
+                  className="flex max-w-[min(100%,36rem)] min-w-0 items-center gap-2 text-left text-[13.5px] text-mute hover:text-paper"
+                >
+                  <span className="shrink-0 text-tan">◷</span>
+                  <span className="min-w-0 truncate">{rememberedLinePreview(block.text)}</span>
+                </button>
+              </div>
+            );
+          }
           return (
             <div
               key={index}

@@ -17,6 +17,9 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- A long `Remembered:` clock line is a one-row preview. Click it to open that Memory card with the full text.
+- Host-page Take control follows the pointer in use: a desktop browser uses the `.deb` overlay; a phone keeps the pad.
+- Linux `.deb` Ctrl+V attaches a screenshot even when the clipboard also has a `file://` path. Ctrl+Z / Ctrl+Shift+Z undo and redo Message.
 - Plugins Remove still forgets the key after a login tab. An in-flight catalog load no longer puts Key saved back on an empty Search apps list.
 - **Open to connect** on a plugin login card is a real `http(s)` link, so the Linux `.deb` opens the owner browser the same way a markdown link does. Plugins Connect and right-click **Open in browser** still open that browser when `window.open` is dropped.
 - Each inbox chat keeps its own model session. A bot without a stored id no longer inherits the host default (or another chat). Two chats can run at the same time.
