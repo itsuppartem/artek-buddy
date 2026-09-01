@@ -17,7 +17,7 @@ from artek_buddy.consent import (
     owner_scope,
 )
 from artek_buddy.contracts.domain import Device
-from artek_buddy.runtime.tools.product import ProductToolsCore
+from artek_buddy.runtime.tools.product import ProductTools, ProductToolsCore
 
 
 def test_decision_from_label_happy_and_fail() -> None:
@@ -394,7 +394,7 @@ def test_deny_git_write_options_leave_temp_repo_unchanged(tmp_path: Path) -> Non
                 )
             ]
 
-    tools = ProductToolsCore(
+    tools = ProductTools(
         SimpleNamespace(
             consent=Hub(),
             store=Store(),
