@@ -461,6 +461,50 @@ async def test_idle_hello_does_not_rewrite_the_book() -> None:
     assert after.text == before.text
 
 
+def test_two_do_not_rules_stay_two_cards_and_reassert_is_silent() -> None:
+    hub, store = _hub()
+    youtrack = "There is no YouTrack API token. Do not search for one or call YouTrack REST."
+    git_rule = (
+        "Before git/commit/branch/MR/merge on rn-robot, open_book git-commit-style "
+        "and gitlab-mr-flow. Do not improvise MR descriptions."
+    )
+    first = hub.capture(
+        youtrack,
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_spam",
+        slot="do_not",
+    )
+    second = hub.capture(
+        git_rule,
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_spam",
+        slot="do_not",
+    )
+    again = hub.capture(
+        youtrack + " Commenting needs the already-logged-in Chromium issue tab.",
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_spam",
+        slot="do_not",
+    )
+    assert first is not None
+    assert second is not None
+    assert again is None
+    live = store.list_live_memory_entries("bot_book")
+    assert len(live) == 2
+    blob = "\n".join(item.text for item in live)
+    assert "YouTrack API token" in blob
+    assert "git-commit-style" in blob
+    assert hub.should_announce_remembered("run_spam", first.text) is True
+    assert hub.should_announce_remembered("run_spam", first.text) is False
+    assert hub.should_announce_remembered("run_spam", second.text) is True
+
+
 def test_book_prompt_budget_fits_a_wide_chapter() -> None:
     assert MAX_AGENT_MEMORY_BYTES >= 256 * 1024
     chapter = "Keep the Pi notes on disk. " * 6000

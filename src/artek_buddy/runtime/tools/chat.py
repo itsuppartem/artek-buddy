@@ -47,6 +47,7 @@ class ChatToolsMixin:
                             args,
                             bound_bot_id,
                             f"Forgot: {content}" if content else "Forgot a saved note",
+                            fact=content,
                         )
                         self._publish_memory_revised(
                             bound_bot_id,
@@ -69,6 +70,7 @@ class ChatToolsMixin:
                     args,
                     bound_bot_id,
                     f"Remembered: {entry.text}".strip() or "Remembered a note",
+                    fact=entry.text,
                 )
                 self._publish_memory_revised(
                     bound_bot_id,
@@ -115,6 +117,7 @@ class ChatToolsMixin:
                     args,
                     bound_bot_id,
                     f"Remembered: {content}".strip() or "Remembered a note",
+                    fact=content,
                 )
                 self._publish_memory_revised(
                     bound_bot_id,
@@ -158,10 +161,24 @@ class ChatToolsMixin:
         )
         self.runtime.events.publish(event)
 
-    def _remember_meta(self, args: dict[str, Any], bound_bot_id: str | None, text: str) -> None:
+    def _remember_meta(
+        self,
+        args: dict[str, Any],
+        bound_bot_id: str | None,
+        text: str,
+        fact: str | None = None,
+    ) -> None:
+        if getattr(self.runtime, "resolve_turn_role", lambda: "lead")() == "subagent":
+            return
         label = (text or "Remembered a note").strip()[:160]
         if not label:
             return
+        hub = getattr(self.runtime, "memory", None)
+        if hub is not None:
+            _bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+            announce = getattr(hub, "should_announce_remembered", None)
+            if callable(announce) and not announce(run_id, fact or label):
+                return
         self._append_bot_blocks(
             args,
             bound_bot_id,
