@@ -728,6 +728,60 @@ def test_takeover_banner_on_other_chat(page: Page, client_url: str, host_url: st
     expect(banner).to_have_count(0)
 
 
+def test_takeover_banner_after_park_then_switch(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("Need")
+    watcher = unique_bot("Idle")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-takeover")
+    expect(box).to_have_value("please e2e-takeover")
+    box.press("Enter")
+    expect(thread_header(page)).to_contain_text(speaker)
+    expect(bot_row(page, speaker)).to_contain_text("waiting_takeover", timeout=15_000)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    expect(page.get_by_test_id("attention-alert")).to_contain_text(
+        f"{speaker} needs you", timeout=15_000
+    )
+
+
+def test_dismiss_needs_you_after_park_then_switch(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    speaker = unique_bot("ParkA")
+    watcher = unique_bot("ParkB")
+    other = unique_bot("ParkC")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    create_named_bot(page, other)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-takeover")
+    expect(box).to_have_value("please e2e-takeover")
+    box.press("Enter")
+    expect(thread_header(page)).to_contain_text(speaker)
+    expect(bot_row(page, speaker)).to_contain_text("waiting_takeover", timeout=15_000)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    banner = page.get_by_test_id("attention-alert")
+    expect(banner).to_contain_text(f"{speaker} needs you", timeout=15_000)
+    page.get_by_test_id("attention-dismiss").click()
+    expect(banner).to_have_count(0)
+    expect(thread_header(page)).to_contain_text(watcher)
+    open_chat(page, other)
+    expect(thread_header(page)).to_contain_text(other)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+
+
 def test_dismiss_needs_you_keeps_current_chat(page: Page, client_url: str, host_url: str) -> None:
     speaker = unique_bot("ParkA")
     watcher = unique_bot("ParkB")

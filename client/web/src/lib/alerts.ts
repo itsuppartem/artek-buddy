@@ -225,6 +225,23 @@ export function rememberShownAlert(seen: Set<string>, key: string): "show" | "sk
   return "show";
 }
 
+export function parkedTakeoverKey(botId: string): string {
+  return `${botId}:takeover:parked`;
+}
+
+export function alertKeysToRemember(input: {
+  key: string;
+  fingerprint: string;
+  botId: string;
+  kind: AttentionKind;
+  surfaced: boolean;
+}): string[] {
+  if (!input.surfaced) return [];
+  const keys = [input.key, input.fingerprint];
+  if (input.kind === "takeover") keys.push(parkedTakeoverKey(input.botId));
+  return [...new Set(keys.filter(Boolean))];
+}
+
 const urgencyRank: Record<AttentionAlert["urgency"], number> = {
   low: 0,
   normal: 1,
