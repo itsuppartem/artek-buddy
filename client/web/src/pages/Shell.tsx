@@ -68,6 +68,7 @@ import {
   shouldQueueSend,
   writeStoredList,
 } from "../lib/offline-queue";
+import { openOwnerBrowser } from "../lib/owner-browser";
 import { panelEscapeAction } from "../lib/panel-escape";
 import {
   nextPhoneTab,
@@ -2332,7 +2333,7 @@ export function ShellPage() {
             }}
             onOpenUrl={() => {
               if (messageMenu.url) {
-                window.open(messageMenu.url, "_blank", "noopener,noreferrer");
+                openOwnerBrowser(messageMenu.url);
               }
               setMessageMenu(null);
             }}

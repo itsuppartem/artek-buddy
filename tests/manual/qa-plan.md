@@ -147,8 +147,9 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 | Search → Connect a simple app (no browser) → Connected. No new user bubble. Composer stays empty. No chip above Message | [ ] | [ ] |
 | If Connect cannot start, a human line under the pane says what to do next (not a dead Connect and not only `could not start that connection`) | [ ] | [ ] |
 | Or chat `please e2e-connect-docs` (scripted host) / «подключи Docs» — **plugin-card**, not git setup. Still no chip | [ ] | [ ] |
+| `please e2e-connect-mail` (or GitHub from chat): **Open to connect** on the card opens the owner browser / a tab. Not the bot desktop. Right-click can Copy URL | [ ] | [ ] |
 | Ask the connected app (`please e2e-plugin-docs` / `please use Docs` on a scripted host, or a real task after GitHub Connect) — the bot calls the tools; thread **plugin-card** (name + result) | [ ] | [ ] |
-| Disconnect / Remove → next turn has no that tool | [ ] | [ ] |
+| Disconnect / Remove → next turn has no that tool. Remove after **Open to connect** shows Paste a key (not Key saved with an empty catalog) | [ ] | [ ] |
 | If Connect opens a browser tab, Finish after login marks Connected | [ ] | [ ] |
 
 ---
@@ -580,7 +581,7 @@ If time is short, in this order:
 2. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated). Same rule thrice / worker remember → one Remembered line or none from the worker
 3. **§4 Skill from the web**
 4. **§5 Bot asks bot**
-5. **§6 Plugins** (pane Connect or chat attach; no chip; the bot uses the app)
+5. **§6 Plugins** (pane Connect or chat attach; no chip; the bot uses the app). `please e2e-connect-mail` / GitHub **Open to connect** opens the owner browser
 6. **§7 Desktop** + **§7a Hands on the guest** (Release keeps the picture; Sleeping → Take control shows Waking the desktop…)
 7. **§11 Phone chrome** + **§29 Computer must not blank**
 8. **§12 Pad and Cyrillic**
@@ -589,7 +590,7 @@ If time is short, in this order:
 11. **§10 workers** `please e2e-background-worker-chat` then status; Message stays usable; one final result. **This-PC** back-to-back read/list and one Allow action exactly once on Deb
 12. **§1 / §21 Escape** on Settings and New bot
 13. **§14 Inbox** Search empty + one click opens that row
-14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL
+14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Plugin **Open to connect** is the same kind of link
 15. **§8 / §15 Dismiss** on needs-you keeps the current chat. Park while this chat is open, then switch — still «needs you»
 16. **§9 Queue** pending mark, then local Sent while offline
 17. **§15 Stop** on a live turn shows Stopped. A late complete does not land

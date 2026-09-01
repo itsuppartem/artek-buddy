@@ -198,18 +198,15 @@ export function MessageView({
                 <ChatMarkdown>{block.text}</ChatMarkdown>
               </div>
               {connectHref ? (
-                <Button
-                  type="button"
-                  variant="cream"
-                  size="sm"
-                  className="mt-2"
+                <a
+                  href={connectHref}
+                  target="_blank"
+                  rel="noreferrer noopener"
                   data-testid="plugin-connect-open"
-                  onClick={() => {
-                    window.open(connectHref, "_blank", "noopener,noreferrer");
-                  }}
+                  className="mt-2 inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] bg-tan px-3 text-[13px] font-medium text-ink no-underline hover:bg-tan-press"
                 >
                   Open to connect
-                </Button>
+                </a>
               ) : null}
             </div>
           );
