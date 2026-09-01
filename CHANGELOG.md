@@ -18,6 +18,7 @@
 
 ### Fixed
 - Each inbox chat keeps its own model session. A bot without a stored id no longer inherits the host default (or another chat). Two chats can run at the same time.
+- Switching away from a chat that parked while it was open still raises «needs you». The window no longer consumes that pill just because you were looking at the speaker (`please e2e-takeover`).
 - Native attention now has one workspace-event source: only a new final reply, failure, owner question, or takeover can alert. Polling, replay, intermediate/status text, and silent completion cannot re-notify an old line. Reading requires the focused chat and withdraws its row; GNOME dismissal alone does not read it. One libnotify object/id is updated per bot, and GTK3 relaunch activates the existing client instead of adding subscribers.
 - A `Remembered:` memory line no longer raises **is asking** (or a finish alert). Auto owner-tool `waiting_input` is not treated as an owner question.
 - GNOME's notification list keeps an **Artek Buddy** row while the client is running. The tray badge was only the window urgency hint; `notify-send` left the bus and GNOME destroyed the matched-app source.

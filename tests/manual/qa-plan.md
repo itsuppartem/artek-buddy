@@ -219,6 +219,7 @@ Need a turn where the bot asks for the desk (`waiting_takeover` + **Open compute
 | --- | --- | --- |
 | Stay on **this** chat — no «needs you» pill (you are already here) | [ ] | [ ] |
 | Switch to another chat → under the header **`{name} needs you`**, not «replied» | [ ] | [ ] |
+| Park while **this** chat is still open, then switch — the other chat still gets **`{name} needs you`** (`please e2e-takeover`) | [ ] | [ ] |
 | Dismiss or enter that chat — the pill does not come back on later switches. Dismiss does not change the open chat | [ ] | [ ] |
 | A leftover park from the previous window launch stays silent | [ ] | [ ] |
 
@@ -590,7 +591,7 @@ If time is short, in this order:
 12. **§1 / §21 Escape** on Settings and New bot
 13. **§14 Inbox** Search empty + one click opens that row
 14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL
-15. **§8 / §15 Dismiss** on needs-you keeps the current chat
+15. **§8 / §15 Dismiss** on needs-you keeps the current chat. Park while this chat is open, then switch — still «needs you»
 16. **§9 Queue** pending mark, then local Sent while offline
 17. **§15 Stop** on a live turn shows Stopped. A late complete does not land
 18. **§15 dead wait** `please e2e-dead-wait` completes on that send; `please e2e-dead-wait-stuck` still shows Send again
