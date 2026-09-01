@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProductEvent } from "../types";
 import {
+  alertKeysToRemember,
   allowAlert,
   attentionFingerprint,
   attentionFromEvent,
@@ -9,6 +10,7 @@ import {
   isHistoricalEvent,
   nativeNotifyTag,
   parkedAttentionForView,
+  parkedTakeoverKey,
   rememberShownAlert,
   shouldClearAttentionForView,
   shouldConsiderEventForAttention,
@@ -418,5 +420,43 @@ describe("rememberShownAlert", () => {
   it("skips a key that already showed", () => {
     const seen = new Set<string>(["bot-a:takeover:parked"]);
     expect(rememberShownAlert(seen, "bot-a:takeover:parked")).toBe("skip");
+  });
+});
+
+describe("alertKeysToRemember", () => {
+  it("does not consume keys when the banner was suppressed because this chat is open", () => {
+    expect(
+      alertKeysToRemember({
+        key: "evt-1",
+        fingerprint: "bot-a:takeover:run-1",
+        botId: "bot-a",
+        kind: "takeover",
+        surfaced: false,
+      }),
+    ).toEqual([]);
+  });
+
+  it("records the parked key only after a takeover actually surfaces", () => {
+    expect(
+      alertKeysToRemember({
+        key: "evt-1",
+        fingerprint: "bot-a:takeover:run-1",
+        botId: "bot-a",
+        kind: "takeover",
+        surfaced: true,
+      }),
+    ).toEqual(["evt-1", "bot-a:takeover:run-1", parkedTakeoverKey("bot-a")]);
+  });
+
+  it("does not invent a parked key for a reply", () => {
+    expect(
+      alertKeysToRemember({
+        key: "evt-2",
+        fingerprint: "bot-a:replied:run-2",
+        botId: "bot-a",
+        kind: "replied",
+        surfaced: true,
+      }),
+    ).toEqual(["evt-2", "bot-a:replied:run-2"]);
   });
 });
