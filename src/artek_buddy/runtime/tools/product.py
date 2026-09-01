@@ -43,10 +43,10 @@ class ProductToolsCore:
         self.runtime = runtime
 
     def specs(self, role: str = "lead") -> list[ToolSpec]:
-        extra = self._connected_specs() if role == "subagent" else []
+        extra = self._connected_specs()
         if role == "subagent":
             return [spec for spec in TOOL_SPECS if not spec.lead_only] + extra
-        return [spec for spec in TOOL_SPECS if spec.name not in WORKER_ONLY_TOOLS]
+        return [spec for spec in TOOL_SPECS if spec.name not in WORKER_ONLY_TOOLS] + extra
 
     def _connected_specs(self) -> list[ToolSpec]:
         store = getattr(self.runtime, "store", None)

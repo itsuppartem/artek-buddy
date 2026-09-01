@@ -403,6 +403,8 @@ def wrap_turn_prompt(
             "do not wait for the owner to name it or type a trigger. "
             "forget_book drops one. save_book only revises a book already kept.\n"
             "- Host apps: connected apps already have tools this turn. "
+            "Call those tools yourself when the task needs them; do not wait for a chip "
+            "or a please-use line. "
             "To find GitHub or another catalog app, call list_apps(q), then connect_app(slug). "
             "If a card has a login URL, the owner opens it (not the bot desktop). "
             "Do not create git, SSH, or tokens on this computer for a catalog app.\n"
