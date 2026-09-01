@@ -1,5 +1,6 @@
 import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
+import { openOwnerBrowser } from "../../lib/owner-browser";
 import {
   filterPluginCatalog,
   pluginCatalogScrollAfterUpdate,
@@ -104,7 +105,7 @@ export function PluginsPane({
     try {
       const started = await api.connections.begin(slug, window.location.origin);
       if (started.authorizationUrl) {
-        window.open(started.authorizationUrl, "_blank", "noopener,noreferrer");
+        openOwnerBrowser(started.authorizationUrl);
       }
       await refresh();
       onAppsChange?.();

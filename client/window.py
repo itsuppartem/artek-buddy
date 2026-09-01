@@ -48,9 +48,24 @@ def bind_external_links(view: object, local_url: str) -> None:
         decision.ignore()
         return True
 
+    def on_create(_view: object, navigation_action: object) -> None:
+        try:
+            uri = navigation_action.get_request().get_uri()
+            target = external_http_url(uri, local_url)
+        except Exception:
+            return None
+        if target is None:
+            return None
+        try:
+            webbrowser.open(target, new=2, autoraise=True)
+        except Exception:
+            _log("could not open external link:\n" + traceback.format_exc())
+        return None
+
     connect = getattr(view, "connect", None)
     if callable(connect):
         connect("decide-policy", on_decide_policy)
+        connect("create", on_create)
 
 
 def _open_webkit2(local_url: str) -> bool:

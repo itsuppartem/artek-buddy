@@ -146,6 +146,27 @@ def test_webkit_window_binds_external_link_policy(monkeypatch) -> None:
     assert opened == ["https://example.com/docs"]
 
 
+def test_webkit_create_opens_window_open_urls_in_the_system_browser(monkeypatch) -> None:
+    view = _View()
+    opened: list[str] = []
+    monkeypatch.setattr(window.webbrowser, "open", lambda uri, **_kwargs: opened.append(uri))
+    window.bind_external_links(view, "http://127.0.0.1:4173/app")
+
+    assert "create" in view.signals
+    callback = view.signals["create"]
+    assert callable(callback)
+    action = SimpleNamespace(
+        get_request=lambda: SimpleNamespace(get_uri=lambda: "https://github.com/login")
+    )
+    assert callback(view, action) is None
+    assert opened == ["https://github.com/login"]
+    local = SimpleNamespace(
+        get_request=lambda: SimpleNamespace(get_uri=lambda: "http://127.0.0.1:4173/app")
+    )
+    assert callback(view, local) is None
+    assert opened == ["https://github.com/login"]
+
+
 def test_webkit2_uses_single_instance_application_and_relaunch_presents_existing(
     monkeypatch,
 ) -> None:

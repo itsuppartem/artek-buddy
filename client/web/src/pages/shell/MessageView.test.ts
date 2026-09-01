@@ -36,4 +36,38 @@ describe("MessageView", () => {
     expect(html).not.toContain("git-commit-style");
     expect(html).not.toContain("internal procedure");
   });
+
+  it("renders a plugin login URL as an owner-browser link, not a JS popup button", () => {
+    const message: ThreadMessage = {
+      id: "msg-plugin",
+      threadId: "thr-plugin",
+      runId: "run-plugin",
+      role: "bot",
+      seq: 1,
+      createdAt: "2026-09-01T00:00:00Z",
+      blocks: [
+        {
+          kind: "plugin",
+          name: "GitHub",
+          text: "Open this link to sign in, then Finish in Plugins if the row stays pending.",
+          url: "https://example.test/authorize?app=github",
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(MessageView, {
+        canAnswer: false,
+        message,
+        onAnswer: async () => undefined,
+        onOpenBot: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain("plugin-connect-open");
+    expect(html).toContain('href="https://example.test/authorize?app=github"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toMatch(/<a\b[^>]*href="https:\/\/example\.test\/authorize\?app=github"/);
+    expect(html).not.toMatch(/<button[^>]*plugin-connect-open/);
+  });
 });
