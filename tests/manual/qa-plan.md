@@ -338,7 +338,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
-| Failed / cancelled run shows a run-error, not a silent hole. Instant Cursor wait fail after a good turn (`please e2e-dead-wait`) completes on that send (bot `ok`, no Send-again). `please e2e-dead-wait-stuck` still shows **The turn failed. Send again…**; the next hello still answers | [ ] | [ ] |
+| Failed / cancelled run shows a run-error, not a silent hole. After 60+ minutes idle, the first live Cursor Send may restart its local bridge but still completes on that Send with no red line. Scripted `please e2e-dead-wait` proves the bounded hidden retry (bot `ok`, no Send-again); `please e2e-dead-wait-stuck` still shows one terminal error | [ ] | [ ] |
 | A follow-up while `waiting_takeover` starts a turn (does not only enqueue) | [ ] | [ ] |
 | Stop keeps the run cancelled: a late complete does not append the essay (scripted `please e2e-late-complete` or a live Cursor turn). **Stopped.** is one `run-error` line. Queued owner lines survive Stop and prepend to the next send | [ ] | [ ] |
 
@@ -597,7 +597,7 @@ If time is short, in this order:
 15. **§8 / §15 Dismiss** on needs-you keeps the current chat. Park while this chat is open, then switch — still «needs you»
 16. **§9 Queue** pending mark, then local Sent while offline
 17. **§15 Stop** on a live turn shows Stopped. A late complete does not land
-18. **§15 dead wait** `please e2e-dead-wait` completes on that send; `please e2e-dead-wait-stuck` still shows Send again
+18. **§15 dead wait** after 60+ minutes idle, the first live Send completes without a red line; scripted `please e2e-dead-wait` completes on that send and `please e2e-dead-wait-stuck` still shows one terminal error
 19. **§23 Notifications** launch three times → one client; hidden `please e2e-slow` → one Artek Buddy row, and opening that chat withdraws it
 
 Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.

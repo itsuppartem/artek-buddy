@@ -46,7 +46,19 @@ async def open_runtime(
 
     from artek_buddy.runtime.cursor import CursorRuntime
 
-    async with await AsyncClient.launch_bridge(workspace=settings.agent_cwd) as client:
-        runtime = CursorRuntime(client, settings, store=store, computers=computers)
+    async def launch_bridge() -> AsyncClient:
+        return await AsyncClient.launch_bridge(workspace=settings.agent_cwd)
+
+    client = await launch_bridge()
+    runtime = CursorRuntime(
+        client,
+        settings,
+        store=store,
+        computers=computers,
+        bridge_launcher=launch_bridge,
+    )
+    try:
         await runtime.start()
         yield runtime
+    finally:
+        await runtime.aclose()
