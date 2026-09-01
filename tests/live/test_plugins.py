@@ -89,9 +89,7 @@ def test_plugins_pane_key_connect_docs_then_chat_answers(
     expect(page.get_by_test_id("plugin-ask-docs")).to_have_count(0)
 
 
-def test_plugin_login_link_opens_owner_browser(
-    page: Page, client_url: str, host_url: str
-) -> None:
+def test_plugin_login_link_opens_owner_browser(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("PlugLogin")
     pair_fresh(page, client_url, host_url)
     page.get_by_test_id("open-plugins").click()
