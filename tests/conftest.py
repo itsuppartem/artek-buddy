@@ -39,6 +39,19 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
         print("----- end immediate failure -----\n", flush=True)
 
 
+def pytest_terminal_summary(terminalreporter, exitstatus, config) -> None:
+    del exitstatus, config
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary:
+        return
+    stats = terminalreporter.stats
+    passed = len(stats.get("passed", []))
+    failed = len(stats.get("failed", []))
+    skipped = len(stats.get("skipped", []))
+    with open(summary, "a", encoding="utf-8") as handle:
+        handle.write(f"- pytest passed: {passed}, failed: {failed}, skipped: {skipped}\n")
+
+
 @pytest.fixture
 def host_token() -> str:
     return os.environ["AGENT_HTTP_TOKEN"]

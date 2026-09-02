@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.api.postgres_setup import report_postgres_setup_error
 
 from artek_buddy.db.history import HistoryStore
 
@@ -18,7 +19,7 @@ def postgres_ok() -> None:
         store.apply_migrations()
         store.ensure_workspace()
     except Exception as err:
-        pytest.skip(f"postgres unavailable: {type(err).__name__}")
+        report_postgres_setup_error(err)
     finally:
         store.close()
 
