@@ -25,9 +25,7 @@ def wait_run(
             return {**last, "run": record.model_dump(mode="json")}
         time.sleep(0.1)
     stored = store.get_run(run_id)
-    raise AssertionError(
-        f"turn {run_id} did not finish: {last.get('run')} stored={stored}"
-    )
+    raise AssertionError(f"turn {run_id} did not finish: {last.get('run')} stored={stored}")
 
 
 def wait_pending_auto_jobs(
