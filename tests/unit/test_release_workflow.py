@@ -67,6 +67,44 @@ def test_release_workflow_yaml_is_not_loaded_from_default_branch_workflow_run() 
     assert "test_sha=" in text
 
 
+def test_release_workflow_dispatch_requires_push_test_and_codeql_on_sha() -> None:
+    """Dispatch must not publish a SHA whose push test or CodeQL is missing/red (#364)."""
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    bind = text.find("name: Bind release to one main SHA")
+    detect = text.find("name: Detect VERSION bump")
+    login = text.find("docker/login-action")
+    assert bind != -1
+    assert detect != -1
+    assert login != -1
+    bind_block = text[bind:detect]
+    assert "--workflow test" in bind_block
+    assert "--event push" in bind_block
+    assert "check-runs" in bind_block
+    assert "analyze (python)" in bind_block
+    assert "analyze (javascript-typescript)" in bind_block
+    assert '"CodeQL"' in bind_block or "'CodeQL'" in bind_block
+    assert bind < login
+    assert text.find("check-runs") < login
+
+
+def test_release_workflow_force_cannot_reuse_a_published_version() -> None:
+    """force=true on an existing tag/release must abort before registry write (#364)."""
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    refuse = text.find("name: Refuse a published VERSION")
+    login = text.find("docker/login-action")
+    push = text.find("name: Push host image digest")
+    assert refuse != -1
+    assert login != -1
+    assert push != -1
+    assert refuse < login
+    assert refuse < push
+    block = text[refuse:login]
+    assert "ls-remote" in block
+    assert "gh release view" in block
+    assert "force cannot skip" in block
+    assert "github.event.inputs.force" in text
+
+
 def test_release_workflow_points_new_tag_at_tested_sha_before_ghcr_promote() -> None:
     """A missing tag must not be created from default develop (#359)."""
     text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")

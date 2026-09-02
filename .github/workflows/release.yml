@@ -16,6 +16,11 @@ name: release
 # tag is not taken from default develop. gh release create uses --verify-tag.
 # A second upload of the same Release asset name fails. Do not prune GitHub
 # Releases from this workflow.
+# Dispatch requires a green push test and CodeQL on github.sha (analyze
+# (python), analyze (javascript-typescript), and the check named CodeQL).
+# force can retry an unpublished VERSION; it cannot skip an existing tag
+# or GitHub Release. An emergency override is a separate Environment, not
+# that boolean.
 on:
   workflow_dispatch:
     inputs:
@@ -25,6 +30,8 @@ on:
         default: false
 
 permissions:
+  actions: read
+  checks: read
   contents: write
   packages: write
   id-token: write
@@ -61,6 +68,43 @@ jobs:
             --json conclusion,headBranch --jq \
             '[.[] | select(.headBranch=="main" and .conclusion=="success")] | length')"
           test "$MATCHES" != "0"
+          ROWS="$(mktemp)"
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/check-runs?per_page=100" \
+            --jq '.check_runs[] | [.name, .status, .conclusion, (.completed_at // "")] | @tsv' \
+            > "$ROWS"
+          python3 - "$ROWS" "$RELEASE_SHA" <<'PY'
+          import sys
+
+          path, sha = sys.argv[1], sys.argv[2]
+          required = (
+              "analyze (python)",
+              "analyze (javascript-typescript)",
+              "CodeQL",
+          )
+          best: dict[str, tuple[str, str, str]] = {}
+          with open(path, encoding="utf-8") as fh:
+              for line in fh:
+                  parts = line.rstrip("\n").split("\t")
+                  if len(parts) < 4:
+                      continue
+                  name, status, conclusion, completed = parts[:4]
+                  if name not in required:
+                      continue
+                  prev = best.get(name)
+                  if prev is None or completed >= prev[2]:
+                      best[name] = (status, conclusion, completed)
+          missing = [name for name in required if name not in best]
+          if missing:
+              print(f"missing checks on {sha}: {missing}", file=sys.stderr)
+              sys.exit(1)
+          for name in required:
+              status, conclusion, _completed = best[name]
+              print(f"check name={name} status={status} conclusion={conclusion}")
+              if status != "completed" or conclusion != "success":
+                  print(f"required check not green: {name}", file=sys.stderr)
+                  sys.exit(1)
+          PY
 
       - name: Detect VERSION bump
         id: ver
@@ -75,6 +119,25 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
           echo "VERSION new=$NEW old=${OLD:-none} force=${FORCE:-false}"
+
+      - name: Refuse a published VERSION
+        if: steps.ver.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.ver.outputs.new }}"
+          test -n "$TAG"
+          test "$TAG" != "v"
+          if git ls-remote --exit-code origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "refusing to reuse existing tag $TAG (force cannot skip)" >&2
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "refusing to replace existing GitHub Release $TAG (force cannot skip)" >&2
+            exit 1
+          fi
+          echo "unpublished $TAG"
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: steps.ver.outputs.changed == 'true'
