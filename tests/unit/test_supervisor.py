@@ -261,3 +261,76 @@ def test_supervisor_write_source_has_no_heredoc_delimiter() -> None:
     source = inspect.getsource(supervisor_server)
     assert "ARTEK_EOF" not in source
     assert "<<" not in source
+
+
+def test_bridge_icc_off_reads_network_options() -> None:
+    from artek_buddy.supervisor.docker_engine import bridge_icc_off, network_has_containers
+
+    assert bridge_icc_off({"Options": {"com.docker.network.bridge.enable_icc": "false"}})
+    assert not bridge_icc_off({"Options": {"com.docker.network.bridge.enable_icc": "true"}})
+    assert not bridge_icc_off({"Options": {}})
+    assert not bridge_icc_off({})
+    assert network_has_containers({"Containers": {"abc": {"Name": "box"}}})
+    assert not network_has_containers({"Containers": {}})
+    assert not network_has_containers({})
+
+
+class _ScriptedDocker:
+    def __init__(self, replies: list[tuple[int, object]]) -> None:
+        from artek_buddy.supervisor.docker_engine import DockerEngine
+
+        self.engine = DockerEngine("/dev/null")
+        self.replies = list(replies)
+        self.calls: list[tuple[str, str]] = []
+
+        def request(method: str, path: str, body: object = None, timeout: float = 60):
+            self.calls.append((method, path))
+            return self.replies.pop(0)
+
+        self.engine.request = request  # type: ignore[method-assign]
+
+
+def test_ensure_network_keeps_icc_off() -> None:
+    scripted = _ScriptedDocker(
+        [(200, {"Options": {"com.docker.network.bridge.enable_icc": "false"}})]
+    )
+    assert scripted.engine.ensure_network() == "artek-computers"
+    assert scripted.calls == [("GET", "/networks/artek-computers")]
+
+
+def test_ensure_network_recreates_unused_permissive_network() -> None:
+    scripted = _ScriptedDocker(
+        [
+            (
+                200,
+                {
+                    "Options": {"com.docker.network.bridge.enable_icc": "true"},
+                    "Containers": {},
+                },
+            ),
+            (204, {}),
+            (201, {"Id": "net-new"}),
+        ]
+    )
+    assert scripted.engine.ensure_network() == "artek-computers"
+    assert scripted.calls[1][0] == "DELETE"
+    assert scripted.calls[2][0] == "POST"
+
+
+def test_ensure_network_refuses_permissive_network_in_use() -> None:
+    import pytest
+
+    scripted = _ScriptedDocker(
+        [
+            (
+                200,
+                {
+                    "Options": {"com.docker.network.bridge.enable_icc": "true"},
+                    "Containers": {"cid": {"Name": "artek-bot-1"}},
+                },
+            )
+        ]
+    )
+    with pytest.raises(RuntimeError, match="still has containers"):
+        scripted.engine.ensure_network()
+    assert all(method != "DELETE" for method, _ in scripted.calls)

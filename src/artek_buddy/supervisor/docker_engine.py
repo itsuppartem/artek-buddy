@@ -9,6 +9,20 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+ICC_OPTION = "com.docker.network.bridge.enable_icc"
+
+
+def bridge_icc_off(inspect: dict[str, Any]) -> bool:
+    options = inspect.get("Options") or {}
+    if not isinstance(options, dict):
+        return False
+    return str(options.get(ICC_OPTION, "")).lower() == "false"
+
+
+def network_has_containers(inspect: dict[str, Any]) -> bool:
+    containers = inspect.get("Containers") or {}
+    return bool(containers)
+
 
 class UnixHTTPConnection(HTTPConnection):
     def __init__(self, path: str, timeout: float = 60) -> None:
@@ -73,8 +87,17 @@ class DockerEngine:
     def ensure_network(self, name: str = "artek-computers") -> str:
         status, data = self.request("GET", f"/networks/{quote(name)}")
         if status == 200 and isinstance(data, dict):
-            return name
-        status, created = self.request(
+            if bridge_icc_off(data):
+                return name
+            if network_has_containers(data):
+                raise RuntimeError(
+                    f"{name} has inter-container communication enabled and still has "
+                    "containers. Stop those desktops, remove the network, and start the host again."
+                )
+            deleted, detail = self.request("DELETE", f"/networks/{quote(name)}")
+            if deleted not in {204, 404} and deleted >= 300:
+                raise RuntimeError(f"docker network delete failed: {deleted} {detail}")
+        created_status, created = self.request(
             "POST",
             "/networks/create",
             {
@@ -82,13 +105,18 @@ class DockerEngine:
                 "CheckDuplicate": True,
                 "Driver": "bridge",
                 "Internal": False,
-                "Options": {"com.docker.network.bridge.enable_icc": "false"},
+                "Options": {ICC_OPTION: "false"},
             },
         )
-        if status in {201, 409} or (isinstance(created, dict) and created.get("Id")):
+        if created_status == 409:
+            again_status, again = self.request("GET", f"/networks/{quote(name)}")
+            if again_status == 200 and isinstance(again, dict) and bridge_icc_off(again):
+                return name
+            raise RuntimeError(f"{name} already exists without inter-container communication off")
+        if created_status == 201 or (isinstance(created, dict) and created.get("Id")):
             return name
-        if status >= 300:
-            raise RuntimeError(f"docker network create failed: {status} {created}")
+        if created_status >= 300:
+            raise RuntimeError(f"docker network create failed: {created_status} {created}")
         return name
 
     def create(self, spec: dict[str, Any]) -> str:
