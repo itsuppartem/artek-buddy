@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from artek_buddy.memory import format_subagent_context
+from artek_buddy.memory import format_subagent_context, wrap_turn_prompt
 from artek_buddy.runtime.owner_intent import classify_owner_intent
+from artek_buddy.runtime.tools.common import format_owner_steer
+from artek_buddy.status_ping import STATUS_PING_GUIDE
 
 
 def test_status_ping_is_not_a_stop_intent() -> None:
@@ -11,6 +13,27 @@ def test_status_ping_is_not_a_stop_intent() -> None:
     assert classify_owner_intent("как там?") == "status"
     assert classify_owner_intent("what is happening") == "status"
     assert classify_owner_intent("please e2e-worker-false-idle") == "status"
+    assert classify_owner_intent("ну что там?") == "status"
+
+
+def test_status_ping_guide_puts_send_message_before_inspect() -> None:
+    assert "send_message first" in STATUS_PING_GUIDE
+    assert "inspect_subagent" in STATUS_PING_GUIDE
+    lead = wrap_turn_prompt("ну что там?", None, role="lead")
+    assert STATUS_PING_GUIDE in lead
+    assert lead.index("send_message first") < lead.index("inspect_subagent / list_subagents return")
+    inbox = wrap_turn_prompt(
+        "continue",
+        None,
+        role="lead",
+        inbox_context=f"- {STATUS_PING_GUIDE}",
+    )
+    assert STATUS_PING_GUIDE in inbox
+    steer = format_owner_steer([{"text": "ну что там?"}])
+    assert steer is not None
+    instruction = steer["owner_instruction"]
+    assert STATUS_PING_GUIDE in instruction
+    assert instruction.index("send_message first") < instruction.index("ну что там?")
 
 
 def test_correction_intent_beats_status_words() -> None:

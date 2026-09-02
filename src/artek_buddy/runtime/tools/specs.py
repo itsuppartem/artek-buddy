@@ -19,6 +19,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             "Post a message to the user in this chat immediately. "
             "Use this whenever you have an update, explanation, intermediate result, "
             "or decision point as soon as it is ready. "
+            "On a status-only ping, call this first with a short truthful acknowledgement "
+            "before inspect_subagent or other tools. "
             "Do not tell the user to press Allow — the consent card in the thread is that UI."
         ),
         input_schema={

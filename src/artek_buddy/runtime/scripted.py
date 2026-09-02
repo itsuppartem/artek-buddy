@@ -497,6 +497,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "e2e-worker-status" in hay:
         return [
+            scripted_tool("send_message", text=E2E_WORKER_STATUS),
             scripted_tool("inspect_subagent", ref=E2E_SUBAGENT_NAME),
             scripted_finish(E2E_WORKER_STATUS),
         ]

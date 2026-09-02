@@ -8,6 +8,7 @@ STATUS_MARKERS = (
     "whats happening",
     "what's going on",
     "как там",
+    "ну что там",
     "ты завис",
     "еще делаешь",
     "ещё делаешь",
