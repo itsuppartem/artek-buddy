@@ -2040,6 +2040,31 @@ export function ShellPage() {
               ) : null}
             </div>
           ) : null}
+          {error && errorKind !== "host" ? (
+            <div
+              data-testid={errorKind === "auth" ? "auth-error" : "action-error"}
+              className="mx-4 mt-2 shrink-0 self-center rounded-xl border border-danger/40 bg-danger-bg px-4 py-3 text-center text-[13.5px] text-danger"
+            >
+              <div>{error}</div>
+              {errorKind === "auth" ? (
+                <button
+                  type="button"
+                  onClick={() => void forgetDevice()}
+                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
+                >
+                  {pairAgainLabel()}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
+                >
+                  Dismiss
+                </button>
+              )}
+            </div>
+          ) : null}
           <div
             ref={messageScroll}
             data-testid="thread"
@@ -2051,31 +2076,6 @@ export function ShellPage() {
             }}
             className="ab-scroll flex min-w-0 flex-1 flex-col gap-[13px] overflow-x-hidden overflow-y-auto px-7 py-6"
           >
-            {error && errorKind !== "host" ? (
-              <div
-                data-testid={errorKind === "auth" ? "auth-error" : "action-error"}
-                className="self-center rounded-xl border border-danger/40 bg-danger-bg px-4 py-3 text-center text-[13.5px] text-danger"
-              >
-                <div>{error}</div>
-                {errorKind === "auth" ? (
-                  <button
-                    type="button"
-                    onClick={() => void forgetDevice()}
-                    className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
-                  >
-                    {pairAgainLabel()}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setError(null)}
-                    className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
-                  >
-                    Dismiss
-                  </button>
-                )}
-              </div>
-            ) : null}
             {!active && !error && botsReady && emptyInbox === "archived" ? (
               <div
                 data-testid="empty-inbox"
