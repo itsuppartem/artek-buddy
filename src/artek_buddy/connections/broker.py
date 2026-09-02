@@ -73,17 +73,25 @@ def filter_catalog(
     return [item for item in items if needle in item.slug.lower() or needle in item.name.lower()]
 
 
+HOST_CALLBACK = "https://host.example/v1/connections/callback"
+
+
 def validate_redirect(url: str) -> str:
     raw = (url or "").strip()
     parts = urlsplit(raw)
     if (
-        parts.scheme not in {"http", "https"}
+        parts.scheme != "https"
+        or not parts.hostname
         or not parts.netloc
         or parts.username
         or parts.password
     ):
-        raise ValueError("redirect url is invalid")
+        raise ValueError("callback url is invalid")
     return raw
+
+
+def host_callback(configured: str | None) -> str:
+    return validate_redirect((configured or "").strip() or HOST_CALLBACK)
 
 
 def hide_secret(message: str, key: str) -> str:
@@ -163,6 +171,7 @@ class Broker(Protocol):
 class FakeBroker:
     _remote: dict[str, str] = field(default_factory=dict)
     _active: set[str] = field(default_factory=set)
+    last_callback: str = ""
 
     def catalog(self, q: str | None, connected: set[str]) -> list[ConnectionCatalogItem]:
         items = [
@@ -196,6 +205,7 @@ class FakeBroker:
         if app.start_error:
             raise RuntimeError(app.start_error)
         validate_redirect(redirect_url)
+        self.last_callback = redirect_url
         remote_id = f"fake_{app.slug}"
         if app.no_auth:
             self._remote[remote_id] = app.slug
@@ -277,3 +287,4 @@ def fake_broker() -> FakeBroker:
 def reset_fake_broker() -> None:
     _FAKE._remote.clear()
     _FAKE._active.clear()
+    _FAKE.last_callback = ""

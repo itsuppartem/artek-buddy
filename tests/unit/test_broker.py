@@ -5,8 +5,10 @@ import pytest
 from artek_buddy.connections.broker import (
     CONNECT_START_ERROR,
     DOCS_TEXT,
+    HOST_CALLBACK,
     FakeBroker,
     filter_catalog,
+    host_callback,
     toolkit_no_auth,
     validate_redirect,
 )
@@ -68,11 +70,26 @@ def test_toolkit_no_auth_reads_nested_flags() -> None:
     assert toolkit_no_auth({"slug": "weather", "name": "Weather"}) is False
 
 
-def test_validate_redirect_rejects_empty_and_non_http() -> None:
-    assert validate_redirect("https://window.example/app") == "https://window.example/app"
+def test_host_callback_is_https_and_ignores_a_missing_override() -> None:
+    assert host_callback("") == HOST_CALLBACK
+    assert host_callback(None) == HOST_CALLBACK
+    assert host_callback("https://pi.example/v1/connections/callback") == (
+        "https://pi.example/v1/connections/callback"
+    )
+    with pytest.raises(ValueError):
+        host_callback("http://pi.example/app")
+
+
+def test_validate_redirect_https_only_no_userinfo() -> None:
+    """Caller http / credentials must not be a valid provider callback (#369)."""
+    assert validate_redirect("https://host.example/v1/connections/callback") == (
+        "https://host.example/v1/connections/callback"
+    )
     with pytest.raises(ValueError):
         validate_redirect("")
     with pytest.raises(ValueError):
         validate_redirect("javascript:alert(1)")
+    with pytest.raises(ValueError):
+        validate_redirect("http://host.example/app")
     with pytest.raises(ValueError):
         validate_redirect("https://user:pass@evil.example/")

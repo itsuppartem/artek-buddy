@@ -6,7 +6,10 @@ import time
 from fastapi.testclient import TestClient
 from tests.api.helpers import create_bot, wait_thread_has
 
+from artek_buddy.connections.broker import fake_broker
+
 SECRET = "ak-test-secret-wxyz"
+HOST_CALLBACK = "https://host.example/v1/connections/callback"
 
 
 def test_connections_require_auth_and_key(client, auth_header) -> None:
@@ -128,12 +131,6 @@ def test_connection_begin_rejects_unknown_self_and_bad_redirect(client, auth_hea
         json={"provider": "nope", "redirect_url": "https://window.example/app"},
     )
     assert missing.status_code == 404
-    bad = client.post(
-        "/v1/connections",
-        headers=auth_header,
-        json={"provider": "mail", "redirect_url": "javascript:alert(1)"},
-    )
-    assert bad.status_code == 400
     first = client.post(
         "/v1/connections",
         headers=auth_header,
@@ -155,6 +152,30 @@ def test_connection_begin_rejects_unknown_self_and_bad_redirect(client, auth_hea
     assert finished.status_code == 200
     assert finished.json()["status"] == "connected"
     assert "mail_inbox" in finished.json()["capabilities"]
+    assert fake_broker().last_callback == HOST_CALLBACK
+
+
+def test_connection_begin_ignores_caller_redirect(client, auth_header) -> None:
+    """http, evil host, extra port, and a lookalike host cannot become callback_url (#369)."""
+    client.post("/v1/connections/key", headers=auth_header, json={"api_key": SECRET})
+    for redirect in (
+        "http://host.example/app",
+        "https://evil.example",
+        "https://host.example:8443/app",
+        "https://host.example.evil.example/app",
+        "javascript:alert(1)",
+    ):
+        started = client.post(
+            "/v1/connections",
+            headers=auth_header,
+            json={"provider": "docs", "redirect_url": redirect},
+        )
+        assert started.status_code == 200, redirect
+        assert fake_broker().last_callback == HOST_CALLBACK
+        client.post(
+            f"/v1/connections/{started.json()['connection']['id']}/revoke",
+            headers=auth_header,
+        )
 
 
 def test_store_seeds_plugins_key_once(client, auth_header) -> None:
@@ -280,6 +301,8 @@ def test_connect_app_oauth_puts_login_url_on_the_card(client, auth_header) -> No
     assert "example.test" in cards[0]["url"]
     listed = client.get("/v1/connections", headers=auth_header)
     assert listed.json()["connections"][0]["status"] == "pending"
+    assert fake_broker().last_callback == HOST_CALLBACK
+    assert fake_broker().last_callback != "https://window.example/app"
 
 
 def test_connect_unknown_app_fails_closed(client, auth_header) -> None:

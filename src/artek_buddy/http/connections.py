@@ -6,7 +6,7 @@ from artek_buddy.connections.broker import (
     MAX_KEY_CHARS,
     fake_broker,
     hide_secret,
-    validate_redirect,
+    host_callback,
 )
 from artek_buddy.connections.http import HttpBroker
 from artek_buddy.contracts import (
@@ -112,10 +112,14 @@ async def begin_connection(
     provider = (body.provider or "").strip().lower()
     try:
         key = _require_key(history)
+        _ = body.redirect_url
         try:
-            redirect = validate_redirect(body.redirect_url)
+            redirect = host_callback(cfg.connections_callback_url)
         except ValueError:
-            raise HTTPException(status_code=400, detail="redirect url is invalid") from None
+            raise HTTPException(
+                status_code=503,
+                detail="set CONNECTIONS_CALLBACK_URL to this host's https origin",
+            ) from None
         if history.active_for_provider(provider) is not None:
             raise HTTPException(status_code=409, detail="already connected")
         broker = _broker(cfg, key)
