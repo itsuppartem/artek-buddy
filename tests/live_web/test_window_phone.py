@@ -104,3 +104,20 @@ def test_host_page_auth_error_says_pair_this_phone_again(page: Page, host_url: s
     expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)
     expect(page.get_by_text("Pair this phone")).to_be_visible()
     expect(page.get_by_placeholder("https://host.example")).to_have_count(0)
+
+
+def test_host_page_workspace_events_auth_says_pair_this_phone_again(
+    page: Page, host_url: str
+) -> None:
+    pair_host_page(page, host_url)
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    fulfill_json(page, "**/v1/events", 401, '{"detail":"invalid token"}')
+    page.reload()
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    card = page.get_by_test_id("auth-error")
+    expect(card).to_be_visible(timeout=20_000)
+    expect(card.get_by_role("button", name="Pair this computer again")).to_have_count(0)
+    expect(page.get_by_test_id("pairing")).to_have_count(0)
+    card.get_by_role("button", name="Pair this phone again").click()
+    expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)
+    expect(page.get_by_text("Pair this phone")).to_be_visible()

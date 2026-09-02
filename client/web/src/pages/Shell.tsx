@@ -32,6 +32,7 @@ import {
   shouldStickDismissOnView,
   shouldWatchBackgroundBot,
 } from "../lib/alerts";
+import { workspaceEventsAuthLoss } from "../lib/auth-loss";
 import { composerCanSend, composerPlaceholder, composerShouldSend } from "../lib/composer";
 import {
   composerRedo,
@@ -1125,7 +1126,7 @@ export function ShellPage() {
         } catch (err) {
           if (abort.signal.aborted) break;
           const classified = classifyError(err);
-          if (classified.kind === "auth") {
+          if (workspaceEventsAuthLoss(err) === "repair") {
             showError(err, classified.message);
             break;
           }
@@ -1171,7 +1172,11 @@ export function ShellPage() {
           }
         } catch (err) {
           if (abort.signal.aborted) break;
-          if (classifyError(err).kind === "auth") break;
+          const classified = classifyError(err);
+          if (workspaceEventsAuthLoss(err) === "repair") {
+            showError(err, classified.message);
+            break;
+          }
         }
         if (abort.signal.aborted) break;
         try {
