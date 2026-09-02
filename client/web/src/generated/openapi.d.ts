@@ -2437,6 +2437,12 @@ export interface components {
             parent_run_id?: string | null;
             /** Progress */
             progress?: string | null;
+            /** Progress Posted At */
+            progress_posted_at?: string | null;
+            /** Progress Posted Text */
+            progress_posted_text?: string | null;
+            /** Progress Remaining */
+            progress_remaining?: string | null;
             /** Result */
             result?: string | null;
             /**

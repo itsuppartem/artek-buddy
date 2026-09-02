@@ -16,7 +16,7 @@ from artek_buddy.db.shaping import (
 log = logging.getLogger("artek_buddy")
 
 ACTIVITY_KINDS = frozenset(
-    {"run_started", "tool_started", "tool_finished", "text", "clarification"}
+    {"run_started", "tool_started", "tool_finished", "text", "clarification", "progress"}
 )
 
 
@@ -63,6 +63,21 @@ class SubagentsMixin:
         if found is None:
             raise RuntimeError("failed to persist subagent")
         return found
+
+    def bot_latest_progress_posted_at(self, bot_id: str) -> str | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT MAX(progress_posted_at) AS posted_at
+                FROM subagents
+                WHERE bot_id = %s
+                """,
+                (bot_id,),
+            ).fetchone()
+            conn.commit()
+        if row is None or row.get("posted_at") is None:
+            return None
+        return parse_iso(row["posted_at"])
 
     def get_subagent(self, subagent_id: str) -> Subagent | None:
         with self._conn() as conn:
@@ -133,6 +148,9 @@ class SubagentsMixin:
         status: str | None = None,
         cursor_agent_id: str | None = None,
         progress: str | None = None,
+        progress_remaining: str | None = None,
+        progress_posted_at: str | None = None,
+        progress_posted_text: str | None = None,
         thinking: str | None = None,
         result: str | None = None,
         error: str | None = None,
@@ -150,6 +168,15 @@ class SubagentsMixin:
         if progress is not None:
             assignments.append("progress = %s")
             values.append(progress)
+        if progress_remaining is not None:
+            assignments.append("progress_remaining = %s")
+            values.append(progress_remaining)
+        if progress_posted_at is not None:
+            assignments.append("progress_posted_at = %s")
+            values.append(progress_posted_at)
+        if progress_posted_text is not None:
+            assignments.append("progress_posted_text = %s")
+            values.append(progress_posted_text)
         if thinking is not None:
             assignments.append("thinking = %s")
             values.append(thinking)
@@ -164,6 +191,9 @@ class SubagentsMixin:
             values.append(clarifications)
         if clear_output:
             assignments.append("progress = NULL")
+            assignments.append("progress_remaining = NULL")
+            assignments.append("progress_posted_at = NULL")
+            assignments.append("progress_posted_text = NULL")
             assignments.append("thinking = NULL")
             assignments.append("result = NULL")
             assignments.append("error = NULL")
@@ -193,6 +223,11 @@ class SubagentsMixin:
             task=row["task"],
             status=row["status"],
             progress=row.get("progress"),
+            progress_remaining=row.get("progress_remaining"),
+            progress_posted_at=(
+                parse_iso(row["progress_posted_at"]) if row.get("progress_posted_at") else None
+            ),
+            progress_posted_text=row.get("progress_posted_text"),
             thinking=row.get("thinking"),
             result=row.get("result"),
             error=row.get("error"),

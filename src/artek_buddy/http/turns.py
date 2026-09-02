@@ -405,7 +405,7 @@ def _format_inbox(
 ) -> str:
     lines = [
         "The user sent these messages while you were working. They were not injected mid-turn. Apply them now.",
-        "- If a message asks about progress, status, or a worker (e.g. 'еще делаешь?', 'сверил?', 'как там?'): check the actual host activity immediately (using inspect_subagent, list_subagents). Empty progress is no text update, not idle. Give a quick direct update. Do not call stop_subagent or restart_subagent on a status-only ping.",
+        "- If a message asks about progress, status, or a worker (e.g. 'еще делаешь?', 'сверил?', 'как там?'): check the actual host activity immediately (using inspect_subagent, list_subagents). Empty progress is no text update, not idle. When a step is stored, say that step. Give a quick direct update. Do not call stop_subagent or restart_subagent on a status-only ping.",
         "- If a message refines or corrects a worker's task: steer it immediately with steer_subagent. Keep the same worker id. Do not stop and spawn a replacement.",
         "- If a message gives new substantive parallel tasks: spawn a subagent if appropriate, or execute directly.",
     ]

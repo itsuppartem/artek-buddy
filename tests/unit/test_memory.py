@@ -41,6 +41,8 @@ def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
     assert "does not appear in the owner thread" in worker
     assert "You do not have send_message" in worker
     assert worker.count("send_message") == 1
+    assert "report_progress" in worker
+    assert "Never invent minutes remaining" in worker
     assert "no text update" in lead
     assert "status-only ping must inspect" in lead
 

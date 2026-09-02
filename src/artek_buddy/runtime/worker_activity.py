@@ -6,7 +6,7 @@ from typing import Any
 log = logging.getLogger("artek_buddy")
 
 ACTIVITY_KINDS = frozenset(
-    {"run_started", "tool_started", "tool_finished", "text", "clarification"}
+    {"run_started", "tool_started", "tool_finished", "text", "clarification", "progress"}
 )
 
 

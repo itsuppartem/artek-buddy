@@ -2931,6 +2931,39 @@
             ],
             "title": "Progress"
           },
+          "progress_posted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Posted At"
+          },
+          "progress_posted_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Posted Text"
+          },
+          "progress_remaining": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Remaining"
+          },
           "result": {
             "anyOf": [
               {

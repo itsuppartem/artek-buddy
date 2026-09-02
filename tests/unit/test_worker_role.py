@@ -29,6 +29,8 @@ def test_lead_cannot_use_worker_only_tools() -> None:
     assert "browser_act" not in lead
     assert "send_message" not in worker
     assert "run_owner_command" in worker
+    assert "report_progress" in worker
+    assert "report_progress" not in lead
     assert "spawn_subagent" not in worker
 
 
@@ -69,6 +71,20 @@ def test_lead_execute_refuses_this_pc_ssh(tmp_path) -> None:
     )
     assert "lead cannot use" not in str(allowed.get("error"))
     assert "spawn_subagent" not in str(allowed.get("error"))
+
+
+def test_lead_execute_refuses_report_progress(tmp_path) -> None:
+    runtime = _runtime(tmp_path)
+    tools = ProductTools(runtime)
+    lead = TurnContext(bot_id="bot_a", run_id="run_lead", thread_id="th", role="lead")
+    refused = tools.execute(
+        "report_progress",
+        {"step": "commit"},
+        bound_bot_id="bot_a",
+        turn=lead,
+    )
+    assert refused["ok"] is False
+    assert "report_progress" in str(refused.get("error"))
 
 
 def test_cancelled_turn_refuses_further_tools(tmp_path) -> None:

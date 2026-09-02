@@ -139,7 +139,12 @@ def format_subagent_context(rows: list[Any]) -> str | None:
         ident = _row_field(item, "id")
         lines.append(f"{index}. {name} ({ident}) [{status}] — {task}")
         progress = _row_field(item, "progress")
-        if not (progress or "").strip():
+        remaining = _row_field(item, "progress_remaining")
+        if (progress or "").strip():
+            lines.append(f"   step: {progress}")
+            if (remaining or "").strip():
+                lines.append(f"   remaining: {remaining}")
+        else:
             lines.append("   text: no text update")
         kind = _row_field(item, "last_activity_kind")
         seq = _row_field(item, "activity_seq")
@@ -398,7 +403,8 @@ def wrap_turn_prompt(
             "- When checking progress or if the user asks status (e.g. 'ты завис?', 'еще делаешь?', 'как там?'): "
             "answer from host activity, not from blank progress text. "
             "Empty progress means no text update was persisted, not that the worker is idle. "
-            "inspect_subagent / list_subagents return last_activity_at, activity_seq, last_tool_name, and tool_running. "
+            "inspect_subagent / list_subagents return last_activity_at, activity_seq, last_tool_name, "
+            "tool_running, and the current step / remaining when the worker reported them. "
             "If a tool is in flight or activity_seq has moved, keep that worker. "
             "A status-only ping must inspect and answer. It must not call stop_subagent or restart_subagent "
             "and must not spawn a replacement. "
@@ -449,8 +455,9 @@ def wrap_turn_prompt(
             "Use close_app(application='chromium') to close the on-screen browser. "
             "computer_observe does not need permission. "
             "Do not post to the owner chat. You do not have send_message; it is not in your catalog. "
-            "Persist progress and the result on this worker; "
-            "the lead will write the owner-facing wording. "
+            "After each meaningful milestone (not every tool), call report_progress with the current "
+            "step and what is left. Never invent minutes remaining. "
+            "The host writes the owner-facing wording. Persist the result on this worker. "
             "If this task has a standing rule for this chat, call remember; it stays with this bot "
             "and does not appear in the owner thread."
         )

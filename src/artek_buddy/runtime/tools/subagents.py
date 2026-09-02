@@ -7,6 +7,7 @@ def _activity_fields(item: Any) -> dict[str, Any]:
     empty = not (getattr(item, "progress", None) or "").strip()
     return {
         "progress": item.progress,
+        "progress_remaining": getattr(item, "progress_remaining", None),
         "progress_empty": empty,
         "text_update": "no text update" if empty else "has text",
         "last_activity_at": item.last_activity_at,
@@ -171,3 +172,22 @@ class SubagentToolsMixin:
             "status": item.status,
             "clarifications": item.clarifications,
         }
+
+    def _exec_report_progress(
+        self, args: dict[str, Any], bound_bot_id: str | None
+    ) -> dict[str, Any]:
+        found = self._require_subagents(bound_bot_id)
+        if isinstance(found, dict):
+            return found
+        bot, run_id = found
+        if not run_id:
+            return {"ok": False, "error": "worker run is required"}
+        try:
+            return self.runtime.subagents.report_progress(
+                bot,
+                run_id,
+                str(args.get("step") or ""),
+                args.get("remaining"),
+            )
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}

@@ -45,3 +45,29 @@ def test_format_subagent_context_names_empty_progress_as_no_text_update() -> Non
     assert "seq=21" in text
     assert "tool_finished" in text
     assert " idle" not in text.lower()
+
+
+def test_format_subagent_context_includes_reported_step() -> None:
+    text = format_subagent_context(
+        [
+            SimpleNamespace(
+                index=1,
+                name="Researcher",
+                id="sub_abc",
+                status="running",
+                task="long job",
+                progress="commit",
+                progress_remaining="push MR 76",
+                last_activity_kind="progress",
+                activity_seq=3,
+                last_tool_name="report_progress",
+                tool_running=False,
+                last_activity_at="2026-09-02T10:00:00.000000Z",
+                clarifications=None,
+            )
+        ]
+    )
+    assert text is not None
+    assert "step: commit" in text
+    assert "remaining: push MR 76" in text
+    assert "no text update" not in text

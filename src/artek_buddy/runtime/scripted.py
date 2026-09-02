@@ -56,6 +56,15 @@ E2E_WORKER_RESULT = "blocked work finished"
 E2E_WORKER_BLOCK_S = 10.0
 E2E_WORKER_ACTIVITY_TOOLS = 20
 E2E_WORKER_ACTIVITY_HOLD_S = 8.0
+E2E_WORKER_PROGRESS_STEP = "commit"
+E2E_WORKER_PROGRESS_REMAINING = "push MR 76"
+E2E_WORKER_PROGRESS_STEP_2 = "push MR 76"
+E2E_WORKER_PROGRESS_REMAINING_2 = "comment on the ticket"
+E2E_WORKER_PROGRESS_LINE = "Still working: commit. Next: push MR 76."
+E2E_WORKER_PROGRESS_LINE_2 = "Still working: push MR 76. Next: comment on the ticket."
+E2E_WORKER_PROGRESS_RESULT = "progress job done"
+E2E_WORKER_PROGRESS_HOLD_S = 8.0
+E2E_WORKER_PROGRESS_GAP_S = 0.4
 E2E_LEAD_OWNER_SSH = "Lead must not hold This-PC SSH."
 E2E_ASK_READY = "I am ready to answer. The city is Subotica."
 E2E_ASK_ANSWER = "They said the city is Subotica."
@@ -451,6 +460,36 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 "spawn_subagent",
                 name=E2E_SUBAGENT_NAME,
                 task="please e2e-worker-block",
+            ),
+            scripted_finish(E2E_WORKER_ACK),
+        ]
+    if "e2e-worker-progress-run" in hay:
+        return [
+            scripted_tool(
+                "report_progress",
+                step=E2E_WORKER_PROGRESS_STEP,
+                remaining=E2E_WORKER_PROGRESS_REMAINING,
+            ),
+            scripted_tool(
+                "report_progress",
+                step=E2E_WORKER_PROGRESS_STEP,
+                remaining=E2E_WORKER_PROGRESS_REMAINING,
+            ),
+            scripted_delay(E2E_WORKER_PROGRESS_GAP_S),
+            scripted_tool(
+                "report_progress",
+                step=E2E_WORKER_PROGRESS_STEP_2,
+                remaining=E2E_WORKER_PROGRESS_REMAINING_2,
+            ),
+            scripted_delay(E2E_WORKER_PROGRESS_HOLD_S),
+            scripted_finish(E2E_WORKER_PROGRESS_RESULT),
+        ]
+    if "e2e-worker-progress" in hay:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name="WorkerProgress",
+                task="please e2e-worker-progress-run",
             ),
             scripted_finish(E2E_WORKER_ACK),
         ]
