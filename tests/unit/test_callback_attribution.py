@@ -103,6 +103,8 @@ def test_worker_callback_does_not_drain_owner_inbox(tmp_path) -> None:
     tools = ProductTools(runtime)
     lead = TurnContext(bot_id="bot_a", run_id="run_lead", thread_id="th", role="lead")
     worker = TurnContext(bot_id="bot_a", run_id="sub_1", thread_id="th", role="subagent")
+    runtime.freeze_turn(lead)
+    runtime.freeze_turn(worker)
     barrier = threading.Barrier(2)
     results: dict[str, dict] = {}
 

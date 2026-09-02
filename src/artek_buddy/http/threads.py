@@ -96,7 +96,6 @@ async def send_thread_message(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> ThreadSendResult:
-    rt.set_turn_device(actor)
     try:
         bot = _require_bot(history, bot_id)
         hosted = (
@@ -122,6 +121,7 @@ async def send_thread_message(
         trigger=body.trigger,
         reply_to_id=body.reply_to_id,
         attachments=hosted,
+        device_id=actor,
     )
 
 
@@ -129,12 +129,10 @@ async def send_thread_message(
 async def answer_thread_question(
     bot_id: str,
     body: ThreadAnswerInput,
-    actor: str = Depends(require_auth),
-    rt: AgentRuntime = Depends(runtime),
+    _actor: str = Depends(require_auth),
     history: HistoryStore = Depends(store),
     questions: ConsentHub = Depends(consent),
 ) -> OkResponse:
-    rt.set_turn_device(actor)
     try:
         bot = _require_bot(history, bot_id)
         if body.bot_id is not None and body.bot_id != bot.id:
@@ -262,12 +260,11 @@ async def follow_up_thread_message(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> OkResponse:
-    rt.set_turn_device(actor)
     try:
         bot = _require_bot(history, bot_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
-    await _accept_turn(history, rt, events, bot, body.text, trigger="follow_up")
+    await _accept_turn(history, rt, events, bot, body.text, trigger="follow_up", device_id=actor)
     return OkResponse(ok=True)
 
 
@@ -383,12 +380,11 @@ async def create_run(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> Run:
-    rt.set_turn_device(actor)
     try:
         bot = _resolve_bot(history, rt, bot_id=body.bot_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
-    result = await _accept_turn(history, rt, events, bot, body.text)
+    result = await _accept_turn(history, rt, events, bot, body.text, device_id=actor)
     if result.run is None:
         raise HTTPException(status_code=500, detail="run missing after send")
     return result.run

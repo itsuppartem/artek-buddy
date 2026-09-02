@@ -121,7 +121,6 @@ async def test_routine(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> TestRunResult:
-    rt.set_turn_device(actor)
     try:
         routine = history.get_routine(routine_id)
         if routine is None:
@@ -129,7 +128,9 @@ async def test_routine(
         bot = _require_bot(history, routine.bot_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
-    result = await _accept_turn(history, rt, events, bot, routine.prompt, trigger="routine")
+    result = await _accept_turn(
+        history, rt, events, bot, routine.prompt, trigger="routine", device_id=actor
+    )
     return TestRunResult(
         routine_id=routine.id,
         task_id=result.task_id,

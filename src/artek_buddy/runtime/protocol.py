@@ -34,6 +34,7 @@ class AgentRuntime(Protocol):
         thread_id: str | None,
         agent_id: str | None = None,
         role: str = "lead",
+        device_id: str | None = None,
     ) -> Any: ...
 
     def has_sent_message_in_turn(self, run_id: str | None) -> bool: ...

@@ -14,6 +14,7 @@ class TurnContext:
     thread_id: str
     role: TurnRole = "lead"
     agent_id: str | None = None
+    device_id: str | None = None
 
 
 @dataclass

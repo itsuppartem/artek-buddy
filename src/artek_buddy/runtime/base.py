@@ -53,17 +53,26 @@ class RuntimeBase:
         self._frozen_by_agent: dict[str, TurnContext] = {}
         self._tool_boxes: dict[str, ToolTurnBox] = {}
         self._owner_intent: dict[str, str] = {}
-        self._last_device: str | None = None
         self._bot_by_agent: dict[str, str] = {}
         self._messages_sent_in_turn: set[str] = set()
         self._fresh_sessions: set[str] = set()
         self._cancelled_runs: set[str] = set()
 
-    def set_turn_device(self, device_id: str | None) -> None:
-        self._last_device = device_id if device_id and device_id != "host" else None
+    @staticmethod
+    def normalize_turn_device(device_id: str | None) -> str | None:
+        if not device_id or device_id == "host":
+            return None
+        return device_id
 
-    def resolve_turn_device(self) -> str | None:
-        return self._last_device
+    def set_turn_device(self, device_id: str | None) -> None:
+        """Kept so callers cannot reintroduce a process-global device. Bind via freeze."""
+        del device_id
+
+    def resolve_turn_device(self, bound_bot_id: str | None = None) -> str | None:
+        found = self.resolve_turn(bound_bot_id)
+        if found is None:
+            return None
+        return found.device_id
 
     def bind_agent_bot(self, agent_id: str | None, bot_id: str | None) -> None:
         if not agent_id or not bot_id:
@@ -169,10 +178,14 @@ class RuntimeBase:
         thread_id: str | None,
         agent_id: str | None = None,
         role: str = "lead",
+        device_id: str | None = None,
     ) -> Any:
         turn_role = role if role in {"lead", "subagent"} else "lead"
         token = _current_turn_context.set((bot_id, run_id, thread_id))
         _current_turn_role.set(turn_role)
+        turn_device = self.normalize_turn_device(device_id)
+        if turn_device is None and turn_role == "subagent" and run_id:
+            turn_device = self._inherit_parent_device(run_id)
         if bot_id and run_id:
             self.freeze_turn(
                 TurnContext(
@@ -181,11 +194,39 @@ class RuntimeBase:
                     thread_id=thread_id or "",
                     role=turn_role,
                     agent_id=agent_id,
+                    device_id=turn_device,
                 )
             )
         elif agent_id and bot_id:
             self.bind_agent_bot(agent_id, bot_id)
         return token
+
+    def _inherit_parent_device(self, run_id: str) -> str | None:
+        store = self.store
+        getter = getattr(store, "get_subagent", None) if store is not None else None
+        if not callable(getter):
+            return None
+        try:
+            found = getter(run_id)
+        except Exception:
+            return None
+        parent_id = getattr(found, "parent_run_id", None) if found is not None else None
+        if not parent_id:
+            return None
+        with self._turn_lock:
+            parent = self._frozen_by_run.get(parent_id)
+        if parent is None:
+            return None
+        return parent.device_id
+
+    def device_for_run(self, run_id: str | None) -> str | None:
+        if not run_id:
+            return None
+        with self._turn_lock:
+            frozen = self._frozen_by_run.get(run_id)
+        if frozen is None:
+            return None
+        return frozen.device_id
 
     def freeze_turn(self, ctx: TurnContext) -> None:
         with self._turn_lock:
@@ -236,15 +277,11 @@ class RuntimeBase:
         agent_id: str | None = None,
     ) -> TurnContext | None:
         ctx = _current_turn_context.get()
-        if ctx[0] and ctx[1]:
-            role = _current_turn_role.get()
-            turn_role = role if role in {"lead", "subagent"} else "lead"
-            return TurnContext(
-                bot_id=ctx[0],
-                run_id=ctx[1],
-                thread_id=ctx[2] or "",
-                role=turn_role,
-            )
+        if ctx[1]:
+            with self._turn_lock:
+                frozen = self._frozen_by_run.get(ctx[1])
+            if frozen is not None and (not bound_bot_id or frozen.bot_id == bound_bot_id):
+                return frozen
         with self._turn_lock:
             if agent_id:
                 frozen = self._frozen_by_agent.get(agent_id)
