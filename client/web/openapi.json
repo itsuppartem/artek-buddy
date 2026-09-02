@@ -716,6 +716,10 @@
             "title": "Kind",
             "type": "string"
           },
+          "lease_id": {
+            "title": "Lease Id",
+            "type": "string"
+          },
           "payload": {
             "additionalProperties": true,
             "title": "Payload",
@@ -723,7 +727,8 @@
           }
         },
         "required": [
-          "kind"
+          "kind",
+          "lease_id"
         ],
         "title": "ComputerInput",
         "type": "object"
@@ -754,6 +759,17 @@
             ],
             "title": "Control Holder",
             "type": "string"
+          },
+          "control_lease_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Lease Id"
           },
           "home_revision": {
             "anyOf": [

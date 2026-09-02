@@ -19,6 +19,7 @@ function computer(): ComputerStatus {
     kind: "fake",
     state: "stopped",
     controlHolder: "bot",
+    controlLeaseId: null,
     screenAvailable: false,
     homeRevision: null,
     busyBotName: null,
@@ -257,9 +258,14 @@ describe("reduceComputerStatus", () => {
   });
 
   it("Release drops user control so the pane cannot keep You have control", () => {
-    const held = reduceComputerStatus(computer(), event({ type: "computer.takeover.granted" }));
+    const held = reduceComputerStatus(
+      computer(),
+      event({ type: "computer.takeover.granted", payload: { leaseId: "lease_1" } }),
+    );
     expect(held?.controlHolder).toBe("user");
+    expect(held?.controlLeaseId).toBe("lease_1");
     const released = reduceComputerStatus(held, event({ type: "computer.takeover.released" }));
     expect(released?.controlHolder).toBe("bot");
+    expect(released?.controlLeaseId).toBeNull();
   });
 });

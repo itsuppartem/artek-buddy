@@ -43,6 +43,7 @@ class ComputerRecord:
             if self.state in {"stopped", "booting", "running", "suspended", "error"}
             else "stopped",
             control_holder=holder if holder in {"bot", "user", "none"} else "none",
+            control_lease_id=self.control_lease_id if holder == "user" else None,
             screen_available=self.state in {"running", "booting"},
             home_revision=self.home_revision,
             busy_bot_name=busy_bot_name,

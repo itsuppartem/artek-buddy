@@ -341,6 +341,7 @@ class ComputerStatus(BaseModel):
     kind: SandboxKind
     state: Literal["stopped", "booting", "running", "suspended", "error"]
     control_holder: Literal["bot", "user", "none"]
+    control_lease_id: str | None = None
     screen_available: bool
     home_revision: str | None
     busy_bot_name: str | None
@@ -358,6 +359,7 @@ class ComputerInput(BaseModel):
 
     kind: str
     payload: dict[str, Any] = Field(default_factory=dict)
+    lease_id: str
 
 
 class ComputerFilesInput(BaseModel):

@@ -209,6 +209,7 @@ On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; t
 | Right-click (Deb) or two-finger tap (Phone) opens a guest context menu | [ ] | [ ] |
 | fluxbox **Files** / Browser / Terminal open a real window you can see | [ ] | [ ] |
 | Release: overlay is view-only again (same guest page, **not a black tile** — last frame stays until the view-only picture loads). Pane says **Take control**, not You have control. Message and Stop work | [ ] | [ ] |
+| A click or key still in flight after Release does not bring back You have control | [ ] | [ ] |
 
 If Chrome emulation cannot drag the pad, say **fail / blocked**, not skip. This section is why the phone desk exists.
 

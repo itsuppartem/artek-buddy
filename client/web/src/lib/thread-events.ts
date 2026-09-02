@@ -269,12 +269,18 @@ export function reduceComputerStatus(
 ): ComputerStatus | null {
   if (!prev || !isComputerStatusEvent(event)) return prev;
   if (event.type === "computer.takeover.granted") {
-    return { ...prev, controlHolder: "user" };
+    const lease = event.payload.leaseId ?? event.payload.lease_id;
+    return {
+      ...prev,
+      controlHolder: "user",
+      controlLeaseId: typeof lease === "string" ? lease : prev.controlLeaseId,
+    };
   }
   if (event.type === "computer.takeover.released" || event.type === "computer.takeover.requested") {
     return {
       ...prev,
       controlHolder: event.type === "computer.takeover.requested" ? "none" : "bot",
+      controlLeaseId: null,
     };
   }
   const status = event.payload.status ?? event.payload.state;
@@ -295,6 +301,12 @@ export function reduceComputerStatus(
   }
   if (holder === "user" || holder === "bot" || holder === "none") {
     next.controlHolder = holder;
+  }
+  const lease = event.payload.controlLeaseId ?? event.payload.control_lease_id;
+  if (holder === "bot" || holder === "none") {
+    next.controlLeaseId = null;
+  } else if (lease === null || typeof lease === "string") {
+    next.controlLeaseId = lease as string | null;
   }
   if (typeof event.payload.screenAvailable === "boolean") {
     next.screenAvailable = event.payload.screenAvailable;
