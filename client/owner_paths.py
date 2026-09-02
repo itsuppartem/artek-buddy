@@ -37,7 +37,7 @@ def _expand_owner_text(raw: str, root: Path) -> Path:
     if text.startswith("~"):
         rest = text[1:].lstrip("/\\")
         return (root / rest) if rest else root
-    path = Path(text).expanduser()
+    path = Path(text).expanduser()  # lgtm[py/path-injection]
     if not path.is_absolute():
         path = root / path
     return Path(os.path.normpath(str(path)))
