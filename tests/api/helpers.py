@@ -22,6 +22,9 @@ def wait_run(
         last = snap.json()
         record = store.get_run(run_id)
         if record is not None and record.status in {"completed", "failed", "cancelled"}:
+            snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+            assert snap.status_code == 200, snap.text
+            last = snap.json()
             return {**last, "run": record.model_dump(mode="json")}
         time.sleep(0.1)
     stored = store.get_run(run_id)
