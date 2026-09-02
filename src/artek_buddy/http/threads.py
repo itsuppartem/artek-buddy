@@ -264,9 +264,7 @@ async def follow_up_thread_message(
         bot = _require_bot(history, bot_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
-    await _accept_turn(
-        history, rt, events, bot, body.text, trigger="follow_up", device_id=actor
-    )
+    await _accept_turn(history, rt, events, bot, body.text, trigger="follow_up", device_id=actor)
     return OkResponse(ok=True)
 
 
