@@ -96,6 +96,7 @@ def test_follow_up_after_other_device_keeps_live_grant_device(client, auth_heade
     assert sent.status_code == 200, sent.text
     run_id = sent.json()["run_id"]
     wait_run_status(client, auth_header, bot["id"], run_id, "waiting_input")
+    assert runtime.device_for_run(run_id) == first["id"]
     live = runtime.resolve_turn(bot["id"])
     assert live is not None
     assert live.run_id == run_id

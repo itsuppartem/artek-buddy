@@ -144,6 +144,31 @@ def test_worker_inherits_parent_turn_device(tmp_path) -> None:
     assert found.role == "subagent"
 
 
+def test_stale_contextvar_does_not_impersonate_another_bot(tmp_path) -> None:
+    leaked = RuntimeBase(_settings(tmp_path))
+    leaked.set_current_turn_context(
+        "bot_a",
+        "run_host",
+        "th",
+        device_id="dev_a",
+        role="lead",
+    )
+    live = RuntimeBase(_settings(tmp_path))
+    live.freeze_turn(
+        TurnContext(
+            bot_id="bot_b",
+            run_id="run_live",
+            thread_id="th2",
+            role="lead",
+            device_id="dev_b",
+        )
+    )
+    found = live.resolve_turn("bot_b")
+    assert found is not None
+    assert found.run_id == "run_live"
+    assert found.device_id == "dev_b"
+
+
 def test_host_actor_freezes_as_no_device(tmp_path) -> None:
     runtime = RuntimeBase(_settings(tmp_path))
     runtime.set_current_turn_context(

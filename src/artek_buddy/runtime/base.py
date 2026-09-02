@@ -282,15 +282,6 @@ class RuntimeBase:
                 frozen = self._frozen_by_run.get(ctx[1])
             if frozen is not None and (not bound_bot_id or frozen.bot_id == bound_bot_id):
                 return frozen
-        if ctx[0] and ctx[1]:
-            role = _current_turn_role.get()
-            turn_role = role if role in {"lead", "subagent"} else "lead"
-            return TurnContext(
-                bot_id=ctx[0],
-                run_id=ctx[1],
-                thread_id=ctx[2] or "",
-                role=turn_role,
-            )
         with self._turn_lock:
             if agent_id:
                 frozen = self._frozen_by_agent.get(agent_id)
