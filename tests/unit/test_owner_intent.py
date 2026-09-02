@@ -33,7 +33,7 @@ def test_status_ping_guide_puts_send_message_before_inspect() -> None:
     assert steer is not None
     instruction = steer["owner_instruction"]
     assert STATUS_PING_GUIDE in instruction
-    assert instruction.index("send_message first") < instruction.index("ну что там?")
+    assert instruction.index(STATUS_PING_GUIDE) < instruction.index("1. ну что там?")
 
 
 def test_correction_intent_beats_status_words() -> None:
