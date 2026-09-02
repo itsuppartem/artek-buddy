@@ -1,4 +1,4 @@
-cursor-sdk==1.0.28
+cursor-sdk==1.0.30
 fastapi==0.141.1
 starlette==1.6.0
 uvicorn[standard]==0.52.4
