@@ -91,7 +91,8 @@ skipped vs failed). Review
 count is 0; do not push `main` or `develop` directly.
 A merge into `main` that changes `VERSION` publishes a GitHub Release only after
 the **push** `test` run **and** CodeQL on that commit are green, then `release.yml`
-is `workflow_dispatch`ed from **that** `main` SHA. Dispatch aborts if the VERSION
+is `workflow_dispatch`ed from **that** `main` SHA. Bind prints those CodeQL
+check-run and workflow run ids. Dispatch aborts if the VERSION
 tag or GitHub Release already exists (`force` cannot skip that). GitHub does not
 load this privileged YAML via default-branch `workflow_run`. The Release tag is
 that same SHA (`--verify-tag`); a peel mismatch aborts before GHCR tags move.

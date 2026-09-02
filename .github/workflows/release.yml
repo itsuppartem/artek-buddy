@@ -19,6 +19,8 @@ name: release
 # Releases from this workflow.
 # Dispatch requires a green push test and CodeQL on github.sha (analyze
 # (python), analyze (javascript-typescript), and the check named CodeQL).
+# Bind prints check_run_id and codeql_run_id for that SHA. There is no
+# automatic workflow_run publish.
 # force can retry an unpublished VERSION; it cannot skip an existing tag
 # or GitHub Release. An emergency override is a separate Environment, not
 # that boolean.
@@ -77,7 +79,7 @@ jobs:
           ROWS="$(mktemp)"
           gh api --paginate \
             "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/check-runs?per_page=100" \
-            --jq '.check_runs[] | [.name, .status, .conclusion, (.completed_at // "")] | @tsv' \
+            --jq '.check_runs[] | [.id, .name, .status, .conclusion, (.completed_at // "")] | @tsv' \
             > "$ROWS"
           python3 - "$ROWS" "$RELEASE_SHA" <<'PY'
           import sys
@@ -88,29 +90,51 @@ jobs:
               "analyze (javascript-typescript)",
               "CodeQL",
           )
-          best: dict[str, tuple[str, str, str]] = {}
+          best: dict[str, tuple[str, str, str, str]] = {}
           with open(path, encoding="utf-8") as fh:
               for line in fh:
                   parts = line.rstrip("\n").split("\t")
-                  if len(parts) < 4:
+                  if len(parts) < 5:
                       continue
-                  name, status, conclusion, completed = parts[:4]
+                  run_id, name, status, conclusion, completed = parts[:5]
                   if name not in required:
                       continue
                   prev = best.get(name)
-                  if prev is None or completed >= prev[2]:
-                      best[name] = (status, conclusion, completed)
+                  if prev is None or completed >= prev[3]:
+                      best[name] = (run_id, status, conclusion, completed)
           missing = [name for name in required if name not in best]
           if missing:
               print(f"missing checks on {sha}: {missing}", file=sys.stderr)
               sys.exit(1)
           for name in required:
-              status, conclusion, _completed = best[name]
-              print(f"check name={name} status={status} conclusion={conclusion}")
+              run_id, status, conclusion, _completed = best[name]
+              print(f"check name={name} check_run_id={run_id} status={status} conclusion={conclusion}")
               if status != "completed" or conclusion != "success":
                   print(f"required check not green: {name}", file=sys.stderr)
                   sys.exit(1)
           PY
+          CODEQL_JSON="$(gh run list --commit "$RELEASE_SHA" --workflow codeql --limit 30 \
+            --json databaseId,conclusion,status,event,headBranch)"
+          echo "$CODEQL_JSON" | python3 -c '
+          import json, sys
+          green = False
+          for run in json.load(sys.stdin):
+              print(
+                  "codeql_run_id={databaseId} status={status} conclusion={conclusion} "
+                  "event={event} headBranch={headBranch}".format(
+                      databaseId=run.get("databaseId"),
+                      status=run.get("status"),
+                      conclusion=run.get("conclusion") or "",
+                      event=run.get("event"),
+                      headBranch=run.get("headBranch"),
+                  )
+              )
+              if run.get("headBranch") == "main" and run.get("conclusion") == "success":
+                  green = True
+          if not green:
+              print("missing green codeql workflow run on main for this SHA", file=sys.stderr)
+              sys.exit(1)
+          '
 
       - name: Detect VERSION bump
         id: ver
