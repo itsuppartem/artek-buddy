@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
-from artek_buddy.auth import supervisor_token
+from artek_buddy.auth import host_token_match, supervisor_token
 from artek_buddy.observe import configure_logging
 from artek_buddy.supervisor.desktop_spec import (
     desktop_create_spec,
@@ -31,6 +31,16 @@ from artek_buddy.supervisor.logic import (
 log = logging.getLogger("artek_buddy.supervisor")
 
 SAFE_HOME = re.compile(r"^[A-Za-z0-9._-]+$")
+SUPERVISOR_ERROR = "supervisor error"
+
+
+def supervisor_authorized(header: str, token: str) -> bool:
+    if not token:
+        return False
+    scheme, _, rest = header.partition(" ")
+    if scheme != "Bearer" or not rest:
+        return False
+    return host_token_match(rest, token)
 
 
 class SupervisorState:
@@ -79,8 +89,7 @@ class Handler(BaseHTTPRequestHandler):
         log.info(fmt, *args)
 
     def _auth(self) -> bool:
-        header = self.headers.get("Authorization", "")
-        return bool(STATE.token) and header == f"Bearer {STATE.token}"
+        return supervisor_authorized(self.headers.get("Authorization", ""), STATE.token)
 
     def _json(self, status: int, payload: Any) -> None:
         data = json.dumps(payload).encode("utf-8")
@@ -166,9 +175,9 @@ class Handler(BaseHTTPRequestHandler):
                 if action == "files":
                     self._files(cid, write=True, body=body)
                     return
-        except Exception as err:
+        except Exception:
             log.exception("supervisor error")
-            self._json(500, {"error": str(err)})
+            self._json(500, {"error": SUPERVISOR_ERROR})
             return
         self._json(404, {"error": "not found"})
 

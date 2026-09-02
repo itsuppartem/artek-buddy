@@ -18,7 +18,11 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+<<<<<<< HEAD
 - After `send_message`, a different finish body is the next bot message. The same text is not duplicated (`please e2e-send-then-answer` / `please e2e-send-then-repeat`).
+=======
+- Supervisor `:7091` compares the bearer with `secrets.compare_digest`. Client 500s are a stable `supervisor error`; engine text stays in the server log.
+>>>>>>> 5af39eb (Compare supervisor bearer with compare_digest and hide engine text from 500s.)
 - `python -m artek_buddy worker --once` is the release worker process against host HTTP. CI starts that command; a due routine wakes once and a second pass does not duplicate it.
 - Plugins Connect and `connect_app` send a host-owned HTTPS callback (`CONNECTIONS_CALLBACK_URL`) to the provider. A caller `redirect_url` (window origin, `http`, or another host) cannot become `callback_url`.
 - Named CodeQL residuals keep inline `lgtm` (`py/command-line-injection` on owner-exec, `py/path-injection` on the owner-path join). Secret scanning, push protection, and Dependabot alerts/security updates are on for this repository.

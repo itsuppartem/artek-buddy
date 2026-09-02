@@ -188,6 +188,33 @@ def test_write_container_file_does_not_put_bytes_in_the_shell_command() -> None:
     assert "/home/artek" in engine.commands[0]
 
 
+def test_supervisor_authorized_wrong_token() -> None:
+    from artek_buddy.supervisor.server import supervisor_authorized
+
+    token = "sup_token_aaaaaaaaaaaaaaaa"
+    assert supervisor_authorized(f"Bearer {token}", token) is True
+    assert supervisor_authorized("Bearer sup_token_bbbbbbbbbbbbbbbb", token) is False
+    assert supervisor_authorized("Bearer short", token) is False
+    assert supervisor_authorized(f"bearer {token}", token) is False
+    assert supervisor_authorized(token, token) is False
+    assert supervisor_authorized(f"Bearer {token}", "") is False
+
+
+def test_supervisor_client_500_hides_engine_text() -> None:
+    import inspect
+
+    from artek_buddy.supervisor import server as supervisor_server
+    from artek_buddy.supervisor.server import SUPERVISOR_ERROR
+
+    leak = "Cannot connect to the Docker daemon at unix:///var/run/docker.sock"
+    source = inspect.getsource(supervisor_server.Handler.do_POST)
+    assert "str(err)" not in source
+    assert "SUPERVISOR_ERROR" in source
+    assert SUPERVISOR_ERROR == "supervisor error"
+    assert leak not in SUPERVISOR_ERROR
+    assert "unix://" not in SUPERVISOR_ERROR
+
+
 def test_write_container_file_stores_nul_and_non_utf8_bytes() -> None:
     from artek_buddy.supervisor.docker_engine import write_container_file
 
