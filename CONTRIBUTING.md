@@ -36,6 +36,10 @@ python -m ruff check src tests client
 python -m mypy
 ```
 
+The API suite fails closed on migration and workspace setup errors. Set
+`ARTEK_ALLOW_DB_SKIP=1` locally (ignored when `CI` is set) to skip those tests
+when Postgres is absent. Actions prints pass/fail/skip counts on the job summary.
+
 Window TypeScript (from `client/web`):
 
 ```bash
