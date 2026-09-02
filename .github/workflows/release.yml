@@ -11,8 +11,11 @@ name: release
 # The computer image is not built here: Chromium under QEMU hangs the job.
 # install-host.sh pulls it when present, otherwise builds on the Pi.
 # Host image: push by digest, Trivy HIGH+CRITICAL on that digest, then tag
-# VERSION and latest (same digest, no rebuild). A second upload of the same
-# Release asset name fails. Do not prune GitHub Releases from this workflow.
+# VERSION and latest (same digest, no rebuild). The GitHub Release tag is
+# created at github.sha and peeled before those GHCR tags move, so a missing
+# tag is not taken from default develop. gh release create uses --verify-tag.
+# A second upload of the same Release asset name fails. Do not prune GitHub
+# Releases from this workflow.
 on:
   workflow_dispatch:
     inputs:
@@ -162,6 +165,29 @@ jobs:
           exit-code: "0"
           trivyignores: .trivyignore
 
+      - name: Point release tag at the tested SHA
+        if: steps.ver.outputs.changed == 'true'
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.ver.outputs.new }}"
+          test -n "$RELEASE_SHA"
+          test -n "$TAG"
+          if git show-ref --verify --quiet "refs/tags/${TAG}"; then
+            :
+          elif git ls-remote --exit-code origin "refs/tags/${TAG}" >/dev/null; then
+            git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          else
+            git tag "$TAG" "$RELEASE_SHA"
+            git push origin "refs/tags/${TAG}"
+          fi
+          PEELED="$(git rev-parse "${TAG}^{}")"
+          echo "tag=$TAG"
+          echo "tag_sha=$PEELED"
+          echo "released_sha=$RELEASE_SHA"
+          test "$PEELED" = "$RELEASE_SHA"
+
       - name: Promote scanned host image
         if: steps.ver.outputs.changed == 'true'
         run: |
@@ -204,6 +230,7 @@ jobs:
         if: steps.ver.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           TAG="v${{ steps.ver.outputs.new }}"
@@ -219,6 +246,11 @@ jobs:
             exit 1
           fi
           gh release create "$TAG" \
+            --verify-tag \
             --title "$TAG" \
             --notes-file RELEASE_NOTES.md \
             "${ASSETS[@]}"
+          PEELED="$(git rev-parse "${TAG}^{}")"
+          echo "tag_sha=$PEELED"
+          echo "released_sha=$RELEASE_SHA"
+          test "$PEELED" = "$RELEASE_SHA"

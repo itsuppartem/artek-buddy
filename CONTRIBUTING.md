@@ -91,7 +91,9 @@ count is 0; do not push `main` or `develop` directly.
 A merge into `main` that changes `VERSION` publishes a GitHub Release only after
 the **push** `test` run on that commit is green, then `release.yml` is
 `workflow_dispatch`ed from **that** `main` SHA. GitHub does not load this
-privileged YAML via default-branch `workflow_run`. The computer image is not built in Actions.
+privileged YAML via default-branch `workflow_run`. The Release tag is that
+same SHA (`--verify-tag`); a peel mismatch aborts before GHCR tags move.
+The computer image is not built in Actions.
 The host image is pushed by digest, Trivy-scanned (HIGH and CRITICAL), then
 tagged as the version and `latest` — same digest, no rebuild. A second upload
 of the same Release asset name fails (no `--clobber`). GitHub Releases stay;

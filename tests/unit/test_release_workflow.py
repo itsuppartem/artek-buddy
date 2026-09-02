@@ -67,6 +67,29 @@ def test_release_workflow_yaml_is_not_loaded_from_default_branch_workflow_run() 
     assert "test_sha=" in text
 
 
+def test_release_workflow_points_new_tag_at_tested_sha_before_ghcr_promote() -> None:
+    """A missing tag must not be created from default develop (#359)."""
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    tag_step = text.find("name: Point release tag at the tested SHA")
+    promote = text.find("name: Promote scanned host image")
+    release = text.find("name: GitHub Release")
+    assert tag_step != -1
+    assert promote != -1
+    assert release != -1
+    assert tag_step < promote
+    tag_block = text[tag_step:promote]
+    assert "git tag" in tag_block
+    assert "git push" in tag_block
+    assert 'git rev-parse "${TAG}^{}"' in tag_block
+    assert "RELEASE_SHA" in tag_block
+    assert 'test "$PEELED" = "$RELEASE_SHA"' in tag_block
+    create = text[release:]
+    assert "gh release create" in create
+    assert "--verify-tag" in create
+    assert 'git rev-parse "${TAG}^{}"' in create
+    assert 'test "$PEELED" = "$RELEASE_SHA"' in create
+
+
 def test_release_client_sbom_covers_the_packaged_deb() -> None:
     text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     assert "dpkg-deb -x" in text
