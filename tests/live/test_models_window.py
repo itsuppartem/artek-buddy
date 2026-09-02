@@ -193,3 +193,32 @@ def test_models_chip_click_uses_that_model(page: Page, client_url: str, host_url
     assert model_id in (posted.value.post_data or "")
     expect(page.get_by_test_id("models-using")).to_contain_text(model_id, timeout=8_000)
     expect(chip).to_have_attribute("aria-selected", "true")
+
+
+def test_models_list_error_is_not_silent(page: Page, client_url: str, host_url: str) -> None:
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, unique_bot("ListErr"))
+    fulfill_json(page, "**/v1/models", 500, '{"detail":"list down"}', method="GET")
+    open_models(page)
+    expect(page.get_by_test_id("models-error")).to_contain_text("list down")
+
+
+def test_models_forget_keeps_key_on_host_error(page: Page, client_url: str, host_url: str) -> None:
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, unique_bot("ForgetErr"))
+    open_models(page)
+    leftover = page.get_by_test_id("models-forget-cursor")
+    if leftover.count() and leftover.first.is_visible(timeout=0):
+        leftover.click()
+        expect(page.get_by_label("Cursor API key")).to_be_visible()
+    page.get_by_label("Cursor API key").fill("test-secret-cursor")
+    expect(page.get_by_label("Cursor API key")).to_have_value("test-secret-cursor")
+    page.get_by_test_id("models-save-cursor").click()
+    expect(page.get_by_test_id("models-status-cursor")).to_contain_text("Connected", timeout=8_000)
+    fulfill_json(
+        page, "**/v1/models/credentials/cursor", 500, '{"detail":"forget failed"}', method="DELETE"
+    )
+    page.get_by_test_id("models-forget-cursor").click()
+    expect(page.get_by_test_id("models-error-cursor")).to_contain_text("forget failed")
+    expect(page.get_by_test_id("models-status-cursor")).to_contain_text("Connected")
+    expect(page.get_by_test_id("models-forget-cursor")).to_be_visible()

@@ -84,6 +84,7 @@ Also (visible, easy):
 | --- | --- | --- |
 | After a good Save the key field is gone (`••••` + last four + Connected). The full key never appears | [ ] | [ ] |
 | Forget empties that row | [ ] | [ ] |
+| Failed catalog list shows `models-error`. Failed Forget keeps Connected and the line under that row | [ ] | [ ] |
 | Send with no default model does not start a turn; the thread says to open Models | [ ] | [ ] |
 
 ---
@@ -152,6 +153,8 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 | `please e2e-connect-mail` (or GitHub from chat): **Open to connect** on the card opens the owner browser / a tab. Not the bot desktop. Right-click can Copy URL | [ ] | [ ] |
 | Ask the connected app (`please e2e-plugin-docs` / `please use Docs` on a scripted host, or a real task after GitHub Connect) — the bot calls the tools; thread **plugin-card** (name + result) | [ ] | [ ] |
 | Disconnect / Remove → next turn has no that tool. Remove after **Open to connect** shows Paste a key (not Key saved with an empty catalog) | [ ] | [ ] |
+| Failed status load shows `plugins-error`, not «Checking the key…», and does not pretend the key is missing | [ ] | [ ] |
+| Failed Remove keeps **Key saved** and shows `plugins-error` | [ ] | [ ] |
 | If Connect opens a browser tab, Finish after login marks Connected. Real login needs `CONNECTIONS_CALLBACK_URL` = this host's HTTPS origin (not the `.deb` loopback) | [ ] | [ ] |
 
 ---

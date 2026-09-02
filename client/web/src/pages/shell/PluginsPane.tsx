@@ -11,6 +11,7 @@ import {
   pluginsFetchIsCurrent,
   pluginsHttpClearsSavedKey,
   pluginsKeyMissingStatus,
+  pluginsPaneStatusView,
 } from "../../lib/plugins-key";
 import type { Connection, ConnectionCatalogItem, ConnectionKeyStatus } from "../../types";
 import { Button } from "../../ui/button";
@@ -36,7 +37,13 @@ export function PluginsPane({
   const mutateGen = useRef(0);
   const configured = Boolean(status?.configured);
   const ready = status !== null;
-  const showKeyField = ready && (!configured || replace);
+  const statusView = pluginsPaneStatusView({
+    ready,
+    configured,
+    replace,
+    error,
+  });
+  const showKeyField = statusView === "paste";
 
   useEffect(() => {
     void refresh();
@@ -51,7 +58,14 @@ export function PluginsPane({
 
   async function refresh() {
     const started = mutateGen.current;
-    const next = await api.connections.status();
+    let next: ConnectionKeyStatus;
+    try {
+      next = await api.connections.status();
+    } catch (err) {
+      if (!pluginsFetchIsCurrent(started, mutateGen.current)) return;
+      setError(err instanceof Error ? err.message : "Could not load Plugins.");
+      return;
+    }
     if (!pluginsFetchIsCurrent(started, mutateGen.current)) return;
     setStatus(next);
     if (!next.configured) {
@@ -188,15 +202,15 @@ export function PluginsPane({
           Close
         </button>
       </div>
-      {!ready ? (
+      {statusView === "checking" ? (
         <p className="mb-3 text-[13px] leading-5 text-mute">Checking the key…</p>
       ) : showKeyField ? (
         <p className="mb-3 text-[13px] leading-5 text-mute">Paste a key to connect apps.</p>
-      ) : (
+      ) : statusView === "saved" ? (
         <p className="mb-3 text-[13px] leading-5 text-sage" data-testid="plugins-key-saved">
           Key saved{status?.lastFour ? ` · ••••${status.lastFour}` : ""}
         </p>
-      )}
+      ) : null}
       {showKeyField ? (
         <form
           className="block"
@@ -235,7 +249,7 @@ export function PluginsPane({
         </form>
       ) : null}
       <div className="mt-2 flex flex-wrap gap-2">
-        {showKeyField ? null : (
+        {statusView === "saved" ? (
           <>
             <Button
               type="button"
@@ -257,7 +271,7 @@ export function PluginsPane({
               Remove
             </Button>
           </>
-        )}
+        ) : null}
       </div>
       {configured ? (
         <>

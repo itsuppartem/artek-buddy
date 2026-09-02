@@ -290,3 +290,31 @@ def test_plugins_closed_wheel_does_not_open_and_one_close(
     expect(page.get_by_test_id("plugins-pane")).to_have_count(0)
     expect(hatch).to_have_attribute("data-hatch-open", "0")
     expect(hatch).to_have_css("pointer-events", "none")
+
+
+def test_plugins_status_error_is_not_checking(page: Page, client_url: str, host_url: str) -> None:
+    pair_fresh(page, client_url, host_url)
+    fulfill_json(page, "**/v1/connections/status", 500, '{"detail":"status down"}', method="GET")
+    page.get_by_test_id("open-plugins").click()
+    expect(page.get_by_test_id("plugins-error")).to_contain_text("status down", timeout=8_000)
+    expect(page.get_by_text("Checking the key…")).to_have_count(0)
+    expect(page.get_by_text("Paste a key to connect apps.")).to_have_count(0)
+    expect(page.get_by_test_id("plugins-key-saved")).to_have_count(0)
+    expect(page.get_by_test_id("plugins-pane")).to_have_attribute("data-plugins-ready", "0")
+
+
+def test_plugins_remove_keeps_key_on_host_error(page: Page, client_url: str, host_url: str) -> None:
+    pair_fresh(page, client_url, host_url)
+    page.get_by_test_id("open-plugins").click()
+    _plugins_key_form(page)
+    key = page.get_by_label("Plugins key")
+    key.fill("ak-test-secret-remove-fail")
+    expect(key).to_have_value("ak-test-secret-remove-fail")
+    page.get_by_test_id("plugins-save").click()
+    expect(page.get_by_test_id("plugins-key-saved")).to_contain_text("Key saved")
+    fulfill_json(page, "**/v1/connections/key", 500, '{"detail":"remove failed"}', method="DELETE")
+    page.get_by_test_id("plugins-remove").click()
+    expect(page.get_by_test_id("plugins-error")).to_contain_text("remove failed")
+    expect(page.get_by_test_id("plugins-key-saved")).to_be_visible()
+    expect(page.get_by_text("Paste a key to connect apps.")).to_have_count(0)
+    expect(page.get_by_test_id("plugins-remove")).to_be_visible()
