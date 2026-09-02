@@ -1,21 +1,19 @@
 name: release
 
 # Publishes the GitHub Release, clean .deb, and host GHCR image.
-# Does not run on push. It starts only after the `test` workflow succeeds
-# on a push to main (or a manual Force run from main). A red PR into main
-# cannot merge: ruleset "Protect main" requires quality, backend, ui, scan,
-# live_gate, analyze (python), analyze (javascript-typescript), and CodeQL.
-# live is not required. Protect develop uses the same checks.
+# GitHub would load a workflow_run file from the default branch (develop),
+# so this workflow is not started that way. YAML comes from the branch chosen
+# at dispatch; the job runs only for refs/heads/main, so a develop-only
+# change never receives the write token.
+# A red PR into main cannot merge: ruleset "Protect main" requires quality,
+# backend, ui, scan, live_gate, analyze (python), analyze (javascript-typescript),
+# and CodeQL. live is not required. Protect develop uses the same checks.
 # The computer image is not built here: Chromium under QEMU hangs the job.
 # install-host.sh pulls it when present, otherwise builds on the Pi.
 # Host image: push by digest, Trivy HIGH+CRITICAL on that digest, then tag
 # VERSION and latest (same digest, no rebuild). A second upload of the same
 # Release asset name fails. Do not prune GitHub Releases from this workflow.
 on:
-  workflow_run:
-    workflows: [test]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       force:
@@ -31,21 +29,35 @@ permissions:
 
 jobs:
   release:
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
-      || (
-        github.event_name == 'workflow_run'
-        && github.event.workflow_run.conclusion == 'success'
-        && github.event.workflow_run.event == 'push'
-        && github.event.workflow_run.head_branch == 'main'
-      )
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Bind release to one main SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          TEST_SHA="$RELEASE_SHA"
+          echo "workflow_sha=$WORKFLOW_SHA"
+          echo "released_sha=$RELEASE_SHA"
+          echo "test_sha=$TEST_SHA"
+          test -n "$WORKFLOW_SHA"
+          test -n "$RELEASE_SHA"
+          test "$WORKFLOW_SHA" = "$RELEASE_SHA"
+          test "$TEST_SHA" = "$RELEASE_SHA"
+          git fetch origin main
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main
+          MATCHES="$(gh run list --commit "$RELEASE_SHA" --workflow test --event push --limit 30 \
+            --json conclusion,headBranch --jq \
+            '[.[] | select(.headBranch=="main" and .conclusion=="success")] | length')"
+          test "$MATCHES" != "0"
 
       - name: Detect VERSION bump
         id: ver

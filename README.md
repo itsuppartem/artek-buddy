@@ -219,7 +219,7 @@ Keep the tailnet IP and Funnel hostname out of git.
 
 ### 5. Install the Linux `.deb`
 
-**Usual path:** a GitHub Release. A merge into `main` that bumps `VERSION` attaches `artek-buddy-client_<version>_all.deb` (no baked host URL), `SHA256SUMS`, CycloneDX SBOMs, and `install-host.sh` only after `test` on **that commit** is green (`release.yml` is `workflow_run` on `test`, not a parallel push). The host image is scanned before `latest` moves. GitHub Releases are not pruned by that workflow.
+**Usual path:** a GitHub Release. A merge into `main` that bumps `VERSION` attaches `artek-buddy-client_<version>_all.deb` (no baked host URL), `SHA256SUMS`, CycloneDX SBOMs, and `install-host.sh` only after `test` on **that commit** is green and `release.yml` is dispatched from that `main` SHA (not a `workflow_run` loaded from `develop`). The host image is scanned before `latest` moves. GitHub Releases are not pruned by that workflow.
 
 Verify a downloaded Release:
 
