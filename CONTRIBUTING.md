@@ -95,9 +95,11 @@ is `workflow_dispatch`ed from **that** `main` SHA. Dispatch aborts if the VERSIO
 tag or GitHub Release already exists (`force` cannot skip that). GitHub does not
 load this privileged YAML via default-branch `workflow_run`. The Release tag is
 that same SHA (`--verify-tag`); a peel mismatch aborts before GHCR tags move.
+GHCR `VERSION` / `latest` move only after that GitHub Release exists.
 The computer image is not built in Actions.
 The host image is pushed by digest, Trivy-scanned (HIGH and CRITICAL), then
-tagged as the version and `latest` — same digest, no rebuild. A second upload
+tagged as the version and `latest` after the GitHub Release exists — same digest,
+no rebuild. A second upload
 of the same Release asset name fails (no `--clobber`). GitHub Releases stay;
 `infra/prune-releases.sh` is a **manual** operator script, not the default
 release path.
