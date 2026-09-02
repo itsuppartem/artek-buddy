@@ -40,13 +40,22 @@ export function ModelsPane({
   const [busy, setBusy] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [listError, setListError] = useState("");
   const [autoRetried, setAutoRetried] = useState<Record<string, boolean>>({});
   const [effort, setEffort] = useState(credentials?.defaultEffort || "xhigh");
   const [fast, setFast] = useState(credentials?.defaultFast !== false);
   const rows = credentials?.credentials ?? [];
 
   useEffect(() => {
-    void api.models.list().then((list) => setModels(list.models ?? []));
+    void api.models
+      .list()
+      .then((list) => {
+        setModels(list.models ?? []);
+        setListError("");
+      })
+      .catch((err: unknown) => {
+        setListError(err instanceof Error ? err.message : "Could not load models.");
+      });
   }, [credentials]);
 
   useEffect(() => {
@@ -71,8 +80,13 @@ export function ModelsPane({
   async function refresh() {
     const next = await api.models.credentials();
     onChange(next);
-    const list = await api.models.list();
-    setModels(list.models ?? []);
+    try {
+      const list = await api.models.list();
+      setModels(list.models ?? []);
+      setListError("");
+    } catch (err) {
+      setListError(err instanceof Error ? err.message : "Could not load models.");
+    }
   }
 
   async function save(provider: string, apiKey: string) {
@@ -129,6 +143,11 @@ export function ModelsPane({
       setErrors((current) => ({ ...current, [provider]: "" }));
       setAutoRetried((current) => ({ ...current, [provider]: false }));
       await refresh();
+    } catch (err) {
+      setErrors((current) => ({
+        ...current,
+        [provider]: err instanceof Error ? err.message : "Could not forget the key.",
+      }));
     } finally {
       setBusy((current) => {
         const next = { ...current };
@@ -169,6 +188,11 @@ export function ModelsPane({
       <p className="mb-4 text-[13px] leading-5 text-mute">
         Paste an API key and Save. That row&apos;s model is what this host uses.
       </p>
+      {listError ? (
+        <p className="mb-3 text-[13px] text-danger" data-testid="models-error">
+          {listError}
+        </p>
+      ) : null}
       <div className="flex flex-col gap-3">
         {MODEL_PROVIDERS.map((spec) => {
           const row = rows.find((item) => item.provider === spec.id);
