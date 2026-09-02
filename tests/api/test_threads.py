@@ -545,7 +545,7 @@ def test_thread_snapshot_exposes_every_pending_auto_owner_job(client, auth_heade
 
 def test_worker_auto_owner_job_survives_thread_reload(client, auth_header) -> None:
     """A worker This-PC read must remain on snapshot after the lead run completes (#361)."""
-    from artek_buddy.runtime.scripted import E2E_WORKER_ACK
+    from artek_buddy.runtime.scripted import E2E_WORKER_ACK, E2E_WORKER_SUMMARY
 
     bot_id = create_bot(client, auth_header, "WorkerAutoReload")["id"]
     sent = client.post(
@@ -595,8 +595,12 @@ def test_worker_auto_owner_job_survives_thread_reload(client, auth_header) -> No
         json={"name": "notes.txt", "text": "notes from owner", "claim": claim},
     )
     assert uploaded.status_code == 200
-    done = wait_thread_has(client, auth_header, bot_id, "got notes")
-    assert any(item.get("status") == "completed" for item in done.get("subagents") or [])
+    done = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_SUMMARY, timeout=20)
+    workers = [
+        item for item in (done.get("subagents") or []) if item.get("name") == "WorkerAutoRead"
+    ]
+    assert workers and workers[0]["status"] == "completed"
+    assert "got notes" in (workers[0].get("result") or "")
     finished = client.get(f"/v1/consents/{consent_id}", headers=auth_header)
     assert finished.status_code == 200
     assert finished.json()["job_status"] == "completed"
