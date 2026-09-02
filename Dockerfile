@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS web
+FROM node:26-bookworm-slim AS web
 
 WORKDIR /src/client/web
 COPY client/web/package.json client/web/package-lock.json ./
