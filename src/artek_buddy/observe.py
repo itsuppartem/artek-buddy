@@ -53,7 +53,7 @@ _DEVICE = re.compile(r"\bdev_[A-Za-z0-9_-]{16,}\b")
 _PAIRING = re.compile(
     rf"\b[{re.escape(PAIRING_ALPHABET)}]{{4}}-[{re.escape(PAIRING_ALPHABET)}]{{4}}\b"
 )
-_SKIP_HTTP_PATHS = {"/health"}
+_SKIP_HTTP_PATHS = {"/health", "/livez", "/readyz"}
 
 
 def mint_request_id() -> str:
