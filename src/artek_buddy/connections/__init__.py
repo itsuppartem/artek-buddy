@@ -5,6 +5,7 @@ from artek_buddy.connections.broker import (
     fake_broker,
     filter_catalog,
     hide_secret,
+    host_callback,
     reset_fake_broker,
     validate_redirect,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "fake_broker",
     "filter_catalog",
     "hide_secret",
+    "host_callback",
     "reset_fake_broker",
     "validate_redirect",
 ]

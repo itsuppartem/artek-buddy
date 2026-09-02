@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 MAX_APP_ROWS = 20
-CONNECT_REDIRECT = "https://window.example/app"
 
 
 def format_apps_context(store: Any) -> str:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from artek_buddy.apps import CONNECT_REDIRECT, MAX_APP_ROWS
+from artek_buddy.apps import MAX_APP_ROWS
 
 
 class AppsToolsMixin:
@@ -110,7 +110,13 @@ class AppsToolsMixin:
                 "status": existing.status,
             }
         try:
-            started = broker.begin(slug, CONNECT_REDIRECT)
+            from artek_buddy.connections.broker import host_callback
+
+            settings = getattr(self.runtime, "settings", None)
+            started = broker.begin(
+                slug,
+                host_callback(getattr(settings, "connections_callback_url", None)),
+            )
         except KeyError:
             self._apps_say(args, bound_bot_id, "app not found")
             return {"ok": False, "error": "app not found"}

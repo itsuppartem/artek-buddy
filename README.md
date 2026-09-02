@@ -154,7 +154,7 @@ sudo usermod -aG docker "$USER"   # then log out and back in
 curl -fsSL https://github.com/itsuppartem/artek-buddy/releases/latest/download/install-host.sh | sh
 ```
 
-Optional: edit `~/artek-buddy/.env` and set `CURSOR_API_KEY=crsr_…` if you want Cursor seeded from env, or `COMPOSIO_API_KEY` for the Plugins key. The window can add or replace keys later.
+Optional: edit `~/artek-buddy/.env` and set `CURSOR_API_KEY=crsr_…` if you want Cursor seeded from env, or `COMPOSIO_API_KEY` for the Plugins key. For a real app login, set `CONNECTIONS_CALLBACK_URL` to this host's HTTPS origin (the same Funnel / tailnet URL the window uses). The window can add or replace keys later.
 
 Manual clone and `docker compose up --build` still work. After the first GHCR publish, set each package visibility to **Public** so the Pi can pull without login.
 
