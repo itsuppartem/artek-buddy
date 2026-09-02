@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.api.helpers import create_bot, wait_run_status
+from tests.api.helpers import consent_id_from_thread, create_bot, wait_run, wait_run_status
 from tests.support import mask_secret
 
 from artek_buddy.runtime.types import TurnContext
@@ -114,3 +114,14 @@ def test_follow_up_after_other_device_keeps_live_grant_device(client, auth_heade
         assert runtime.resolve_turn_device() == first["id"]
     finally:
         runtime.reset_callback_context(tokens)
+    snap = client.get(f"/v1/threads/{bot['id']}", headers=auth_header)
+    assert snap.status_code == 200, snap.text
+    consent_id = consent_id_from_thread(snap.json())
+    denied = client.post(
+        f"/v1/consents/{consent_id}",
+        headers=auth_header,
+        json={"decision": "deny"},
+    )
+    assert denied.status_code == 200, denied.text
+    finished = wait_run(client, auth_header, bot["id"], run_id)
+    assert finished["run"]["status"] == "failed"
