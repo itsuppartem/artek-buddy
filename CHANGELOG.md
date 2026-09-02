@@ -18,7 +18,9 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- `python -m artek_buddy worker --once` is the release worker process against host HTTP. CI starts that command; a due routine wakes once and a second pass does not duplicate it.
 - Plugins Connect and `connect_app` send a host-owned HTTPS callback (`CONNECTIONS_CALLBACK_URL`) to the provider. A caller `redirect_url` (window origin, `http`, or another host) cannot become `callback_url`.
+- Named CodeQL residuals keep inline `lgtm` (`py/command-line-injection` on owner-exec, `py/path-injection` on the owner-path join). Secret scanning, push protection, and Dependabot alerts/security updates are on for this repository.
 - `release.yml` Bind prints CodeQL check-run and workflow run ids on the dispatched `main` SHA and fails closed if that `codeql` workflow run is missing or red. There is no automatic `workflow_run` publish.
 - `release.yml` serializes dispatch and moves GHCR `VERSION` / `latest` only after the GitHub Release exists, so a failed Release create cannot retag the installer image.
 - Manual `release.yml` dispatch requires a green push `test` and CodeQL on that `main` SHA. `force` cannot republish an existing tag or GitHub Release; it aborts before registry write.

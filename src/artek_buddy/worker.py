@@ -97,7 +97,7 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
     return woke
 
 
-def worker() -> int:
+def worker(*, once: bool = False) -> int:
     configure_logging()
     url = os.environ.get(
         "DATABASE_URL",
@@ -117,8 +117,11 @@ def worker() -> int:
         log.error("worker db unavailable: %s", err)
         return 1
     base = host_base()
-    log.info("worker polling every %ss", poll)
     try:
+        if once:
+            run_once(store, base, token)
+            return 0
+        log.info("worker polling every %ss", poll)
         while True:
             try:
                 run_once(store, base, token)
