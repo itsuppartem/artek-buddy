@@ -87,6 +87,25 @@ def test_release_workflow_dispatch_requires_push_test_and_codeql_on_sha() -> Non
     assert text.find("check-runs") < login
 
 
+def test_release_workflow_prints_codeql_run_ids_before_publish() -> None:
+    """Automatic path is gone; dispatch must still log CodeQL ids on github.sha (#366)."""
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    bind = text.find("name: Bind release to one main SHA")
+    detect = text.find("name: Detect VERSION bump")
+    promote = text.find("name: Promote scanned host image")
+    release = text.find("name: GitHub Release")
+    assert bind != -1
+    assert detect != -1
+    bind_block = text[bind:detect]
+    assert "--workflow codeql" in bind_block
+    assert "check_run_id=" in bind_block
+    assert "codeql_run_id=" in bind_block
+    assert bind < promote
+    assert bind < release
+    assert text.find("check-runs") < release
+    assert text.find("check-runs") < promote
+
+
 def test_release_workflow_force_cannot_reuse_a_published_version() -> None:
     """force=true on an existing tag/release must abort before registry write (#364)."""
     text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
