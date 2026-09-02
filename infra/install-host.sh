@@ -1,5 +1,7 @@
 #!/bin/sh
 # One-shot host bring-up from a GitHub Release. No secrets in the script.
+# A second run on a clean checkout fetches and checks out v$VERSION.
+# A dirty tree aborts. .env is gitignored and kept.
 # A provider key is optional here: paste it in Models after pairing, or set
 # CURSOR_API_KEY in .env to seed the same store.
 set -eu
@@ -34,11 +36,27 @@ need git
 need openssl
 VERSION=$(latest_version)
 export ARTEK_VERSION="$VERSION"
+TAG="v$VERSION"
 
-if [ ! -f "$DEST/.env.example" ]; then
-  git clone --depth 1 --branch "v$VERSION" "$REPO" "$DEST"
-fi
+prepare_dest() {
+  if [ -d "$DEST/.git" ]; then
+    if [ -n "$(git -C "$DEST" status --porcelain)" ]; then
+      echo "$DEST has uncommitted changes. Clean the tree or set ARTEK_HOME to an empty directory. Not overwriting." >&2
+      echo "Upgrade after a clean tree: ARTEK_VERSION=$VERSION ARTEK_HOME=$DEST sh infra/install-host.sh" >&2
+      exit 1
+    fi
+    git -C "$DEST" fetch --depth 1 origin "refs/tags/$TAG:refs/tags/$TAG"
+    git -C "$DEST" checkout --detach "$TAG"
+    return
+  fi
+  if [ -e "$DEST" ] && [ -n "$(ls -A "$DEST" 2>/dev/null || true)" ]; then
+    echo "$DEST exists and is not a git checkout. Move it or set ARTEK_HOME." >&2
+    exit 1
+  fi
+  git clone --depth 1 --branch "$TAG" "$REPO" "$DEST"
+}
 
+prepare_dest
 cd "$DEST"
 
 if [ ! -f .env ]; then
