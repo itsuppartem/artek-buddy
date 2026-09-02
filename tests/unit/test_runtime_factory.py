@@ -13,6 +13,8 @@ from artek_buddy.runtime.scripted import (
     E2E_LEAD_OWNER_SSH,
     E2E_META_TEXT,
     E2E_OLDER_COUNT,
+    E2E_SEND_ANSWER,
+    E2E_SEND_TEASER,
     E2E_SUBAGENT_NAME,
     E2E_WORKER_ACK,
     E2E_WORKER_BLOCK_S,
@@ -203,3 +205,12 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
 
     released = steps_for_prompt("The owner released the desktop. Continue the same task.")
     assert released[0].result == "continuing after takeover"
+
+    teaser = steps_for_prompt("please e2e-send-then-answer")
+    assert teaser[0].tool == "send_message"
+    assert teaser[0].args.get("text") == E2E_SEND_TEASER
+    assert teaser[-1].result == E2E_SEND_ANSWER
+    same = steps_for_prompt("please e2e-send-then-repeat")
+    assert same[0].tool == "send_message"
+    assert same[0].args.get("text") == E2E_SEND_TEASER
+    assert same[-1].result == E2E_SEND_TEASER

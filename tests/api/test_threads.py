@@ -855,6 +855,48 @@ def test_dead_wait_stuck_still_fails_once(client, auth_header) -> None:
     assert "ok" in message_texts(recovered)
 
 
+def test_distinct_finish_after_send_message_is_kept(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_SEND_ANSWER, E2E_SEND_TEASER
+
+    bot_id = create_bot(client, auth_header, "SendThenAnswer")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-send-then-answer"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    assert snap.get("run") and not snap["run"].get("error")
+    texts = message_texts(snap)
+    assert texts.count(E2E_SEND_TEASER) == 1
+    assert texts.count(E2E_SEND_ANSWER) == 1
+    assert texts.index(E2E_SEND_TEASER) < texts.index(E2E_SEND_ANSWER)
+
+    reloaded = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert reloaded.status_code == 200
+    again = message_texts(reloaded.json())
+    assert again.count(E2E_SEND_TEASER) == 1
+    assert again.count(E2E_SEND_ANSWER) == 1
+    assert again.index(E2E_SEND_TEASER) < again.index(E2E_SEND_ANSWER)
+
+
+def test_identical_finish_after_send_message_is_not_duplicated(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_SEND_TEASER
+
+    bot_id = create_bot(client, auth_header, "SendThenRepeat")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-send-then-repeat"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    texts = message_texts(snap)
+    assert texts.count(E2E_SEND_TEASER) == 1
+
+
 def test_completed_run_does_not_recycle_the_bridge(client, auth_header) -> None:
     from artek_buddy.main import app
 
