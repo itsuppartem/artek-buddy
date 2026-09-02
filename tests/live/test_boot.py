@@ -142,10 +142,9 @@ def test_workspace_events_auth_error_shows_repair(
     fulfill_json(page, "**/v1/events", 401, '{"detail":"invalid token"}')
     page.reload()
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
-    card = page.get_by_test_id("auth-error")
-    expect(card).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("auth-error")).to_be_visible(timeout=20_000)
     expect(page.get_by_test_id("pairing")).to_have_count(0)
-    card.get_by_role("button", name="Pair this computer again").click()
+    page.get_by_role("button", name="Pair this computer again").click()
     expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)
 
 
