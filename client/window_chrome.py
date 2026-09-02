@@ -12,6 +12,9 @@ _WINDOW_LOCK = threading.Lock()
 _GTK_WINDOWS: list[object] = []
 _WINDOW_ACTIVE: bool | None = None
 
+# Gdk.WindowState in GTK3: WITHDRAWN = 1<<0, ICONIFIED = 1<<1.
+_GDK_CONCEALED = (1 << 0) | (1 << 1)
+
 
 def _has_gtk_window() -> bool:
     with _WINDOW_LOCK:
@@ -190,6 +193,53 @@ def remember_window_active(active: bool) -> None:
         _WINDOW_ACTIVE = bool(active)
 
 
+def _as_state_bits(state: object) -> int:
+    if isinstance(state, int) and not isinstance(state, bool):
+        return state
+    value = getattr(state, "value", None)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    try:
+        return int(state)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
+
+
+def _gdk_window_state(window: object, event: object | None) -> object | None:
+    if event is not None and hasattr(event, "new_window_state"):
+        return event.new_window_state
+    getter = getattr(window, "get_window", None)
+    if not callable(getter):
+        return None
+    try:
+        gdk_window = getter()
+    except Exception:
+        return None
+    if gdk_window is None:
+        return None
+    get_state = getattr(gdk_window, "get_state", None)
+    if not callable(get_state):
+        return None
+    try:
+        return get_state()
+    except Exception:
+        return None
+
+
+def _gtk_window_looking(window: object, event: object | None = None) -> bool:
+    """True when the GTK window is mapped, visible, and focused."""
+    state = _gdk_window_state(window, event)
+    if state is not None and _as_state_bits(state) & _GDK_CONCEALED:
+        return False
+    is_active = getattr(window, "is_active", None)
+    if not callable(is_active):
+        return True
+    try:
+        return bool(is_active())
+    except Exception:
+        return True
+
+
 def _apply_urgency(urgent: bool) -> None:
     def go() -> bool:
         with _WINDOW_LOCK:
@@ -244,18 +294,19 @@ def _run_active_script(view: object, script: str) -> None:
 
 
 def bind_window_active(view: object, window: object) -> None:
-    def push(*_args: object) -> None:
-        is_active = getattr(window, "is_active", None)
-        active = bool(is_active()) if callable(is_active) else True
-        remember_window_active(active)
-        if active:
+    def push(*args: object) -> bool:
+        event = args[1] if len(args) > 1 else None
+        looking = _gtk_window_looking(window, event)
+        remember_window_active(looking)
+        if looking:
             _apply_urgency(False)
-        _run_active_script(view, window_active_script(active))
+        _run_active_script(view, window_active_script(looking))
+        return False
 
     connect_w = getattr(window, "connect", None)
     if callable(connect_w):
         connect_w("notify::is-active", push)
-        for name in ("focus-out-event", "focus-in-event"):
+        for name in ("focus-out-event", "focus-in-event", "window-state-event"):
             try:
                 connect_w(name, push)
             except Exception:

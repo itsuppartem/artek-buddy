@@ -968,6 +968,49 @@ def test_deb_unfocused_open_chat_posts_one_native_notification(
     expect(page.get_by_test_id("attention-alert")).to_have_count(0)
 
 
+def test_deb_iconified_open_chat_posts_one_native_notification(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    native_requests = []
+    page.on(
+        "request",
+        lambda request: (
+            native_requests.append(request) if request.url.endswith("/local/notify") else None
+        ),
+    )
+    speaker = unique_bot("Iconify")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    open_chat(page, speaker)
+
+    def mark_inactive(route) -> None:
+        if route.request.method != "GET":
+            route.continue_()
+            return
+        response = route.fetch()
+        payload = response.json()
+        payload["window_active"] = False
+        route.fulfill(status=response.status, json=payload)
+
+    page.route("**/local/status", mark_inactive)
+    page.evaluate(
+        """() => {
+          if (typeof window.__artekSetWindowActive !== "function") {
+            throw new Error("missing window active hook");
+          }
+          window.__artekSetWindowActive(false);
+        }"""
+    )
+    box = composer(page)
+    box.fill("please e2e-slow")
+    expect(box).to_have_value("please e2e-slow")
+    box.press("Enter")
+    expect(bot_row(page, speaker)).to_contain_text("slow done", timeout=15_000)
+    assert len(native_requests) == 1
+    assert native_requests[0].post_data_json["title"] == f"{speaker} replied"
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+
+
 def test_notify_off_mutes_replied_not_ask(page: Page, client_url: str, host_url: str) -> None:
     speaker = unique_bot("Mute")
     watcher = unique_bot("Hear")

@@ -123,6 +123,18 @@ describe("shouldSendNativeAlert", () => {
     ).toBe(true);
   });
 
+  it("posts for the open chat when GTK reports inactive after iconify even if the page still looks focused", () => {
+    expect(
+      shouldSendNativeAlert({
+        gtkWindowActive: false,
+        windowFocused: true,
+        pageHidden: false,
+        viewingBotId: "bot-a",
+        alertBotId: "bot-a",
+      }),
+    ).toBe(true);
+  });
+
   it("stays quiet for the open chat while the GTK window is focused", () => {
     expect(
       shouldSendNativeAlert({
