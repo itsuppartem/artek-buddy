@@ -49,7 +49,8 @@ before posting a write-up.
 
 ## What CI scans
 
-Dependabot (pip, `client/web` npm, GitHub Actions, Docker bases), CodeQL
+Dependabot (pip, `client/web` npm, GitHub Actions, Docker bases), Dependabot
+alerts and security updates, secret scanning with push protection, CodeQL
 (Python and JavaScript), `pip-audit` and `npm audit --audit-level=high` on
 `test.yml`, Trivy filesystem on `test.yml` (`scan` job), Trivy image on
 `release.yml` after the host image is pushed (CRITICAL, ignore unfixed).
