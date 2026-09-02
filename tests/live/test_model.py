@@ -63,10 +63,7 @@ def test_browse_allow_starts_chromium(page: Page, client_url: str, host_url: str
         page, "Open https://example.com on the remote desktop. Do not skip the Allow card.", name
     )
     card = page.get_by_test_id("consent-card")
-    try:
-        card.wait_for(timeout=180_000)
-    except Exception:
-        pytest.skip("model did not request browse consent")
+    expect(card).to_be_visible(timeout=180_000)
     page.get_by_test_id("ask-option").filter(has_text="Allow once").click()
     deadline = time.time() + 90
     while time.time() < deadline:
@@ -83,10 +80,7 @@ def test_browse_deny_leaves_chromium_down(page: Page, client_url: str, host_url:
         page, "Open https://example.org on the remote desktop. Wait for the Allow card.", name
     )
     card = page.get_by_test_id("consent-card")
-    try:
-        card.wait_for(timeout=180_000)
-    except Exception:
-        pytest.skip("model did not request browse consent")
+    expect(card).to_be_visible(timeout=180_000)
     page.get_by_test_id("ask-option").filter(has_text="Deny").click()
     time.sleep(5)
     assert _chromium_running() == before
