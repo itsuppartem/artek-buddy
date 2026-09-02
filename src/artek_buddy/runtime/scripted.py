@@ -51,6 +51,12 @@ E2E_SUBAGENT_TASK = "please e2e-slow now"
 E2E_WORKER_ACK = "Working in the background."
 E2E_WORKER_STATUS = "Still working."
 E2E_WORKER_STEER_ACK = "Got it. I'll apply that next."
+E2E_GIT_APPROVAL = (
+    "Always ask before a git commit, a new branch, a pull request or MR, or a merge."
+)
+E2E_GIT_MR = "Wait for MR approval."
+E2E_GIT_BAN = "Don't merge until I say so."
+E2E_GIT_FREE = "You may merge and push without asking."
 E2E_WORKER_SUMMARY = "The background job is done."
 E2E_WORKER_RESULT = "blocked work finished"
 E2E_WORKER_BLOCK_S = 10.0
@@ -294,6 +300,38 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 content=f"Lives in {city}",
                 kind="place",
                 section="identity",
+            ),
+            scripted_finish("I'll remember that."),
+        ]
+    if "e2e-remember-git-free" in hay:
+        return [
+            scripted_tool(
+                "remember",
+                content=E2E_GIT_FREE,
+                kind="rule",
+                section="bans",
+            ),
+            scripted_finish("I'll remember that."),
+        ]
+    if "e2e-remember-git-approval" in hay:
+        return [
+            scripted_tool(
+                "remember",
+                content=E2E_GIT_APPROVAL,
+                kind="rule",
+                section="wait",
+            ),
+            scripted_tool(
+                "remember",
+                content=E2E_GIT_MR,
+                kind="rule",
+                section="wait",
+            ),
+            scripted_tool(
+                "remember",
+                content=E2E_GIT_BAN,
+                kind="rule",
+                section="bans",
             ),
             scripted_finish("I'll remember that."),
         ]

@@ -10,6 +10,8 @@ from artek_buddy.memory_hub import (
     MemoryEntry,
     MemoryHub,
     extract_unwritten_memories,
+    git_approval_contradicts,
+    git_approval_same_rule,
     memory_covers,
     similar_memory,
 )
@@ -349,6 +351,67 @@ def test_similar_memory_paraphrase_not_a_different_ban() -> None:
     )
     assert not memory_covers("Don't ask for read permission", "Don't ask for write permission")
     assert not memory_covers("Never open Gmail for work", "Never open Outlook")
+
+
+def test_git_approval_wait_and_ban_paraphrases_are_one_rule() -> None:
+    long_rule = (
+        "Always ask before a git commit, a new branch, a pull request or MR, or a merge."
+    )
+    assert git_approval_same_rule(long_rule, "Wait for MR approval.")
+    assert git_approval_same_rule(long_rule, "Don't merge until I say so.")
+    assert git_approval_same_rule("Wait for MR approval.", "Don't merge until I say so.")
+    assert not git_approval_same_rule(long_rule, "You may merge and push without asking.")
+    assert git_approval_contradicts(long_rule, "You may merge and push without asking.")
+    assert not git_approval_same_rule(long_rule, "Never open Gmail")
+
+
+def test_git_approval_restatements_do_not_add_a_second_row() -> None:
+    hub, store = _hub()
+    long_rule = (
+        "Always ask before a git commit, a new branch, a pull request or MR, or a merge."
+    )
+    first = hub.capture(
+        long_rule,
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_git_1",
+        slot="wait",
+    )
+    mr = hub.capture(
+        "Wait for MR approval.",
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_git_2",
+        slot="wait",
+    )
+    ban = hub.capture(
+        "Don't merge until I say so.",
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_git_3",
+        slot="bans",
+    )
+    assert first is not None
+    assert mr is None
+    assert ban is None
+    live = store.list_live_memory_entries("bot_book")
+    assert len(live) == 1
+    assert live[0].text == long_rule
+    free = hub.capture(
+        "You may merge and push without asking.",
+        kind="rule",
+        bot_id="bot_book",
+        source="remember",
+        run_id="run_git_4",
+        slot="bans",
+    )
+    assert free is not None
+    after = store.list_live_memory_entries("bot_book")
+    assert len(after) == 1
+    assert "without asking" in after[0].text
 
 
 def test_one_run_does_not_store_paraphrased_read_permission_twice() -> None:

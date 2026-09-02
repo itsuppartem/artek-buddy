@@ -288,6 +288,49 @@ def test_remember_twice_writes_one_meta_and_one_row(client, auth_header) -> None
     assert len(hits) == 1
 
 
+def test_git_approval_paraphrases_write_one_meta_and_one_row(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_GIT_APPROVAL, E2E_GIT_FREE
+
+    bot_id = create_bot(client, auth_header, "MemGit")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-remember-git-approval"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    remembered = [text for text in message_metas(snap) if text.startswith("Remembered:")]
+    assert len(remembered) == 1
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    hits = [
+        item
+        for item in listed.json()["documents"]
+        if "git commit" in str(item.get("content") or "").lower()
+    ]
+    assert len(hits) == 1
+    assert hits[0]["content"] == E2E_GIT_APPROVAL
+
+    free = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-remember-git-free"},
+    )
+    assert free.status_code == 200
+    after = wait_run(client, auth_header, bot_id, free.json()["run_id"])
+    assert after["run"]["status"] == "completed"
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    live = [
+        item
+        for item in listed.json()["documents"]
+        if "merge" in str(item.get("content") or "").lower()
+    ]
+    assert len(live) == 1
+    assert live[0]["content"] == E2E_GIT_FREE
+
+
 def test_scripted_identity_city_lists_and_replaces(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "IdCity")["id"]
     stem = uuid.uuid4().hex[:8]

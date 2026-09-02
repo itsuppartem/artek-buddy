@@ -9,6 +9,9 @@ from artek_buddy.runtime.scripted import (
     E2E_CARD_VALUE,
     E2E_CHILD_ARCHIVED,
     E2E_FAIL_ERROR,
+    E2E_GIT_APPROVAL,
+    E2E_GIT_BAN,
+    E2E_GIT_MR,
     E2E_HANG_S,
     E2E_LEAD_OWNER_SSH,
     E2E_META_TEXT,
@@ -171,6 +174,11 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert twice[0].tool == "remember"
     assert twice[1].tool == "remember"
     assert twice[0].args.get("content") != twice[1].args.get("content")
+    git_rule = steps_for_prompt("please e2e-remember-git-approval")
+    assert [step.tool for step in git_rule[:3]] == ["remember", "remember", "remember"]
+    assert git_rule[0].args.get("content") == E2E_GIT_APPROVAL
+    assert git_rule[1].args.get("content") == E2E_GIT_MR
+    assert git_rule[2].args.get("content") == E2E_GIT_BAN
     thrice = steps_for_prompt("please e2e-remember-same-thrice")
     assert [step.tool for step in thrice[:3]] == ["remember", "remember", "remember"]
     worker_remember = steps_for_prompt("please e2e-background-worker-remember")
