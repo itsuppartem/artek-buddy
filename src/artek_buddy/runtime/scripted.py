@@ -299,6 +299,15 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish("I'll remember that."),
         ]
+    if "e2e-worker-auto-read" in hay:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name="WorkerAutoRead",
+                task="please e2e-consent-auto-read",
+            ),
+            scripted_finish(E2E_WORKER_ACK),
+        ]
     if "e2e-background-worker-remember" in hay:
         return [
             scripted_tool(

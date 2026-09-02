@@ -26,6 +26,25 @@ def wait_run(
     raise AssertionError(f"turn {run_id} did not finish: {last.get('run')}")
 
 
+def wait_pending_auto_jobs(
+    client,
+    auth_header: dict[str, str],
+    bot_id: str,
+    timeout: float = 15.0,
+) -> dict[str, Any]:
+    deadline = time.time() + timeout
+    last: dict[str, Any] = {}
+    while time.time() < deadline:
+        snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+        assert snap.status_code == 200, snap.text
+        last = snap.json()
+        pending = last.get("pending_auto_consent_ids") or []
+        if pending:
+            return last
+        time.sleep(0.1)
+    raise AssertionError(f"{bot_id} never listed a queued automatic owner job: {last}")
+
+
 def wait_run_status(
     client,
     auth_header: dict[str, str],

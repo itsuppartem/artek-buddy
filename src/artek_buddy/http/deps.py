@@ -216,11 +216,23 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
     run = history.latest_run(bot.id)
     pending = None
     pending_ids: list[str] = []
-    run_status = getattr(getattr(run, "status", None), "value", None) or getattr(
-        run, "status", None
-    )
-    if run is not None and run_status == "waiting_input":
-        pending_ids = history.pending_auto_consent_ids(bot.id, run.id)
+    scope: list[str] = []
+    if run is not None and run.id:
+        scope.append(run.id)
+    subs = sorted(history.list_subagents(bot.id), key=lambda item: item.index)
+    for sub in subs:
+        if sub.status in {"queued", "running"}:
+            scope.append(sub.id)
+            if sub.parent_run_id:
+                scope.append(sub.parent_run_id)
+    seen: set[str] = set()
+    unique_scope: list[str] = []
+    for item in scope:
+        if item and item not in seen:
+            seen.add(item)
+            unique_scope.append(item)
+    if unique_scope:
+        pending_ids = history.pending_auto_consent_ids(bot.id, unique_scope)
         pending = pending_ids[-1] if pending_ids else None
     return ThreadSnapshot(
         bot_id=bot.id,
@@ -230,7 +242,7 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
         older_cursor=page.older_cursor,
         run=run,
         computer=status,
-        subagents=sorted(history.list_subagents(bot.id), key=lambda item: item.index),
+        subagents=subs,
         pending_auto_consent_id=pending,
         pending_auto_consent_ids=pending_ids,
     )

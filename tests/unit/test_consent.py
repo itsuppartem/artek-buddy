@@ -135,6 +135,25 @@ def test_auto_owner_read_publishes_consent_on_waiting_input() -> None:
     assert not hasattr(hub, "last_request_id")
 
 
+def test_parent_run_id_follows_the_worker_not_the_lead() -> None:
+    class Store:
+        def get_run(self, run_id: str) -> object | None:
+            if run_id == "run_lead":
+                return SimpleNamespace(id="run_lead")
+            return None
+
+        def get_subagent(self, sub_id: str) -> object | None:
+            if sub_id == "sub_1":
+                return SimpleNamespace(id="sub_1", parent_run_id="run_lead")
+            return None
+
+    hub = ConsentHub(Store())
+    assert hub._parent_run_id(None) is None
+    assert hub._parent_run_id("run_lead") is None
+    assert hub._parent_run_id("sub_1") == "run_lead"
+    assert hub._parent_run_id("sub_missing") is None
+
+
 def test_owner_question_timeout_is_explicit_and_resumes_the_run() -> None:
     published: list[object] = []
 

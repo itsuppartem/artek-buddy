@@ -79,6 +79,7 @@ class ConsentsMixin:
         scope_key: str,
         summary: str,
         run_id: str | None = None,
+        parent_run_id: str | None = None,
         thread_id: str | None = None,
         message_id: str | None = None,
         workspace_id: str = DEFAULT_WORKSPACE_ID,
@@ -88,15 +89,16 @@ class ConsentsMixin:
             conn.execute(
                 """
                 INSERT INTO consent_requests (
-                    id, workspace_id, bot_id, run_id, thread_id, message_id,
+                    id, workspace_id, bot_id, run_id, parent_run_id, thread_id, message_id,
                     action_class, scope_key, summary, status, job_status, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s, %s)
                 """,
                 (
                     request_id,
                     workspace_id,
                     bot_id,
                     run_id,
+                    parent_run_id,
                     thread_id,
                     message_id,
                     action_class,
@@ -114,8 +116,8 @@ class ConsentsMixin:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                SELECT id, bot_id, action_class, scope_key, summary, status, run_id, message_id,
-                       job_status
+                SELECT id, bot_id, action_class, scope_key, summary, status, run_id, parent_run_id,
+                       message_id, job_status
                 FROM consent_requests WHERE id = %s
                 """,
                 (request_id,),
@@ -131,6 +133,7 @@ class ConsentsMixin:
             summary=row["summary"],
             status=row["status"],
             run_id=row["run_id"],
+            parent_run_id=row["parent_run_id"],
             message_id=row["message_id"],
             job_status=row["job_status"],
         )
@@ -139,20 +142,25 @@ class ConsentsMixin:
         pending = self.pending_auto_consent_ids(bot_id, run_id)
         return pending[-1] if pending else None
 
-    def pending_auto_consent_ids(self, bot_id: str, run_id: str | None) -> list[str]:
-        if not run_id:
+    def pending_auto_consent_ids(self, bot_id: str, run_ids: str | list[str] | None) -> list[str]:
+        if isinstance(run_ids, str):
+            ids = [run_ids] if run_ids else []
+        else:
+            ids = [item for item in (run_ids or []) if item]
+        if not ids:
             return []
         with self._conn() as conn:
             rows = conn.execute(
                 """
                 SELECT id FROM consent_requests
-                WHERE bot_id = %s AND run_id = %s
+                WHERE bot_id = %s
                   AND status = 'pending'
                   AND job_status = 'queued'
                   AND message_id IS NULL
+                  AND (run_id = ANY(%s) OR parent_run_id = ANY(%s))
                 ORDER BY created_at, id
                 """,
-                (bot_id, run_id),
+                (bot_id, ids, ids),
             ).fetchall()
             conn.commit()
         return [str(row["id"]) for row in rows]
