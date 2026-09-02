@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from artek_buddy.runtime.types import TurnContext
 from tests.api.helpers import create_bot, wait_run_status
 from tests.support import mask_secret
+
+from artek_buddy.runtime.types import TurnContext
 
 
 def _mint_device(client, auth_header: dict[str, str], name: str) -> dict[str, str]:
