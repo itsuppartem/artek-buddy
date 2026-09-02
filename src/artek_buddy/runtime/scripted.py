@@ -74,6 +74,8 @@ E2E_HANG_S = 12.0
 E2E_ASK_DETAIL = "I can open Wikipedia on the desktop after you pick one."
 E2E_TAKEOVER_REASON = "Pass the site check, then Release."
 E2E_GENERATE_ERROR = "could not generate that image"
+E2E_SEND_TEASER = "Working on the spec."
+E2E_SEND_ANSWER = "The specification is ready."
 E2E_AUTH_ERROR = "Authentication error If you are logged in, try logging out and back in."
 E2E_PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
@@ -732,6 +734,16 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         return [
             ScriptedStep(owner_auto_path="notes.txt"),
             scripted_finish("got notes"),
+        ]
+    if "e2e-send-then-repeat" in hay:
+        return [
+            scripted_tool("send_message", text=E2E_SEND_TEASER),
+            scripted_finish(E2E_SEND_TEASER),
+        ]
+    if "e2e-send-then-answer" in hay:
+        return [
+            scripted_tool("send_message", text=E2E_SEND_TEASER),
+            scripted_finish(E2E_SEND_ANSWER),
         ]
     if "e2e-generate-image-fail" in hay:
         return [

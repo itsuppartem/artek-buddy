@@ -27,6 +27,7 @@ from artek_buddy.computer.service import (
 from artek_buddy.contracts import (
     Bot,
     ComputerStatus,
+    MessageRole,
     ProductEvent,
     ProductEventType,
     Run,
@@ -263,14 +264,32 @@ async def _shutdown_work() -> None:
         await asyncio.gather(*pending, return_exceptions=True)
 
 
-def _message_excerpt(message: ThreadMessage, limit: int = 400) -> str:
+def _block_dicts(message: ThreadMessage) -> list[dict[str, Any]]:
     raw: list[dict[str, Any]] = []
     for block in message.blocks or []:
         if hasattr(block, "model_dump"):
             raw.append(block.model_dump())
         elif isinstance(block, dict):
             raw.append(block)
-    return preview_snippet(blocks_text(raw), limit)
+    return raw
+
+
+def _message_excerpt(message: ThreadMessage, limit: int = 400) -> str:
+    return preview_snippet(blocks_text(_block_dicts(message)), limit)
+
+
+def _posted_bot_texts(history: HistoryStore, bot: Bot, run_id: str) -> set[str]:
+    posted: set[str] = set()
+    for msg in history.page_messages(bot.thread_id, limit=200).messages:
+        if msg.run_id != run_id or msg.role != MessageRole.bot:
+            continue
+        for block in _block_dicts(msg):
+            if block.get("kind") != "text":
+                continue
+            text = str(block.get("text") or "").strip()
+            if text:
+                posted.add(text)
+    return posted
 
 
 def _ingest_thread_files(
@@ -887,7 +906,9 @@ async def _run_turn(
         if has_sent or not reply_text or reply_text.strip() == error:
             reply_text = ""
     elif has_sent:
-        reply_text = ""
+        body = (reply_text or "").strip()
+        if not body or body in _posted_bot_texts(history, bot, run.id):
+            reply_text = ""
     elif not reply_text:
         reply_text = draft or ""
 
