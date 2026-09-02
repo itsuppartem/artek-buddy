@@ -6,7 +6,7 @@ import urllib.error
 import urllib.request
 import uuid
 
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, expect
 from tests.support import mask_secret
 
 
@@ -65,18 +65,14 @@ def thread_header(page: Page):
 
 
 def close_computer_pane(page: Page) -> None:
-    closer = page.get_by_title("Close panel")
-    try:
-        if closer.count() and closer.first.is_visible(timeout=0):
-            closer.first.click(timeout=2_000)
-    except Exception:
-        pass
     overlay = page.get_by_label("Close computer")
-    try:
-        if overlay.count() and overlay.first.is_visible(timeout=0):
-            overlay.first.click(timeout=2_000)
-    except Exception:
-        pass
+    if overlay.count() > 0 and overlay.first.is_visible():
+        overlay.first.click()
+        expect(page.get_by_test_id("computer-overlay")).to_have_count(0)
+    closer = page.get_by_title("Close panel")
+    if closer.count() > 0 and closer.first.is_visible():
+        closer.first.click()
+        expect(page.get_by_test_id("new-memory")).to_have_count(0)
 
 
 def arm_page(page: Page) -> None:
@@ -87,21 +83,29 @@ def arm_page(page: Page) -> None:
 def open_computer_pane(page: Page) -> None:
     """Memory and routines live in the side pane. Gear does not boot the desktop."""
     arm_page(page)
-    closer = page.get_by_title("Close panel")
     memory = page.get_by_test_id("new-memory")
-    try:
-        if closer.count() and closer.first.is_visible(timeout=0):
-            expect(memory).to_be_visible(timeout=8_000)
-            return
-    except Exception:
-        pass
-    try:
-        if memory.count() and memory.first.is_visible(timeout=0):
-            return
-    except Exception:
-        pass
-    page.get_by_role("button", name="Computer").click(timeout=5_000)
+    if memory.count() > 0 and memory.first.is_visible():
+        return
+    page.get_by_role("button", name="Computer").click()
     expect(memory).to_be_visible(timeout=8_000)
+
+
+def expect_cancelled_turn(page: Page) -> None:
+    expect(page.get_by_test_id("run-error")).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("thread-stop")).to_have_count(0)
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
+    expect(composer(page)).to_be_enabled()
+
+
+def expect_stays_absent(locator, timeout: int = 4_000) -> None:
+    """Fail if the locator becomes visible while a cancelled late token could still land."""
+    expect(locator).to_have_count(0)
+    try:
+        locator.first.wait_for(state="visible", timeout=timeout)
+    except PlaywrightTimeoutError:
+        expect(locator).to_have_count(0)
+        return
+    raise AssertionError("cancelled turn still appended after Stop")
 
 
 def open_chat(page: Page, name: str) -> None:
