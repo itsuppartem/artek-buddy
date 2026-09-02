@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import re
+import shlex
 from pathlib import Path
 
 _FOLDER_ALIASES = {
@@ -124,6 +126,131 @@ def inspect_owner_path(
                 continue
             return resolved if resolved.exists() else candidate, ""
     return None, last
+
+
+_FIND_FILE_WRITE_FLAGS = frozenset({"-fprint", "-fprint0", "-fprintf", "-fls"})
+_OWNER_EXEC_WRAPPERS = frozenset(
+    {"timeout", "nice", "nohup", "command", "ionice", "stdbuf", "time"}
+)
+
+
+def inspect_owner_exec_writes(command: str, home: Path | None = None) -> str:
+    """Empty if git/find file-output targets stay under the owner home; else the jail error."""
+    for target in _owner_exec_write_targets(command):
+        path, err = inspect_owner_path(target, home, must_exist=False)
+        if path is None:
+            return err or "path is outside the home"
+    return ""
+
+
+def _owner_exec_write_targets(command: str) -> list[str]:
+    text = (command or "").strip()
+    if not text:
+        return []
+    found: list[str] = []
+    for part in _shell_segments(text):
+        try:
+            tokens = shlex.split(part, posix=True)
+        except ValueError:
+            continue
+        if tokens:
+            found.extend(_git_find_write_targets(tokens))
+    return found
+
+
+def _shell_segments(text: str) -> list[str]:
+    """Split on &&, ||, ;, |, and newlines without a nested-space regex."""
+    parts: list[str] = []
+    start = 0
+    index = 0
+    length = len(text)
+    while index < length:
+        pair = text[index : index + 2]
+        char = text[index]
+        if pair in {"&&", "||"} or char in ";|\n":
+            chunk = text[start:index].strip()
+            if chunk:
+                parts.append(chunk)
+            index += 2 if pair in {"&&", "||"} else 1
+            start = index
+            continue
+        index += 1
+    chunk = text[start:].strip()
+    if chunk:
+        parts.append(chunk)
+    return parts
+
+
+def _git_find_write_targets(tokens: list[str]) -> list[str]:
+    index = 0
+    while index < len(tokens) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[index]):
+        index += 1
+    while index < len(tokens):
+        name = tokens[index].rsplit("/", 1)[-1]
+        if name == "env" and index + 1 < len(tokens):
+            index += 1
+            while index < len(tokens) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[index]):
+                index += 1
+            continue
+        if name in _OWNER_EXEC_WRAPPERS:
+            index += 1
+            while index < len(tokens) and (
+                tokens[index].startswith("-") or re.match(r"^[0-9.]+[smh]?$", tokens[index])
+            ):
+                index += 1
+            continue
+        break
+    rest = tokens[index:]
+    if not rest:
+        return []
+    name = rest[0].rsplit("/", 1)[-1]
+    if name == "git":
+        return _git_write_targets(rest)
+    if name == "find":
+        return _find_file_write_targets(rest)
+    return []
+
+
+def _git_write_targets(tokens: list[str]) -> list[str]:
+    found: list[str] = []
+    index = 1
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "--output" and index + 1 < len(tokens):
+            found.append(tokens[index + 1])
+            index += 2
+            continue
+        if token.startswith("--output=") and not token.startswith("--output-indicator"):
+            found.append(token.split("=", 1)[1])
+            index += 1
+            continue
+        if token == "-C" and index + 1 < len(tokens):
+            found.append(tokens[index + 1])
+            index += 2
+            continue
+        if token in {"--git-dir", "--work-tree"} and index + 1 < len(tokens):
+            found.append(tokens[index + 1])
+            index += 2
+            continue
+        if token.startswith("--git-dir=") or token.startswith("--work-tree="):
+            found.append(token.split("=", 1)[1])
+            index += 1
+            continue
+        index += 1
+    return found
+
+
+def _find_file_write_targets(tokens: list[str]) -> list[str]:
+    found: list[str] = []
+    index = 1
+    while index < len(tokens):
+        token = tokens[index]
+        if token in _FIND_FILE_WRITE_FLAGS and index + 1 < len(tokens):
+            found.append(tokens[index + 1])
+            index += 2
+            continue
+        index += 1
+    return found
 
 
 def resolve_owner_path(

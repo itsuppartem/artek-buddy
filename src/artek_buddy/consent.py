@@ -44,7 +44,6 @@ _READONLY_COMMANDS = frozenset(
         "egrep",
         "fgrep",
         "rg",
-        "find",
         "wc",
         "which",
         "whereis",
@@ -77,7 +76,7 @@ _READONLY_COMMANDS = frozenset(
     }
 )
 _READONLY_WRAPPERS = frozenset({"timeout", "nice", "nohup", "command", "ionice", "stdbuf", "time"})
-_GIT_READONLY = frozenset(
+_GIT_INSPECT_SUBS = frozenset(
     {
         "status",
         "log",
@@ -91,7 +90,126 @@ _GIT_READONLY = frozenset(
         "rev-list",
     }
 )
-_FIND_WRITE_FLAGS = frozenset({"-delete", "-exec", "-execdir", "-ok", "-okdir"})
+_GIT_GLOBAL_INSPECT = frozenset(
+    {
+        "--no-pager",
+        "--no-color",
+        "--color",
+        "--paginate",
+        "--no-optional-locks",
+    }
+)
+_GIT_REPO_OR_OUTPUT_FLAGS = frozenset(
+    {
+        "--output",
+        "--git-dir",
+        "--work-tree",
+        "--namespace",
+        "--config",
+        "--config-env",
+    }
+)
+_GIT_BRANCH_LIST_FLAGS = frozenset(
+    {
+        "--list",
+        "-a",
+        "--all",
+        "-r",
+        "--remotes",
+        "-v",
+        "-vv",
+        "--verbose",
+        "--no-color",
+        "--color",
+        "--show-current",
+        "-q",
+        "--quiet",
+        "--column",
+        "--no-column",
+        "-i",
+        "--ignore-case",
+        "--abbrev",
+        "--no-abbrev",
+        "--merged",
+        "--no-merged",
+        "--contains",
+        "--no-contains",
+        "--points-at",
+    }
+)
+_GIT_BRANCH_LIST_PREFIXES = ("--sort=", "--format=", "--color=", "--column=", "--abbrev=")
+_FIND_INSPECT_ARITY = {
+    "-print": 0,
+    "-print0": 0,
+    "-ls": 0,
+    "-quit": 0,
+    "-prune": 0,
+    "-true": 0,
+    "-false": 0,
+    "-empty": 0,
+    "-readable": 0,
+    "-writable": 0,
+    "-executable": 0,
+    "-nouser": 0,
+    "-nogroup": 0,
+    "-depth": 0,
+    "-xdev": 0,
+    "-mount": 0,
+    "-noleaf": 0,
+    "-ignore_readdir_race": 0,
+    "-noignore_readdir_race": 0,
+    "-daystart": 0,
+    "-follow": 0,
+    "-L": 0,
+    "-H": 0,
+    "-P": 0,
+    "-not": 0,
+    "-or": 0,
+    "-and": 0,
+    "-o": 0,
+    "-a": 0,
+    "-help": 0,
+    "-version": 0,
+    "-warn": 0,
+    "-nowarn": 0,
+    "-name": 1,
+    "-iname": 1,
+    "-lname": 1,
+    "-ilname": 1,
+    "-path": 1,
+    "-wholename": 1,
+    "-ipath": 1,
+    "-iwholename": 1,
+    "-regex": 1,
+    "-iregex": 1,
+    "-regextype": 1,
+    "-type": 1,
+    "-xtype": 1,
+    "-size": 1,
+    "-user": 1,
+    "-group": 1,
+    "-uid": 1,
+    "-gid": 1,
+    "-perm": 1,
+    "-mtime": 1,
+    "-mmin": 1,
+    "-atime": 1,
+    "-amin": 1,
+    "-ctime": 1,
+    "-cmin": 1,
+    "-used": 1,
+    "-links": 1,
+    "-inum": 1,
+    "-samefile": 1,
+    "-newer": 1,
+    "-anewer": 1,
+    "-cnewer": 1,
+    "-maxdepth": 1,
+    "-mindepth": 1,
+    "-printf": 1,
+    "-fstype": 1,
+    "-context": 1,
+}
 _SAFE_SUBST = re.compile(r"(?:\$\(|`)(pwd|whoami|id|hostname|date|uname)(?:\s+[^)`]*)?(?:\)|`)")
 
 
@@ -130,7 +248,7 @@ def owner_scope(path: str) -> str:
 
 
 def owner_command_is_readonly(command: str) -> bool:
-    """True for explore-only shell, like Claude Code's built-in ls/cat/echo set."""
+    """True for explore-only shell: ls/cat/echo, inspect-only git, inspect-only find."""
     text = (command or "").strip()
     if not text or len(text) > 4000:
         return False
@@ -181,16 +299,75 @@ def _readonly_segment(part: str) -> bool:
         return True
     name = rest[0].rsplit("/", 1)[-1]
     if name == "git":
-        flags = {item for item in rest[1:] if item.startswith("-")}
-        sub = next((item for item in rest[1:] if not item.startswith("-")), "")
-        if sub not in _GIT_READONLY:
-            return False
-        if sub == "branch" and flags & {"-d", "-D", "--delete"}:
-            return False
-        return True
-    if name == "find" and any(item in _FIND_WRITE_FLAGS for item in rest[1:]):
-        return False
+        return _git_inspect_ok(rest)
+    if name == "find":
+        return _find_inspect_ok(rest)
     return name in _READONLY_COMMANDS
+
+
+def _git_flag_name(item: str) -> str:
+    return item.split("=", 1)[0]
+
+
+def _git_repo_or_output_flag(item: str) -> bool:
+    if not item.startswith("-"):
+        return False
+    return _git_flag_name(item) in _GIT_REPO_OR_OUTPUT_FLAGS
+
+
+def _git_inspect_ok(tokens: list[str]) -> bool:
+    args = tokens[1:]
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token in _GIT_GLOBAL_INSPECT:
+            index += 1
+            continue
+        if token.startswith("-"):
+            return False
+        break
+    if index >= len(args):
+        return False
+    sub = args[index]
+    if sub not in _GIT_INSPECT_SUBS:
+        return False
+    tail = args[index + 1 :]
+    if any(_git_repo_or_output_flag(item) for item in tail):
+        return False
+    if sub == "branch":
+        return _git_branch_list_only(tail)
+    return True
+
+
+def _git_branch_list_only(tail: list[str]) -> bool:
+    for item in tail:
+        if not item.startswith("-"):
+            return False
+        if item in _GIT_BRANCH_LIST_FLAGS:
+            continue
+        if any(item.startswith(prefix) for prefix in _GIT_BRANCH_LIST_PREFIXES):
+            continue
+        return False
+    return True
+
+
+def _find_inspect_ok(tokens: list[str]) -> bool:
+    index = 1
+    while index < len(tokens):
+        token = tokens[index]
+        if token in {"!", "(", ")", ",", "--"}:
+            index += 1
+            continue
+        if token.startswith("-") and len(token) > 1:
+            arity = _FIND_INSPECT_ARITY.get(token)
+            if arity is None:
+                return False
+            index += 1 + arity
+            if index > len(tokens):
+                return False
+            continue
+        index += 1
+    return True
 
 
 @dataclass

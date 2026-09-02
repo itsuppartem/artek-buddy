@@ -371,9 +371,9 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 
 ## 18. This-PC (Deb only)
 
-Read a file or list a folder under the Linux home: no Allow card. Read-only shell (`ls`, `cat`, `echo`, …) does not ask.
+Read a file or list a folder under the Linux home: no Allow card. Read-only shell (`ls`, `cat`, `echo`, `git status`, `find … -name` / `-print`) does not ask.
 
-Write a file or a command that can change the PC: Allow once / Always / Deny. Always covers later writes and commands on this PC, not each folder. Paths outside `$HOME` stay 403 on the card.
+Write a file or a command that can change the PC: Allow once / Always / Deny. That includes `git show --output=…`, `git diff --output=…`, `git branch new-name`, `git branch -m …`, and `find … -fprint` / `-fprintf` / `-fls`. Always covers later writes and commands on this PC, not each folder. Paths outside `$HOME` stay 403 on the card. A git/find write path outside `$HOME` does not run.
 
 For SSH reuse, use a real alias already present on the owner PC. Do not add one
 for this test and do not change `~/.ssh/config`. First test without
@@ -383,7 +383,10 @@ rebuilt client. This stays in the long walk because it needs a real owner alias.
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Read / list under home: no card | [ ] | — |
+| `git status` / `find . -name '*.py' -print`: no card | [ ] | — |
 | Write / mutating command: card, then the action only after Allow | [ ] | — |
+| `git show --output=…`, `git branch new-name`, or `find … -fprint …`: card. Deny does not create the file or branch | [ ] | — |
+| Write path outside `$HOME` (`git show --output=/tmp/…`) does not run | [ ] | — |
 | Deny does not touch the PC | [ ] | — |
 | Ask for several small remote checks. The agent sends one `ssh alias 'check; check; check'` owner command / one card, not one SSH call per check | [ ] | — |
 | Without `ssh-mux`, SSH behaves as before. With the opt-in file, two sequential calls to the same alias reuse a private socket under `$XDG_RUNTIME_DIR/artek-buddy/ssh` (or the documented cache fallback) | [ ] | — |
@@ -592,7 +595,7 @@ If time is short, in this order:
 8. **§12 Pad and Cyrillic**
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
-11. **§10 workers** `please e2e-background-worker-chat` then status; Message stays usable; one final result. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. **This-PC** back-to-back read/list and one Allow action exactly once on Deb
+11. **§10 workers** `please e2e-background-worker-chat` then status; Message stays usable; one final result. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
 12. **§1 / §21 Escape** on Settings and New bot
 13. **§14 Inbox** Search empty + one click opens that row
 14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Plugin **Open to connect** is the same kind of link

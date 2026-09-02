@@ -18,6 +18,7 @@
 
 ### Fixed
 - The lead cannot hold This-PC SSH (`run_owner_command` and owner file tools). Those belong on a worker; a stale session that still sends the name is refused. Window Stop ends in-flight owner jobs and cannot resurrect a cancelled run as `waiting_input`, so the next Send is a new turn.
+- Owner `git`/`find` that can write (`--output`, `git branch` create/rename, `-fprint` / `-fprintf` / `-fls`) require Allow. Deny does not create the file or branch. A write path outside `$HOME` does not run on the paired client.
 - A background worker that emits no assistant text is no longer treated as idle. Host-owned activity (tool start/finish, sequence, last tool) is what status inspects; a status ping cannot stop or replace that worker, and a stale inspect cannot Stop it. Explicit window Stop still cancels it and admits no new worker tools.
 - Native `.deb` alerts follow GTK `is-active` via loopback `window_active`, not WebKit `hasFocus`. Switching to another app no longer stays silent, and the open chat is not marked read while that window is inactive.
 - Right-click a chat message offers **Copy** for that text. Link rows still have Open in browser and Copy URL.

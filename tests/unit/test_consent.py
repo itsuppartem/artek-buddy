@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
+import subprocess
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import artek_buddy.consent as consent_mod
@@ -13,7 +16,8 @@ from artek_buddy.consent import (
     owner_command_is_readonly,
     owner_scope,
 )
-from artek_buddy.runtime.tools.product import ProductToolsCore
+from artek_buddy.contracts.domain import Device
+from artek_buddy.runtime.tools.product import ProductTools, ProductToolsCore
 
 
 def test_decision_from_label_happy_and_fail() -> None:
@@ -42,6 +46,9 @@ def test_owner_readonly_commands() -> None:
     assert owner_command_is_readonly("echo hi > file") is False
     assert owner_command_is_readonly("git status") is True
     assert owner_command_is_readonly("git commit -am x") is False
+    assert owner_command_is_readonly("git show --output=$HOME/leaked.patch HEAD") is False
+    assert owner_command_is_readonly("find . -name '*.py' -print") is True
+    assert owner_command_is_readonly("find . -fprint listing.txt") is False
 
 
 class _ConsentStore:
@@ -302,3 +309,117 @@ def test_cancel_owner_jobs_wakes_result_wait(monkeypatch) -> None:
     assert isinstance(result, dict)
     assert result.get("ok") is False
     assert result.get("error") == "Stopped."
+
+
+def _git_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env.update(
+        {
+            "GIT_AUTHOR_NAME": "artek",
+            "GIT_AUTHOR_EMAIL": "artek@example.test",
+            "GIT_COMMITTER_NAME": "artek",
+            "GIT_COMMITTER_EMAIL": "artek@example.test",
+        }
+    )
+    return env
+
+
+def _init_temp_repo(root: Path) -> Path:
+    repo = root / "repo"
+    repo.mkdir()
+    env = _git_env()
+    subprocess.run(["git", "init"], cwd=repo, check=True, env=env, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "artek@example.test"],
+        cwd=repo,
+        check=True,
+        env=env,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "artek"],
+        cwd=repo,
+        check=True,
+        env=env,
+        capture_output=True,
+    )
+    (repo / "a.txt").write_text("hi\n", encoding="utf-8")
+    subprocess.run(["git", "add", "a.txt"], cwd=repo, check=True, env=env, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=repo,
+        check=True,
+        env=env,
+        capture_output=True,
+    )
+    return repo
+
+
+def test_deny_git_write_options_leave_temp_repo_unchanged(tmp_path: Path) -> None:
+    """If the classifier skips Allow, the runner writes. Deny must not call it."""
+    repo = _init_temp_repo(tmp_path)
+    leaked = repo / "leaked.patch"
+    listing = repo / "listing.txt"
+    ran: list[str] = []
+
+    def runner(command: str, cwd: str) -> dict[str, object]:
+        ran.append(command)
+        proc = subprocess.run(
+            command,
+            shell=True,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            env=_git_env(),
+        )
+        return {
+            "ok": proc.returncode == 0,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+            "exit_code": proc.returncode,
+        }
+
+    class Hub:
+        def require(self, **_kwargs: object) -> tuple[bool, None]:
+            return False, None
+
+    class Store:
+        def list_devices(self) -> list[Device]:
+            return [
+                Device(
+                    id="dev_1",
+                    name="pc",
+                    platform="linux",
+                    created_at="2026-01-01T00:00:00Z",
+                )
+            ]
+
+    tools = ProductTools(
+        SimpleNamespace(
+            consent=Hub(),
+            store=Store(),
+            resolve_turn_context=lambda _bot: ("bot_1", "run_1", "thr_1"),
+            resolve_turn_device=lambda: "dev_1",
+            owner_command_runner=runner,
+        )
+    )
+    show = tools._exec_run_owner_command(
+        {"command": f"git show --output={leaked} HEAD", "cwd": str(repo)},
+        "bot_1",
+    )
+    branch = tools._exec_run_owner_command(
+        {"command": "git branch stolen-branch", "cwd": str(repo)},
+        "bot_1",
+    )
+    found = tools._exec_run_owner_command(
+        {"command": f"find . -fprint {listing}", "cwd": str(repo)},
+        "bot_1",
+    )
+    branches = subprocess.check_output(["git", "branch"], cwd=repo, text=True, env=_git_env())
+    assert show == {"ok": False, "error": "denied by owner", "denied": True}
+    assert branch == {"ok": False, "error": "denied by owner", "denied": True}
+    assert found == {"ok": False, "error": "denied by owner", "denied": True}
+    assert ran == []
+    assert not leaked.exists()
+    assert not listing.exists()
+    assert "stolen-branch" not in branches
