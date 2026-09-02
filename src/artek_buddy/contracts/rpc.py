@@ -35,6 +35,8 @@ def _p(
 PROCEDURES: list[Procedure] = [
     # Live host (implemented)
     _p("health", "GET", "/health", None, "HealthResponse", True),
+    _p("health.live", "GET", "/livez", None, "HealthResponse", True),
+    _p("health.ready", "GET", "/readyz", None, "HealthResponse", True),
     _p("models.list", "GET", "/v1/models", None, "ModelListResponse", True),
     _p("session.get", "GET", "/v1/session", None, "SessionResponse", True),
     _p("session.create", "POST", "/v1/session", "SessionRequest", "SessionResponse", True),

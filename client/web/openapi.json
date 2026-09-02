@@ -1833,7 +1833,7 @@
         "type": "object"
       },
       "HealthResponse": {
-        "description": "GET /health is process liveness. db is additive. No agent identity.",
+        "description": "GET /health and /livez are process liveness. GET /readyz is 503 when db or runtime is down.",
         "properties": {
           "db": {
             "anyOf": [
@@ -4029,6 +4029,24 @@
         "summary": "Health"
       }
     },
+    "/livez": {
+      "get": {
+        "operationId": "health_livez_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
     "/local/attach-files": {
       "post": {
         "operationId": "page_owner_cut_local_attach_files_post",
@@ -4489,6 +4507,34 @@
           }
         },
         "summary": "Page Unpair"
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Readyz"
       }
     },
     "/v1/artifacts": {

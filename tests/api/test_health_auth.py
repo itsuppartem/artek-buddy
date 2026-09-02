@@ -14,6 +14,37 @@ def test_health_is_open_and_names_no_agent(client) -> None:
     assert body["db"] is True
     assert "agent_id" not in body
     assert "agentId" not in body
+    live = client.get("/livez")
+    assert live.status_code == 200
+    assert live.json() == body
+    ready = client.get("/readyz")
+    assert ready.status_code == 200
+    assert ready.json()["ok"] is True
+    assert ready.json()["db"] is True
+
+
+def test_readyz_is_503_when_postgres_is_down(client) -> None:
+    client.app.state.store.available = lambda: False
+    response = client.get("/readyz")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["ok"] is False
+    assert body["db"] is False
+    live = client.get("/health")
+    assert live.status_code == 200
+    assert live.json()["ok"] is True
+    assert live.json()["db"] is False
+    assert client.get("/livez").status_code == 200
+
+
+def test_readyz_is_503_when_runtime_is_missing(client) -> None:
+    client.app.state.runtime = None
+    response = client.get("/readyz")
+    assert response.status_code == 503
+    assert response.json()["ok"] is False
+    live = client.get("/health")
+    assert live.status_code == 200
+    assert live.json()["ok"] is False
 
 
 def test_v1_without_token_is_401(client) -> None:

@@ -752,7 +752,7 @@ class ThreadSendResult(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """GET /health is process liveness. db is additive. No agent identity."""
+    """GET /health and /livez are process liveness. GET /readyz is 503 when db or runtime is down."""
 
     ok: bool
     db: bool | None = None

@@ -5,6 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from artek_buddy.bus import EventHub
 from artek_buddy.computer.service import (
@@ -153,19 +154,36 @@ app.include_router(connections_router)
 app.include_router(computer_router)
 
 
-@app.get("/health")
-async def health() -> HealthResponse:
+def _health_bits() -> tuple[bool, bool]:
     current = getattr(app.state, "runtime", None)
     history = getattr(app.state, "store", None)
     db_ok = False
     if history is not None:
         try:
-            db_ok = history.available()
+            db_ok = bool(history.available())
         except Exception:
             db_ok = False
-    return HealthResponse(
-        ok=current is not None,
-        db=db_ok,
+    return current is not None, db_ok
+
+
+@app.get("/health")
+@app.get("/livez")
+async def health() -> HealthResponse:
+    runtime_ok, db_ok = _health_bits()
+    return HealthResponse(ok=runtime_ok, db=db_ok)
+
+
+@app.get(
+    "/readyz",
+    response_model=HealthResponse,
+    responses={503: {"model": HealthResponse}},
+)
+async def readyz() -> JSONResponse:
+    runtime_ok, db_ok = _health_bits()
+    ready = runtime_ok and db_ok
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content=HealthResponse(ok=ready, db=db_ok).model_dump(),
     )
 
 
