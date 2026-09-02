@@ -43,6 +43,9 @@ def test_deb_script_installs_artek_icon() -> None:
     assert 'sys.argv[0] = "artek-buddy"' in text
     assert "update-desktop-database" in text
     assert "StartupWMClass=Artek Buddy" in text
+    assert "npm ci" in text
+    assert "npm install" not in text
+    assert "SOURCE_DATE_EPOCH" in text
 
 
 def test_bundled_icon_path_finds_source_tree(client_mod) -> None:

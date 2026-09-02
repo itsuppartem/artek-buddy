@@ -29,7 +29,7 @@ if [ -x "$HOME/.local/node/bin/npm" ]; then
   export PATH="$HOME/.local/node/bin:$PATH"
 fi
 if command -v npm >/dev/null 2>&1; then
-  (cd client/web && npm install && npm run build)
+  (cd client/web && npm ci && npm run build)
 fi
 if [ ! -f client/web/dist/index.html ]; then
   echo "client/web/dist is missing; install Node and rebuild" >&2
@@ -124,5 +124,9 @@ Description: Desktop client for the Artek Buddy host
  Desktop shell for the host HTTP API.
 EOF
 
+if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
+  SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+  export SOURCE_DATE_EPOCH
+fi
 dpkg-deb --build --root-owner-group "$ROOT" "$OUT"
 echo "built $OUT"
