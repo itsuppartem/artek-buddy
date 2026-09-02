@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from tests.api.helpers import create_bot, message_texts, wait_run, wait_thread_has
 
 
@@ -147,9 +149,17 @@ def test_ask_reply_enqueues_when_source_starts_another_run(
     assert ping.status_code == 200
     release.set()
     store = client.app.state.store
+    deadline = time.monotonic() + 8
+    row = None
+    saw_follow_up = False
+    while time.monotonic() < deadline:
+        row = store.get_bot_ask_for_to_run(to_run_id)
+        if row and row.get("delivered_at"):
+            if store.inbox_count(asker_id) >= 1 or store.active_run_count(asker_id) >= 1:
+                saw_follow_up = True
+                break
+        time.sleep(0.05)
+    assert row is not None and row.get("delivered_at")
+    assert saw_follow_up
     answered = wait_thread_has(client, auth_header, asker["id"], "Subotica")
     assert "computer" not in _block_kinds(answered)
-    row = store.get_bot_ask_for_to_run(to_run_id)
-    assert row is not None
-    assert row["delivered_at"] is not None
-    assert store.inbox_count(asker_id) >= 1 or store.active_run_count(asker_id) >= 1
