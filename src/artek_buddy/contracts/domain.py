@@ -414,6 +414,9 @@ class Subagent(BaseModel):
     task: str
     status: Literal["queued", "running", "completed", "failed", "cancelled"]
     progress: str | None = None
+    progress_remaining: str | None = None
+    progress_posted_at: str | None = None
+    progress_posted_text: str | None = None
     thinking: str | None = None
     result: str | None = None
     error: str | None = None

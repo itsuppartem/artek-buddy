@@ -513,6 +513,29 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         lead_only=True,
     ),
     ToolSpec(
+        name="report_progress",
+        description=(
+            "Record the current owner-safe step on this worker. "
+            "Call after each meaningful milestone, not every tool. "
+            "step is what you are doing now. remaining is what is left, not minutes. "
+            "The host posts a short chat line on a throttle. Do not invent ETAs."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "step": {
+                    "type": "string",
+                    "description": "Current step, at most 200 characters. No commands or stdout.",
+                },
+                "remaining": {
+                    "type": "string",
+                    "description": "What is left, short phrase, at most 200 characters.",
+                },
+            },
+            "required": ["step"],
+        },
+    ),
+    ToolSpec(
         name="spawn_subagent",
         description="Start a worker on this chat's desktop for one task. Returns immediately with an index.",
         input_schema={
@@ -534,7 +557,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="inspect_subagent",
         description=(
-            "Read a worker's status, text progress, and host activity. "
+            "Read a worker's status, text progress, remaining work, and host activity. "
             "Empty progress means no text update, not idle. "
             "ref is the index, name, or id."
         ),

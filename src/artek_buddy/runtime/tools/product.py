@@ -36,6 +36,7 @@ WORKER_ONLY_TOOLS = frozenset(
         "computer_observe",
         "computer_act",
         "browser_act",
+        "report_progress",
     }
 )
 LEAD_FORBIDDEN_OWNER_TOOLS = frozenset(
@@ -256,6 +257,8 @@ class ProductToolsCore:
                 if ctx.role == "subagent":
                     return {"ok": False, "error": "worker was cancelled"}
                 return {"ok": False, "error": "turn was cancelled"}
+            if ctx.role != "subagent" and name == "report_progress":
+                return {"ok": False, "error": "lead cannot use report_progress"}
             if ctx.role != "subagent" and name in LEAD_FORBIDDEN_OWNER_TOOLS:
                 return {
                     "ok": False,
@@ -264,7 +267,7 @@ class ProductToolsCore:
             blocked = self._block_status_replace(name, ctx)
             if blocked is not None:
                 return blocked
-            if ctx.role == "subagent":
+            if ctx.role == "subagent" and name != "report_progress":
                 touch_worker_activity(
                     self.runtime,
                     ctx.run_id,

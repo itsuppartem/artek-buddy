@@ -16,6 +16,8 @@ from artek_buddy.runtime.scripted import (
     E2E_SUBAGENT_NAME,
     E2E_WORKER_ACK,
     E2E_WORKER_BLOCK_S,
+    E2E_WORKER_PROGRESS_RESULT,
+    E2E_WORKER_PROGRESS_STEP,
     E2E_WORKER_RESULT,
     E2E_WORKER_STATUS,
     E2E_WORKER_STEER_ACK,
@@ -119,6 +121,13 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert worker_read[0].tool == "spawn_subagent"
     assert worker_read[0].args["task"] == "please e2e-consent-auto-read"
     assert worker_read[1].result == E2E_WORKER_ACK
+    progress = steps_for_prompt("please e2e-worker-progress")
+    assert progress[0].tool == "spawn_subagent"
+    assert progress[0].args["task"] == "please e2e-worker-progress-run"
+    run = steps_for_prompt("please e2e-worker-progress-run")
+    assert run[0].tool == "report_progress"
+    assert run[0].args["step"] == E2E_WORKER_PROGRESS_STEP
+    assert run[-1].result == E2E_WORKER_PROGRESS_RESULT
     lead_ssh = steps_for_prompt("please e2e-lead-owner-ssh")
     assert lead_ssh[0].tool == "run_owner_command"
     assert lead_ssh[-1].result == E2E_LEAD_OWNER_SSH

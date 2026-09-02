@@ -147,3 +147,86 @@ def test_stop_cancels_worker_when_lead_is_idle(client, auth_header) -> None:
             return
         time.sleep(0.1)
     raise AssertionError(f"worker was not cancelled: {last}")
+
+
+def test_worker_progress_throttles_host_lines(client, auth_header, monkeypatch) -> None:
+    from artek_buddy.runtime import worker_progress as progress_mod
+    from artek_buddy.runtime.scripted import (
+        E2E_WORKER_ACK,
+        E2E_WORKER_PROGRESS_LINE,
+        E2E_WORKER_PROGRESS_LINE_2,
+        E2E_WORKER_PROGRESS_RESULT,
+        E2E_WORKER_SUMMARY,
+    )
+
+    monkeypatch.setattr(progress_mod, "PROGRESS_FLOOR_S", 0.2)
+    bot_id = create_bot(client, auth_header, "WorkerProgressLead")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-worker-progress"},
+    )
+    assert sent.status_code == 200
+    lead = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert lead["run"]["status"] == "completed"
+    assert E2E_WORKER_ACK in message_texts(lead)
+
+    first = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_PROGRESS_LINE, timeout=5)
+    assert message_texts(first).count(E2E_WORKER_PROGRESS_LINE) == 1
+    workers = _running(_workers(client, auth_header, bot_id))
+    assert len(workers) == 1
+    assert workers[0]["progress"] == "commit"
+    assert workers[0]["progress_remaining"] == "push MR 76"
+    reconnect = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert reconnect.status_code == 200
+    body = reconnect.json()
+    assert any(
+        item.get("progress") == "commit" and item.get("progress_remaining") == "push MR 76"
+        for item in (body.get("subagents") or [])
+    )
+
+    second = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_PROGRESS_LINE_2, timeout=5)
+    texts = message_texts(second)
+    assert texts.count(E2E_WORKER_PROGRESS_LINE) == 1
+    assert texts.count(E2E_WORKER_PROGRESS_LINE_2) == 1
+
+    done = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_SUMMARY, timeout=20)
+    final_texts = message_texts(done)
+    assert final_texts.count(E2E_WORKER_SUMMARY) == 1
+    assert final_texts.count(E2E_WORKER_PROGRESS_LINE) == 1
+    assert final_texts.count(E2E_WORKER_PROGRESS_LINE_2) == 1
+    assert E2E_WORKER_PROGRESS_RESULT not in final_texts
+    finished = [
+        item for item in _workers(client, auth_header, bot_id) if item["status"] == "completed"
+    ]
+    assert finished and "progress job done" in (finished[0].get("result") or "")
+
+
+def test_stop_ends_worker_progress_heartbeats(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_WORKER_PROGRESS_LINE, E2E_WORKER_PROGRESS_LINE_2
+
+    bot_id = create_bot(client, auth_header, "StopProgress")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-worker-progress"},
+    )
+    assert sent.status_code == 200
+    wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    wait_thread_has(client, auth_header, bot_id, E2E_WORKER_PROGRESS_LINE, timeout=5)
+    stopped = client.post(f"/v1/threads/{bot_id}/stop", headers=auth_header)
+    assert stopped.status_code == 200
+    deadline = time.time() + 5
+    last: list[dict] = []
+    while time.time() < deadline:
+        last = _workers(client, auth_header, bot_id)
+        if last and last[0]["status"] == "cancelled":
+            snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+            assert snap.status_code == 200
+            texts = message_texts(snap.json())
+            assert texts.count(E2E_WORKER_PROGRESS_LINE) == 1
+            assert E2E_WORKER_PROGRESS_LINE_2 not in texts
+            assert snap.json()["run"]["error"] == "Stopped."
+            return
+        time.sleep(0.1)
+    raise AssertionError(f"progress worker was not cancelled: {last}")
