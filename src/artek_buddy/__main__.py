@@ -33,10 +33,10 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args == ["pair"]:
         return pair()
-    if args == ["worker"]:
+    if args == ["worker"] or args == ["worker", "--once"]:
         from artek_buddy.worker import worker
 
-        return worker()
+        return worker(once=args[-1:] == ["--once"])
     if args == ["supervisor"]:
         from artek_buddy.supervisor.server import main as supervisor_main
 
