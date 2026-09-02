@@ -491,6 +491,7 @@ async def _accept_turn(
     reply_to_id: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
     model_prompt: str | None = None,
+    device_id: str | None = None,
 ) -> ThreadSendResult:
     try:
         if history.get_default_model() is None:
@@ -600,6 +601,7 @@ async def _accept_turn(
             attach_agent=True,
             reply=reply_msg,
             inbox_items=inbox_items,
+            device_id=device_id,
         ),
         name=f"turn-{run.id}",
     )
@@ -753,10 +755,22 @@ async def _run_turn(
     attach_agent: bool = True,
     reply: ThreadMessage | None = None,
     inbox_items: list[dict[str, str | None]] | None = None,
+    device_id: str | None = None,
 ) -> None:
+    remembered = None
+    getter = getattr(rt, "device_for_run", None)
+    if callable(getter):
+        remembered = getter(run.id)
     rt.clear_active_turn(run_id=run.id)
     agent_id = session_id or bot.cursor_agent_id
-    rt.set_current_turn_context(bot.id, run.id, bot.thread_id, agent_id=agent_id, role="lead")
+    rt.set_current_turn_context(
+        bot.id,
+        run.id,
+        bot.thread_id,
+        agent_id=agent_id,
+        role="lead",
+        device_id=device_id or remembered,
+    )
     set_intent = getattr(rt, "set_owner_intent", None)
     if callable(set_intent):
         set_intent(run.id, classify_owner_intent(text))

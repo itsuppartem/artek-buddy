@@ -38,6 +38,7 @@ class ConsentsMixin:
                     """
                     SELECT id FROM consent_grants
                     WHERE bot_id = %s AND action_class = %s AND scope_key = %s
+                      AND device_id IS NULL
                     LIMIT 1
                     """,
                     (bot_id, action_class, scope_key),

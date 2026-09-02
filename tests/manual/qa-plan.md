@@ -338,7 +338,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Right-click Reply (Deb) puts a quote in the next user bubble. **Copy** copies that message; on a link, **Copy URL** is still there | [ ] | — |
 | `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Copy**, **Open in browser**, **Copy URL**, and Reply; Copy URL changes to **URL copied** | [ ] | [ ] |
 | `please e2e-blocked-browser`: Ask card visibly waits. An option or free-text answer stays on the card and continues the **same run**, without a second user bubble. A second answer is rejected without breaking the thread | [ ] | [ ] |
-| Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks | [ ] | [ ] |
+| Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks **on this window**. The other paired device still sees a card | [ ] | [ ] |
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
@@ -375,7 +375,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 
 Read a file or list a folder under the Linux home: no Allow card. Read-only shell (`ls`, `cat`, `echo`, `git status`, `find … -name` / `-print`) does not ask.
 
-Write a file or a command that can change the PC: Allow once / Always / Deny. That includes `git show --output=…`, `git diff --output=…`, `git branch new-name`, `git branch -m …`, and `find … -fprint` / `-fprintf` / `-fls`. Always covers later writes and commands on this PC, not each folder. Paths outside `$HOME` stay 403 on the card. A git/find write path outside `$HOME` does not run.
+Write a file or a command that can change the PC: Allow once / Always / Deny. That includes `git show --output=…`, `git diff --output=…`, `git branch new-name`, `git branch -m …`, and `find … -fprint` / `-fprintf` / `-fls`. Always covers later writes and commands on this PC **from this Deb**, not each folder. Paths outside `$HOME` stay 403 on the card. A git/find write path outside `$HOME` does not run.
 
 For SSH reuse, use a real alias already present on the owner PC. Do not add one
 for this test and do not change `~/.ssh/config`. First test without
