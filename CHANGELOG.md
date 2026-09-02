@@ -18,6 +18,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Live browse Allow/Deny fail the job if the model never shows a consent card. Skip remains only when the secret is absent.
 - Models list/Forget and Plugins status/Remove show a line on failure. Forget and Remove keep the previous key; a failed Plugins status does not stay on Checking.
 - A bot-to-bot reply is marked delivered only in the same transaction as the source follow-up run or inbox item. Overlapping owner send cannot drop that reply.
 - API setup errors (broken migration, workspace) fail the suite in CI. Local skip is `ARTEK_ALLOW_DB_SKIP=1` only. The job summary prints pass/fail/skip counts.
