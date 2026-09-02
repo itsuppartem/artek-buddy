@@ -32,7 +32,7 @@ import {
   shouldStickDismissOnView,
   shouldWatchBackgroundBot,
 } from "../lib/alerts";
-import { workspaceEventsAuthLoss } from "../lib/auth-loss";
+import { healthOkClearsError, workspaceEventsAuthLoss } from "../lib/auth-loss";
 import { composerCanSend, composerPlaceholder, composerShouldSend } from "../lib/composer";
 import {
   composerRedo,
@@ -840,7 +840,7 @@ export function ShellPage() {
       if (loadBots || recovering) {
         await refreshBotsRef.current();
       }
-      if (loadBots || recovering) {
+      if (healthOkClearsError(errorKindRef.current)) {
         setError(null);
       }
     } catch (err) {
