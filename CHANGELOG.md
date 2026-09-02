@@ -18,6 +18,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- A bot-to-bot reply is marked delivered only in the same transaction as the source follow-up run or inbox item. Overlapping owner send cannot drop that reply.
 - API setup errors (broken migration, workspace) fail the suite in CI. Local skip is `ARTEK_ALLOW_DB_SKIP=1` only. The job summary prints pass/fail/skip counts.
 - An existing `artek-computers` network with inter-container communication on is deleted when unused, or refused if boxes are still attached. ICC off is required, not only on first create.
 - The Linux `.deb` build uses `npm ci`. Host Playwright matches the test pin (1.62.0). Release prints base FROM lines and the host image digest.

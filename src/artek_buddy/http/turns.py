@@ -704,7 +704,7 @@ async def _deliver_bot_ask_reply(
     error: str | None,
     reply_text: str,
 ) -> None:
-    take = getattr(history, "take_undelivered_ask_for_run", None)
+    take = getattr(history, "peek_undelivered_ask_for_run", None)
     if not callable(take):
         return
     page = history.page_messages(bot.thread_id, limit=40)
@@ -715,13 +715,28 @@ async def _deliver_bot_ask_reply(
         answer = f"{bot.name} failed." + (f" {error}" if error else "")
     elif not answer:
         answer = f"{bot.name} finished without a reply."
-    ask = take(run.id, answer)
-    if ask is None:
+    pending = take(run.id)
+    if pending is None:
         return
-    source = history.get_bot(str(ask.get("from_bot_id") or ""))
+    source = history.get_bot(str(pending.get("from_bot_id") or ""))
     if source is None:
         return
-    ready = history.append_bot_message(source, ready_card_blocks(bot))
+    prompt = reply_model_prompt(bot.name, answer)
+    live = source
+    if history.active_run_count(source.id) == 0:
+        live = await _ensure_agent(history, rt, source)
+    delivered = history.deliver_bot_ask_follow_up(
+        to_run_id=run.id,
+        reply_text=answer,
+        source=live,
+        ready_blocks=ready_card_blocks(bot),
+        prompt=prompt,
+        model_provider=runtime_kind(rt.settings),
+        model_id=_chosen_model_id(history, rt),
+    )
+    if delivered is None:
+        return
+    ask, ready, follow = delivered
     _emit(
         events,
         source,
@@ -729,17 +744,8 @@ async def _deliver_bot_ask_reply(
         {"message": ready.model_dump(mode="json")},
         run_id=str(ask.get("from_run_id") or "") or None,
     )
-    prompt = reply_model_prompt(bot.name, answer)
-    if history.active_run_count(source.id) > 0:
-        history.enqueue_inbox(source.id, ready.id, prompt)
+    if follow is None:
         return
-    live = await _ensure_agent(history, rt, source)
-    follow = history.begin_run(
-        live,
-        trigger="follow_up",
-        model_provider=runtime_kind(rt.settings),
-        model_id=_chosen_model_id(history, rt),
-    )
     _emit(
         events,
         live,

@@ -105,3 +105,51 @@ def test_ask_api_starts_dest_and_returns_compact_reply(client, auth_header) -> N
     assert "computer" not in _block_kinds(answered)
     snap_b = client.get(f"/v1/threads/{knows['id']}", headers=auth_header).json()
     assert snap_b["computer"]["bot_id"] == knows["id"]
+
+
+def test_ask_reply_enqueues_when_source_starts_another_run(
+    client, auth_header, monkeypatch
+) -> None:
+    import asyncio
+    import threading
+
+    import artek_buddy.http.turns as turns
+
+    asker = create_bot(client, auth_header, "AskRace")
+    knows = create_bot(client, auth_header, "KnowsRace")
+    entered = threading.Event()
+    release = threading.Event()
+    holding = threading.Event()
+    real = turns._ensure_agent
+    asker_id = asker["id"]
+
+    async def gated(history, rt, bot):
+        if bot.id == asker_id and not holding.is_set():
+            holding.set()
+            entered.set()
+            await asyncio.to_thread(release.wait)
+        return await real(history, rt, bot)
+
+    monkeypatch.setattr(turns, "_ensure_agent", gated)
+    asked = client.post(
+        f"/v1/bots/{asker['id']}/asks",
+        headers=auth_header,
+        json={"bot": knows["name"], "text": "what city do you know"},
+    )
+    assert asked.status_code == 200
+    to_run_id = asked.json()["to_run_id"]
+    assert entered.wait(timeout=30), "dest finish never waited on source ensure_agent"
+    ping = client.post(
+        f"/v1/threads/{asker['id']}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now"},
+    )
+    assert ping.status_code == 200
+    release.set()
+    store = client.app.state.store
+    answered = wait_thread_has(client, auth_header, asker["id"], "Subotica")
+    assert "computer" not in _block_kinds(answered)
+    row = store.get_bot_ask_for_to_run(to_run_id)
+    assert row is not None
+    assert row["delivered_at"] is not None
+    assert store.inbox_count(asker_id) >= 1 or store.active_run_count(asker_id) >= 1
