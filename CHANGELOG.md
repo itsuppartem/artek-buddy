@@ -18,6 +18,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- A minimized or tray-hidden Linux `.deb` still raises one native row when the open chat finishes. Iconify / withdrawn now set `window_active` false even if GTK `is-active` stays true.
 - Always is looked up on the frozen turn device, not the last HTTP actor. A second window cannot spend the first window's Always; a host-wide grant is only a row with no device.
 - A late desktop click after Release cannot restore Take control. Input is bound to that lease; a stale save does not rewrite the holder.
 - A worker This-PC auto read stays on the thread snapshot after the lead turn finishes and the window reloads. ACK still claims once; a second window that loses the claim stands down.
