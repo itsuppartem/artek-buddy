@@ -53,6 +53,20 @@ def test_release_workflow_does_not_prune_github_releases() -> None:
     assert "Keep five GitHub Releases" not in text
 
 
+def test_release_workflow_yaml_is_not_loaded_from_default_branch_workflow_run() -> None:
+    """A develop-only release.yml change must not receive the write token (#358)."""
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    on_block = text.split("permissions:", 1)[0]
+    assert "workflow_run:" not in on_block
+    assert "workflow_dispatch:" in on_block
+    assert "github.ref == 'refs/heads/main'" in text
+    assert "github.workflow_sha" in text
+    assert "merge-base --is-ancestor" in text
+    assert "workflow_sha=" in text
+    assert "released_sha=" in text
+    assert "test_sha=" in text
+
+
 def test_release_client_sbom_covers_the_packaged_deb() -> None:
     text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     assert "dpkg-deb -x" in text

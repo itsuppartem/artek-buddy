@@ -53,8 +53,8 @@ Runtime `/docs` stays off. The dump writes `client/web/openapi.json`; `npm run g
 
 GitHub Releases attach `artek-buddy-client_<version>_all.deb` (no baked host URL),
 `SHA256SUMS`, CycloneDX SBOMs, and `install-host.sh` after a `VERSION` bump on
-`main` when `test` on that commit is green (`release.yml` is `workflow_run` on
-`test`). Notes are the changelog section for that version. The `test` workflow
+`main` when `test` on that commit is green (`release.yml` is dispatched from
+`main`, not a default-branch `workflow_run`). Notes are the changelog section for that version. The `test` workflow
 builds a `.deb` for Playwright; it does not upload that artifact.
 
 You can still build a local package (unreleased tree, or `ARTEK_BAKE_URL=1`):
@@ -89,8 +89,9 @@ kind of optional Grok job for the host page; `live_gate` already records
 skipped vs failed). Review
 count is 0; do not push `main` or `develop` directly.
 A merge into `main` that changes `VERSION` publishes a GitHub Release only after
-the **push** `test` run on that commit is green (`release.yml` is `workflow_run`
-on `test`, not a parallel `push`). The computer image is not built in Actions.
+the **push** `test` run on that commit is green, then `release.yml` is
+`workflow_dispatch`ed from **that** `main` SHA. GitHub does not load this
+privileged YAML via default-branch `workflow_run`. The computer image is not built in Actions.
 The host image is pushed by digest, Trivy-scanned (HIGH and CRITICAL), then
 tagged as the version and `latest` — same digest, no rebuild. A second upload
 of the same Release asset name fails (no `--clobber`). GitHub Releases stay;
