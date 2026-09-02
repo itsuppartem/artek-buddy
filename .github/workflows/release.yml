@@ -11,9 +11,10 @@ name: release
 # The computer image is not built here: Chromium under QEMU hangs the job.
 # install-host.sh pulls it when present, otherwise builds on the Pi.
 # Host image: push by digest, Trivy HIGH+CRITICAL on that digest, then tag
-# VERSION and latest (same digest, no rebuild). The GitHub Release tag is
-# created at github.sha and peeled before those GHCR tags move, so a missing
-# tag is not taken from default develop. gh release create uses --verify-tag.
+# VERSION and latest (same digest, no rebuild) only after the GitHub Release
+# exists. The GitHub Release tag is created at github.sha and peeled before
+# those GHCR tags move, so a missing tag is not taken from default develop.
+# gh release create uses --verify-tag.
 # A second upload of the same Release asset name fails. Do not prune GitHub
 # Releases from this workflow.
 # Dispatch requires a green push test and CodeQL on github.sha (analyze
@@ -28,6 +29,10 @@ on:
         description: Publish even if VERSION did not change
         type: boolean
         default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   actions: read
@@ -46,6 +51,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Bind release to one main SHA
         env:
@@ -231,6 +237,7 @@ jobs:
       - name: Point release tag at the tested SHA
         if: steps.ver.outputs.changed == 'true'
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -243,6 +250,9 @@ jobs:
             git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}"
           else
             git tag "$TAG" "$RELEASE_SHA"
+            set +x
+            AUTH="$(printf 'x-access-token:%s' "$GH_TOKEN" | openssl base64 -A)"
+            git config --local "http.https://github.com/.extraheader" "AUTHORIZATION: basic ${AUTH}"
             git push origin "refs/tags/${TAG}"
           fi
           PEELED="$(git rev-parse "${TAG}^{}")"
@@ -250,17 +260,6 @@ jobs:
           echo "tag_sha=$PEELED"
           echo "released_sha=$RELEASE_SHA"
           test "$PEELED" = "$RELEASE_SHA"
-
-      - name: Promote scanned host image
-        if: steps.ver.outputs.changed == 'true'
-        run: |
-          set -euo pipefail
-          DIGEST="${{ steps.image.outputs.digest }}"
-          test -n "$DIGEST"
-          docker buildx imagetools create \
-            --tag "ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}" \
-            --tag "ghcr.io/itsuppartem/artek-buddy:latest" \
-            "ghcr.io/itsuppartem/artek-buddy@${DIGEST}"
 
       - name: Attest client .deb
         if: steps.ver.outputs.changed == 'true'
@@ -317,3 +316,14 @@ jobs:
           echo "tag_sha=$PEELED"
           echo "released_sha=$RELEASE_SHA"
           test "$PEELED" = "$RELEASE_SHA"
+
+      - name: Promote scanned host image
+        if: steps.ver.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.image.outputs.digest }}"
+          test -n "$DIGEST"
+          docker buildx imagetools create \
+            --tag "ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}" \
+            --tag "ghcr.io/itsuppartem/artek-buddy:latest" \
+            "ghcr.io/itsuppartem/artek-buddy@${DIGEST}"

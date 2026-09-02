@@ -126,6 +126,30 @@ def test_release_workflow_points_new_tag_at_tested_sha_before_ghcr_promote() -> 
     assert "--verify-tag" in create
     assert 'git rev-parse "${TAG}^{}"' in create
     assert 'test "$PEELED" = "$RELEASE_SHA"' in create
+    assert release < promote
+
+
+def test_release_workflow_serializes_and_promotes_after_github_release() -> None:
+    """Overlapping dispatch must not both promote; GHCR tags wait for the Release (#365)."""
+    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    on_block = text.split("permissions:", 1)[0]
+    assert "concurrency:" in on_block
+    assert "cancel-in-progress: false" in on_block
+    assert "cancel-in-progress: true" not in text
+    checkout = text.find("actions/checkout@")
+    login = text.find("docker/login-action")
+    checkout_block = text[checkout:login]
+    assert "persist-credentials: false" in checkout_block
+    refuse = text.find("name: Refuse a published VERSION")
+    imagetools = text.find("docker buildx imagetools create")
+    release = text.find("name: GitHub Release")
+    promote = text.find("name: Promote scanned host image")
+    assert refuse != -1
+    assert refuse < imagetools
+    assert release != -1
+    assert promote != -1
+    assert release < promote
+    assert "gh release create" in text[release:promote]
 
 
 def test_release_client_sbom_covers_the_packaged_deb() -> None:
