@@ -18,6 +18,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- The Linux `.deb` build uses `npm ci`. Host Playwright matches the test pin (1.62.0). Release prints base FROM lines and the host image digest.
 - `/readyz` is 503 when Postgres or the runtime is down. `/health` and `/livez` stay process liveness (200). Compose healthchecks use `/readyz`.
 - A second `install-host.sh` on a clean checkout fetches and checks out that release tag. A dirty tree aborts; `.env` is kept.
 - Supervisor `:7091` compares the bearer with `secrets.compare_digest`. Client 500s are a stable `supervisor error`; engine text stays in the server log.

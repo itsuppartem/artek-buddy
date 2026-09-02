@@ -235,6 +235,17 @@ jobs:
           platforms: linux/amd64,linux/arm64
           outputs: type=image,name=ghcr.io/itsuppartem/artek-buddy,push-by-digest=true,name-canonical=true,push=true
 
+      - name: Record toolchain
+        if: steps.ver.outputs.changed == 'true'
+        run: |
+          {
+            echo "## Toolchain"
+            echo "- Host image digest: \`${{ steps.image.outputs.digest }}\`"
+            echo "- Playwright (host requirements): \`$(grep -E '^playwright=' requirements.txt)\`"
+            echo "- Dockerfile FROM:"
+            grep -E '^FROM ' Dockerfile infra/computer/Dockerfile | sed 's/^/  - /'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Trivy host image
         if: steps.ver.outputs.changed == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
