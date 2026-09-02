@@ -379,6 +379,7 @@ class ConsentRequest:
     summary: str
     status: str = "pending"
     run_id: str | None = None
+    parent_run_id: str | None = None
     message_id: str | None = None
     job_status: str | None = None
 
@@ -431,6 +432,18 @@ class ConsentHub:
             return "allow"
         return None
 
+    def _parent_run_id(self, run_id: str | None) -> str | None:
+        if not run_id:
+            return None
+        get_run = getattr(self.store, "get_run", None)
+        if callable(get_run) and get_run(run_id) is not None:
+            return None
+        get_sub = getattr(self.store, "get_subagent", None)
+        if not callable(get_sub):
+            return None
+        found = get_sub(run_id)
+        return getattr(found, "parent_run_id", None) if found is not None else None
+
     def has_grant(
         self, bot_id: str, action_class: str, scope_key: str, device_id: str | None
     ) -> bool:
@@ -477,6 +490,7 @@ class ConsentHub:
             request_id,
             bot_id=bot_id,
             run_id=run_id,
+            parent_run_id=self._parent_run_id(run_id),
             thread_id=bot.thread_id,
             message_id=message.id,
             action_class=action_class,
@@ -921,6 +935,7 @@ class ConsentHub:
             request_id,
             bot_id=bot_id,
             run_id=run_id,
+            parent_run_id=self._parent_run_id(run_id),
             thread_id=bot.thread_id,
             message_id=None,
             action_class=action_class,
@@ -1008,6 +1023,7 @@ class ConsentHub:
             request_id,
             bot_id=bot_id,
             run_id=run_id,
+            parent_run_id=self._parent_run_id(run_id),
             thread_id=bot.thread_id,
             message_id=None,
             action_class=CLASS_OWNER_READ,

@@ -251,6 +251,7 @@ On **Deb**: stop the `artek-buddy` container for about 30 seconds (or pull the n
 | Scripted `please e2e-lead-owner-ssh`: the lead turn finishes without grinding This-PC SSH. A following Send is a new run. Window **Stop** then Send is also a new turn, not a silent queue on a cancelled run | [ ] | [ ] |
 | Composer **Stop** while only the worker is running writes **Stopped.** and cancels that work | [ ] | [ ] |
 | This-PC Allow (read / write this Linux home) works on Deb. Refresh or open a second window while it runs: the same write/exec happens **once** and the losing window does not fail the winner's result | [ ] | — |
+| Scripted `please e2e-worker-auto-read`: lead finishes; refresh still lists the queued This-PC read; ACK once; worker continues with the file. A second window that loses the claim stands down | [ ] | — |
 | Back-to-back This-PC read + list are both ACKed promptly and return their own results; neither waits for the SSE heartbeat or receives the other job | [ ] | — |
 | Phone `/local/owner-*` is **403**. It does not fail an auto job while the paired Deb can claim it | — | [ ] |
 
@@ -595,7 +596,7 @@ If time is short, in this order:
 8. **§12 Pad and Cyrillic**
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
-11. **§10 workers** `please e2e-background-worker-chat` then status; Message stays usable; one final result. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
+11. **§10 workers** `please e2e-background-worker-chat` then status; Message stays usable; one final result. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
 12. **§1 / §21 Escape** on Settings and New bot
 13. **§14 Inbox** Search empty + one click opens that row
 14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Plugin **Open to connect** is the same kind of link

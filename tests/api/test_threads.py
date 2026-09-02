@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import time
 
-from tests.api.helpers import create_bot, message_texts, wait_run, wait_run_status
+from tests.api.helpers import (
+    create_bot,
+    message_texts,
+    wait_pending_auto_jobs,
+    wait_run,
+    wait_run_status,
+    wait_thread_has,
+)
 
 
 def test_scripted_turn_happy(client, auth_header) -> None:
@@ -534,6 +541,68 @@ def test_thread_snapshot_exposes_every_pending_auto_owner_job(client, auth_heade
     )
     assert uploaded.status_code == 200
     assert wait_run(client, auth_header, bot_id, run_id)["run"]["status"] == "completed"
+
+
+def test_worker_auto_owner_job_survives_thread_reload(client, auth_header) -> None:
+    """A worker This-PC read must remain on snapshot after the lead run completes (#361)."""
+    from artek_buddy.runtime.scripted import E2E_WORKER_ACK
+
+    bot_id = create_bot(client, auth_header, "WorkerAutoReload")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-worker-auto-read"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    lead = wait_run(client, auth_header, bot_id, run_id)
+    assert lead["run"]["status"] == "completed"
+    assert E2E_WORKER_ACK in message_texts(lead)
+
+    snap = wait_pending_auto_jobs(client, auth_header, bot_id)
+    consent_id = snap["pending_auto_consent_id"]
+    assert consent_id
+    assert consent_id in snap["pending_auto_consent_ids"]
+    job = client.get(f"/v1/consents/{consent_id}", headers=auth_header)
+    assert job.status_code == 200
+    body = job.json()
+    assert body["action_class"] == "owner_read"
+    assert body["job_status"] == "queued"
+    stored = client.app.state.store.get_consent_request(consent_id)
+    assert stored is not None
+    assert stored.run_id != run_id
+    assert stored.parent_run_id == run_id
+
+    claimed = client.post(
+        f"/v1/consents/{consent_id}/ack",
+        headers=auth_header,
+        json={"claim_capable": True},
+    )
+    assert claimed.status_code == 200
+    claim = claimed.json().get("claim")
+    assert isinstance(claim, str) and claim
+    duplicate = client.post(f"/v1/consents/{consent_id}/ack", headers=auth_header)
+    assert duplicate.status_code == 409
+    loser = client.post(
+        f"/v1/consents/{consent_id}/result",
+        headers=auth_header,
+        json={"ok": False, "error": "no paired client"},
+    )
+    assert loser.status_code == 409
+    uploaded = client.post(
+        f"/v1/consents/{consent_id}/file",
+        headers=auth_header,
+        json={"name": "notes.txt", "text": "notes from owner", "claim": claim},
+    )
+    assert uploaded.status_code == 200
+    done = wait_thread_has(client, auth_header, bot_id, "got notes")
+    assert any(item.get("status") == "completed" for item in done.get("subagents") or [])
+    finished = client.get(f"/v1/consents/{consent_id}", headers=auth_header)
+    assert finished.status_code == 200
+    assert finished.json()["job_status"] == "completed"
+    final_snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert final_snap.status_code == 200
+    assert final_snap.json()["pending_auto_consent_id"] is None
 
 
 def test_auto_owner_job_ack_is_single_claim_and_rejects_loser_result(client, auth_header) -> None:
