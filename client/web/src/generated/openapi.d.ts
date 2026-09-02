@@ -1651,6 +1651,8 @@ export interface components {
         ComputerInput: {
             /** Kind */
             kind: string;
+            /** Lease Id */
+            lease_id: string;
             /** Payload */
             payload?: {
                 [key: string]: unknown;
@@ -1667,6 +1669,8 @@ export interface components {
              * @enum {string}
              */
             control_holder: "bot" | "user" | "none";
+            /** Control Lease Id */
+            control_lease_id?: string | null;
             /** Home Revision */
             home_revision: string | null;
             kind: components["schemas"]["SandboxKind"];

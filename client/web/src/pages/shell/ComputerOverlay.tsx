@@ -83,11 +83,16 @@ export function ComputerOverlay({
   const lastActivityMs = useRef(0);
   const deskBotIdRef = useRef(bot?.id ?? "");
   deskBotIdRef.current = bot?.id ?? "";
+  const leaseIdRef = useRef(computer?.controlLeaseId ?? "");
+  leaseIdRef.current = computer?.controlLeaseId ?? "";
   const deskGateRef = useRef<((input: DeskInput) => void) | null>(null);
   if (deskGateRef.current === null) {
-    deskGateRef.current = createDeskInputGate((input) =>
-      api.computer.input(deskBotIdRef.current, input),
-    );
+    deskGateRef.current = createDeskInputGate((input) => {
+      const botId = deskBotIdRef.current;
+      const leaseId = leaseIdRef.current;
+      if (!botId || !leaseId) return Promise.resolve();
+      return api.computer.input(botId, { ...input, leaseId });
+    });
   }
   const [frameReady, setFrameReady] = useState(0);
   const [keysOpen, setKeysOpen] = useState(false);
@@ -104,7 +109,9 @@ export function ComputerOverlay({
     const now = Date.now();
     if (!shouldReportOwnerActivity(lastActivityMs.current, now)) return;
     lastActivityMs.current = now;
-    void api.computer.input(bot.id, { kind: "activity", payload: {} });
+    const leaseId = computer.controlLeaseId;
+    if (!leaseId) return;
+    void api.computer.input(bot.id, { kind: "activity", payload: {}, leaseId });
   }
 
   useEffect(() => {

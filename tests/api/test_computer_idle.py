@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime, timedelta
 
 from tests.api.helpers import create_bot, wait_run, wait_run_status
@@ -40,7 +41,11 @@ def test_owner_input_refreshes_sleep_at(client, auth_header) -> None:
     typed = client.post(
         f"/v1/computer/{bot_id}/input",
         headers=auth_header,
-        json={"kind": "key", "payload": {"text": "a"}},
+        json={
+            "kind": "key",
+            "payload": {"text": "a"},
+            "lease_id": taken.json()["lease_id"],
+        },
     )
     assert typed.status_code == 200
     _bot, after = _bot_record(bot_id)
@@ -118,7 +123,8 @@ def test_desktop_observe_refreshes_sleep_at(client, auth_header) -> None:
 def test_activity_input_refreshes_sleep_and_skips_supervisor(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "IdleActivity", computer_mode="dedicated")["id"]
     assert client.post(f"/v1/computer/{bot_id}/boot", headers=auth_header).status_code == 200
-    assert client.post(f"/v1/computer/{bot_id}/takeover", headers=auth_header).status_code == 200
+    taken = client.post(f"/v1/computer/{bot_id}/takeover", headers=auth_header)
+    assert taken.status_code == 200
     stamped = _set_sleep_at(bot_id, datetime.now(UTC) - timedelta(minutes=4))
     bot, record = _bot_record(bot_id)
     record.last_input_at = isoformat_utc(datetime.now(UTC) - timedelta(minutes=1))
@@ -127,7 +133,11 @@ def test_activity_input_refreshes_sleep_and_skips_supervisor(client, auth_header
     typed = client.post(
         f"/v1/computer/{bot_id}/input",
         headers=auth_header,
-        json={"kind": "activity", "payload": {}},
+        json={
+            "kind": "activity",
+            "payload": {},
+            "lease_id": taken.json()["lease_id"],
+        },
     )
     assert typed.status_code == 200
     _bot, after = _bot_record(bot_id)
@@ -229,3 +239,45 @@ def test_parked_takeover_does_not_block_idle_sleep(client, auth_header) -> None:
     _set_sleep_at(bot_id, datetime.now(UTC) - timedelta(minutes=1))
     due = app.state.store.due_idle_computer_bots()
     assert bot_id in due
+
+
+def test_late_input_save_does_not_resurrect_idle_expired_lease(
+    client, auth_header, monkeypatch
+) -> None:
+    bot_id = create_bot(client, auth_header, "StaleIdleLease", computer_mode="dedicated")["id"]
+    assert client.post(f"/v1/computer/{bot_id}/boot", headers=auth_header).status_code == 200
+    taken = client.post(f"/v1/computer/{bot_id}/takeover", headers=auth_header)
+    assert taken.status_code == 200
+    lease_id = taken.json()["lease_id"]
+    boxes = app.state.computers
+    real_client_send = boxes.client.send_input
+    entered = threading.Event()
+    gate = threading.Event()
+
+    def blocked_send(provider_ref: str, kind: str, payload: dict) -> dict:
+        entered.set()
+        assert gate.wait(10)
+        return real_client_send(provider_ref, kind, payload)
+
+    monkeypatch.setattr(boxes.client, "send_input", blocked_send)
+
+    def type_away() -> None:
+        client.post(
+            f"/v1/computer/{bot_id}/input",
+            headers=auth_header,
+            json={"kind": "key", "payload": {"text": "x"}, "lease_id": lease_id},
+        )
+
+    worker = threading.Thread(target=type_away)
+    worker.start()
+    assert entered.wait(10)
+    bot, record = _bot_record(bot_id)
+    record.last_input_at = isoformat_utc(datetime.now(UTC) - timedelta(hours=1))
+    app.state.store.save_computer(record)
+    assert app.state.store.expire_idle_takeovers(30) >= 1
+    gate.set()
+    worker.join(10)
+    assert not worker.is_alive()
+    _bot, after = _bot_record(bot_id)
+    assert after.control_holder != "user"
+    assert after.control_lease_id is None

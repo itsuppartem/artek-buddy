@@ -503,7 +503,10 @@ export const api = {
     release(botId: string) {
       return request<OkResponse>("POST", `/v1/computer/${botId}/release`);
     },
-    input(botId: string, body: { kind: string; payload: Record<string, unknown> }) {
+    input(
+      botId: string,
+      body: { kind: string; payload: Record<string, unknown>; leaseId: string },
+    ) {
       return request<OkResponse>("POST", `/v1/computer/${botId}/input`, body);
     },
     heartbeat(botId: string) {

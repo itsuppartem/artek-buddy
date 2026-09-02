@@ -225,7 +225,11 @@ async def computer_input(
 ) -> OkResponse:
     try:
         await asyncio.to_thread(
-            boxes.send_input, _require_bot(history, bot_id), body.kind, body.payload
+            boxes.send_input,
+            _require_bot(history, bot_id),
+            body.kind,
+            body.payload,
+            body.lease_id,
         )
     except (ComputerBusy, ComputerError) as err:
         raise _computer_http(err) from err

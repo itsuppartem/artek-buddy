@@ -75,6 +75,33 @@ class _ComputerStore:
         self.record = record
         return record
 
+    def save_box_state(self, record: ComputerRecord) -> ComputerRecord:
+        self.record.home_revision = record.home_revision
+        self.record.kind = record.kind
+        self.record.provider_ref = record.provider_ref
+        self.record.state = record.state
+        self.record.execution_run_id = record.execution_run_id
+        self.record.execution_bot_id = record.execution_bot_id
+        self.record.execution_lease_expires_at = record.execution_lease_expires_at
+        self.record.sleep_at = record.sleep_at
+        return self.record
+
+    def clear_control_lease(
+        self,
+        computer_id: str,
+        *,
+        lease_id: str | None = None,
+        holder: str = "bot",
+    ) -> ComputerRecord | None:
+        if lease_id and self.record.control_lease_id != lease_id:
+            return None
+        self.record.control_holder = holder if holder in {"bot", "none"} else "bot"
+        self.record.control_lease_id = None
+        self.record.control_lease_expires_at = None
+        self.record.control_bot_id = None
+        self.record.last_input_at = None
+        return self.record
+
 
 def test_stop_marks_computer_sleeping() -> None:
     """WINDOW.md Stop → Sleeping. `stopped` is Offline in the Settings power label."""

@@ -100,6 +100,136 @@ class ComputerMixin:
             raise RuntimeError("computer missing")
         return self._computer_from_row(row)
 
+    def save_box_state(self, record: ComputerRecord) -> ComputerRecord:
+        now = isoformat_utc()
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE computers SET
+                    home_revision = %s, kind = %s, provider_ref = %s, state = %s,
+                    execution_run_id = %s, execution_bot_id = %s,
+                    execution_lease_expires_at = %s, sleep_at = %s,
+                    updated_at = %s
+                WHERE id = %s
+                RETURNING *
+                """,
+                (
+                    record.home_revision,
+                    record.kind,
+                    record.provider_ref,
+                    record.state,
+                    record.execution_run_id,
+                    record.execution_bot_id,
+                    record.execution_lease_expires_at,
+                    record.sleep_at,
+                    now,
+                    record.id,
+                ),
+            ).fetchone()
+            conn.commit()
+        if row is None:
+            raise RuntimeError("computer missing")
+        return self._computer_from_row(row)
+
+    def touch_control_input(
+        self,
+        computer_id: str,
+        lease_id: str,
+        last_input_at: str,
+        sleep_at: str,
+    ) -> bool:
+        now = isoformat_utc()
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE computers
+                SET last_input_at = %s, sleep_at = %s, updated_at = %s
+                WHERE id = %s
+                  AND control_lease_id = %s
+                  AND control_holder = 'user'
+                RETURNING id
+                """,
+                (last_input_at, sleep_at, now, computer_id, lease_id),
+            ).fetchone()
+            conn.commit()
+        return row is not None
+
+    def set_control_lease(
+        self,
+        computer_id: str,
+        bot_id: str,
+        lease_id: str,
+        expires_at: str,
+        last_input_at: str,
+    ) -> ComputerRecord | None:
+        now = isoformat_utc()
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE computers
+                SET control_holder = 'user',
+                    control_lease_id = %s,
+                    control_lease_expires_at = %s,
+                    control_bot_id = %s,
+                    last_input_at = %s,
+                    updated_at = %s
+                WHERE id = %s
+                  AND (
+                    control_holder <> 'user'
+                    OR control_lease_id IS NULL
+                    OR control_lease_id = %s
+                  )
+                RETURNING *
+                """,
+                (lease_id, expires_at, bot_id, last_input_at, now, computer_id, lease_id),
+            ).fetchone()
+            conn.commit()
+        return self._computer_from_row(row) if row else None
+
+    def clear_control_lease(
+        self,
+        computer_id: str,
+        *,
+        lease_id: str | None = None,
+        holder: str = "bot",
+    ) -> ComputerRecord | None:
+        now = isoformat_utc()
+        holder = holder if holder in {"bot", "none"} else "bot"
+        with self._conn() as conn:
+            if lease_id:
+                row = conn.execute(
+                    """
+                    UPDATE computers
+                    SET control_holder = %s,
+                        control_lease_id = NULL,
+                        control_lease_expires_at = NULL,
+                        control_bot_id = NULL,
+                        last_input_at = NULL,
+                        updated_at = %s
+                    WHERE id = %s
+                      AND control_lease_id = %s
+                    RETURNING *
+                    """,
+                    (holder, now, computer_id, lease_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    UPDATE computers
+                    SET control_holder = %s,
+                        control_lease_id = NULL,
+                        control_lease_expires_at = NULL,
+                        control_bot_id = NULL,
+                        last_input_at = NULL,
+                        updated_at = %s
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (holder, now, computer_id),
+                ).fetchone()
+            conn.commit()
+        return self._computer_from_row(row) if row else None
+
     def other_bots_using_computer(self, computer_id: str, except_bot_id: str) -> int:
         with self._conn() as conn:
             row = conn.execute(

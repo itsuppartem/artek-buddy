@@ -19,6 +19,7 @@
 
 ### Fixed
 - Always is looked up on the frozen turn device, not the last HTTP actor. A second window cannot spend the first window's Always; a host-wide grant is only a row with no device.
+- A late desktop click after Release cannot restore Take control. Input is bound to that lease; a stale save does not rewrite the holder.
 - A worker This-PC auto read stays on the thread snapshot after the lead turn finishes and the window reloads. ACK still claims once; a second window that loses the claim stands down.
 - Owner `git`/`find` that can write (`--output`, `git branch` create/rename, `-fprint` / `-fprintf` / `-fls`) require Allow. Deny does not create the file or branch. A write path outside `$HOME` does not run on the paired client.
 - Privileged `release.yml` is no longer a default-branch `workflow_run`. Publish is `workflow_dispatch` on `main` after green `test` on that SHA; a `release.yml` change that exists only on `develop` does not get the write token.
