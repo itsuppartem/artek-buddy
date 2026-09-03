@@ -104,9 +104,28 @@ mypy_path = "src"
 packages = ["artek_buddy"]
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
-# Baseline 2026-08-22: 205 errors, almost all mixin/Protocol attr-defined.
-# Tighten these codes in a later PR; do not silently re-enable a failing tree.
+# Baseline 2026-09-03: 295 errors with these four codes re-enabled
+# (268 attr-defined, 15 arg-type, 7 union-attr, 5 assignment). Almost all
+# remaining attr-defined are HistoryStore mixins (`_conn`) and runtime tool
+# Protocol attributes. client/ is not in `packages`.
 disable_error_code = [
+    "attr-defined",
+    "arg-type",
+    "union-attr",
+    "assignment",
+]
+
+[[tool.mypy.overrides]]
+# #142: auth, owner jail, and the migration runner are clean for the
+# globally disabled codes. quality fails if these modules regress.
+module = [
+    "artek_buddy.auth",
+    "artek_buddy.fs_jail",
+    "artek_buddy.db.connection",
+    "artek_buddy.db.sql_split",
+    "artek_buddy.db.history.store",
+]
+enable_error_code = [
     "attr-defined",
     "arg-type",
     "union-attr",
