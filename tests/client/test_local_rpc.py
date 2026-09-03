@@ -402,6 +402,4 @@ def test_proxy_forwards_put_to_the_host(
         host.server_close()
     assert resp.status == 200
     assert payload == b'{"ok":true}'
-    assert seen == [
-        ("/v1/bots/bot_deadbeefdeadbeef/credentials/github", b'{"secret":"fixture"}')
-    ]
+    assert seen == [("/v1/bots/bot_deadbeefdeadbeef/credentials/github", b'{"secret":"fixture"}')]
