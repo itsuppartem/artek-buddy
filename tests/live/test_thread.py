@@ -10,6 +10,8 @@ from tests.live.helpers import (
     create_named_bot,
     cut_host,
     ensure_model,
+    expect_cancelled_turn,
+    expect_stays_absent,
     open_chat,
     pair_fresh,
     restore_host,
@@ -556,9 +558,8 @@ def test_stop_does_not_append_completed_essay(page: Page, client_url: str, host_
     box.press("Enter")
     expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
     page.get_by_test_id("thread-stop").click()
-    expect(page.get_by_test_id("run-error")).to_be_visible(timeout=15_000)
-    page.wait_for_timeout(3_000)
-    expect(page.get_by_test_id("thread").get_by_text("slow done")).to_have_count(0)
+    expect_cancelled_turn(page)
+    expect_stays_absent(page.get_by_test_id("thread").get_by_text("slow done"))
     expect(bot_row(page, name)).not_to_contain_text("slow done")
 
 
@@ -573,8 +574,8 @@ def test_stop_late_complete_shows_stopped_and_drops_model_text(
     expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
     page.get_by_test_id("thread-stop").click()
     expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
-    page.wait_for_timeout(3_000)
-    expect(page.get_by_test_id("thread").get_by_text("pong")).to_have_count(0)
+    expect_cancelled_turn(page)
+    expect_stays_absent(page.get_by_test_id("thread").get_by_text("pong"))
     expect(bot_row(page, name)).not_to_contain_text("pong")
 
 
@@ -734,8 +735,8 @@ def test_user_stop_during_generate_shows_stopped_and_no_later_card(
     expect(page.get_by_test_id("thread").get_by_text("Generating…")).to_be_visible(timeout=8_000)
     page.get_by_test_id("thread-stop").click()
     expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
-    page.wait_for_timeout(3_000)
-    expect(page.get_by_test_id("file-card")).to_have_count(0)
+    expect_cancelled_turn(page)
+    expect_stays_absent(page.get_by_test_id("file-card"))
 
 
 def test_subagent_stop_while_running(page: Page, client_url: str, host_url: str) -> None:

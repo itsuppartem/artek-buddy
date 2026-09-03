@@ -302,3 +302,43 @@ def test_status_issues_nonce_only_to_this_origin(
     assert missing.status == 200
     assert missing_body["nonce"] == httpd.local_nonce
     assert crossed.status == 403
+
+
+def test_local_unpair_forgets_the_device_token(
+    client_mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proxy = _proxy(client_mod)
+    cfg = tmp_path / "artek-config"
+    cfg.mkdir()
+    token_path = cfg / "token"
+    token_path.write_text("device-token", encoding="utf-8")
+    monkeypatch.setattr(proxy, "_config_dir", lambda: cfg)
+    with running_proxy(client_mod, tmp_path, monkeypatch) as (httpd, port):
+        httpd.token = "device-token"
+        origin = f"http://127.0.0.1:{port}"
+        conn = HTTPConnection("127.0.0.1", port, timeout=5)
+        try:
+            conn.request("GET", "/local/status", headers={"Origin": origin})
+            status = conn.getresponse()
+            payload = json.loads(status.read().decode("utf-8"))
+            nonce = payload["nonce"]
+            conn.request(
+                "POST",
+                "/local/unpair",
+                body=b"{}",
+                headers={
+                    "Host": f"127.0.0.1:{port}",
+                    "Origin": origin,
+                    "Content-Type": "application/json",
+                    "X-Artek-Local-Nonce": nonce,
+                },
+            )
+            gone = conn.getresponse()
+            body = json.loads(gone.read().decode("utf-8"))
+        finally:
+            conn.close()
+    assert gone.status == 200
+    assert body["ok"] is True
+    assert body["paired"] is False
+    assert httpd.token == ""
+    assert not token_path.exists()
