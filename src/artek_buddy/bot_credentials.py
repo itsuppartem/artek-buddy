@@ -144,16 +144,18 @@ def _is_secret_blob(text: str) -> bool:
     value = (text or "").strip()
     if not _BLOB.fullmatch(value):
         return False
-    if value.lower().startswith("please"):
+    lowered = value.lower()
+    if lowered.startswith("please") or lowered.startswith("e2e-"):
         return False
     if "://" in value:
         return False
     hex_only = re.fullmatch(r"[0-9a-fA-F]{20,40}", value)
     if hex_only:
         return False
-    has_letter = any(ch.isalpha() for ch in value)
+    has_upper = any(ch.isupper() for ch in value)
+    has_lower = any(ch.islower() for ch in value)
     has_digit = any(ch.isdigit() for ch in value)
-    return has_letter and has_digit
+    return has_upper and has_lower and has_digit
 
 
 def find_chat_credentials(text: str) -> list[_Found]:

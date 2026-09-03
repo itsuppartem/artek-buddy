@@ -27,6 +27,8 @@ def test_detects_named_and_github_shapes() -> None:
     assert looks_like_pasted_credential(f"REGISTRY_TOKEN={NAMED_FIXTURE}")
     assert not looks_like_pasted_credential("please push to GitHub")
     assert not looks_like_pasted_credential("please e2e-worker-progress")
+    assert not looks_like_pasted_credential("e2e-consent-auto-read")
+    assert not looks_like_pasted_credential("e2e-consent-read-escape")
     assert PASTED_CREDENTIAL_DETAIL
     assert UNNAMED_CREDENTIAL_DETAIL
 
@@ -50,6 +52,12 @@ def test_chat_github_shape_is_stored_not_left_in_text(tmp_path: Path) -> None:
     assert "use" in visible
     assert last_four(GITHUB_FIXTURE) in visible
     assert BotCredentialStore(tmp_path).read(BOT_A, "github") == GITHUB_FIXTURE
+
+
+def test_scripted_e2e_prompt_is_not_intake(tmp_path: Path) -> None:
+    text = "e2e-consent-auto-read"
+    assert apply_chat_credentials(tmp_path, BOT_A, text) == text
+    assert BotCredentialStore(tmp_path).list_for_bot(BOT_A) == []
 
 
 def test_unlabeled_blob_is_not_stored(tmp_path: Path) -> None:
