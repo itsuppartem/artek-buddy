@@ -9,6 +9,7 @@ REQUIRED_MERGE_CHECKS = (
     "quality",
     "backend",
     "ui",
+    "ui_web",
     "scan",
     "live_gate",
     "analyze (python)",
@@ -25,6 +26,8 @@ def test_contributing_names_the_develop_and_main_merge_gate() -> None:
         assert name in text
     assert "`live` is not required" in text
     assert "develop is not branch-protected" not in text
+    assert "even if the ruleset still names only" not in text
+    assert "`ui`, `ui_web`, `scan`" in text
 
 
 def test_codeowners_does_not_claim_develop_is_unprotected() -> None:
@@ -36,7 +39,6 @@ def test_codeowners_does_not_claim_develop_is_unprotected() -> None:
 def test_release_workflow_comment_lists_the_full_merge_gate() -> None:
     text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     assert 'ruleset "Protect main"' in text
-    for name in ("quality", "backend", "ui", "scan", "live_gate"):
+    for name in REQUIRED_MERGE_CHECKS:
         assert name in text
-    assert "analyze (python)" in text
     assert "live is not required" in text

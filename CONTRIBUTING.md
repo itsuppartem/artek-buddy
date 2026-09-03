@@ -85,10 +85,9 @@ Daily work is a pull request **into `develop`**. `main` is release-only:
 open `develop` → `main` when shipping. Never push `main` directly.
 New issues can use the GitHub forms (bug, feature, engineering).
 PRs into `develop` or `main` cannot merge while any of these checks is red:
-`quality`, `backend`, `ui`, `scan`, `live_gate`, `analyze (python)`,
+`quality`, `backend`, `ui`, `ui_web`, `scan`, `live_gate`, `analyze (python)`,
 `analyze (javascript-typescript)`, and `CodeQL`. That is rulesets
-**Protect develop** and **Protect main**. `ui_web` runs on the same workflow
-and must be green before we merge even if the ruleset still names only `ui`.
+**Protect develop** and **Protect main**.
 `live` is not required (it needs the Actions secret; `live_web` is the same
 kind of optional Grok job for the host page; `live_gate` already records
 skipped vs failed). Review
