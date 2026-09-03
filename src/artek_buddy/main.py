@@ -33,6 +33,7 @@ log = logging.getLogger("artek_buddy")
 
 
 from artek_buddy.http.books import router as books_router
+from artek_buddy.http.bot_ask_delivery import handle_bot_ask as _handle_bot_ask
 from artek_buddy.http.bot_credentials import router as bot_credentials_router
 from artek_buddy.http.bots import router as bots_router
 from artek_buddy.http.computer import router as computer_router
@@ -46,7 +47,6 @@ from artek_buddy.http.routines import router as routines_router
 from artek_buddy.http.session import router as session_router
 from artek_buddy.http.threads import router as threads_router
 from artek_buddy.http.turns import (
-    _handle_bot_ask,
     _handle_takeover_request,
     _kick_inbox,
     _shutdown_work,
