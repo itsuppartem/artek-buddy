@@ -141,7 +141,8 @@ class ConnectionsMixin:
             )
             conn.commit()
         found = self.get_connection(connection_id)
-        assert found is not None
+        if found is None:
+            raise RuntimeError("connection insert did not persist")
         return found
 
     def update_connection(
