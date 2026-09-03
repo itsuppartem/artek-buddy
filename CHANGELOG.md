@@ -18,6 +18,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Changed
+- mypy still disables `attr-defined` / `arg-type` / `union-attr` / `assignment` on the host package (295 remaining). Those four codes are on for `auth`, `fs_jail`, and the migration runner (`db.connection`, `db.sql_split`, `db.history.store`).
 - Host page HTML sends CSP (`frame-ancestors 'none'`), `nosniff`, and `Referrer-Policy: no-referrer`. `/local/*` JSON on that origin gets `nosniff` and no-referrer too.
 - Host HTTP routers no longer call `logging.basicConfig` at import. JSON/text format is set only from `configure_logging` at process entry.
 - The Linux `.deb` HTTP handler is split: static window bytes, `/v1`/`/novnc` proxy, and `/local/*` RPC live in separate modules. Public imports stay on `proxy.py`.
