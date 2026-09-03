@@ -136,6 +136,25 @@ def test_host_local_pair_needs_origin_and_nonce(client, auth_header) -> None:
     assert bad_nonce.status_code == 403
 
 
+def test_host_local_rejects_scheme_and_port_mismatch(client) -> None:
+    nonce = _nonce(client)
+    https_origin = client.post(
+        "/local/unpair",
+        headers={"Origin": "https://testserver", "X-Artek-Local-Nonce": nonce},
+    )
+    assert https_origin.status_code == 403
+    other_port = client.post(
+        "/local/unpair",
+        headers={"Origin": "http://testserver:8080", "X-Artek-Local-Nonce": nonce},
+    )
+    assert other_port.status_code == 403
+    matching = client.post(
+        "/local/unpair",
+        headers={**_origin(), "X-Artek-Local-Nonce": nonce},
+    )
+    assert matching.status_code == 200
+
+
 def test_novnc_websocket_accepts_pairing_cookie(client, auth_header) -> None:
     paired = client.post(
         "/local/pair",
