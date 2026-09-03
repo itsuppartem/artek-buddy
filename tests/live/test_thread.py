@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import threading
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -1164,3 +1165,110 @@ def test_auth_error_send_does_not_queue(page: Page, client_url: str, host_url: s
         )
     ).to_have_count(0)
     expect(box).to_have_value("should not queue")
+
+
+def test_unsent_draft_stays_on_the_chat_it_was_typed_in(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    first = unique_bot("DraftA")
+    second = unique_bot("DraftB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    create_named_bot(page, second)
+    open_chat(page, first)
+    box = composer(page)
+    box.fill("keep on A")
+    expect(box).to_have_value("keep on A")
+    open_chat(page, second)
+    expect(composer(page)).to_have_value("")
+    open_chat(page, first)
+    expect(composer(page)).to_have_value("keep on A")
+
+
+def test_in_flight_send_does_not_disable_the_other_chat(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    first = unique_bot("HoldA")
+    second = unique_bot("HoldB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    create_named_bot(page, second)
+    ensure_model(page)
+    open_chat(page, first)
+    release = threading.Event()
+
+    def hold_post(route) -> None:
+        if route.request.method != "POST":
+            route.continue_()
+            return
+        release.wait(timeout=15)
+        route.continue_()
+
+    page.route("**/v1/threads/**/messages", hold_post)
+    box = composer(page)
+    box.fill("hold this send")
+    expect(box).to_have_value("hold this send")
+    box.press("Enter")
+    expect(page.get_by_role("button", name="Send")).to_be_disabled(timeout=5_000)
+    open_chat(page, second)
+    expect(composer(page)).to_have_value("")
+    other = composer(page)
+    other.fill("from B")
+    expect(other).to_have_value("from B")
+    expect(page.get_by_role("button", name="Send")).to_be_enabled()
+    release.set()
+    expect(composer(page)).to_have_value("from B")
+    open_chat(page, first)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="hold this send"
+        )
+    ).to_be_visible(timeout=15_000)
+
+
+def test_late_send_failure_keeps_files_on_the_origin_chat(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    first = unique_bot("FailA")
+    second = unique_bot("FailB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    create_named_bot(page, second)
+    ensure_model(page)
+    open_chat(page, first)
+    page.get_by_test_id("thread-composer").evaluate(
+        """el => {
+          const data = new DataTransfer();
+          data.items.add(new File([new Uint8Array([65, 66, 67])], "drop.txt", {type: "text/plain"}));
+          el.dispatchEvent(new DragEvent("drop", {bubbles: true, cancelable: true, dataTransfer: data}));
+        }"""
+    )
+    expect(page.get_by_test_id("attach-chip")).to_contain_text("drop.txt", timeout=5_000)
+    release = threading.Event()
+
+    def fail_post(route) -> None:
+        if route.request.method != "POST":
+            route.continue_()
+            return
+        release.wait(timeout=15)
+        route.fulfill(
+            status=500,
+            content_type="application/json",
+            body='{"detail":"send failed"}',
+        )
+
+    page.route("**/v1/threads/**/messages", fail_post)
+    page.get_by_role("button", name="Send").click()
+    expect(page.get_by_test_id("attach-chip")).to_have_count(0, timeout=5_000)
+    open_chat(page, second)
+    expect(page.get_by_test_id("attach-chip")).to_have_count(0)
+    expect(composer(page)).to_have_value("")
+    other = composer(page)
+    other.fill("from B")
+    expect(other).to_have_value("from B")
+    expect(page.get_by_role("button", name="Send")).to_be_enabled()
+    release.set()
+    expect(page.get_by_test_id("action-error")).to_be_visible(timeout=8_000)
+    open_chat(page, first)
+    expect(page.get_by_test_id("attach-chip")).to_contain_text("drop.txt", timeout=5_000)
+    expect(page.get_by_test_id("attach-chip")).to_have_count(1)

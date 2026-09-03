@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-from tests.live.helpers import arm_page, fulfill_json, unique_bot
+from tests.live.helpers import (
+    arm_page,
+    bot_row,
+    composer,
+    fulfill_json,
+    thread_header,
+    unique_bot,
+)
 from tests.live_web.helpers import (
     create_named_bot_phone,
     expect_bot_in_chats,
@@ -120,3 +127,28 @@ def test_host_page_workspace_events_auth_says_pair_this_phone_again(
     page.get_by_role("button", name="Pair this phone again").click()
     expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)
     expect(page.get_by_text("Pair this phone")).to_be_visible()
+
+
+def test_host_page_unsent_draft_stays_on_the_chat_it_was_typed_in(page: Page, host_url: str) -> None:
+    first = unique_bot("DraftWebA")
+    second = unique_bot("DraftWebB")
+    pair_host_page(page, host_url)
+    create_named_bot_phone(page, first)
+    create_named_bot_phone(page, second)
+    open_phone_tab(page, "chats")
+    bot_row(page, first).click()
+    expect(thread_header(page)).to_contain_text(first, timeout=8_000)
+    open_phone_tab(page, "chat")
+    box = composer(page)
+    box.fill("keep on A")
+    expect(box).to_have_value("keep on A")
+    open_phone_tab(page, "chats")
+    bot_row(page, second).click()
+    expect(thread_header(page)).to_contain_text(second, timeout=8_000)
+    open_phone_tab(page, "chat")
+    expect(composer(page)).to_have_value("")
+    open_phone_tab(page, "chats")
+    bot_row(page, first).click()
+    expect(thread_header(page)).to_contain_text(first, timeout=8_000)
+    open_phone_tab(page, "chat")
+    expect(composer(page)).to_have_value("keep on A")
