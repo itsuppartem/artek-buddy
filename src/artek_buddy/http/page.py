@@ -58,14 +58,52 @@ def _cookie_secure(request: Request) -> bool:
     return forwarded == "https"
 
 
+def _default_port(scheme: str) -> int:
+    return 443 if scheme == "https" else 80
+
+
+def _request_scheme(request: Request) -> str:
+    if _cookie_secure(request):
+        return "https"
+    scheme = (request.url.scheme or "http").lower()
+    return scheme if scheme in {"http", "https"} else "http"
+
+
+def _origin_triple(origin: str) -> tuple[str, str, int] | None:
+    parsed = urlparse(origin)
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in {"http", "https"}:
+        return None
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return None
+    port = parsed.port if parsed.port is not None else _default_port(scheme)
+    return scheme, host, port
+
+
+def _host_header_parts(host_header: str, *, scheme: str) -> tuple[str, int] | None:
+    parsed = urlparse(f"{scheme}://{host_header.strip()}")
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return None
+    port = parsed.port if parsed.port is not None else _default_port(scheme)
+    return host, port
+
+
 def _same_origin(request: Request, *, mutating: bool) -> bool:
     origin = (request.headers.get("origin") or "").strip()
-    host = (request.headers.get("host") or "").strip()
     if not origin:
         return not mutating
-    parsed = urlparse(origin)
-    origin_host = parsed.netloc or parsed.hostname or ""
-    return origin_host == host
+    parts = _origin_triple(origin)
+    if parts is None:
+        return False
+    scheme, host, port = parts
+    req_scheme = _request_scheme(request)
+    header = _host_header_parts(request.headers.get("host") or "", scheme=req_scheme)
+    if header is None:
+        return False
+    header_host, header_port = header
+    return scheme == req_scheme and host == header_host and port == header_port
 
 
 def _require_local(request: Request, nonce: str | None, *, mutating: bool) -> None:
