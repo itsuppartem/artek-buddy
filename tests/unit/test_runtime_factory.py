@@ -115,6 +115,9 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert blocked[1].delay_s == E2E_WORKER_BLOCK_S
     assert blocked[-1].result == E2E_WORKER_RESULT
     status = steps_for_prompt("please e2e-worker-status")
+    assert status[0].tool == "send_message"
+    assert status[0].args.get("text") == E2E_WORKER_STATUS
+    assert status[1].tool == "inspect_subagent"
     assert status[-1].result == E2E_WORKER_STATUS
     activity = steps_for_prompt("please e2e-worker-activity-no-text")
     assert activity[0].tool == "spawn_subagent"

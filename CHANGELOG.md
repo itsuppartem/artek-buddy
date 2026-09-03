@@ -18,6 +18,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- A status-only ping (`please e2e-worker-status`) posts a short `send_message` acknowledgement before inspect. Inbox and mid-turn steer use the same order. The ping does not start a new plan.
 - Workspace `/v1/events` 401/403 shows Pair again, same as a 401 on send. Background needs-you cannot go silent while the window still looks paired.
 - Live browse Allow/Deny fail the job if the model never shows a consent card. Skip remains only when the secret is absent.
 - Models list/Forget and Plugins status/Remove show a line on failure. Forget and Remove keep the previous key; a failed Plugins status does not stay on Checking.

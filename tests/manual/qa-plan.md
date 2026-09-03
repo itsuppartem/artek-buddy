@@ -250,7 +250,7 @@ On **Deb**: stop the `artek-buddy` container for about 30 seconds (or pull the n
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Paste a screenshot into Message → chip `screenshot-1.png` (or the file name). Ordinary text is not an attachment | [ ] | [ ] |
-| Scripted `please e2e-background-worker-chat`: one **Working in the background.**, Message stays usable, **Stop** stays up, **no** worker card and **no** `Started …` / `Finished …` / `Stopped …` lines. `please e2e-worker-status` answers **Still working.** Then exactly one **The background job is done.** | [ ] | [ ] |
+| Scripted `please e2e-background-worker-chat`: one **Working in the background.**, Message stays usable, **Stop** stays up, **no** worker card and **no** `Started …` / `Finished …` / `Stopped …` lines. `please e2e-worker-status` (or «ну что там?» on a live host) answers **Still working.** first — no second plan — then inspect if needed. Then exactly one **The background job is done.** | [ ] | [ ] |
 | Scripted `please e2e-worker-progress`: a short **Still working:** line appears without a ping; Message stays usable; **no** worker card. A later different step can add one more line after ~45s. Exactly one **The background job is done.** and no extra still-working after that | [ ] | [ ] |
 | Scripted `please e2e-worker-activity-no-text`: status (`please e2e-worker-status` or `please e2e-worker-false-idle`) keeps the **same** worker. Empty progress is not treated as idle; **Stop** is only the window control, not a status ping. | [ ] | [ ] |
 | Scripted `please e2e-lead-owner-ssh`: the lead turn finishes without grinding This-PC SSH. A following Send is a new run. Window **Stop** then Send is also a new turn, not a silent queue on a cancelled run | [ ] | [ ] |
@@ -604,7 +604,7 @@ If time is short, in this order:
 8. **§12 Pad and Cyrillic**
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
-11. **§10 workers** `please e2e-background-worker-chat` then status; Message stays usable; one final result. `please e2e-worker-progress`: a **Still working:** line without a ping and no worker card. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
+11. **§10 workers** `please e2e-background-worker-chat` then status; the acknowledgement is immediate and does not start a second plan; Message stays usable; one final result. `please e2e-worker-progress`: a **Still working:** line without a ping and no worker card. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
 12. **§1 / §21 Escape** on Settings and New bot
 13. **§14 Inbox** Search empty + one click opens that row
 14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Plugin **Open to connect** is the same kind of link. `please e2e-send-then-answer`: teaser then the spec, both stay, then Message is usable

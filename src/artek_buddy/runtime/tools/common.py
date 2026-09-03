@@ -6,6 +6,7 @@ from typing import Any
 
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.db.shaping import isoformat_utc, new_id
+from artek_buddy.status_ping import STATUS_PING_GUIDE
 
 log = logging.getLogger("artek_buddy")
 
@@ -28,7 +29,12 @@ def format_owner_steer(items: list[dict[str, str | None]]) -> dict[str, Any] | N
     texts = [text for text in texts if text]
     if not texts:
         return None
-    lines = [OWNER_STEER]
+    lines = [
+        OWNER_STEER,
+        STATUS_PING_GUIDE,
+        "If this is a correction, use steer_subagent on the same worker. "
+        "Do not stop and spawn a replacement.",
+    ]
     for index, text in enumerate(texts, start=1):
         lines.append(f"{index}. {text}")
     return {"owner_follow_up": texts, "owner_instruction": "\n".join(lines)}

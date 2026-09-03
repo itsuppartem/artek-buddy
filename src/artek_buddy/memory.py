@@ -5,6 +5,7 @@ from typing import Any
 
 from artek_buddy.contracts.domain import MemoryDocument
 from artek_buddy.observe import redact_text
+from artek_buddy.status_ping import STATUS_PING_GUIDE
 
 MAX_AGENT_MEMORY_BYTES = 256 * 1024
 MAX_MEMORY_CONTENT_CHARS = 100_000
@@ -399,15 +400,12 @@ def wrap_turn_prompt(
             "call ask_user for one concrete owner step instead of guessing selectors or inventing "
             "site-specific APIs. Continue when the answer returns. Do not ask for passwords. "
             "Use request_takeover only when the owner must operate this bot's desktop; then stop until Release.\n"
-            "- If a tool result includes owner_follow_up, the owner messaged you during this turn. Apply it immediately. Do not finish the old plan first.\n"
-            "- When checking progress or if the user asks status (e.g. 'ты завис?', 'еще делаешь?', 'как там?'): "
-            "answer from host activity, not from blank progress text. "
-            "Empty progress means no text update was persisted, not that the worker is idle. "
+            "- If a tool result includes owner_follow_up, the owner messaged you during this turn. Apply it immediately. Do not finish the old plan first. If that follow-up is a status-only ping, call send_message first.\n"
+            f"- {STATUS_PING_GUIDE} "
+            "Answer from host activity, not from blank progress text. "
             "inspect_subagent / list_subagents return last_activity_at, activity_seq, last_tool_name, "
             "tool_running, and the current step / remaining when the worker reported them. "
             "If a tool is in flight or activity_seq has moved, keep that worker. "
-            "A status-only ping must inspect and answer. It must not call stop_subagent or restart_subagent "
-            "and must not spawn a replacement. "
             "A correction uses steer_subagent on the same worker id. "
             "stop_subagent requires inspected_activity_seq from the latest inspect; the host rejects Stop "
             "while a tool is running or if activity advanced.\n"

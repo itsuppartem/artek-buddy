@@ -44,7 +44,8 @@ def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
     assert "report_progress" in worker
     assert "Never invent minutes remaining" in worker
     assert "no text update" in lead
-    assert "status-only ping must inspect" in lead
+    assert "call send_message first" in lead
+    assert "status-only ping" in lead
 
 
 def test_wrap_turn_prompt_keeps_user_tail() -> None:
