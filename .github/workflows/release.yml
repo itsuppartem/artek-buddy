@@ -6,8 +6,9 @@ name: release
 # at dispatch; the job runs only for refs/heads/main, so a develop-only
 # change never receives the write token.
 # A red PR into main cannot merge: ruleset "Protect main" requires quality,
-# backend, ui, scan, live_gate, analyze (python), analyze (javascript-typescript),
-# and CodeQL. live is not required. Protect develop uses the same checks.
+# backend, ui, ui_web, scan, live_gate, analyze (python),
+# analyze (javascript-typescript), and CodeQL. live is not required.
+# Protect develop uses the same checks.
 # The computer image is not built here: Chromium under QEMU hangs the job.
 # install-host.sh pulls it when present, otherwise builds on the Pi.
 # Host image: push by digest, Trivy HIGH+CRITICAL on that digest, then tag

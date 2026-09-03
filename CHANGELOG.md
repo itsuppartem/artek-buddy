@@ -17,6 +17,9 @@
 - A bot can ask another inbox bot by name or id. This chat shows the ask and a card to that chat. The other bot works in its own thread; only its last message comes back so this bot can answer you. Missing, archived, deleted, empty, and self-asks fail closed.
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
+### Changed
+- Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
+
 ### Fixed
 - Unsent Message text, files, and Reply stay on the chat they belong to. A slow Send in one chat does not disable Send in another; a late failure restores files on the originating chat.
 - Stop UI tests wait for a cancelled turn to settle instead of a 3s sleep. Computer pane open/close no longer swallow a missed click. Loopback unpair is a client RPC test; the window still unpairs via Pair this computer again.
