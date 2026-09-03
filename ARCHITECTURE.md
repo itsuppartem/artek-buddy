@@ -104,7 +104,7 @@ schema in `client/web/src/generated/openapi.d.ts` (dumped at build/CI from
 | Layer | Job | What it is |
 | --- | --- | --- |
 | Lint / types / audit | `quality` | Ruff, mypy, pip-audit |
-| Unit + API | `backend` | pytest `tests/unit tests/api tests/client`, Postgres service, `AGENT_RUNTIME=scripted`, `SANDBOX_PROVIDER=fake`, coverage fail-under 56%, `npm run check` |
+| Unit + API | `backend` | pytest `tests/unit tests/api tests/client`, Postgres service, `AGENT_RUNTIME=scripted`, `SANDBOX_PROVIDER=fake`, coverage fail-under 71% plus higher floors on auth/jail/migrations/supervisor write, `npm run check` |
 | Packaged window | `ui` | Playwright against an **installed** `.deb --serve` |
 | Model canary | `live` | Opt-in (`CURSOR_API_KEY`); real computer image; Cursor runtime |
 

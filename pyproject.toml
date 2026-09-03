@@ -170,5 +170,15 @@ omit = ["*/tests/*"]
 [tool.coverage.report]
 skip_empty = true
 show_missing = false
-# Measured 2026-08-22 on backend (unit+api+client, --cov-branch): TOTAL 56%.
-fail_under = 56
+# Measured 2026-09-03 on backend (unit+api+client, --cov-branch): TOTAL 71%.
+fail_under = 71
+
+# coverage.py has one global fail_under. Module floors are enforced in the
+# backend job from this table (#143).
+[tool.artek.coverage_floors]
+"src/artek_buddy/auth.py" = 100
+"src/artek_buddy/fs_jail.py" = 80
+"src/artek_buddy/db/connection.py" = 100
+"src/artek_buddy/db/sql_split.py" = 75
+"src/artek_buddy/db/history/store.py" = 80
+"src/artek_buddy/supervisor/logic.py" = 60
