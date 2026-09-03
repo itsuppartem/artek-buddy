@@ -3,6 +3,7 @@ import type { LocalStatus, PairedDevice } from "./lib/pairing";
 import type {
   BeginConnectionResult,
   Bot,
+  BotCredential,
   ComputerFileContent,
   ComputerFileList,
   ComputerStatus,
@@ -405,6 +406,19 @@ export const api = {
     remove(botId: string, deleteMemories: boolean = false) {
       const query = deleteMemories ? "?delete_memories=true" : "";
       return request<OkResponse>("DELETE", `/v1/bots/${botId}${query}`);
+    },
+    credentials(botId: string) {
+      return request<{ credentials: BotCredential[] }>("GET", `/v1/bots/${botId}/credentials`).then(
+        (data) => data.credentials ?? [],
+      );
+    },
+    saveCredential(botId: string, provider: "github" | "pypi", secret: string) {
+      return request<BotCredential>("PUT", `/v1/bots/${botId}/credentials/${provider}`, {
+        secret,
+      });
+    },
+    forgetCredential(botId: string, provider: "github" | "pypi") {
+      return request<OkResponse>("DELETE", `/v1/bots/${botId}/credentials/${provider}`);
     },
   },
   subagents: {

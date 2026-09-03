@@ -11,6 +11,7 @@ from artek_buddy.bot_asks import (
     normalize_question,
     resolve_ask,
 )
+from artek_buddy.bot_credentials import PASTED_CREDENTIAL_DETAIL, looks_like_pasted_credential
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.db.shaping import isoformat_utc, new_id
 from artek_buddy.runtime.tools.common import (
@@ -28,6 +29,8 @@ class ChatToolsMixin:
         path = str(args.get("path") or "").strip()
         if not content:
             return {"ok": False, "error": "content cannot be empty"}
+        if looks_like_pasted_credential(content):
+            return {"ok": False, "error": PASTED_CREDENTIAL_DETAIL}
         bot_id, run_id, thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         forget = bool(args.get("forget"))
         kind = str(args.get("kind") or "preference")

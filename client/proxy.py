@@ -290,6 +290,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_error(404)
 
+    def do_PUT(self) -> None:
+        if self._route().startswith("/v1/"):
+            self._proxy()
+            return
+        self.send_error(404)
+
     def do_PATCH(self) -> None:
         if self._route().startswith("/v1/"):
             self._proxy()
@@ -310,7 +316,7 @@ class Handler(BaseHTTPRequestHandler):
             "Access-Control-Allow-Headers",
             "Authorization, Content-Type, Accept, X-Artek-Local-Nonce",
         )
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
         self.end_headers()
 
     def _json(self, status: int, payload: dict) -> None:

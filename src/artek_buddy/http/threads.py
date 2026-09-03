@@ -133,6 +133,9 @@ async def answer_thread_question(
     history: HistoryStore = Depends(store),
     questions: ConsentHub = Depends(consent),
 ) -> OkResponse:
+    from artek_buddy.bot_credentials import raise_if_pasted_credential
+
+    raise_if_pasted_credential(body.answer)
     try:
         bot = _require_bot(history, bot_id)
         if body.bot_id is not None and body.bot_id != bot.id:

@@ -8,6 +8,12 @@ export type RunStatus = Schema["RunStatus"];
 export type MemoryScope = Schema["MemoryScope"];
 
 export type Bot = Camelize<Schema["Bot"]>;
+export type BotCredential = {
+  provider: "github" | "pypi";
+  scope: "this_bot";
+  lastFour: string;
+  updatedAt: string;
+};
 export type ComputerStatus = Camelize<Schema["ComputerStatus"]>;
 export type ComputerFileEntry = Camelize<Schema["ComputerFileEntry"]>;
 export type ComputerFileList = Camelize<Schema["ComputerFileList"]>;

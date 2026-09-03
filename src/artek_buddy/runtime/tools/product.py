@@ -17,6 +17,7 @@ from artek_buddy.runtime.tools.common import (
     log,
 )
 from artek_buddy.runtime.tools.computer import ComputerToolsMixin
+from artek_buddy.runtime.tools.credentials import CredentialsToolsMixin
 from artek_buddy.runtime.tools.owner import OwnerToolsMixin
 from artek_buddy.runtime.tools.specs import TOOL_SPECS, ToolSpec
 from artek_buddy.runtime.tools.subagents import SubagentToolsMixin
@@ -426,6 +427,7 @@ class ProductTools(
     AppsToolsMixin,
     OwnerToolsMixin,
     ComputerToolsMixin,
+    CredentialsToolsMixin,
     SubagentToolsMixin,
     ProductToolsCore,
 ):

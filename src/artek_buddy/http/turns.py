@@ -513,6 +513,9 @@ async def _accept_turn(
     model_prompt: str | None = None,
     device_id: str | None = None,
 ) -> ThreadSendResult:
+    from artek_buddy.bot_credentials import raise_if_pasted_credential
+
+    raise_if_pasted_credential(text)
     try:
         if history.get_default_model() is None:
             return _needs_model_send(history, events, bot, text)

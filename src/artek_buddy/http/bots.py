@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import Depends, HTTPException, Query
 
 from artek_buddy.bot_asks import BotAskError, normalize_question, resolve_ask
+from artek_buddy.bot_credentials import BotCredentialStore
 from artek_buddy.bus import EventHub
 from artek_buddy.computer.service import (
     ComputerBusy,
@@ -246,6 +247,9 @@ async def ask_other_bot(
     rt: AgentRuntime = Depends(runtime),
     events: EventHub = Depends(hub),
 ) -> BotAskResult:
+    from artek_buddy.bot_credentials import raise_if_pasted_credential
+
+    raise_if_pasted_credential(body.text)
     try:
         source = _require_bot(history, bot_id)
         dest = resolve_ask(history, source, body.text, body.bot)
@@ -321,4 +325,5 @@ async def remove_bot(
     dest = contained_under(Path(current_app().state.settings.agent_data_dir) / "artifacts", bot.id)
     if dest is not None:
         shutil.rmtree(dest, ignore_errors=True)
+    BotCredentialStore(current_app().state.settings.agent_data_dir).forget_bot(bot.id)
     return OkResponse(ok=True)

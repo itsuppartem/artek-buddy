@@ -24,6 +24,7 @@ services:
       MEMORY_GATEWAY_URL: http://127.0.0.1:8420
       LOG_FORMAT: json
     volumes:
+      # Persistent host data, including /data/credentials (bot GitHub/PyPI tokens).
       - ./workspace:/workspace
       - ./data:/data
     healthcheck:
