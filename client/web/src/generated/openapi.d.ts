@@ -415,6 +415,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/bots/{bot_id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Bot Credentials */
+        get: operations["list_bot_credentials_v1_bots__bot_id__credentials_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/bots/{bot_id}/credentials/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Bot Credential */
+        put: operations["save_bot_credential_v1_bots__bot_id__credentials__provider__put"];
+        post?: never;
+        /** Forget Bot Credential */
+        delete: operations["forget_bot_credential_v1_bots__bot_id__credentials__provider__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/bots/{bot_id}/duplicate": {
         parameters: {
             query?: never;
@@ -1574,6 +1609,29 @@ export interface components {
             /** To Run Id */
             to_run_id: string;
         };
+        /** BotCredential */
+        BotCredential: {
+            /** Last Four */
+            last_four: string;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "github" | "pypi";
+            /**
+             * Scope
+             * @default this_bot
+             * @constant
+             */
+            scope: "this_bot";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** BotCredentialList */
+        BotCredentialList: {
+            /** Credentials */
+            credentials: components["schemas"]["BotCredential"][];
+        };
         /** BotList */
         BotList: {
             /** Bots */
@@ -2367,6 +2425,11 @@ export interface components {
          * @enum {string}
          */
         SandboxKind: "docker" | "desktop" | "fake";
+        /** SaveBotCredentialInput */
+        SaveBotCredentialInput: {
+            /** Secret */
+            secret: string;
+        };
         /** ScreenUrlResult */
         ScreenUrlResult: {
             /** Url */
@@ -3599,6 +3662,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Bot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bot_credentials_v1_bots__bot_id__credentials_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                bot_id: string;
+            };
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BotCredentialList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_bot_credential_v1_bots__bot_id__credentials__provider__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                bot_id: string;
+                provider: string;
+            };
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveBotCredentialInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BotCredential"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_bot_credential_v1_bots__bot_id__credentials__provider__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                bot_id: string;
+                provider: string;
+            };
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
                 };
             };
             /** @description Validation Error */

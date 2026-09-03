@@ -54,7 +54,7 @@ Auth error (`auth-error`), including a 401/403 on workspace `/v1/events` while t
 - No bots: Create your first bot.
 - Archived list: Back to Inbox, Restore on each row.
 - **Plugins** (`open-plugins`) opens the apps pane (`plugins-pane`). Works with an empty inbox. Not a toast.
-- You: door to **Models** (host keys). The visible word on the control is Models. Not a tooltip. Per-bot Settings stay name / mode / Reset / Delete.
+- You: door to **Models** (host keys). The visible word on the control is Models. Not a tooltip. Per-bot Settings stay name / Tokens (GitHub and PyPI, last four, Replace, Forget) / mode / Reset / Delete.
 
 ## Thread
 
@@ -136,7 +136,7 @@ Copy: Plugins, Plugins key, Save, Replace, Remove, Search apps, Connect, Disconn
 
 Create: Name (inbox row, `Name this bot`), Title (short role, `e.g. Code Reviewer`), Description (`What this bot is for`), Instructions (`Standing orders for this bot`, not labelled Prompt), Team | Private (`computer-mode-team` / `computer-mode-private`).
 
-Settings: the same fields plus mode change (rebinds the desktop; home is not copied), Restart… / Stop… / Reset… (each confirms once; Reset wipes that home; Team reset wipes the shared desktop), busy-bot name, notifyOnFinish, Delete with optional purge memories. **Edit profile** opens the fields. Title keeps what you typed through blur and Save. Save flashes **Saved** for about a second, then the sheet. A host error stays under the row. Escape closes Settings and New bot the same as Close / ×. Composer text stays put. Fullscreen overlay Escape still drops the overlay first; guest keys are unchanged.
+Settings: the same fields plus **Tokens** for this bot (GitHub and PyPI: password field, Save, last four, Replace, Forget; never re-shows the value). Reset and Team ↔ Private do not delete those tokens. A chat paste that looks like those tokens is refused (`action-error`) before the bubble is stored. Mode change rebinds the desktop; home is not copied. Restart… / Stop… / Reset… (each confirms once; Reset wipes that home; Team reset wipes the shared desktop), busy-bot name, notifyOnFinish, Delete with optional purge memories. **Edit profile** opens the fields. Title keeps what you typed through blur and Save. Save flashes **Saved** for about a second, then the sheet. A host error stays under the row. Escape closes Settings and New bot the same as Close / ×. Composer text stays put. Fullscreen overlay Escape still drops the overlay first; guest keys are unchanged.
 
 ## Computer pane (hatch)
 

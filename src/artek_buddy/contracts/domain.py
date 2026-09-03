@@ -505,6 +505,27 @@ class ModelCredentialList(BaseModel):
     default_fast: bool | None = None
 
 
+class BotCredential(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    provider: Literal["github", "pypi"]
+    scope: Literal["this_bot"] = "this_bot"
+    last_four: str
+    updated_at: str
+
+
+class BotCredentialList(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    credentials: list[BotCredential]
+
+
+class SaveBotCredentialInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    secret: str = Field(min_length=1, max_length=8000)
+
+
 class ConnectModelInput(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 

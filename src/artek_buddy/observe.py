@@ -16,6 +16,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from artek_buddy.auth import PAIRING_ALPHABET
+from artek_buddy.bot_credentials import stored_secrets
 from artek_buddy.db.shaping import new_id
 
 log = logging.getLogger("artek_buddy")
@@ -149,6 +150,9 @@ def redact_text(text: str) -> str:
         return text
     out = text
     for secret in _secrets():
+        if secret in out:
+            out = out.replace(secret, "[redacted]")
+    for secret in stored_secrets():
         if secret in out:
             out = out.replace(secret, "[redacted]")
     out = _BEARER.sub(r"\1 [redacted]", out)

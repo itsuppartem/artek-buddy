@@ -116,6 +116,30 @@ PROCEDURES: list[Procedure] = [
     _p("bots.remove", "DELETE", "/v1/bots/{bot_id}", "DeleteBotInput", "OkResponse", True),
     _p("bots.ask", "POST", "/v1/bots/{bot_id}/asks", "BotAskInput", "BotAskResult", True),
     _p("bots.list_books", "GET", "/v1/bots/{bot_id}/books", "BotIdInput", "SkillBookList", True),
+    _p(
+        "bots.list_credentials",
+        "GET",
+        "/v1/bots/{bot_id}/credentials",
+        "BotIdInput",
+        "BotCredentialList",
+        True,
+    ),
+    _p(
+        "bots.save_credential",
+        "PUT",
+        "/v1/bots/{bot_id}/credentials/{provider}",
+        "SaveBotCredentialInput",
+        "BotCredential",
+        True,
+    ),
+    _p(
+        "bots.forget_credential",
+        "DELETE",
+        "/v1/bots/{bot_id}/credentials/{provider}",
+        None,
+        "OkResponse",
+        True,
+    ),
     # Threads
     _p("threads.get", "GET", "/v1/threads/{bot_id}", "BotIdInput", "ThreadSnapshot", True),
     _p(

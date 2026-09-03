@@ -134,3 +134,52 @@ def test_escape_closes_settings_and_new_bot(page: Page, client_url: str, host_ur
     page.keyboard.press("Escape")
     expect(page.get_by_placeholder("Name this bot")).to_have_count(0)
     expect(box).to_have_value("keep me")
+
+
+def test_settings_github_token_stays_on_that_bot(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    from tests.support import mask_secret
+
+    alpha = unique_bot("TokA")
+    bravo = unique_bot("TokB")
+    secret = "ghp_" + ("A" * 36)
+    mask_secret(secret)
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, alpha, private=True)
+    create_named_bot(page, bravo, private=True)
+    open_settings(page, alpha)
+    expect(page.get_by_test_id("bot-credentials")).to_be_visible()
+    page.get_by_test_id("bot-credential-github-secret").fill(secret)
+    page.get_by_test_id("bot-credential-github-save").click()
+    expect(page.get_by_test_id("bot-credential-github-status")).to_contain_text("••••AAAA")
+    page.get_by_label("Close settings").click()
+    open_settings(page, bravo)
+    expect(page.get_by_test_id("bot-credential-github-status")).to_have_count(0)
+    expect(page.get_by_test_id("bot-credential-github-secret")).to_be_visible()
+    page.get_by_label("Close settings").click()
+    open_settings(page, alpha)
+    expect(page.get_by_test_id("bot-credential-github-status")).to_contain_text("••••AAAA")
+    page.get_by_test_id("bot-credential-github-forget").click()
+    expect(page.get_by_test_id("bot-credential-github-secret")).to_be_visible()
+    expect(page.get_by_test_id("bot-credential-github-status")).to_have_count(0)
+
+
+def test_composer_rejects_a_github_token_paste(page: Page, client_url: str, host_url: str) -> None:
+    from tests.support import mask_secret
+
+    name = unique_bot("TokChat")
+    secret = "ghp_" + ("A" * 36)
+    mask_secret(secret)
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    box = composer(page)
+    expect(box).to_be_enabled(timeout=8_000)
+    text = f"use {secret}"
+    box.fill(text)
+    expect(box).to_have_value(text)
+    box.press("Enter")
+    expect(page.get_by_test_id("action-error")).to_contain_text("Do not paste GitHub")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=secret)
+    ).to_have_count(0)

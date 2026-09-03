@@ -6,6 +6,7 @@ import { computerModeHint } from "../../lib/screen";
 import type { Bot, ComputerMode, ComputerStatus } from "../../types";
 import { BotAvatar } from "../../ui/bot-avatar";
 import { Button } from "../../ui/button";
+import { BotCredentials } from "./BotCredentials";
 import { ComputerModePicker } from "./ComputerModePicker";
 
 export function computerPowerLabel(state: ComputerStatus["state"] | undefined): string {
@@ -202,6 +203,8 @@ export function BotSettings({
           </div>
         </>
       )}
+
+      <BotCredentials botId={bot.id} />
 
       <div className="mt-6 rounded-xl border border-hairline bg-ink p-3.5">
         <div className="flex items-center justify-between gap-3">
