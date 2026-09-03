@@ -18,6 +18,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Fixed
+- Unsent Message text, files, and Reply stay on the chat they belong to. A slow Send in one chat does not disable Send in another; a late failure restores files on the originating chat.
 - Stop UI tests wait for a cancelled turn to settle instead of a 3s sleep. Computer pane open/close no longer swallow a missed click. Loopback unpair is a client RPC test; the window still unpairs via Pair this computer again.
 - Ask-before git/commit/branch/PR/MR/merge restatements map to one standing rule (`please e2e-remember-git-approval`). A later permission to merge without asking revises that card.
 - A status-only ping (`please e2e-worker-status`) posts a short `send_message` acknowledgement before inspect. Inbox and mid-turn steer use the same order. The ping does not start a new plan.

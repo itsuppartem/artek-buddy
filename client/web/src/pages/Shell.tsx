@@ -35,6 +35,11 @@ import {
 import { healthOkClearsError, workspaceEventsAuthLoss } from "../lib/auth-loss";
 import { composerCanSend, composerPlaceholder, composerShouldSend } from "../lib/composer";
 import {
+  applyComposerSendResult,
+  type ComposerSlot,
+  emptyComposerSlot,
+} from "../lib/composer-slots";
+import {
   composerRedo,
   composerUndo,
   composerUndoKind,
@@ -311,6 +316,8 @@ export function ShellPage() {
     url?: string;
   } | null>(null);
   const [replyTo, setReplyTo] = useState<ThreadMessage | null>(null);
+  const composerSlots = useRef(new Map<string, ComposerSlot<ThreadMessage>>());
+  const composerBotRef = useRef<string | undefined>(undefined);
   const expandedHistoryThread = useRef<string | null>(null);
   const discardedBotIds = useRef(new Set<string>());
   const heldUnreadIds = useRef(new Set<string>());
@@ -368,7 +375,6 @@ export function ShellPage() {
 
   useEffect(() => {
     filesEpoch.current += 1;
-    setPendingFiles([]);
   }, [botId]);
 
   function patchBotUnread(id: string, unread: boolean) {
@@ -867,7 +873,12 @@ export function ShellPage() {
     };
     setOfflineQueue((queue) => persistQueue(enqueueSend(queue, item)));
     setHostDown(true);
-    setReplyTo(null);
+    if (activeIdRef.current === botId) {
+      setReplyTo(null);
+    } else {
+      const parked = composerSlots.current.get(botId) ?? emptyComposerSlot<ThreadMessage>();
+      composerSlots.current.set(botId, { ...parked, replyTo: null, sending: false });
+    }
   }
 
   async function flushOfflineQueue() {
@@ -984,7 +995,9 @@ export function ShellPage() {
       writeDraft("", true);
       setPendingFiles([]);
       setReplyTo(null);
+      setSending(false);
     }
+    composerSlots.current.delete(id);
     setBots((list) => list.filter((item) => item.id !== id));
   }
 
@@ -1191,7 +1204,6 @@ export function ShellPage() {
   }, []);
 
   useEffect(() => {
-    setReplyTo(null);
     setMessageMenu(null);
   }, [active?.id]);
 
@@ -1307,6 +1319,29 @@ export function ShellPage() {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }
+
+  useLayoutEffect(() => {
+    const prev = composerBotRef.current;
+    if (prev && prev !== botId) {
+      composerSlots.current.set(prev, {
+        draft,
+        history: draftHistory.current,
+        pendingFiles,
+        sending,
+        replyTo,
+      });
+    }
+    composerBotRef.current = botId;
+    const parked = botId ? composerSlots.current.get(botId) : undefined;
+    const next = parked ?? emptyComposerSlot<ThreadMessage>();
+    draftHistory.current = next.history;
+    draftChangeAt.current = 0;
+    setDraft(next.draft);
+    setPendingFiles(next.pendingFiles);
+    setSending(next.sending);
+    setReplyTo(next.replyTo);
+    window.requestAnimationFrame(() => sizeComposer());
+  }, [botId]);
 
   function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     const kind = composerUndoKind(event);
@@ -1467,21 +1502,62 @@ export function ShellPage() {
         return;
       }
       await api.threads.send(targetId, text, replyId, attachments);
-      setReplyTo(null);
+      const next = applyComposerSendResult({
+        currentBotId: activeIdRef.current,
+        targetId,
+        live: {
+          draft,
+          history: draftHistory.current,
+          pendingFiles,
+          sending: true,
+          replyTo,
+        },
+        parked: composerSlots.current.get(targetId),
+        result: { ok: true },
+      });
+      if (activeIdRef.current === targetId) {
+        setReplyTo(null);
+      } else if (next.parked) {
+        composerSlots.current.set(targetId, next.parked);
+      }
     } catch (err) {
       const classified = classifyError(err);
       if (shouldQueueSend(classified.kind)) {
         parkSend(targetId, text, replyId, attachments);
         return;
       }
-      if (textOverride == null) {
-        writeDraft(text);
-        setPendingFiles(files);
+      const next = applyComposerSendResult({
+        currentBotId: activeIdRef.current,
+        targetId,
+        live: {
+          draft,
+          history: draftHistory.current,
+          pendingFiles,
+          sending: true,
+          replyTo,
+        },
+        parked: composerSlots.current.get(targetId),
+        result: { ok: false, draft: text, files },
+      });
+      if (activeIdRef.current === targetId) {
+        if (textOverride == null) {
+          writeDraft(text);
+          setPendingFiles(files);
+        }
+      } else if (next.parked) {
+        composerSlots.current.set(targetId, next.parked);
       }
       showError(err, "Send failed");
       return;
     } finally {
-      setSending(false);
+      if (activeIdRef.current === targetId) {
+        setSending(false);
+      } else {
+        const parked = composerSlots.current.get(targetId);
+        if (parked) {
+          composerSlots.current.set(targetId, { ...parked, sending: false });
+        }
+      }
     }
     void refreshThread(targetId).catch(() => undefined);
   }
