@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_named_codeql_residuals_keep_inline_lgtm() -> None:
     """Security-tab alerts stay named residuals, not forgotten holes (#367, #438)."""
-    proxy = (ROOT / "client" / "proxy.py").read_text(encoding="utf-8")
+    proxy = (ROOT / "client" / "proxy_rpc.py").read_text(encoding="utf-8")
     paths = (ROOT / "client" / "owner_paths.py").read_text(encoding="utf-8")
     jail = (ROOT / "src" / "artek_buddy" / "fs_jail.py").read_text(encoding="utf-8")
     creds = (ROOT / "src" / "artek_buddy" / "bot_credentials.py").read_text(encoding="utf-8")

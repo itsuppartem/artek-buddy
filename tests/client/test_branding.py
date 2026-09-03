@@ -32,6 +32,10 @@ def test_deb_script_installs_artek_icon() -> None:
     assert "window_chrome.py" in text
     assert "pairing.py" in text
     assert "proxy.py" in text
+    assert "proxy_common.py" in text
+    assert "proxy_rpc.py" in text
+    assert "proxy_static.py" in text
+    assert "proxy_upstream.py" in text
     assert "notifications.py" in text
     assert "tray.py" in text
     assert "window.py" in text

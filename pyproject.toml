@@ -77,7 +77,7 @@ extend-immutable-calls = [
 "client/clipboard_image.py" = ["S110"]
 "client/notifications.py" = ["S110", "S603"]
 "client/owner_paths.py" = ["S105"]
-"client/proxy.py" = ["S602"]
+"client/proxy_rpc.py" = ["S602", "S604"]
 "client/ssh_mux.py" = ["S108", "S603"]
 "client/window.py" = ["S110"]
 "client/window_chrome.py" = ["S110", "S112"]
@@ -129,6 +129,10 @@ filterwarnings = [
     "error::DeprecationWarning:owner_paths",
     "error::DeprecationWarning:pairing",
     "error::DeprecationWarning:proxy",
+    "error::DeprecationWarning:proxy_common",
+    "error::DeprecationWarning:proxy_rpc",
+    "error::DeprecationWarning:proxy_static",
+    "error::DeprecationWarning:proxy_upstream",
     "error::DeprecationWarning:ssh_mux",
     "error::DeprecationWarning:tray",
     "error::DeprecationWarning:web_paths",
