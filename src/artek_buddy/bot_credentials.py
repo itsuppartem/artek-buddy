@@ -75,6 +75,12 @@ def last_four(secret: str) -> str:
     return value[-4:]
 
 
+def _write_private(path: Path, body: str) -> None:
+    """Write a 0600 host-local file. Plaintext is the THREAT-MODEL.md residual."""
+    # codeql[py/clear-text-storage-sensitive-data]
+    path.write_text(body, encoding="utf-8")  # lgtm[py/clear-text-storage-sensitive-data]
+
+
 class BotCredentialStore:
     def __init__(self, data_dir: str | Path) -> None:
         self.data_dir = Path(data_dir)
@@ -102,21 +108,17 @@ class BotCredentialStore:
             raise ValueError("secret is empty")
         if not _secret_matches_provider(provider, value):
             raise ValueError("secret does not match this provider")
-        path.parent.mkdir(parents=True, exist_ok=True)  # lgtm[py/path-injection]
-        os.chmod(path.parent, stat.S_IRWXU)  # lgtm[py/path-injection]
-        tmp = path.with_suffix(".tmp")  # lgtm[py/path-injection]
-        tmp.write_text(  # lgtm[py/path-injection, py/clear-text-storage-sensitive-data]
-            value, encoding="utf-8"
-        )
-        os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)  # lgtm[py/path-injection]
-        tmp.replace(path)  # lgtm[py/path-injection]
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)  # lgtm[py/path-injection]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        os.chmod(path.parent, stat.S_IRWXU)
+        tmp = path.with_suffix(".tmp")
+        _write_private(tmp, value)
+        os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)
+        tmp.replace(path)
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
         stamp = isoformat_utc()
-        meta = path.with_suffix(".meta")  # lgtm[py/path-injection]
-        meta.write_text(  # lgtm[py/path-injection, py/clear-text-storage-sensitive-data]
-            f"{last_four(value)}\n{stamp}\n", encoding="utf-8"
-        )
-        os.chmod(meta, stat.S_IRUSR | stat.S_IWUSR)  # lgtm[py/path-injection]
+        meta = path.with_suffix(".meta")
+        _write_private(meta, f"{last_four(value)}\n{stamp}\n")
+        os.chmod(meta, stat.S_IRUSR | stat.S_IWUSR)
         return BotCredentialStatus(
             provider=provider,
             scope="this_bot",
@@ -126,20 +128,20 @@ class BotCredentialStore:
 
     def read(self, bot_id: str, provider: str) -> str | None:
         path = self._secret_path(bot_id, provider)
-        if path is None or not path.is_file():  # lgtm[py/path-injection]
+        if path is None or not path.is_file():
             return None
-        value = path.read_text(encoding="utf-8").strip()  # lgtm[py/path-injection]
+        value = path.read_text(encoding="utf-8").strip()
         return value or None
 
     def status(self, bot_id: str, provider: str) -> BotCredentialStatus | None:
         path = self._secret_path(bot_id, provider)
-        if path is None or not path.is_file():  # lgtm[py/path-injection]
+        if path is None or not path.is_file():
             return None
-        meta = path.with_suffix(".meta")  # lgtm[py/path-injection]
+        meta = path.with_suffix(".meta")
         four = last_four(self.read(bot_id, provider) or "")
         stamp = isoformat_utc()
-        if meta.is_file():  # lgtm[py/path-injection]
-            lines = meta.read_text(encoding="utf-8").splitlines()  # lgtm[py/path-injection]
+        if meta.is_file():
+            lines = meta.read_text(encoding="utf-8").splitlines()
             if lines:
                 four = lines[0].strip() or four
             if len(lines) > 1:
@@ -163,17 +165,17 @@ class BotCredentialStore:
         path = self._secret_path(bot_id, provider)
         if path is None:
             return False
-        existed = path.is_file()  # lgtm[py/path-injection]
-        for item in (  # lgtm[py/path-injection]
+        existed = path.is_file()
+        for item in (
             path,
             path.with_suffix(".meta"),
             path.with_suffix(".tmp"),
         ):
-            if item.is_file():  # lgtm[py/path-injection]
-                item.unlink()  # lgtm[py/path-injection]
-        folder = path.parent  # lgtm[py/path-injection]
-        if folder.is_dir() and not any(folder.iterdir()):  # lgtm[py/path-injection]
-            folder.rmdir()  # lgtm[py/path-injection]
+            if item.is_file():
+                item.unlink()
+        folder = path.parent
+        if folder.is_dir() and not any(folder.iterdir()):
+            folder.rmdir()
         return existed
 
     def forget_bot(self, bot_id: str) -> None:

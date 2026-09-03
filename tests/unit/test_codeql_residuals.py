@@ -15,8 +15,10 @@ def test_named_codeql_residuals_keep_inline_lgtm() -> None:
     assert "lgtm[py/command-line-injection]" in proxy
     assert "lgtm[py/path-injection]" in paths
     assert "lgtm[py/path-injection]" in jail
+    assert "codeql[py/path-injection]" in jail
     assert "lgtm[py/path-injection]" in creds
     assert "lgtm[py/clear-text-storage-sensitive-data]" in creds
+    assert "codeql[py/clear-text-storage-sensitive-data]" in creds
     assert "py/command-line-injection" in threat
     assert "py/path-injection" in threat
     assert "py/clear-text-storage-sensitive-data" in threat

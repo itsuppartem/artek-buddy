@@ -10,6 +10,12 @@ export function saveButtonLabel(state: SaveAckState): string {
   return "Save";
 }
 
+export function storeButtonLabel(state: SaveAckState): string {
+  if (state === "saving") return "Storing…";
+  if (state === "saved") return "Stored";
+  return "Store";
+}
+
 export function useSaveAck() {
   const [state, setState] = useState<SaveAckState>("idle");
   const [error, setError] = useState("");

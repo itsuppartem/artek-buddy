@@ -433,7 +433,7 @@ Computer → Routines.
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Settings: Name, Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team \| Private, notifyOnFinish, Restart… / Stop… / Reset… (each confirms), Delete. Escape closes Settings the same as Close | [ ] | [ ] |
-| Tokens: GitHub and PyPI for **this bot**. Save then `••••` + last four. Another bot's Settings does not show that token. Forget empties the row. Reset / Team ↔ Private keep it | [ ] | [ ] |
+| Tokens: GitHub and PyPI for **this bot**. Store then `••••` + last four. Another bot's Settings does not show that token. Forget empties the row. Reset / Team ↔ Private keep it | [ ] | [ ] |
 | Paste a GitHub or PyPI token in Message → error, no user bubble. Use Settings instead | [ ] | [ ] |
 | Title keeps what you typed through blur / Tab and Save (the field must not empty). Save flashes Saved. Reopen Edit profile shows the same title | [ ] | [ ] |
 | Settings opened from the computer pane returns to that pane. Create / Models Close do the same if the pane was open | [ ] | [ ] |
@@ -608,7 +608,7 @@ If time is short, in this order:
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
 11. **§10 workers** `please e2e-background-worker-chat` then status; the acknowledgement is immediate and does not start a second plan; Message stays usable; one final result. `please e2e-worker-progress`: a **Still working:** line without a ping and no worker card. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
-12. **§1 / §21 Escape** on Settings and New bot. **§21 Tokens**: Save GitHub last four on one bot; the other bot is empty; a chat paste is refused
+12. **§1 / §21 Escape** on Settings and New bot. **§21 Tokens**: Store GitHub last four on one bot; the other bot is empty; a chat paste is refused
 13. **§14 Inbox** Search empty + one click opens that row
 14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Plugin **Open to connect** is the same kind of link. `please e2e-send-then-answer`: teaser then the spec, both stay, then Message is usable. Unsent draft stays on that chat after a switch
 15. **§8 / §15 Dismiss** on needs-you keeps the current chat. Park while this chat is open, then switch — still «needs you»

@@ -342,3 +342,66 @@ def test_local_unpair_forgets_the_device_token(
     assert body["paired"] is False
     assert httpd.token == ""
     assert not token_path.exists()
+
+
+def test_proxy_forwards_put_to_the_host(
+    client_mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    seen: list[tuple[str, bytes]] = []
+
+    class Upstream(BaseHTTPRequestHandler):
+        def do_PUT(self) -> None:
+            length = int(self.headers.get("Content-Length") or 0)
+            seen.append((self.path, self.rfile.read(length)))
+            payload = b'{"ok":true}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, fmt: str, *args: object) -> None:
+            return
+
+    host = ThreadingHTTPServer(("127.0.0.1", 0), Upstream)
+    host_thread = threading.Thread(target=host.serve_forever, daemon=True)
+    host_thread.start()
+    proxy = _proxy(client_mod)
+    (tmp_path / "index.html").write_text("<!doctype html>", encoding="utf-8")
+    monkeypatch.setattr(proxy, "web_root", lambda: tmp_path)
+    httpd = None
+    try:
+        httpd = proxy.serve(f"http://127.0.0.1:{host.server_address[1]}", "dev_test", 0)
+        loop = threading.Thread(target=httpd.serve_forever, daemon=True)
+        loop.start()
+        port = int(httpd.server_address[1])
+        origin = f"http://127.0.0.1:{port}"
+        conn = HTTPConnection("127.0.0.1", port, timeout=5)
+        try:
+            conn.request(
+                "PUT",
+                "/v1/bots/bot_deadbeefdeadbeef/credentials/github",
+                body=b'{"secret":"fixture"}',
+                headers={
+                    "Host": f"127.0.0.1:{port}",
+                    "Origin": origin,
+                    "Content-Type": "application/json",
+                },
+            )
+            resp = conn.getresponse()
+            payload = resp.read()
+        finally:
+            conn.close()
+    finally:
+        if httpd is not None:
+            httpd.shutdown()
+            httpd.server_close()
+        host.shutdown()
+        host.server_close()
+    assert resp.status == 200
+    assert payload == b'{"ok":true}'
+    assert seen == [
+        ("/v1/bots/bot_deadbeefdeadbeef/credentials/github", b'{"secret":"fixture"}')
+    ]

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api";
-import { saveButtonLabel, useSaveAck } from "../../lib/save-ack";
+import { storeButtonLabel, useSaveAck } from "../../lib/save-ack";
 import type { BotCredential } from "../../types";
 import { Button } from "../../ui/button";
 
@@ -123,7 +123,7 @@ function CredentialRow({
             disabled={!draft.trim() || saveAck.state === "saving"}
             onClick={() => void save()}
           >
-            {saveButtonLabel(saveAck.state)}
+            {storeButtonLabel(saveAck.state)}
           </Button>
         ) : (
           <Button

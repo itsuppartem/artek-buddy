@@ -151,6 +151,7 @@ def test_settings_github_token_stays_on_that_bot(
     open_settings(page, alpha)
     expect(page.get_by_test_id("bot-credentials")).to_be_visible()
     page.get_by_test_id("bot-credential-github-secret").fill(secret)
+    expect(page.get_by_test_id("bot-credential-github-save")).to_have_text("Store")
     page.get_by_test_id("bot-credential-github-save").click()
     expect(page.get_by_test_id("bot-credential-github-status")).to_contain_text("••••AAAA")
     page.get_by_label("Close settings").click()
