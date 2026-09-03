@@ -18,6 +18,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Changed
+- `ARCHITECTURE.md` matches the running tree: 26 SQL migrations, host-owned `CONNECTIONS_CALLBACK_URL`, and `release.yml` as `workflow_dispatch` on `main`.
 - Owner-job claim, file, and result transport lives in `consent_jobs.py`. Ask-card Allow/Deny stays on `ConsentHub`.
 - Inbox highlight, host-page banners, and the chat list live in `pages/shell/`. `ShellPage` still composes the window.
 - Turn registry and bot-ask delivery are separate modules. `http.turns` still re-exports the helpers other routers import.
