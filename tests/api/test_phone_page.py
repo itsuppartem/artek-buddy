@@ -41,6 +41,10 @@ def test_host_page_and_pairing_use_a_cookie_not_a_token_in_json(
     page = client.get("/")
     assert page.status_code == 200
     assert "text/html" in page.headers["content-type"]
+    assert page.headers["x-content-type-options"] == "nosniff"
+    assert page.headers["referrer-policy"] == "no-referrer"
+    csp = page.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in csp
     assert "Artek Buddy" in page.text
     app_path = client.get("/app")
     assert app_path.status_code == 200
@@ -48,6 +52,8 @@ def test_host_page_and_pairing_use_a_cookie_not_a_token_in_json(
 
     empty = client.get("/local/status")
     assert empty.status_code == 200
+    assert empty.headers["x-content-type-options"] == "nosniff"
+    assert empty.headers["referrer-policy"] == "no-referrer"
     body = empty.json()
     assert body["paired"] is False
     assert body["surface"] == "host"

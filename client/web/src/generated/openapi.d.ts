@@ -2927,9 +2927,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

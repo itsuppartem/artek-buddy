@@ -21,6 +21,23 @@ log = logging.getLogger("artek_buddy")
 COOKIE_NAME = "artek_device"
 COOKIE_MAX_AGE = 30 * 24 * 60 * 60
 NONCE_HEADER = "X-Artek-Local-Nonce"
+HTML_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; "
+    "frame-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; "
+    "base-uri 'self'; form-action 'self'"
+)
+
+
+def page_security_headers(*, html: bool) -> dict[str, str]:
+    headers = {
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+    }
+    if html:
+        headers["Content-Security-Policy"] = HTML_CSP
+    return headers
+
 
 router = APIRouter()
 
@@ -95,7 +112,8 @@ async def page_status(request: Request) -> JSONResponse:
             "url": "",
             "nonce": _page_nonce(),
             "surface": "host",
-        }
+        },
+        headers=page_security_headers(html=False),
     )
 
 
@@ -140,7 +158,7 @@ async def page_pair(
         "paired": True,
         "device": {"id": created.id, "name": created.name, "platform": created.platform},
     }
-    response = JSONResponse(payload)
+    response = JSONResponse(payload, headers=page_security_headers(html=False))
     _set_device_cookie(response, request, created.token)
     return response
 
@@ -151,7 +169,9 @@ async def page_unpair(
     nonce: str | None = Header(default=None, alias=NONCE_HEADER),
 ) -> JSONResponse:
     _require_local(request, nonce, mutating=True)
-    response = JSONResponse({"ok": True, "paired": False})
+    response = JSONResponse(
+        {"ok": True, "paired": False}, headers=page_security_headers(html=False)
+    )
     _clear_device_cookie(response)
     return response
 
@@ -175,9 +195,9 @@ async def page_owner_cut(
 async def page_notify(
     request: Request,
     nonce: str | None = Header(default=None, alias=NONCE_HEADER),
-) -> dict[str, bool]:
+) -> JSONResponse:
     _require_local(request, nonce, mutating=True)
-    return {"ok": False}
+    return JSONResponse({"ok": False}, headers=page_security_headers(html=False))
 
 
 @router.get("/")
@@ -192,4 +212,9 @@ async def page_files(full_path: str = "", cfg: Settings = Depends(settings)) -> 
     path = web_file_for_request(root, f"/{full_path}" if full_path else "/")
     if path is None:
         raise HTTPException(status_code=404, detail="not found")
-    return FileResponse(path, media_type=safe_content_type(path))
+    media = safe_content_type(path)
+    return FileResponse(
+        path,
+        media_type=media,
+        headers=page_security_headers(html=media.startswith("text/html")),
+    )
