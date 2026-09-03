@@ -29,7 +29,6 @@ from proxy_common import (
     local_rpc_origin_allowed,
     proxy_host_allowed,
 )
-from ssh_mux import owner_exec_environment
 from window_chrome import _notify_text, gtk_window_active
 
 
@@ -447,7 +446,7 @@ class LocalRpcMixin:
                 timeout=OWNER_EXEC_TIMEOUT,
                 text=True,
                 errors="replace",
-                env=owner_exec_environment(),
+                env=_proxy_mod().owner_exec_environment(),
             )
         except subprocess.TimeoutExpired:
             self._json(

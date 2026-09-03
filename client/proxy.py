@@ -21,6 +21,7 @@ from proxy_common import (
 from proxy_rpc import LocalRpcMixin
 from proxy_static import StaticMixin
 from proxy_upstream import UpstreamMixin
+from ssh_mux import owner_exec_environment as owner_exec_environment  # noqa: F401
 
 __all__ = [
     "Handler",
