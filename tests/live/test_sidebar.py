@@ -8,6 +8,7 @@ from tests.live.helpers import (
     bot_row,
     composer,
     create_named_bot,
+    hold_thread_snapshot_gets,
     open_bot_menu,
     open_chat,
     pair_fresh,
@@ -229,12 +230,92 @@ def test_switch_never_blanks_thread(page: Page, client_url: str, host_url: str) 
     send_message(page, "other chat", second)
     open_chat(page, first)
     expect(page.get_by_test_id("thread-composer")).to_be_visible()
-    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).not_to_have_count(0)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="stay visible"
+        )
+    ).to_be_visible()
     open_chat(page, second)
     expect(thread_header(page)).to_contain_text(second)
-    expect(page.get_by_test_id("thread-composer")).to_be_visible()
-    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).not_to_have_count(0)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="other chat"
+        )
+    ).to_be_visible()
+    with hold_thread_snapshot_gets(page) as held:
+        open_chat(page, first)
+        expect(thread_header(page)).to_contain_text(first)
+        expect(page.get_by_test_id("thread-composer")).to_be_visible()
+        expect(page.get_by_test_id("thread-loading")).to_have_count(0)
+        expect(
+            page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+                has_text="stay visible"
+            )
+        ).to_be_visible()
+        expect(
+            page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+                has_text="other chat"
+            )
+        ).to_have_count(0)
+        assert held.wait(timeout=10), "snapshot GET was never held"
+        expect(
+            page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+                has_text="stay visible"
+            )
+        ).to_be_visible()
     expect(page.get_by_test_id("empty-bots")).to_have_count(0)
+
+
+def test_switch_keeps_loaded_earlier_page(page: Page, client_url: str, host_url: str) -> None:
+    first = unique_bot("HistA")
+    second = unique_bot("HistB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    send_message(page, "please e2e-load-earlier", first)
+    create_named_bot(page, second)
+    send_message(page, "other chat", second)
+    open_chat(page, first)
+    earlier = page.get_by_test_id("load-earlier")
+    expect(earlier).to_be_visible(timeout=15_000)
+    earlier.click()
+    expect(page.get_by_text("e2e-old-00", exact=True)).to_be_visible(timeout=15_000)
+    open_chat(page, second)
+    expect(thread_header(page)).to_contain_text(second)
+    open_chat(page, first)
+    expect(thread_header(page)).to_contain_text(first)
+    expect(page.get_by_text("e2e-old-00", exact=True)).to_be_visible()
+
+
+def test_uncached_chat_shows_loading_not_a_blank_thread(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    first = unique_bot("LoadA")
+    extras = [unique_bot("LoadB"), unique_bot("LoadC"), unique_bot("LoadD")]
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    send_message(page, "stay visible", first)
+    for name in extras:
+        create_named_bot(page, name)
+        open_chat(page, name)
+    open_chat(page, extras[-1])
+    expect(thread_header(page)).to_contain_text(extras[-1])
+    with hold_thread_snapshot_gets(page) as held:
+        open_chat(page, first)
+        expect(thread_header(page)).to_contain_text(first)
+        expect(page.get_by_test_id("thread-loading")).to_be_visible()
+        expect(page.get_by_test_id("thread-loading")).to_contain_text("Loading this chat")
+        expect(
+            page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+                has_text="stay visible"
+            )
+        ).to_have_count(0)
+        assert held.is_set() or held.wait(timeout=10), "snapshot GET was never held"
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="stay visible"
+        )
+    ).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("thread-loading")).to_have_count(0)
 
 
 def test_inbox_row_click_opens_that_chat(page: Page, client_url: str, host_url: str) -> None:
