@@ -39,6 +39,7 @@ log = logging.getLogger("artek_buddy")
 
 from fastapi import APIRouter
 
+from artek_buddy.http.bot_ask_delivery import launch_bot_ask as _launch_bot_ask
 from artek_buddy.http.deps import (
     _computer_http,
     _db_error,
@@ -52,7 +53,6 @@ from artek_buddy.http.deps import (
 )
 from artek_buddy.http.turns import (
     _cancel_turns,
-    _launch_bot_ask,
 )
 
 router = APIRouter()
