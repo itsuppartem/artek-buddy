@@ -172,11 +172,15 @@ export function ComputerOverlay({
       className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-ink select-none"
       data-testid="computer-overlay"
       data-phone-desk={phone ? "1" : "0"}
+      role="application"
+      aria-label={title}
       style={
         phone && view.height > 0
           ? { top: view.top, height: view.height, bottom: "auto" }
           : undefined
       }
+      // The overlay is the bot desktop keyboard target (Take control / Caps Lock).
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: desktop overlay focus target
       tabIndex={0}
       onPointerDown={reportOwnerActivity}
       onPointerMove={reportOwnerActivity}

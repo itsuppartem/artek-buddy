@@ -248,11 +248,8 @@ export function MemoryPanel({
       </div>
       {creating ? (
         <div className="mt-3 rounded-xl border border-hairline bg-ink p-3">
-          <div
-            className="mb-2 inline-flex rounded-[10px] border border-hairline p-0.5"
-            role="group"
-            aria-label="Memory scope"
-          >
+          <fieldset className="mb-2 inline-flex rounded-[10px] border border-hairline p-0.5">
+            <legend className="sr-only">Memory scope</legend>
             <button
               type="button"
               data-testid="memory-scope-bot"
@@ -275,7 +272,7 @@ export function MemoryPanel({
             >
               Shared
             </button>
-          </div>
+          </fieldset>
           <textarea
             ref={factsRef}
             value={content}

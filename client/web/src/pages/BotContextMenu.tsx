@@ -119,12 +119,11 @@ const iconProps = {
   strokeWidth: 1.8,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
-  "aria-hidden": true,
 };
 
 function PinIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z" />
     </svg>
   );
@@ -132,7 +131,7 @@ function PinIcon() {
 
 function EditIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
     </svg>
@@ -141,7 +140,7 @@ function EditIcon() {
 
 function ReadStatusIcon({ unread }: { unread: boolean }) {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
       {unread ? <circle cx="18" cy="5" r="3" fill="currentColor" stroke="none" /> : null}
     </svg>
@@ -150,7 +149,7 @@ function ReadStatusIcon({ unread }: { unread: boolean }) {
 
 function DuplicateIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <rect x="8" y="8" width="12" height="12" rx="2" />
       <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
     </svg>
@@ -159,7 +158,7 @@ function DuplicateIcon() {
 
 function TrashIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <path d="M3 6h18M8 6V4h8v2m-9 0 1 15h8l1-15M10 10v7m4-7v7" />
     </svg>
   );
@@ -167,7 +166,7 @@ function TrashIcon() {
 
 function ArchiveIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <path d="M4 7h16v13H4zM3 4h18v3H3zM9 11h6" />
     </svg>
   );

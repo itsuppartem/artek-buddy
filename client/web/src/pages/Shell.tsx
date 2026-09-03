@@ -2395,6 +2395,8 @@ export function ShellPage() {
                 ))}
               </div>
             ) : null}
+            {/* File drop and paste land on the Message row, not a dedicated control. */}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: composer drop/paste target */}
             <div
               data-testid="thread-composer"
               className="flex items-end gap-2"
@@ -2821,10 +2823,14 @@ function AttachChip({ item, onRemove }: { item: PendingFile; onRemove: () => voi
           controls
           preload="metadata"
           className="h-20 max-w-[200px] shrink-0 rounded-lg"
-        />
+        >
+          <track kind="captions" label="No captions for this file" srcLang="en" />
+        </video>
       ) : null}
       {kind === "audio" && url ? (
-        <audio data-testid="attach-preview" src={url} controls className="h-8 max-w-[220px]" />
+        <audio data-testid="attach-preview" src={url} controls className="h-8 max-w-[220px]">
+          <track kind="captions" label="No captions for this file" srcLang="en" />
+        </audio>
       ) : null}
       <span className="max-w-[140px] truncate">{item.file.name}</span>
       <button

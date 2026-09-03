@@ -13,7 +13,6 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "a11y": "off",
       "correctness": {
         "useExhaustiveDependencies": "off"
       },

@@ -53,6 +53,8 @@ export function MessageView({
 }) {
   const quote = message.replyTo;
   return (
+    // Right-click Copy/Reply on a chat bubble; the bubble is not a control.
+    // biome-ignore lint/a11y/noStaticElementInteractions: chat bubble context menu
     <div
       data-testid="thread-message"
       data-role={message.role}
