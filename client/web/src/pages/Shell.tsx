@@ -103,11 +103,8 @@ import {
   filterBots,
   inboxEmptyState,
   inboxFallbackPath,
-  inboxRowClickShouldOpen,
-  inboxSearchEmpty,
   type SidebarView,
   sortInboxBots,
-  splitQueryMatch,
 } from "../lib/sidebar";
 import {
   canAnswerOwnerPrompt,
@@ -146,7 +143,6 @@ import {
   pairAgainLabel,
   shouldHoldHostAlert,
   shouldOfferWebAlerts,
-  shouldShowHomeScreenHint,
   shouldShowWebNotification,
   webNotificationBody,
 } from "../lib/web-notify";
@@ -178,31 +174,13 @@ import { BotSettings } from "./shell/BotSettings";
 import { ComputerOverlay } from "./shell/ComputerOverlay";
 import { ComputerPane } from "./shell/ComputerPane";
 import { CreateBotForm } from "./shell/CreateBotForm";
+import { HostPhoneBanners } from "./shell/HostPhoneBanners";
+import { InboxList } from "./shell/InboxList";
 import { MessageView, messageCopyText, replyExcerpt } from "./shell/MessageView";
 import { ModelsPane } from "./shell/ModelsPane";
 import { PluginsPane } from "./shell/PluginsPane";
 
 type Panel = "computer" | "settings" | "create" | "models" | "plugins" | null;
-
-function InboxHit({ text, query }: { text: string; query: string }) {
-  return (
-    <>
-      {splitQueryMatch(text, query).map((part, index) =>
-        part.hit ? (
-          <mark
-            key={`${part.text}-${index}`}
-            data-testid="inbox-hit"
-            className="rounded-sm bg-tan/40 text-inherit"
-          >
-            {part.text}
-          </mark>
-        ) : (
-          part.text
-        ),
-      )}
-    </>
-  );
-}
 
 export function ShellPage() {
   const { botId } = useParams();
@@ -1865,146 +1843,25 @@ export function ShellPage() {
             </button>
           </div>
           <div className="ab-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
-            {sidebarView === "archived" ? (
-              <>
-                <button
-                  type="button"
-                  data-testid="back-inbox"
-                  onClick={() => setSidebarView("inbox")}
-                  className="mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13.5px] text-mute hover:bg-raised hover:text-paper"
-                >
-                  ← Inbox
-                </button>
-                <div data-testid="archived-list" className="flex flex-col gap-0.5">
-                  {filteredArchived.map((bot) => (
-                    <div
-                      key={bot.id}
-                      data-testid="archived-bot-row"
-                      data-bot-id={bot.id}
-                      className="flex items-center gap-3 rounded-xl px-2.5 py-[11px]"
-                    >
-                      <BotAvatar color={bot.color} size={38} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-display text-[14.5px] text-paper">
-                          <InboxHit text={bot.name} query={query} />
-                        </div>
-                        <div className="mt-0.5 truncate text-[12.5px] text-mute">
-                          <InboxHit text={stripMarkdown(bot.preview || bot.title)} query={query} />
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        data-testid="restore-chat"
-                        onClick={() => void restoreBot(bot)}
-                        className="shrink-0 rounded-lg border border-hairline px-2.5 py-1 text-[12.5px] text-paper hover:bg-raised"
-                      >
-                        Restore
-                      </button>
-                    </div>
-                  ))}
-                  {inboxSearchEmpty(query, filteredArchived.length) ? (
-                    <p
-                      data-testid="inbox-search-empty"
-                      className="px-2.5 py-3 text-[13px] leading-5 text-mute"
-                    >
-                      No chats match. Clear Search or try another name.
-                    </p>
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <>
-                {filtered.map((bot) => (
-                  <button
-                    key={bot.id}
-                    type="button"
-                    data-testid="bot-row"
-                    data-bot-id={bot.id}
-                    data-bot-name={bot.name}
-                    aria-label={
-                      bot.unread ? `Open chat ${bot.name} (unread)` : `Open chat ${bot.name}`
-                    }
-                    aria-current={active?.id === bot.id ? "page" : undefined}
-                    onPointerDown={() => {
-                      inboxPointerDown.current = bot.id;
-                    }}
-                    onClick={() => {
-                      if (!inboxRowClickShouldOpen(inboxPointerDown.current === bot.id)) return;
-                      inboxPointerDown.current = null;
-                      openBot(bot.id);
-                    }}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      setContextMenu({
-                        bot,
-                        position: { x: event.clientX, y: event.clientY },
-                      });
-                    }}
-                    className={`flex gap-2.5 border-l-[3px] px-2.5 py-[11px] text-left ${
-                      active?.id === bot.id
-                        ? "border-tan bg-plate"
-                        : "border-transparent hover:bg-raised"
-                    }`}
-                  >
-                    <BotAvatar color={bot.color} size={38} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span
-                          className={`flex items-center gap-1.5 font-display text-[14.5px] text-paper ${
-                            bot.unread ? "font-semibold" : "font-normal"
-                          }`}
-                        >
-                          <InboxHit text={bot.name} query={query} />
-                          {bot.pinned ? (
-                            <span title="Pinned" className="text-[11px] text-mute">
-                              📌
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-mute">
-                          {bot.status === "idle" ? "" : bot.status}
-                          {bot.unread ? (
-                            <span
-                              data-testid="unread-dot"
-                              role="img"
-                              aria-label="Unread"
-                              className="inline-block h-2.5 w-2.5 rounded-full bg-tan"
-                            />
-                          ) : null}
-                        </span>
-                      </div>
-                      <div
-                        data-testid="bot-preview"
-                        className={`mt-0.5 truncate text-[12.5px] ${
-                          bot.unread ? "font-medium text-paper" : "text-mute"
-                        }`}
-                      >
-                        <InboxHit text={stripMarkdown(bot.preview || bot.title)} query={query} />
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                {inboxSearchEmpty(query, filtered.length) ? (
-                  <p
-                    data-testid="inbox-search-empty"
-                    className="px-2.5 py-3 text-[13px] leading-5 text-mute"
-                  >
-                    No chats match. Clear Search or try another name.
-                  </p>
-                ) : null}
-                {archivedBots.length > 0 ? (
-                  <button
-                    type="button"
-                    data-testid="open-archived"
-                    onClick={() => setSidebarView("archived")}
-                    className="mt-1 flex items-center justify-between rounded-xl px-2.5 py-[11px] text-left text-[14px] text-mute hover:bg-raised hover:text-paper"
-                  >
-                    <span>Archived</span>
-                    <span data-testid="archived-count">{archivedBots.length}</span>
-                  </button>
-                ) : null}
-              </>
-            )}
+            <InboxList
+              sidebarView={sidebarView}
+              query={query}
+              bots={filtered}
+              archived={filteredArchived}
+              archivedCount={archivedBots.length}
+              activeId={active?.id}
+              inboxPointerDown={inboxPointerDown}
+              onBackInbox={() => setSidebarView("inbox")}
+              onRestore={(bot) => void restoreBot(bot)}
+              onOpenBot={(id) => openBot(id)}
+              onContextMenu={(bot, event) => {
+                setContextMenu({
+                  bot,
+                  position: { x: event.clientX, y: event.clientY },
+                });
+              }}
+              onOpenArchived={() => setSidebarView("archived")}
+            />
           </div>
           <button
             type="button"
@@ -2729,65 +2586,6 @@ export function ShellPage() {
         onScreenError={(message) => setScreenError(message)}
         phone={phoneDesk}
       />
-    </div>
-  );
-}
-
-function HostPhoneBanners({
-  alertOffer,
-  hintDismissed,
-  onDismissHint,
-  onAlertPermission,
-}: {
-  alertOffer: "hide" | "ask" | "ready";
-  hintDismissed: boolean;
-  onDismissHint: () => void;
-  onAlertPermission: (permission: NotificationPermission) => void;
-}) {
-  const showHint =
-    !hintDismissed &&
-    shouldShowHomeScreenHint({
-      surface: "host",
-      ios: isIosDevice(),
-      standalone: isStandaloneDisplay(),
-    });
-  if (pageSurface() !== "host" || (!showHint && alertOffer !== "ask")) return null;
-  return (
-    <div
-      data-testid="phone-host-banners"
-      className="flex shrink-0 flex-col gap-2 border-b border-hairline px-3 pb-2 pt-3"
-    >
-      {showHint ? (
-        <div className="flex items-start gap-2 rounded-[10px] border border-hairline bg-plate px-3 py-2">
-          <p
-            data-testid="home-screen-hint"
-            className="min-w-0 flex-1 text-[13px] leading-5 text-paper"
-          >
-            Share → Add to Home Screen, then open that icon. iPhone alerts need it and only work
-            while this app is open.
-          </p>
-          <button
-            type="button"
-            className="shrink-0 pt-0.5 text-[13px] font-medium text-tan"
-            onClick={onDismissHint}
-          >
-            Got it
-          </button>
-        </div>
-      ) : null}
-      {alertOffer === "ask" ? (
-        <button
-          type="button"
-          data-testid="turn-on-alerts"
-          className="rounded-[10px] border border-tan bg-plate px-3 py-2 text-left text-[13px] font-medium text-paper"
-          onClick={() => {
-            if (typeof Notification === "undefined") return;
-            void Notification.requestPermission().then(onAlertPermission);
-          }}
-        >
-          Turn on alerts — only while this app is open
-        </button>
-      ) : null}
     </div>
   );
 }
