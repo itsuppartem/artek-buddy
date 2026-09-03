@@ -508,7 +508,7 @@ class ModelCredentialList(BaseModel):
 class BotCredential(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    provider: Literal["github", "pypi"]
+    provider: str = Field(min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9-]{0,31}$")
     scope: Literal["this_bot"] = "this_bot"
     last_four: str
     updated_at: str

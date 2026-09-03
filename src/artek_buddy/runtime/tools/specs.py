@@ -630,8 +630,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="list_bot_credentials",
         description=(
-            "List whether this bot has a host-saved GitHub or PyPI token. "
-            "Returns last four characters only. Never returns the secret. "
+            "List host-saved authorization tokens for this bot. "
+            "Returns names and last four characters only. Never returns the secret. "
             "Tokens are not stored in chat, memory, or the computer home."
         ),
         input_schema={"type": "object", "properties": {}},

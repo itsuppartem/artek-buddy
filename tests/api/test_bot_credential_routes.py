@@ -7,6 +7,7 @@ from tests.api.helpers import create_bot, message_texts
 
 from artek_buddy.bot_credentials import (
     PASTED_CREDENTIAL_DETAIL,
+    UNNAMED_CREDENTIAL_DETAIL,
     BotCredentialStore,
     last_four,
 )
@@ -14,6 +15,7 @@ from artek_buddy.computer.service import wipe_computer_home
 
 GITHUB_FIXTURE = "ghp_" + ("A" * 36)
 PYPI_FIXTURE = "pypi-AgEIcHlwaS5vcmc" + ("B" * 16)
+NAMED_FIXTURE = "reg_" + ("Z" * 24)
 
 
 def _dump(payload: object) -> str:
@@ -33,11 +35,15 @@ def test_credentials_survive_new_store_and_stay_isolated(client, auth_header) ->
     bravo = create_bot(client, auth_header, "CredBravo")["id"]
     saved_g = _put(client, auth_header, alpha, "github", GITHUB_FIXTURE)
     saved_p = _put(client, auth_header, alpha, "pypi", PYPI_FIXTURE)
+    saved_n = _put(client, auth_header, alpha, "registry-token", NAMED_FIXTURE)
     assert saved_g.status_code == 200, saved_g.text
     assert saved_p.status_code == 200, saved_p.text
+    assert saved_n.status_code == 200, saved_n.text
     assert GITHUB_FIXTURE not in saved_g.text
     assert PYPI_FIXTURE not in saved_p.text
+    assert NAMED_FIXTURE not in saved_n.text
     assert saved_g.json()["last_four"] == last_four(GITHUB_FIXTURE)
+    assert saved_n.json()["last_four"] == last_four(NAMED_FIXTURE)
     assert saved_g.json()["scope"] == "this_bot"
 
     listed_a = client.get(f"/v1/bots/{alpha}/credentials", headers=auth_header)
@@ -46,17 +52,24 @@ def test_credentials_survive_new_store_and_stay_isolated(client, auth_header) ->
     assert listed_b.status_code == 200
     assert GITHUB_FIXTURE not in listed_a.text
     assert PYPI_FIXTURE not in listed_a.text
-    assert {row["provider"] for row in listed_a.json()["credentials"]} == {"github", "pypi"}
+    assert NAMED_FIXTURE not in listed_a.text
+    assert {row["provider"] for row in listed_a.json()["credentials"]} == {
+        "github",
+        "pypi",
+        "registry-token",
+    }
     assert listed_b.json()["credentials"] == []
 
     vault = BotCredentialStore(client.app.state.settings.agent_data_dir)
     assert vault.read(alpha, "github") == GITHUB_FIXTURE
     assert vault.read(alpha, "pypi") == PYPI_FIXTURE
+    assert vault.read(alpha, "registry-token") == NAMED_FIXTURE
     assert vault.read(bravo, "github") is None
     assert vault.tool_env(bravo) == {}
     env = vault.tool_env(alpha)
     assert env["GH_TOKEN"] == GITHUB_FIXTURE
     assert env["TWINE_PASSWORD"] == PYPI_FIXTURE
+    assert env["REGISTRY_TOKEN"] == NAMED_FIXTURE
     assert "https://" not in " ".join(env.values())
 
 
@@ -119,23 +132,50 @@ def test_replace_delete_and_forget_drop_old_secret(client, auth_header) -> None:
     assert vault.read(bot_id, "pypi") is None
 
 
-def test_chat_paste_is_rejected_before_persist(client, auth_header) -> None:
+def test_chat_named_token_is_stored_not_persisted(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "CredPaste")["id"]
     sent = client.post(
         f"/v1/threads/{bot_id}/messages",
         headers=auth_header,
-        json={"text": f"here {GITHUB_FIXTURE}"},
+        json={"text": f"use REGISTRY_TOKEN={NAMED_FIXTURE} to publish"},
     )
-    assert sent.status_code == 400
-    assert sent.json()["detail"] == PASTED_CREDENTIAL_DETAIL
-    assert GITHUB_FIXTURE not in sent.text
+    assert sent.status_code == 200, sent.text
+    blob = _dump(sent.json())
+    assert NAMED_FIXTURE not in blob
     snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
     assert snap.status_code == 200
-    blob = _dump(snap.json())
-    assert GITHUB_FIXTURE not in blob
-    assert GITHUB_FIXTURE not in " ".join(message_texts(snap.json()))
+    assert NAMED_FIXTURE not in _dump(snap.json())
+    assert NAMED_FIXTURE not in " ".join(message_texts(snap.json()))
+    user_text = " ".join(message_texts(snap.json()))
+    assert "use" in user_text
+    assert last_four(NAMED_FIXTURE) in user_text
     listed = client.get(f"/v1/threads/{bot_id}/messages", headers=auth_header)
-    assert GITHUB_FIXTURE not in listed.text
+    assert NAMED_FIXTURE not in listed.text
+    creds = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
+    assert creds.status_code == 200
+    assert NAMED_FIXTURE not in creds.text
+    names = {row["provider"] for row in creds.json()["credentials"]}
+    assert "registry-token" in names
+    vault = BotCredentialStore(client.app.state.settings.agent_data_dir)
+    assert vault.read(bot_id, "registry-token") == NAMED_FIXTURE
+    assert vault.tool_env(bot_id)["REGISTRY_TOKEN"] == NAMED_FIXTURE
+
+
+def test_unlabeled_chat_blob_is_refused(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "CredBlob")["id"]
+    blob = "AbCdEfGhIjKlMnOpQrStUvWxYz012345"
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": blob},
+    )
+    assert sent.status_code == 400
+    assert sent.json()["detail"] == UNNAMED_CREDENTIAL_DETAIL
+    assert blob not in sent.text
+    snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert blob not in _dump(snap.json())
+    creds = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
+    assert creds.json()["credentials"] == []
 
 
 def test_memory_and_answer_reject_pasted_tokens(client, auth_header) -> None:

@@ -412,12 +412,12 @@ export const api = {
         (data) => data.credentials ?? [],
       );
     },
-    saveCredential(botId: string, provider: "github" | "pypi", secret: string) {
+    saveCredential(botId: string, provider: string, secret: string) {
       return request<BotCredential>("PUT", `/v1/bots/${botId}/credentials/${provider}`, {
         secret,
       });
     },
-    forgetCredential(botId: string, provider: "github" | "pypi") {
+    forgetCredential(botId: string, provider: string) {
       return request<OkResponse>("DELETE", `/v1/bots/${botId}/credentials/${provider}`);
     },
   },

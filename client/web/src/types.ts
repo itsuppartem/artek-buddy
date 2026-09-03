@@ -9,7 +9,7 @@ export type MemoryScope = Schema["MemoryScope"];
 
 export type Bot = Camelize<Schema["Bot"]>;
 export type BotCredential = {
-  provider: "github" | "pypi";
+  provider: string;
   scope: "this_bot";
   lastFour: string;
   updatedAt: string;
