@@ -46,6 +46,17 @@ _INBOX = "The user sent these messages"
 _FORGET = re.compile(r"(?i)\b(forget|забудь|не помни|stop remembering)\b")
 _ONE_OFF = re.compile(r"(?i)\b(open|открой|вкладк|tab|gmail|url|http|сейчас|this time|once)\b")
 _NEGATED_RULE = re.compile(r"(?i)\b(?:do not|don't|never|не|нельзя|никогда)\b")
+_GIT_ACT = re.compile(
+    r"(?i)\b(?:git|commits?|branches?|merges?|merged|pr|mr|"
+    r"pull requests?|merge requests?)\b"
+)
+_GIT_HOLD = re.compile(
+    r"(?i)\b(?:ask|wait|approve|approval|permission|until i|asking|спрашив\w*|жди\w*)\b"
+)
+_GIT_UNATTENDED = re.compile(
+    r"(?i)(?:without asking|no need to ask|do(?: not|n't) wait|"
+    r"you may (?:merge|push|commit)|merge freely)"
+)
 _DURABLE_ASK = re.compile(
     r"(?i)\b(city|город|name|зовут|timezone|часовой|prefer|язык|language|где жив)\b"
 )
@@ -346,9 +357,30 @@ def _memory_pieces(text: str) -> set[str]:
 
 
 def _same_memory_fact(left: str, right: str) -> bool:
-    return bool(
-        similar_memory(left, right) or memory_covers(left, right) or memory_covers(right, left)
-    )
+    if similar_memory(left, right) or memory_covers(left, right) or memory_covers(right, left):
+        return True
+    return git_approval_same_rule(left, right)
+
+
+def git_approval_rule(text: str) -> bool:
+    blob = text or ""
+    return bool(_GIT_ACT.search(blob) and (_GIT_HOLD.search(blob) or _GIT_UNATTENDED.search(blob)))
+
+
+def git_approval_unattended(text: str) -> bool:
+    return bool(_GIT_UNATTENDED.search(text or ""))
+
+
+def git_approval_same_rule(left: str, right: str) -> bool:
+    if not (git_approval_rule(left) and git_approval_rule(right)):
+        return False
+    return git_approval_unattended(left) == git_approval_unattended(right)
+
+
+def git_approval_contradicts(left: str, right: str) -> bool:
+    if not (git_approval_rule(left) and git_approval_rule(right)):
+        return False
+    return git_approval_unattended(left) != git_approval_unattended(right)
 
 
 def memory_covers(existing: str, candidate: str) -> bool:
@@ -505,10 +537,12 @@ class MemoryHub:
                     self._mark_capture(run_id, section, body)
                     return None
         for live in self.store.list_live_memory_entries(bot_id=bot_id):
-            if not _same_memory_fact(live.text, body):
+            same = _same_memory_fact(live.text, body)
+            git_clash = git_approval_contradicts(live.text, body)
+            if not same and not git_clash:
                 continue
-            if facts_contradict(live.text, body):
-                merged = scripted_rewrite(section, live.text, "", body)
+            if facts_contradict(live.text, body) or git_clash:
+                merged = body if git_clash else scripted_rewrite(section, live.text, "", body)
                 if merged != live.text:
                     updated = self._revise(live, merged, run_id, thread_id)
                     self._mark_capture(run_id, section, body)

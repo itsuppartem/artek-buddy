@@ -106,6 +106,7 @@ Computer → Memory: the **identity** chapter updated while that pane is open (n
 | «Привет» / `hello` does not rewrite identity | [ ] | [ ] |
 | Memory pane identity chapter has the new city only | [ ] | [ ] |
 | One detailed standing rule followed by a shorter restatement (`please e2e-remember-twice` on a scripted host) → **one** Remembered line and one Memory card. Reading This PC afterward does not repeat it | [ ] | [ ] |
+| A git/MR/merge approval rule plus short wait and ban restatements (`please e2e-remember-git-approval`) → **one** Remembered line and one card. `please e2e-remember-git-free` then revises that card | [ ] | [ ] |
 | Same standing rule three times (`please e2e-remember-same-thrice`) → still **one** Remembered line. A worker `remember` (`please e2e-background-worker-remember`) saves the card and does **not** print Remembered in the thread | [ ] | [ ] |
 | **+ New memory** defaults to **This bot** (filled segment). Save flashes Saved and keeps the card in view. Delete is **Remove**, not Outdated | [ ] | [ ] |
 | A long `Remembered:` clock line is one short row. Click it (`please e2e-remember`) opens Memory on that card with the full text. `Using …` is not a button | [ ] | [ ] |
@@ -595,7 +596,7 @@ Out of this pass: collaboration (#154–#169) and research tickets (#98, #100).
 If time is short, in this order:
 
 1. **§2 Models**
-2. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated). Click a long Remembered line → that Memory card. Same rule thrice / worker remember → one Remembered line or none from the worker
+2. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated). Click a long Remembered line → that Memory card. Same rule thrice / worker remember → one Remembered line or none from the worker. `please e2e-remember-git-approval` stays one card; `please e2e-remember-git-free` revises it
 3. **§4 Skill from the web**
 4. **§5 Bot asks bot**
 5. **§6 Plugins** (pane Connect or chat attach; no chip; the bot uses the app). `please e2e-connect-mail` / GitHub **Open to connect** opens the owner browser
