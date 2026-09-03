@@ -16,7 +16,6 @@ from artek_buddy.contracts import (
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
 from fastapi import APIRouter

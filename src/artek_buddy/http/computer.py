@@ -29,7 +29,6 @@ from artek_buddy.runtime import (
     AgentRuntime,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
 from fastapi import APIRouter
