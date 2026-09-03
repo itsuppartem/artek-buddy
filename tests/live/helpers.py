@@ -242,17 +242,16 @@ def hold_thread_snapshot_gets(page: Page) -> Iterator[threading.Event]:
         if request.method != "GET" or not is_thread_snapshot_path(path):
             route.continue_()
             return
-        response = route.fetch()
         held.set()
 
-        def fulfill() -> None:
+        def resume() -> None:
             release.wait(timeout=30)
             try:
-                route.fulfill(response=response)
+                route.continue_()
             except Exception:
                 return
 
-        threading.Thread(target=fulfill, daemon=True).start()
+        threading.Thread(target=resume, daemon=True).start()
 
     page.route("**/v1/threads/**", handle)
     try:

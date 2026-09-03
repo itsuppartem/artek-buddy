@@ -297,6 +297,8 @@ def test_uncached_chat_shows_loading_not_a_blank_thread(
     for name in extras:
         create_named_bot(page, name)
         open_chat(page, name)
+    open_chat(page, extras[-1])
+    expect(thread_header(page)).to_contain_text(extras[-1])
     with hold_thread_snapshot_gets(page) as held:
         open_chat(page, first)
         expect(thread_header(page)).to_contain_text(first)
@@ -307,7 +309,7 @@ def test_uncached_chat_shows_loading_not_a_blank_thread(
                 has_text="stay visible"
             )
         ).to_have_count(0)
-        assert held.wait(timeout=10), "snapshot GET was never held"
+        assert held.is_set() or held.wait(timeout=10), "snapshot GET was never held"
     expect(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(
             has_text="stay visible"
