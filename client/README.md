@@ -1,7 +1,8 @@
 # artek-buddy client
 
 Desktop GUI for the Artek Buddy host. Command: `artek-buddy`.
-Source: `artek_buddy.py` (entrypoint) plus `pairing.py`, `proxy.py`, `ssh_mux.py`,
+Source: `artek_buddy.py` (entrypoint) plus `pairing.py`, `proxy.py` (static /
+host proxy / local RPC mixins), `ssh_mux.py`,
 `ssh-wrap/`, `web_paths.py`, `notifications.py`, `tray.py`, `window.py`,
 `clipboard_image.py`, `owner_paths.py`, `window_chrome.py`, and `web/`.
 Version: same as the product (`../VERSION`).
