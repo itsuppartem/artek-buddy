@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import json
 import subprocess
+import threading
 import urllib.error
 import urllib.request
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+from urllib.parse import urlparse
 
 from playwright.sync_api import Page, expect
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -219,6 +223,43 @@ def fulfill_json(
         route.fulfill(status=status, content_type="application/json", body=body)
 
     page.route(url_glob, handle)
+
+
+def is_thread_snapshot_path(path: str) -> bool:
+    parts = [item for item in path.split("/") if item]
+    return len(parts) == 3 and parts[0] == "v1" and parts[1] == "threads"
+
+
+@contextmanager
+def hold_thread_snapshot_gets(page: Page) -> Iterator[threading.Event]:
+    """Stall GET /v1/threads/{id} after the host has already produced the body."""
+    held = threading.Event()
+    release = threading.Event()
+
+    def handle(route) -> None:
+        request = route.request
+        path = urlparse(request.url).path.rstrip("/")
+        if request.method != "GET" or not is_thread_snapshot_path(path):
+            route.continue_()
+            return
+        response = route.fetch()
+        held.set()
+
+        def fulfill() -> None:
+            release.wait(timeout=30)
+            try:
+                route.fulfill(response=response)
+            except Exception:
+                return
+
+        threading.Thread(target=fulfill, daemon=True).start()
+
+    page.route("**/v1/threads/**", handle)
+    try:
+        yield held
+    finally:
+        release.set()
+        page.unroute("**/v1/threads/**", handle)
 
 
 def cut_host(page: Page) -> None:

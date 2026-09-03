@@ -1,7 +1,9 @@
 import {
   type ClipboardEvent,
+  type Dispatch,
   type DragEvent,
   type KeyboardEvent,
+  type SetStateAction,
   type SyntheticEvent,
   useEffect,
   useLayoutEffect,
@@ -112,9 +114,16 @@ import {
   isHiddenLiveDraft,
   isRawRunFailedMessage,
   isToolNoise,
-  mergeThreadSnapshot,
-  prependThreadMessagePage,
 } from "../lib/thread-events";
+import {
+  applyOlderPageForBot,
+  applySnapshotForBot,
+  createThreadSnapshotCache,
+  forgetThread,
+  peekThread,
+  rememberThread,
+  touchThread,
+} from "../lib/thread-snapshot-cache";
 import {
   addPendingFiles,
   clipboardFilePaths,
@@ -319,7 +328,7 @@ export function ShellPage() {
   const [replyTo, setReplyTo] = useState<ThreadMessage | null>(null);
   const composerSlots = useRef(new Map<string, ComposerSlot<ThreadMessage>>());
   const composerBotRef = useRef<string | undefined>(undefined);
-  const expandedHistoryThread = useRef<string | null>(null);
+  const threadCache = useRef(createThreadSnapshotCache());
   const discardedBotIds = useRef(new Set<string>());
   const heldUnreadIds = useRef(new Set<string>());
   const messageScroll = useRef<HTMLDivElement>(null);
@@ -327,17 +336,18 @@ export function ShellPage() {
   const active = bots.find((bot) => bot.id === botId);
   activeIdRef.current = active?.id;
   botIdRef.current = botId;
-  const thread = active && snapshot?.botId === active.id ? snapshot : null;
+  const cachedEntry = active ? peekThread(threadCache.current, active.id) : undefined;
+  const cachedSnapshot = cachedEntry?.snapshot ?? null;
+  const thread = active && snapshot?.botId === active.id ? snapshot : cachedSnapshot;
+  const historyAtStart =
+    snapshot?.botId === active?.id ? threadAtStart : Boolean(cachedEntry?.atStart);
+  const loadingThread = Boolean(active && !thread && !error);
   const isParked = thread?.run?.status === "waiting_takeover";
   const isBusy = Boolean(
     (thread?.run && isLiveTurn(thread.run.status)) ||
       (thread && !isParked && (hasLive(thread) || hasActiveWorkers(thread))),
   );
   const flightText = inFlightProgressText(thread?.subagents);
-
-  useEffect(() => {
-    setThreadAtStart(false);
-  }, [active?.id]);
 
   useEffect(() => {
     botsRef.current = bots;
@@ -1000,6 +1010,7 @@ export function ShellPage() {
       setSending(false);
     }
     composerSlots.current.delete(id);
+    forgetThread(threadCache.current, id);
     setBots((list) => list.filter((item) => item.id !== id));
   }
 
@@ -1015,17 +1026,36 @@ export function ShellPage() {
     }
   }
 
+  function cacheSnapshot(action: SetStateAction<ThreadSnapshot | null>) {
+    setSnapshot((prev) => {
+      const next = typeof action === "function" ? action(prev) : action;
+      if (next?.botId) {
+        const held = threadCache.current.get(next.botId);
+        rememberThread(threadCache.current, next.botId, {
+          snapshot: next,
+          preserveLoadedHistory: held?.preserveLoadedHistory ?? false,
+          atStart: held?.atStart ?? false,
+        });
+      }
+      return next;
+    });
+  }
+
+  const publishSnapshot: Dispatch<SetStateAction<ThreadSnapshot | null>> = cacheSnapshot;
+
   async function refreshThread(id: string) {
-    if (discardedBotIds.current.has(id) || activeIdRef.current !== id) return null;
-    const scrollElement = messageScroll.current;
+    if (discardedBotIds.current.has(id)) return null;
+    const viewing = activeIdRef.current === id;
+    const scrollElement = viewing ? messageScroll.current : null;
     const stickToEnd =
       !scrollElement ||
       scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 80;
     const snap = await api.threads.get(id);
-    if (discardedBotIds.current.has(id) || activeIdRef.current !== id) return snap;
-    setSnapshot((prev) =>
-      mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId),
-    );
+    if (discardedBotIds.current.has(id) || snap.botId !== id) return snap;
+    const entry = applySnapshotForBot(threadCache.current, id, snap);
+    if (!entry || activeIdRef.current !== id) return snap;
+    setSnapshot(entry.snapshot);
+    setThreadAtStart(entry.atStart);
     setComputer(snap.computer);
     for (const consentId of pendingOwnerJobIds(snap)) startOwnerFulfill(consentId);
     if (stickToEnd) {
@@ -1038,17 +1068,18 @@ export function ShellPage() {
   }
 
   async function loadOlderMessages() {
-    if (!active || snapshot?.olderCursor == null || loadingOlder) return;
+    const requested = active?.id;
+    const cursor = thread?.olderCursor;
+    if (!requested || cursor == null || loadingOlder) return;
     const scrollElement = messageScroll.current;
     const previousHeight = scrollElement?.scrollHeight ?? 0;
-    const requested = active.id;
     setLoadingOlder(true);
     try {
-      const page = await api.threads.messages(requested, snapshot.olderCursor);
-      if (activeIdRef.current !== requested) return;
-      expandedHistoryThread.current = page.threadId;
-      setSnapshot((prev) => prependThreadMessagePage(prev, page));
-      if (page.olderCursor == null) setThreadAtStart(true);
+      const page = await api.threads.messages(requested, cursor);
+      const entry = applyOlderPageForBot(threadCache.current, requested, page);
+      if (!entry || activeIdRef.current !== requested) return;
+      setSnapshot(entry.snapshot);
+      if (entry.atStart) setThreadAtStart(true);
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
         if (element) element.scrollTop += element.scrollHeight - previousHeight;
@@ -1098,9 +1129,11 @@ export function ShellPage() {
     setScreenError(null);
     setScreenEpoch(0);
     screenRetries.current = 0;
-    setSnapshot((prev) => (prev?.botId === active.id ? prev : null));
-    setComputer(null);
-    expandedHistoryThread.current = null;
+    const cached = touchThread(threadCache.current, active.id);
+    setSnapshot(cached?.snapshot ?? null);
+    setThreadAtStart(cached?.atStart ?? false);
+    setComputer(cached?.snapshot.computer ?? null);
+    setLoadingOlder(false);
     const abort = new AbortController();
     void (async () => {
       const _snap = await refreshThread(active.id).catch((err: unknown) => {
@@ -1128,7 +1161,7 @@ export function ShellPage() {
               abort.signal.aborted ||
               activeIdRef.current !== active.id;
             if (!leftChat) {
-              applyThreadEvent(event, setSnapshot, setComputer);
+              applyThreadEvent(event, publishSnapshot, setComputer);
             }
             const bot = botsRef.current.find((item) => item.id === active.id) ?? active;
             considerEvent(event, bot, { source: "thread" });
@@ -1669,7 +1702,17 @@ export function ShellPage() {
     const status = await api.computer.status(active.id).catch(() => null);
     if (status) {
       setComputer(status);
-      setSnapshot((prev) => (prev ? { ...prev, computer: status } : prev));
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, computer: status };
+        const held = threadCache.current.get(prev.botId);
+        rememberThread(threadCache.current, prev.botId, {
+          snapshot: next,
+          preserveLoadedHistory: held?.preserveLoadedHistory ?? false,
+          atStart: held?.atStart ?? false,
+        });
+        return next;
+      });
     }
     await ensureScreenUrl(active.id, true, true);
   }
@@ -2206,7 +2249,17 @@ export function ShellPage() {
                 </button>
               </div>
             ) : null}
-            {thread?.olderCursor != null ? (
+            {loadingThread ? (
+              <div
+                data-testid="thread-loading"
+                role="status"
+                aria-live="polite"
+                className="m-auto max-w-sm text-center text-[14px] leading-5 text-mute"
+              >
+                Loading this chat…
+              </div>
+            ) : null}
+            {!loadingThread && thread?.olderCursor != null ? (
               <button
                 type="button"
                 data-testid="load-earlier"
@@ -2217,7 +2270,7 @@ export function ShellPage() {
               >
                 {loadingOlder ? "Loading…" : "Load earlier messages"}
               </button>
-            ) : threadAtStart ? (
+            ) : !loadingThread && historyAtStart ? (
               <p data-testid="thread-start" className="self-center text-[13px] text-mute">
                 Beginning of this chat.
               </p>

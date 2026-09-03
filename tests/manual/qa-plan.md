@@ -321,7 +321,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | --- | --- | --- |
 | Search filters inbox (and Archived) by name / preview. A name or preview hit is marked. No matches: empty copy plus Clear Search; clear restores the list | [ ] | [ ] |
 | Click a row opens **that** chat on the first click (not the previous one). After Research, one click Lead → header and composer are Lead. Same after a third bot. Unsent Message text stays on the chat it was typed in | [ ] | [ ] |
-| Switching chats does not blank the thread or jump inbox order under the pointer | [ ] | [ ] |
+| Switching chats does not blank the thread or jump inbox order under the pointer. A recently opened chat paints immediately even if the snapshot GET is still in flight. A first visit (or one evicted from the three-chat cache) shows **Loading this chat…** under that header, not an empty column | [ ] | [ ] |
 | Opening a chat in the focused window marks it read. Looking at or dismissing an OS notification does **not**. A reply while that chat is focused on screen does not leave the unread pin | [ ] | [ ] |
 | Unread pin is a tan circle named Unread (not a hidden 7px square). The name is bold | [ ] | [ ] |
 | Right-click (Deb) / long-press if offered (Phone): Pin / Unpin, Mark as unread (sticks until you leave and open again), Edit profile, Duplicate, Archive, Delete | [ ] | [ ] |
@@ -340,7 +340,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Enter sends. Shift+Enter inserts a newline (Deb) and that break stays in the sent bubble. Phone return key follows the on-screen keyboard. Ctrl+A selects the draft and does not Send; Enter then sends one copy. Slow Send in one chat does not disable Send in another; a late failure restores files on the chat that sent | [ ] | [ ] |
 | Message placeholder stays readable: full name, or `Message …` with an ellipsis — not a clipped mid-word (`Message Resea`) | [ ] | [ ] |
 | Deb WebKit: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo), not only Chromium `--serve` | [ ] | — |
-| Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays | [ ] | [ ] |
+| Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays. Switching to another chat and back keeps that loaded page while the chat is still in the recent cache | [ ] | [ ] |
 | Right-click Reply (Deb) puts a quote in the next user bubble. **Copy** copies that message; on a link, **Copy URL** is still there | [ ] | — |
 | `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Copy**, **Open in browser**, **Copy URL**, and Reply; Copy URL changes to **URL copied** | [ ] | [ ] |
 | `please e2e-blocked-browser`: Ask card visibly waits. An option or free-text answer stays on the card and continues the **same run**, without a second user bubble. A second answer is rejected without breaking the thread | [ ] | [ ] |
@@ -609,7 +609,7 @@ If time is short, in this order:
 10. **§28 Save feedback**
 11. **§10 workers** `please e2e-background-worker-chat` then status; the acknowledgement is immediate and does not start a second plan; Message stays usable; one final result. `please e2e-worker-progress`: **Still working:** in the waiting slot, not a chat bubble, and no worker card. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
 12. **§1 / §21 Escape** on Settings and New bot. **§21 Tokens**: Store GitHub last four on one bot; the other bot is empty; a chat paste is refused
-13. **§14 Inbox** Search empty + one click opens that row
+13. **§14 Inbox** Search empty + one click opens that row. Switch A↔B keeps messages (no empty flash); a first/uncached visit shows Loading this chat…
 14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Plugin **Open to connect** is the same kind of link. `please e2e-send-then-answer`: teaser then the spec, both stay, then Message is usable. Unsent draft stays on that chat after a switch
 15. **§8 / §15 Dismiss** on needs-you keeps the current chat. Park while this chat is open, then switch — still «needs you»
 16. **§9 Queue** pending mark, then local Sent while offline
