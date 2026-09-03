@@ -308,6 +308,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Pairing body: create a code on the Pi, type it here, Pair. Phone has **no** token / mint / `python -m`. Deb shows `docker exec artek-buddy python -m artek_buddy pair` | [ ] | [ ] |
 | After pair, the credential is not visible in the page (Deb: `~/.config/artek-buddy/token` mode 600; Phone: httpOnly cookie) | [ ] | [ ] |
 | Auth error: **Pair this computer again** (Deb) / **Pair this phone again** (Phone). Click unpairs to the matching pair screen. Does not queue as an offline send | [ ] | [ ] |
+| Workspace `/v1/events` 401/403 (inbox still loads) still shows Pair again, not a quiet shell | [ ] | [ ] |
 | Unpair returns to the pair screen. Re-pair with a new code restores the inbox | [ ] | [ ] |
 | Pairing does **not** open the computer pane or Models and does **not** boot a desktop | [ ] | [ ] |
 

@@ -134,6 +134,20 @@ def test_auth_error_repair_returns_to_pairing(page: Page, client_url: str, host_
     expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)
 
 
+def test_workspace_events_auth_error_shows_repair(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    pair_fresh(page, client_url, host_url)
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    fulfill_json(page, "**/v1/events", 401, '{"detail":"invalid token"}')
+    page.reload()
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("auth-error")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("pairing")).to_have_count(0)
+    page.get_by_role("button", name="Pair this computer again").click()
+    expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)
+
+
 def test_host_error_retry_clears_banner(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
