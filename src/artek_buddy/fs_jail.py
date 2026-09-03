@@ -9,8 +9,8 @@ def contained_under(root: Path, relative: str) -> Path | None:
     """Return root/relative only when resolve() stays strictly inside root."""
     if any(ch in relative for ch in "\x00\r\n"):
         return None
-    base = Path(root).resolve()
-    target = (base / relative).resolve()
+    base = Path(root).resolve()  # lgtm[py/path-injection]
+    target = (base / relative).resolve()  # lgtm[py/path-injection]
     try:
         target.relative_to(base)
     except ValueError:

@@ -36,7 +36,7 @@ def test_store_roundtrip_and_isolation(tmp_path: Path) -> None:
     assert other.read(BOT_A, "github") == GITHUB_FIXTURE
     assert other.read(BOT_A, "pypi") == PYPI_FIXTURE
     assert other.read(BOT_B, "github") is None
-    assert other.list(BOT_B) == []
+    assert other.list_for_bot(BOT_B) == []
     env_a = other.tool_env(BOT_A)
     env_b = other.tool_env(BOT_B)
     assert env_a["GH_TOKEN"] == GITHUB_FIXTURE

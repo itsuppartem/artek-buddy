@@ -43,7 +43,7 @@ async def list_bot_credentials(
         _require_bot(history, bot_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
-    return BotCredentialList(credentials=[_row(item) for item in _vault(cfg).list(bot_id)])
+    return BotCredentialList(credentials=[_row(item) for item in _vault(cfg).list_for_bot(bot_id)])
 
 
 @router.put("/v1/bots/{bot_id}/credentials/{provider}", dependencies=[Depends(require_auth)])

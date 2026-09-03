@@ -13,7 +13,7 @@ class CredentialsToolsMixin:
         if not bot_id:
             return {"ok": False, "error": "no active bot"}
         data_dir = getattr(self.runtime.settings, "agent_data_dir", "/data")
-        rows = BotCredentialStore(data_dir).list(bot_id)
+        rows = BotCredentialStore(data_dir).list_for_bot(bot_id)
         return {
             "ok": True,
             "scope": "this_bot",
