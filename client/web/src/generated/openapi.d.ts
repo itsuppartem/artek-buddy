@@ -1613,11 +1613,8 @@ export interface components {
         BotCredential: {
             /** Last Four */
             last_four: string;
-            /**
-             * Provider
-             * @enum {string}
-             */
-            provider: "github" | "pypi";
+            /** Provider */
+            provider: string;
             /**
              * Scope
              * @default this_bot

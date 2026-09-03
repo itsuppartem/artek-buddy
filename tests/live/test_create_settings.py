@@ -166,21 +166,54 @@ def test_settings_github_token_stays_on_that_bot(
     expect(page.get_by_test_id("bot-credential-github-status")).to_have_count(0)
 
 
-def test_composer_rejects_a_github_token_paste(page: Page, client_url: str, host_url: str) -> None:
+def test_settings_named_token_stays_on_that_bot(page: Page, client_url: str, host_url: str) -> None:
+    from tests.support import mask_secret
+
+    alpha = unique_bot("TokN")
+    bravo = unique_bot("TokM")
+    secret = "reg_" + ("Z" * 24)
+    mask_secret(secret)
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, alpha, private=True)
+    create_named_bot(page, bravo, private=True)
+    open_settings(page, alpha)
+    page.get_by_test_id("bot-credential-add-name").fill("REGISTRY_TOKEN")
+    page.get_by_test_id("bot-credential-add-secret").fill(secret)
+    page.get_by_test_id("bot-credential-add-save").click()
+    expect(page.get_by_test_id("bot-credential-registry-token-status")).to_contain_text("••••ZZZZ")
+    page.get_by_label("Close settings").click()
+    open_settings(page, bravo)
+    expect(page.get_by_test_id("bot-credential-registry-token-status")).to_have_count(0)
+    page.get_by_label("Close settings").click()
+    open_settings(page, alpha)
+    expect(page.get_by_test_id("bot-credential-registry-token-status")).to_contain_text("••••ZZZZ")
+    page.get_by_test_id("bot-credential-registry-token-forget").click()
+    expect(page.get_by_test_id("bot-credential-registry-token-status")).to_have_count(0)
+
+
+def test_composer_saves_a_chat_token_off_the_thread(
+    page: Page, client_url: str, host_url: str
+) -> None:
     from tests.support import mask_secret
 
     name = unique_bot("TokChat")
-    secret = "ghp_" + ("A" * 36)
+    secret = "reg_" + ("Z" * 24)
     mask_secret(secret)
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name, private=True)
     box = composer(page)
     expect(box).to_be_enabled(timeout=8_000)
-    text = f"use {secret}"
+    text = f"use REGISTRY_TOKEN={secret} to publish"
     box.fill(text)
     expect(box).to_have_value(text)
     box.press("Enter")
-    expect(page.get_by_test_id("action-error")).to_contain_text("Do not paste GitHub")
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_contain_text(
+        "••••ZZZZ",
+        timeout=8_000,
+    )
+    expect(page.get_by_test_id("action-error")).to_have_count(0)
     expect(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=secret)
     ).to_have_count(0)
+    open_settings(page, name)
+    expect(page.get_by_test_id("bot-credential-registry-token-status")).to_contain_text("••••ZZZZ")

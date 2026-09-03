@@ -464,10 +464,9 @@
             "type": "string"
           },
           "provider": {
-            "enum": [
-              "github",
-              "pypi"
-            ],
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9-]{0,31}$",
             "title": "Provider",
             "type": "string"
           },

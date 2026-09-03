@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Literal, cast
-
 from fastapi import APIRouter, Depends, HTTPException
 
-from artek_buddy.bot_credentials import PROVIDERS, BotCredentialStore
+from artek_buddy.bot_credentials import BotCredentialStore, provider_slug
 from artek_buddy.config import Settings
 from artek_buddy.contracts import (
     BotCredential,
@@ -24,13 +22,19 @@ def _vault(cfg: Settings) -> BotCredentialStore:
 
 
 def _row(status) -> BotCredential:
-    provider = cast(Literal["github", "pypi"], status.provider)
     return BotCredential(
-        provider=provider,
+        provider=status.provider,
         scope=status.scope,
         last_four=status.last_four,
         updated_at=status.updated_at,
     )
+
+
+def _require_provider(provider: str) -> str:
+    slug = provider_slug(provider)
+    if slug is None:
+        raise HTTPException(status_code=400, detail="unknown provider")
+    return slug
 
 
 @router.get("/v1/bots/{bot_id}/credentials", dependencies=[Depends(require_auth)])
@@ -54,14 +58,13 @@ async def save_bot_credential(
     history: HistoryStore = Depends(store),
     cfg: Settings = Depends(settings),
 ) -> BotCredential:
-    if provider not in PROVIDERS:
-        raise HTTPException(status_code=400, detail="unknown provider")
+    slug = _require_provider(provider)
     try:
         _require_bot(history, bot_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
     try:
-        status = _vault(cfg).put(bot_id, provider, body.secret)
+        status = _vault(cfg).put(bot_id, slug, body.secret)
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
     return _row(status)
@@ -74,11 +77,10 @@ async def forget_bot_credential(
     history: HistoryStore = Depends(store),
     cfg: Settings = Depends(settings),
 ) -> OkResponse:
-    if provider not in PROVIDERS:
-        raise HTTPException(status_code=400, detail="unknown provider")
+    slug = _require_provider(provider)
     try:
         _require_bot(history, bot_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
-    _vault(cfg).forget(bot_id, provider)
+    _vault(cfg).forget(bot_id, slug)
     return OkResponse(ok=True)

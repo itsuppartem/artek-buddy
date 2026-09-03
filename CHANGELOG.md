@@ -21,8 +21,8 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+- A token typed in Message for a bot is stored on the persistent host volume under that bot, stripped from the thread, and listed in Settings by name and last four — not only GitHub and PyPI. The Linux `.deb` proxies PUT so Store works from that window. Reset and Team ↔ Private keep them; Forget and Delete chat remove them. An unlabeled secret still needs a name in Settings. Memory and a question answer still refuse a paste.
 - Switching chats keeps a bounded in-memory snapshot of recent threads, so the column does not flash empty and Load earlier pages survive a round trip. A first visit shows Loading this chat…
-- GitHub and PyPI tokens for a bot are saved under Settings, on the persistent host volume, not in chat or the computer home. The Linux `.deb` proxies PUT so Store works from that window. Reset and Team ↔ Private keep them; Forget and Delete chat remove them. A paste that looks like those tokens is refused before the message is stored.
 - Unsent Message text, files, and Reply stay on the chat they belong to. A slow Send in one chat does not disable Send in another; a late failure restores files on the originating chat.
 - Stop UI tests wait for a cancelled turn to settle instead of a 3s sleep. Computer pane open/close no longer swallow a missed click. Loopback unpair is a client RPC test; the window still unpairs via Pair this computer again.
 - Ask-before git/commit/branch/PR/MR/merge restatements map to one standing rule (`please e2e-remember-git-approval`). A later permission to merge without asking revises that card.
