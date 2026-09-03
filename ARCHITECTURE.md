@@ -55,7 +55,7 @@ Desktop noVNC ports bind `127.0.0.1`. The API default is `HTTP_HOST=0.0.0.0`.
 
 | State | Where |
 | --- | --- |
-| Threads, bots, devices, pairing hashes, memory book, routines, consent, artifacts | Postgres (`HistoryStore`, 15 SQL files under `src/artek_buddy/db/migrations/`). Host API and worker both call `apply_migrations` on boot; a session `pg_advisory_lock` serializes them. Each applied file stores a sha256; a rewritten historical file fails the run. |
+| Threads, bots, devices, pairing hashes, memory book, routines, consent, artifacts | Postgres (`HistoryStore`, 26 SQL files under `src/artek_buddy/db/migrations/`). Host API and worker both call `apply_migrations` on boot; a session `pg_advisory_lock` serializes them. Each applied file stores a sha256; a rewritten historical file fails the run. |
 | Chromium profile, downloads, sandbox home | `data/homes/{home_key}` on the Pi |
 | Optional memory index files | `data/agent-memory` via the loopback gateway |
 | Host token, DB password, Cursor key | Pi `.env` (never in the page) |
@@ -110,7 +110,12 @@ schema in `client/web/src/generated/openapi.d.ts` (dumped at build/CI from
 
 Do not treat `ui` as “the host unit tests in a browser”. Computer image is
 not built in `release.yml` (QEMU Chromium hangs); `live` builds it on
-`ubuntu-latest`.
+`ubuntu-latest`. Privileged publish is `workflow_dispatch` on `main` after a
+green push `test` and CodeQL on that SHA — not a default-branch
+`workflow_run`.
+
+Plugins Connect and `connect_app` send a host-owned https callback
+(`CONNECTIONS_CALLBACK_URL`). A caller `redirect_url` is ignored.
 
 ## What this is not
 
