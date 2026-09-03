@@ -6,7 +6,8 @@ import urllib.error
 import urllib.request
 import uuid
 
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, expect
+from playwright.sync_api import Page, expect
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from tests.support import mask_secret
 
 
