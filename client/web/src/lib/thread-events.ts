@@ -216,6 +216,7 @@ export function reduceThreadSnapshot(
     const index = num(event.payload.index) || null;
     const clarifications =
       event.payload.clarifications != null ? str(event.payload.clarifications) : null;
+    const remainingRaw = event.payload.progress_remaining ?? event.payload.progressRemaining;
     const next: ThreadMessage = {
       id: `subagent:${agentId}`,
       threadId: event.threadId,
@@ -239,7 +240,19 @@ export function reduceThreadSnapshot(
       createdAt: event.createdAt,
     };
     const without = prev.messages.filter((message) => message.id !== next.id);
-    return { ...prev, cursor: event.seq, messages: [...without, next] };
+    return {
+      ...prev,
+      cursor: event.seq,
+      messages: [...without, next],
+      subagents: upsertSubagent(prev, event, {
+        agentId,
+        name,
+        task,
+        status,
+        progress,
+        remainingRaw,
+      }),
+    };
   }
   if (event.type === "bot.spawned") {
     const botId = str(event.payload.bot_id) || str(event.payload.botId) || str(event.id);
@@ -448,6 +461,73 @@ export function isRawRunFailedMessage(message: ThreadMessage): boolean {
 
 function isLive(id: string): boolean {
   return isLiveMessageId(id);
+}
+
+function optionalStr(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value == null) return null;
+  return str(value) || null;
+}
+
+function upsertSubagent(
+  prev: ThreadSnapshot,
+  event: ProductEvent,
+  patch: {
+    agentId: string;
+    name: string;
+    task: string;
+    status: NonNullable<Extract<MessageBlock, { kind: "subagent" }>["status"]>;
+    progress: string | null;
+    remainingRaw: unknown;
+  },
+): Subagent[] {
+  const existing = (prev.subagents ?? []).find((row) => row.id === patch.agentId);
+  const seqRaw = event.payload.activity_seq ?? event.payload.activitySeq;
+  const remaining =
+    patch.remainingRaw === undefined
+      ? (existing?.progressRemaining ?? null)
+      : (optionalStr(patch.remainingRaw) ?? null);
+  const lastActivityAt =
+    str(event.payload.last_activity_at) ||
+    str(event.payload.lastActivityAt) ||
+    existing?.lastActivityAt ||
+    event.createdAt;
+  const row: Subagent = {
+    id: patch.agentId,
+    botId: existing?.botId || prev.botId,
+    threadId: existing?.threadId || event.threadId,
+    parentRunId: existing?.parentRunId || event.runId || null,
+    cursorAgentId: existing?.cursorAgentId ?? null,
+    index: num(event.payload.index) || existing?.index || 0,
+    name: patch.name,
+    task: patch.task || existing?.task || "",
+    status: patch.status,
+    progress: patch.progress,
+    progressRemaining: remaining,
+    progressPostedAt: existing?.progressPostedAt ?? null,
+    progressPostedText: existing?.progressPostedText ?? null,
+    thinking:
+      event.payload.thinking === undefined
+        ? (existing?.thinking ?? null)
+        : (optionalStr(event.payload.thinking) ?? null),
+    result:
+      event.payload.result === undefined
+        ? (existing?.result ?? null)
+        : (optionalStr(event.payload.result) ?? null),
+    error: existing?.error ?? null,
+    clarifications:
+      event.payload.clarifications === undefined
+        ? (existing?.clarifications ?? null)
+        : (optionalStr(event.payload.clarifications) ?? null),
+    lastActivityAt,
+    activitySeq: typeof seqRaw === "number" ? seqRaw : (existing?.activitySeq ?? 0),
+    lastActivityKind: existing?.lastActivityKind ?? null,
+    lastToolName: existing?.lastToolName ?? null,
+    toolRunning: existing?.toolRunning ?? false,
+    createdAt: existing?.createdAt || event.createdAt,
+    updatedAt: event.createdAt,
+  };
+  return [...(prev.subagents ?? []).filter((item) => item.id !== patch.agentId), row];
 }
 
 function isLiveForRun(message: ThreadMessage, runId?: string | null): boolean {

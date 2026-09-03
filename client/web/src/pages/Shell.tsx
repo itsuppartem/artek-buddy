@@ -55,6 +55,7 @@ import {
 } from "../lib/consent";
 import { copyText } from "../lib/copy-text";
 import { hatchIsOpen, hatchPointerEvents } from "../lib/hatch";
+import { inFlightProgressText } from "../lib/in-flight-status";
 import { contextLinkUrl, stripMarkdown } from "../lib/markdown";
 import { dispatchMemoryChanged } from "../lib/memory";
 import { NEEDS_MODEL_TEXT } from "../lib/models";
@@ -332,6 +333,7 @@ export function ShellPage() {
     (thread?.run && isLiveTurn(thread.run.status)) ||
       (thread && !isParked && (hasLive(thread) || hasActiveWorkers(thread))),
   );
+  const flightText = inFlightProgressText(thread?.subagents);
 
   useEffect(() => {
     setThreadAtStart(false);
@@ -2274,22 +2276,33 @@ export function ShellPage() {
                 {ownerRunError(thread.run.error ?? undefined, thread.run.status)}
               </div>
             ) : null}
-            {thread?.run && isLiveTurn(thread.run.status) ? (
+            {isBusy ? (
               <div className="flex justify-start">
                 <div
                   data-testid="typing-indicator"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
                   className="flex items-center gap-1.5 rounded-[18px] border border-hairline bg-plate px-4 py-3"
-                  title="Typing…"
                 >
-                  <span className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan" />
-                  <span
-                    className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
-                    style={{ animationDelay: "150ms" }}
-                  />
-                  <span
-                    className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
-                    style={{ animationDelay: "300ms" }}
-                  />
+                  {flightText ? (
+                    <p className="m-0 text-[13.5px] leading-5 text-mute">{flightText}</p>
+                  ) : (
+                    <>
+                      <span className="sr-only">Working</span>
+                      <span aria-hidden="true" className="flex items-center gap-1.5">
+                        <span className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan" />
+                        <span
+                          className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
+                          style={{ animationDelay: "150ms" }}
+                        />
+                        <span
+                          className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
+                          style={{ animationDelay: "300ms" }}
+                        />
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             ) : null}

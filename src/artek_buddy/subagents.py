@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from typing import Any
 
 from artek_buddy.bus import EventHub
@@ -318,7 +317,6 @@ class SubagentService:
         leftover = progress_mod.clip_step(remaining or "")
         if not current:
             return {"ok": False, "error": "step is required"}
-        line = progress_mod.format_progress_line(current, leftover or None)
         self.store.update_subagent(
             sub_id,
             progress=current,
@@ -327,61 +325,12 @@ class SubagentService:
         self.store.record_subagent_activity(sub_id, kind="progress")
         updated = self.store.get_subagent(sub_id) or record
         self._emit(bot, updated)
-        posted = False
-        if progress_mod.should_post_progress(
-            line=line,
-            last_line=updated.progress_posted_text,
-            last_posted_at=progress_mod.posted_unix(
-                self.store.bot_latest_progress_posted_at(bot.id)
-            ),
-            now=time.time(),
-            floor_s=progress_mod.PROGRESS_FLOOR_S,
-        ):
-            posted = self._post_progress_line(bot, updated, line)
         return {
             "ok": True,
             "step": current,
             "remaining": leftover or None,
-            "posted": posted,
+            "posted": False,
         }
-
-    def _post_progress_line(self, bot: Bot, record: Subagent, line: str) -> bool:
-        try:
-            msg = self.store.append_bot_message(
-                bot,
-                [{"kind": "text", "text": line}],
-                run_id=record.parent_run_id,
-            )
-        except Exception:
-            log.exception("failed to append worker progress")
-            return False
-        now = isoformat_utc()
-        self.store.update_subagent(
-            record.id,
-            progress_posted_at=now,
-            progress_posted_text=line,
-        )
-        if self.events is not None:
-            try:
-                self.events.publish(
-                    ProductEvent(
-                        id=new_id("evt"),
-                        workspace_id=bot.workspace_id,
-                        thread_id=bot.thread_id,
-                        bot_id=bot.id,
-                        seq=self.events.next_seq(bot.id),
-                        type=ProductEventType.THREAD_MESSAGE_CREATED,
-                        created_at=now,
-                        payload={"message": msg.model_dump(mode="json")},
-                        run_id=record.parent_run_id,
-                    )
-                )
-            except Exception:
-                log.exception("failed to publish worker progress")
-        refreshed = self.store.get_subagent(record.id)
-        if refreshed is not None:
-            self._emit(bot, refreshed)
-        return True
 
     def _notify_lead(self, bot: Bot, record: Subagent) -> None:
         if record.status not in {"completed", "failed"}:

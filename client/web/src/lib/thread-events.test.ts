@@ -269,3 +269,35 @@ describe("reduceComputerStatus", () => {
     expect(released?.controlLeaseId).toBeNull();
   });
 });
+
+describe("thread.subagent", () => {
+  it("stores progress on the snapshot so the in-flight slot can reuse it", () => {
+    const next = reduceThreadSnapshot(
+      snap(),
+      event({
+        type: "thread.subagent",
+        payload: {
+          agent_id: "sub_1",
+          name: "WorkerProgress",
+          task: "please e2e-worker-progress-run",
+          status: "running",
+          progress: "commit",
+          progress_remaining: "push MR 76",
+          activity_seq: 3,
+          last_activity_at: "2026-01-01T00:00:02Z",
+        },
+      }),
+    );
+    expect(next?.subagents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "sub_1",
+          status: "running",
+          progress: "commit",
+          progressRemaining: "push MR 76",
+          activitySeq: 3,
+        }),
+      ]),
+    );
+  });
+});

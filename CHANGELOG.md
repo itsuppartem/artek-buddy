@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Added
-- A background worker can report a short owner-safe step. The host posts a throttled «Still working» line in chat so a long job is visible without a status ping, a worker card, or a native alert.
+- A background worker can report a short owner-safe step. That text replaces the waiting dots in one in-flight status slot (`please e2e-worker-progress`) instead of appending chat bubbles. No worker card or native alert.
 - Owner jobs have a short client delivery ACK and a separate queued / acknowledged / terminal lifecycle. A new `.deb` claims a job before touching This PC; older clients may still return a result without ACK.
 - The Linux client can opt into SSH connection reuse with `~/.config/artek-buddy/ssh-mux`. Its private ControlMaster socket never changes `~/.ssh/config`; related small remote checks are batched into one SSH session.
 - A replaced Cursor lead session receives one bounded, redacted resume brief with known workspace, path/branch facts, constraints, and the last visible result.

@@ -754,8 +754,10 @@ def test_subagent_stop_while_running(page: Page, client_url: str, host_url: str)
     expect(page.get_by_test_id("subagent-card")).to_have_count(0)
     expect(thread.get_by_text("Started Researcher.")).to_have_count(0)
     expect(composer(page)).to_be_enabled()
+    expect(page.get_by_test_id("typing-indicator")).to_be_visible()
     page.get_by_test_id("thread-stop").click()
     expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
 
 
 def test_background_worker_keeps_composer_and_one_summary(
@@ -773,6 +775,7 @@ def test_background_worker_keeps_composer_and_one_summary(
     expect(thread.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
     expect(page.get_by_test_id("subagent-card")).to_have_count(0)
     expect(page.get_by_test_id("thread-stop")).to_be_visible()
+    expect(page.get_by_test_id("typing-indicator")).to_be_visible()
     expect(composer(page)).to_be_enabled()
     send_message(page, "please e2e-worker-status", name)
     expect(thread.get_by_text(E2E_WORKER_STATUS)).to_be_visible(timeout=8_000)
@@ -788,6 +791,7 @@ def test_worker_progress_line_without_status_ping(
     from artek_buddy.runtime.scripted import (
         E2E_WORKER_ACK,
         E2E_WORKER_PROGRESS_LINE,
+        E2E_WORKER_PROGRESS_LINE_2,
         E2E_WORKER_SUMMARY,
     )
 
@@ -795,12 +799,21 @@ def test_worker_progress_line_without_status_ping(
     send_message(page, "please e2e-worker-progress", name)
     thread = page.get_by_test_id("thread")
     expect(thread.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
-    expect(thread.get_by_text(E2E_WORKER_PROGRESS_LINE)).to_be_visible(timeout=8_000)
+    status = page.get_by_test_id("typing-indicator")
+    expect(status).to_contain_text(E2E_WORKER_PROGRESS_LINE, timeout=8_000)
+    expect(
+        page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_PROGRESS_LINE)
+    ).to_have_count(0)
     expect(page.get_by_test_id("subagent-card")).to_have_count(0)
     expect(page.get_by_test_id("thread-stop")).to_be_visible()
     expect(composer(page)).to_be_enabled()
+    expect(status).to_contain_text(E2E_WORKER_PROGRESS_LINE_2, timeout=8_000)
     expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_be_visible(timeout=20_000)
     expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_have_count(1)
+    expect(status).to_have_count(0)
+    expect(
+        page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_PROGRESS_LINE)
+    ).to_have_count(0)
     expect(page.get_by_test_id("subagent-card")).to_have_count(0)
 
 
