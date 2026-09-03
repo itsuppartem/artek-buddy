@@ -106,8 +106,9 @@ jobs:
           python -m pytest tests/unit tests/api tests/client \
             --cov=artek_buddy --cov-branch \
             --cov-report=term --cov-report=xml \
-            --cov-fail-under=56
+            --cov-fail-under=71
           python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+          python tests/coverage_floors_gate.py
           PYTHONPATH=src python -m artek_buddy.openapi_export
           (cd client/web && npm ci && npm run generate:openapi)
           git diff --exit-code -- client/web/openapi.json client/web/src/generated/openapi.d.ts
