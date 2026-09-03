@@ -50,6 +50,10 @@ def _named(page: Page, client_url: str, host_url: str, prefix: str) -> str:
     return name
 
 
+def _composer_send(page: Page):
+    return page.get_by_test_id("thread-composer").get_by_role("button", name="Send", exact=True)
+
+
 def test_remembered_line_opens_memory_card(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "RemOpen")
     send_message(page, "please e2e-remember", name)
@@ -1209,13 +1213,14 @@ def test_in_flight_send_does_not_disable_the_other_chat(
     box.fill("hold this send")
     expect(box).to_have_value("hold this send")
     box.press("Enter")
-    expect(page.get_by_role("button", name="Send")).to_be_disabled(timeout=5_000)
+    expect(composer(page)).to_have_value("")
+    expect(_composer_send(page)).to_be_disabled(timeout=5_000)
     open_chat(page, second)
     expect(composer(page)).to_have_value("")
     other = composer(page)
     other.fill("from B")
     expect(other).to_have_value("from B")
-    expect(page.get_by_role("button", name="Send")).to_be_enabled()
+    expect(_composer_send(page)).to_be_enabled()
     release.set()
     expect(composer(page)).to_have_value("from B")
     open_chat(page, first)
@@ -1258,7 +1263,7 @@ def test_late_send_failure_keeps_files_on_the_origin_chat(
         )
 
     page.route("**/v1/threads/**/messages", fail_post)
-    page.get_by_role("button", name="Send").click()
+    _composer_send(page).click()
     expect(page.get_by_test_id("attach-chip")).to_have_count(0, timeout=5_000)
     open_chat(page, second)
     expect(page.get_by_test_id("attach-chip")).to_have_count(0)
@@ -1266,7 +1271,7 @@ def test_late_send_failure_keeps_files_on_the_origin_chat(
     other = composer(page)
     other.fill("from B")
     expect(other).to_have_value("from B")
-    expect(page.get_by_role("button", name="Send")).to_be_enabled()
+    expect(_composer_send(page)).to_be_enabled()
     release.set()
     expect(page.get_by_test_id("action-error")).to_be_visible(timeout=8_000)
     open_chat(page, first)
