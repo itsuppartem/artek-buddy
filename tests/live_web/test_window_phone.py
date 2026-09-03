@@ -129,7 +129,9 @@ def test_host_page_workspace_events_auth_says_pair_this_phone_again(
     expect(page.get_by_text("Pair this phone")).to_be_visible()
 
 
-def test_host_page_unsent_draft_stays_on_the_chat_it_was_typed_in(page: Page, host_url: str) -> None:
+def test_host_page_unsent_draft_stays_on_the_chat_it_was_typed_in(
+    page: Page, host_url: str
+) -> None:
     first = unique_bot("DraftWebA")
     second = unique_bot("DraftWebB")
     pair_host_page(page, host_url)
