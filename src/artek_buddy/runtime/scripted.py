@@ -51,9 +51,7 @@ E2E_SUBAGENT_TASK = "please e2e-slow now"
 E2E_WORKER_ACK = "Working in the background."
 E2E_WORKER_STATUS = "Still working."
 E2E_WORKER_STEER_ACK = "Got it. I'll apply that next."
-E2E_GIT_APPROVAL = (
-    "Always ask before a git commit, a new branch, a pull request or MR, or a merge."
-)
+E2E_GIT_APPROVAL = "Always ask before a git commit, a new branch, a pull request or MR, or a merge."
 E2E_GIT_MR = "Wait for MR approval."
 E2E_GIT_BAN = "Don't merge until I say so."
 E2E_GIT_FREE = "You may merge and push without asking."

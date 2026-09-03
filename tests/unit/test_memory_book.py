@@ -354,9 +354,7 @@ def test_similar_memory_paraphrase_not_a_different_ban() -> None:
 
 
 def test_git_approval_wait_and_ban_paraphrases_are_one_rule() -> None:
-    long_rule = (
-        "Always ask before a git commit, a new branch, a pull request or MR, or a merge."
-    )
+    long_rule = "Always ask before a git commit, a new branch, a pull request or MR, or a merge."
     assert git_approval_same_rule(long_rule, "Wait for MR approval.")
     assert git_approval_same_rule(long_rule, "Don't merge until I say so.")
     assert git_approval_same_rule("Wait for MR approval.", "Don't merge until I say so.")
@@ -367,9 +365,7 @@ def test_git_approval_wait_and_ban_paraphrases_are_one_rule() -> None:
 
 def test_git_approval_restatements_do_not_add_a_second_row() -> None:
     hub, store = _hub()
-    long_rule = (
-        "Always ask before a git commit, a new branch, a pull request or MR, or a merge."
-    )
+    long_rule = "Always ask before a git commit, a new branch, a pull request or MR, or a merge."
     first = hub.capture(
         long_rule,
         kind="rule",
