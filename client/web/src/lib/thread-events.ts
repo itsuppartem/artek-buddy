@@ -486,7 +486,7 @@ function upsertSubagent(
   const remaining =
     patch.remainingRaw === undefined
       ? (existing?.progressRemaining ?? null)
-      : optionalStr(patch.remainingRaw) ?? null;
+      : (optionalStr(patch.remainingRaw) ?? null);
   const lastActivityAt =
     str(event.payload.last_activity_at) ||
     str(event.payload.lastActivityAt) ||
@@ -509,16 +509,16 @@ function upsertSubagent(
     thinking:
       event.payload.thinking === undefined
         ? (existing?.thinking ?? null)
-        : optionalStr(event.payload.thinking) ?? null,
+        : (optionalStr(event.payload.thinking) ?? null),
     result:
       event.payload.result === undefined
         ? (existing?.result ?? null)
-        : optionalStr(event.payload.result) ?? null,
+        : (optionalStr(event.payload.result) ?? null),
     error: existing?.error ?? null,
     clarifications:
       event.payload.clarifications === undefined
         ? (existing?.clarifications ?? null)
-        : optionalStr(event.payload.clarifications) ?? null,
+        : (optionalStr(event.payload.clarifications) ?? null),
     lastActivityAt,
     activitySeq: typeof seqRaw === "number" ? seqRaw : (existing?.activitySeq ?? 0),
     lastActivityKind: existing?.lastActivityKind ?? null,

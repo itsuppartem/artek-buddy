@@ -55,6 +55,7 @@ import {
 } from "../lib/consent";
 import { copyText } from "../lib/copy-text";
 import { hatchIsOpen, hatchPointerEvents } from "../lib/hatch";
+import { inFlightProgressText } from "../lib/in-flight-status";
 import { contextLinkUrl, stripMarkdown } from "../lib/markdown";
 import { dispatchMemoryChanged } from "../lib/memory";
 import { NEEDS_MODEL_TEXT } from "../lib/models";
@@ -114,7 +115,6 @@ import {
   mergeThreadSnapshot,
   prependThreadMessagePage,
 } from "../lib/thread-events";
-import { inFlightProgressText } from "../lib/in-flight-status";
 import {
   addPendingFiles,
   clipboardFilePaths,
