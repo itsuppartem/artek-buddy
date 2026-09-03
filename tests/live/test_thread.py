@@ -1257,7 +1257,7 @@ def test_late_send_failure_keeps_files_on_the_origin_chat(
             return
         release.wait(timeout=15)
         route.fulfill(
-            status=500,
+            status=400,
             content_type="application/json",
             body='{"detail":"send failed"}',
         )
