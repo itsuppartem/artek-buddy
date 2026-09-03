@@ -18,6 +18,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Changed
+- Biome a11y rules are on for the window. Pairing and shell SVGs, the Message row, file previews, Memory scope, and the bot desktop overlay match those rules.
 - Ruff lint includes bugbear (`B`) and security (`S`). Current hits are per-file baselines, not a global mute. Pytest treats `DeprecationWarning` from the host package and Linux client modules as errors; there is no catch-all ignore.
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 

@@ -68,10 +68,14 @@ export function FileCard({ block }: { block: FileBlock }) {
           controls
           preload="metadata"
           className="mt-3 max-h-64 w-full rounded-xl"
-        />
+        >
+          <track kind="captions" label="No captions for this file" srcLang="en" />
+        </video>
       ) : null}
       {kind === "audio" && preview ? (
-        <audio data-testid="file-preview" src={preview} controls className="mt-3 w-full" />
+        <audio data-testid="file-preview" src={preview} controls className="mt-3 w-full">
+          <track kind="captions" label="No captions for this file" srcLang="en" />
+        </audio>
       ) : null}
       {block.artifactId ? (
         <Button
