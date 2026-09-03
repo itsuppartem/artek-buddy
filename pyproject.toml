@@ -48,6 +48,8 @@ select = [
     "F",
     "I",
     "UP",
+    "B",
+    "S",
 ]
 ignore = [
     "E501",
@@ -56,8 +58,42 @@ ignore = [
     "UP042",
 ]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI injects these as default arguments; they are not mutable-default bugs.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.params.Depends",
+    "fastapi.params.Query",
+    "fastapi.params.Header",
+    "fastapi.params.Cookie",
+]
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["F841"]
+# Baseline 2026-09-03 (#151): drop a code here when that file is cleaned.
+"tests/**" = ["F841", "S101", "S105", "S106", "S108", "S310", "S602", "S603", "S607"]
+"client/clipboard_image.py" = ["S110"]
+"client/notifications.py" = ["S110", "S603"]
+"client/owner_paths.py" = ["S105"]
+"client/proxy.py" = ["S602"]
+"client/ssh_mux.py" = ["S108", "S603"]
+"client/window.py" = ["S110"]
+"client/window_chrome.py" = ["S110", "S112"]
+"src/artek_buddy/book_fetch.py" = ["S310"]
+"src/artek_buddy/computer/client.py" = ["S310"]
+"src/artek_buddy/computer/proxy.py" = ["S110", "S310"]
+"src/artek_buddy/config.py" = ["S104"]
+"src/artek_buddy/db/history/memory.py" = ["S608"]
+"src/artek_buddy/db/history/store.py" = ["S110"]
+"src/artek_buddy/db/history/subagents.py" = ["S608"]
+"src/artek_buddy/http/connections.py" = ["S110"]
+"src/artek_buddy/memory_gateway.py" = ["S310"]
+"src/artek_buddy/supervisor/desktop_spec.py" = ["S108"]
+"src/artek_buddy/supervisor/logic.py" = ["S105", "S108"]
+"src/artek_buddy/supervisor/server.py" = ["S108", "S110"]
+"src/artek_buddy/worker.py" = ["S310"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["artek_buddy"]
@@ -85,7 +121,20 @@ markers = [
     "model: Cursor/Grok turn (needs CURSOR_API_KEY; skipped on the ui and ui_web jobs)",
     "no_model_seed: do not attach a default model for this API test",
 ]
-filterwarnings = ["ignore::DeprecationWarning"]
+filterwarnings = [
+    "error::DeprecationWarning:artek_buddy",
+    "error::DeprecationWarning:artek_buddy_client",
+    "error::DeprecationWarning:clipboard_image",
+    "error::DeprecationWarning:notifications",
+    "error::DeprecationWarning:owner_paths",
+    "error::DeprecationWarning:pairing",
+    "error::DeprecationWarning:proxy",
+    "error::DeprecationWarning:ssh_mux",
+    "error::DeprecationWarning:tray",
+    "error::DeprecationWarning:web_paths",
+    "error::DeprecationWarning:window",
+    "error::DeprecationWarning:window_chrome",
+]
 addopts = "-q --tb=short"
 timeout = 60
 timeout_method = "thread"
