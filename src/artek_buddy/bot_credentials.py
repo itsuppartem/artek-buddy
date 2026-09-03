@@ -105,7 +105,9 @@ class BotCredentialStore:
         path.parent.mkdir(parents=True, exist_ok=True)  # lgtm[py/path-injection]
         os.chmod(path.parent, stat.S_IRWXU)  # lgtm[py/path-injection]
         tmp = path.with_suffix(".tmp")  # lgtm[py/path-injection]
-        tmp.write_text(value, encoding="utf-8")  # lgtm[py/path-injection, py/clear-text-storage-sensitive-data]
+        tmp.write_text(  # lgtm[py/path-injection, py/clear-text-storage-sensitive-data]
+            value, encoding="utf-8"
+        )
         os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)  # lgtm[py/path-injection]
         tmp.replace(path)  # lgtm[py/path-injection]
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)  # lgtm[py/path-injection]
@@ -162,7 +164,11 @@ class BotCredentialStore:
         if path is None:
             return False
         existed = path.is_file()  # lgtm[py/path-injection]
-        for item in (path, path.with_suffix(".meta"), path.with_suffix(".tmp")):  # lgtm[py/path-injection]
+        for item in (  # lgtm[py/path-injection]
+            path,
+            path.with_suffix(".meta"),
+            path.with_suffix(".tmp"),
+        ):
             if item.is_file():  # lgtm[py/path-injection]
                 item.unlink()  # lgtm[py/path-injection]
         folder = path.parent  # lgtm[py/path-injection]
