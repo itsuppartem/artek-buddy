@@ -9,9 +9,7 @@ import {
 } from "../../lib/screen";
 import type { Bot, ComputerStatus } from "../../types";
 import { Button } from "../../ui/button";
-import { IconClose, IconComputer, IconSettings } from "../../ui/icons";
-import { MemoryPanel } from "./MemoryPanel";
-import { RoutinesPanel } from "./RoutinesPanel";
+import { IconClose, IconComputer } from "../../ui/icons";
 
 export function ComputerPane({
   bot,
@@ -22,15 +20,12 @@ export function ComputerPane({
   previewFrameRef,
   booting,
   onClose,
-  onSettings,
   onOpenFullscreen,
   onStart,
   onTakeControl,
   onRelease,
   onRetryScreen,
   onScreenFrameLoad,
-  onLater,
-  memoryFocusFact = null,
 }: {
   bot: Bot;
   computer: ComputerStatus | null;
@@ -40,15 +35,12 @@ export function ComputerPane({
   previewFrameRef: RefObject<HTMLIFrameElement | null>;
   booting: boolean;
   onClose: () => void;
-  onSettings: () => void;
   onOpenFullscreen: () => void;
   onStart: () => void;
   onTakeControl: () => void;
   onRelease: () => void;
   onRetryScreen: () => void;
   onScreenFrameLoad: (event: SyntheticEvent<HTMLIFrameElement>) => void;
-  onLater: (text: string) => void;
-  memoryFocusFact?: string | null;
 }) {
   const mode = computer?.mode || bot.computerMode;
   const label = computerLabel(mode, bot.name);
@@ -112,14 +104,6 @@ export function ComputerPane({
           )}
         </div>
         <div className="flex items-center gap-2 text-mute">
-          <button
-            type="button"
-            onClick={onSettings}
-            className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[13px] text-paper hover:bg-raised"
-          >
-            <IconSettings />
-            Settings
-          </button>
           <button
             type="button"
             onClick={onClose}
@@ -290,8 +274,6 @@ export function ComputerPane({
           )}
         </div>
       </div>
-      <MemoryPanel botId={bot.id} focusFact={memoryFocusFact} onLater={onLater} />
-      <RoutinesPanel botId={bot.id} onLater={onLater} />
     </div>
   );
 }

@@ -136,7 +136,7 @@ def test_escape_closes_settings_and_new_bot(page: Page, client_url: str, host_ur
     expect(box).to_have_value("keep me")
 
 
-def test_settings_github_token_stays_on_that_bot(
+def test_settings_arbitrary_secret_stays_on_that_bot(
     page: Page, client_url: str, host_url: str
 ) -> None:
     from tests.support import mask_secret
@@ -151,20 +151,19 @@ def test_settings_github_token_stays_on_that_bot(
     open_settings(page, alpha)
     expect(page.get_by_test_id("bot-credentials")).to_be_visible()
     expect(page.get_by_test_id("bot-credentials")).to_contain_text("host credential broker")
-    page.get_by_test_id("bot-credential-github-secret").fill(secret)
-    expect(page.get_by_test_id("bot-credential-github-save")).to_have_text("Store")
-    page.get_by_test_id("bot-credential-github-save").click()
-    expect(page.get_by_test_id("bot-credential-github-status")).to_contain_text("••••AAAA")
+    page.get_by_test_id("bot-credential-add-name").fill("DEPLOY_KEY")
+    page.get_by_test_id("bot-credential-add-secret").fill(secret)
+    page.get_by_test_id("bot-credential-add-save").click()
+    expect(page.get_by_test_id("bot-credential-deploy-key-status")).to_contain_text("••••AAAA")
     page.get_by_label("Close settings").click()
     open_settings(page, bravo)
-    expect(page.get_by_test_id("bot-credential-github-status")).to_have_count(0)
-    expect(page.get_by_test_id("bot-credential-github-secret")).to_be_visible()
+    expect(page.get_by_test_id("bot-credential-deploy-key-status")).to_have_count(0)
+    expect(page.get_by_test_id("bot-credential-add-name")).to_be_visible()
     page.get_by_label("Close settings").click()
     open_settings(page, alpha)
-    expect(page.get_by_test_id("bot-credential-github-status")).to_contain_text("••••AAAA")
-    page.get_by_test_id("bot-credential-github-forget").click()
-    expect(page.get_by_test_id("bot-credential-github-secret")).to_be_visible()
-    expect(page.get_by_test_id("bot-credential-github-status")).to_have_count(0)
+    expect(page.get_by_test_id("bot-credential-deploy-key-status")).to_contain_text("••••AAAA")
+    page.get_by_test_id("bot-credential-deploy-key-forget").click()
+    expect(page.get_by_test_id("bot-credential-deploy-key-status")).to_have_count(0)
 
 
 def test_settings_named_token_stays_on_that_bot(page: Page, client_url: str, host_url: str) -> None:

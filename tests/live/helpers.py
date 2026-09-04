@@ -114,13 +114,34 @@ def expect_stays_absent(locator, timeout: int = 4_000) -> None:
 
 
 def open_chat(page: Page, name: str) -> None:
+    row = bot_row(page, name)
+    if not row.is_visible(timeout=0):
+        rail = page.get_by_test_id("workspace-rail")
+        if rail.count() and rail.is_visible(timeout=0):
+            rail.get_by_role("button", name="Chats").click()
     bot_row(page, name).click()
     expect(thread_header(page)).to_contain_text(name, timeout=8_000)
 
 
 def open_models(page: Page) -> None:
-    page.get_by_test_id("open-models").click()
+    door = page.get_by_test_id("library-open-models")
+    if not door.is_visible(timeout=0):
+        rail = page.get_by_test_id("workspace-rail")
+        if rail.count() and rail.is_visible(timeout=0):
+            rail.get_by_role("button", name="Library").click()
+    door = page.get_by_test_id("library-open-models")
+    door.click()
     expect(page.get_by_test_id("models-pane")).to_be_visible(timeout=8_000)
+
+
+def open_plugins(page: Page) -> None:
+    door = page.get_by_test_id("library-open-plugins")
+    if not door.is_visible(timeout=0):
+        rail = page.get_by_test_id("workspace-rail")
+        if rail.count() and rail.is_visible(timeout=0):
+            rail.get_by_role("button", name="Library").click()
+    page.get_by_test_id("library-open-plugins").click()
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible(timeout=8_000)
 
 
 def _picker_values(page: Page, test_id: str) -> list[str]:
@@ -132,13 +153,17 @@ def _picker_values(page: Page, test_id: str) -> list[str]:
 
 def _close_models_ready(page: Page) -> None:
     page.get_by_role("button", name="Close Models").click()
-    expect(page.get_by_test_id("open-models")).to_have_attribute(
-        "data-models-ready", "true", timeout=8_000
-    )
+    door = page.get_by_test_id("library-open-models")
+    expect(door).to_have_attribute("data-models-ready", "true", timeout=8_000)
 
 
 def ensure_model(page: Page) -> None:
-    door = page.get_by_test_id("open-models")
+    door = page.get_by_test_id("library-open-models")
+    if not door.is_visible(timeout=0):
+        rail = page.get_by_test_id("workspace-rail")
+        if rail.count() and rail.is_visible(timeout=0):
+            rail.get_by_role("button", name="Library").click()
+    door = page.get_by_test_id("library-open-models")
     expect(door).to_be_visible(timeout=20_000)
     if door.get_attribute("data-models-ready") == "true":
         return
@@ -191,8 +216,24 @@ def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
 
 def open_settings(page: Page, name: str) -> None:
     open_chat(page, name)
-    page.get_by_test_id("thread-pane").get_by_role("button", name="Settings").click()
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Library").click()
+    expect(page.get_by_test_id("library-pane")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("library-open-settings").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=8_000)
+
+
+def open_memory(page: Page, name: str) -> None:
+    open_chat(page, name)
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Library").click()
+    expect(page.get_by_test_id("library-pane")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("library-open-memory").click()
+    expect(page.get_by_role("heading", name="Memory")).to_be_visible(timeout=8_000)
+
+
+def open_routines(page: Page, name: str) -> None:
+    open_chat(page, name)
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Routines").click()
+    expect(page.get_by_role("heading", name="Routines")).to_be_visible(timeout=8_000)
 
 
 def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | None = None) -> None:
@@ -200,11 +241,14 @@ def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | No
     page.goto(client_url, timeout=20_000, wait_until="domcontentloaded")
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
+    form.get_by_text("Pairing options", exact=True).click()
     page.get_by_placeholder("https://host.example").fill(host_url)
     page.get_by_placeholder("XXXX-XXXX").fill(mint_pairing_code())
     if device_name is not None:
         page.get_by_label("Device name").fill(device_name)
     page.get_by_role("button", name="Pair").click()
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Chats").click()
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
 
 
@@ -278,6 +322,16 @@ def assert_readable_chip(chip) -> None:
     ratio = _contrast_ratio(color, background)
     if ratio < 3.0:
         raise AssertionError(f"model chip contrast {ratio:.2f} < 3 ({color} on {background})")
+
+
+def assert_readable_control(control) -> None:
+    color = control.evaluate("el => getComputedStyle(el).color")
+    background = control.evaluate("el => getComputedStyle(el).backgroundColor")
+    ratio = _contrast_ratio(color, background)
+    if ratio < 4.5:
+        raise AssertionError(
+            f"control contrast {ratio:.2f} < 4.5 ({color} on {background})"
+        )
 
 
 def _css_rgb(value: str) -> tuple[int, int, int]:

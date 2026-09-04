@@ -11,6 +11,8 @@ from tests.live.helpers import (
     hold_thread_snapshot_gets,
     open_bot_menu,
     open_chat,
+    open_models,
+    open_plugins,
     pair_fresh,
     send_message,
     thread_header,
@@ -30,11 +32,12 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
 
     page.get_by_role("button", name="New bot").click()
     expect(page.get_by_placeholder("Name this bot")).to_be_visible()
+    page.get_by_test_id("create-cancel").click()
 
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     expect(page.get_by_test_id("plugins-pane")).to_be_visible()
     page.get_by_role("button", name="Close Plugins").click()
-    page.get_by_text("You", exact=True).click()
+    open_models(page)
     expect(page.get_by_test_id("models-pane")).to_be_visible()
     expect(page.get_by_text("Bot Settings")).to_have_count(0)
 

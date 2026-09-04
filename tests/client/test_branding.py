@@ -6,6 +6,7 @@ from pathlib import Path
 CLIENT_DIR = Path(__file__).resolve().parents[2] / "client"
 ASSETS = CLIENT_DIR / "assets"
 BUILD_DEB = CLIENT_DIR / "build-deb.sh"
+LAUNCHER_ICON_SIZES = (16, 24, 32, 48, 64, 128, 256, 512)
 
 
 def test_mascot_pngs_exist() -> None:
@@ -20,6 +21,22 @@ def test_mascot_pngs_exist() -> None:
     for path in files:
         data = path.read_bytes()
         assert data[:8] == b"\x89PNG\r\n\x1a\n", path
+
+
+def test_launcher_icons_are_one_consistent_generation() -> None:
+    source = (ASSETS / "app-icon.png").read_bytes()
+    source_color_type = source[25]
+
+    for size in LAUNCHER_ICON_SIZES:
+        path = ASSETS / "hicolor" / f"{size}x{size}" / "apps" / "artek-buddy.png"
+        data = path.read_bytes()
+        dimensions = (
+            int.from_bytes(data[16:20], "big"),
+            int.from_bytes(data[20:24], "big"),
+        )
+        assert dimensions == (size, size), path
+        assert data[24] == 8, path
+        assert data[25] == source_color_type, f"{path} is from a different icon generation"
 
 
 def test_deb_script_installs_artek_icon() -> None:

@@ -43,8 +43,13 @@ export function AskCard({
     <div
       data-testid={consentId ? "consent-card" : "ask-card"}
       data-status={block.status ?? "pending"}
-      className="min-w-0 max-w-[74%] rounded-[20px] border border-hairline bg-raised px-5 py-[17px]"
+      className="min-w-0 max-w-[74%] rounded-[14px] border border-hairline bg-plate px-5 py-[17px] shadow-[0_10px_30px_rgba(29,49,76,0.08)]"
     >
+      {consentId ? (
+        <div className="mb-2 font-mono text-[9px] tracking-[0.06em] text-copper uppercase">
+          Permission for this task
+        </div>
+      ) : null}
       <div className="min-w-0 text-[15.5px] leading-[1.5] break-words [overflow-wrap:anywhere] text-paper">
         <ChatMarkdown>{block.text}</ChatMarkdown>
       </div>

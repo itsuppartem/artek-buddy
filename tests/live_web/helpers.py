@@ -19,14 +19,38 @@ def pair_host_page(page: Page, host_url: str, device_name: str | None = None) ->
     expect(page.get_by_test_id("home-screen-hint")).to_be_visible()
     page.get_by_placeholder("XXXX-XXXX").fill(mint_pairing_code())
     if device_name is not None:
+        form.get_by_text("Pairing options", exact=True).click()
         page.get_by_label("Device name").fill(device_name)
     page.get_by_role("button", name="Pair").click()
     expect(page.get_by_test_id("phone-nav")).to_be_visible(timeout=20_000)
-    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
 
 
 def open_phone_tab(page: Page, tab: str) -> None:
+    if tab == "chat":
+        if page.get_by_test_id("thread-pane").is_visible(timeout=0):
+            return
+        page.get_by_test_id("phone-tab-chats").click()
+        current = page.locator('[data-testid="bot-row"][aria-current="page"]')
+        target = current if current.count() else page.get_by_test_id("bot-row").first
+        target.click()
+        expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=8_000)
+        return
     page.get_by_test_id(f"phone-tab-{tab}").click()
+
+
+def open_settings_phone(page: Page) -> None:
+    open_phone_tab(page, "more")
+    expect(page.get_by_test_id("library-pane")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("library-open-settings").click()
+    expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=8_000)
+
+
+def open_memory_phone(page: Page) -> None:
+    open_phone_tab(page, "more")
+    expect(page.get_by_test_id("library-pane")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("library-open-memory").click()
+    expect(page.get_by_role("heading", name="Memory")).to_be_visible(timeout=8_000)
 
 
 def create_named_bot_phone(page: Page, name: str, *, private: bool | None = None) -> None:
@@ -63,15 +87,16 @@ def expect_bot_in_chats(page: Page, name: str) -> None:
     expect(bot_row(page, name)).to_be_visible(timeout=8_000)
     search = page.get_by_label("Search inbox").bounding_box()
     scroll = page.locator('[data-shell="rack"] > .ab-scroll').bounding_box()
-    plugins = page.get_by_test_id("open-plugins").bounding_box()
+    nav = page.get_by_test_id("phone-nav").bounding_box()
     assert search is not None
     assert scroll is not None
-    assert plugins is not None
+    assert nav is not None
     assert search["y"] < scroll["y"]
     assert scroll["height"] >= 40
-    assert scroll["y"] + scroll["height"] <= plugins["y"] + 2
+    assert scroll["y"] + scroll["height"] <= nav["y"] + 2
 
 
 def ensure_model_phone(page: Page) -> None:
-    open_phone_tab(page, "chats")
+    open_phone_tab(page, "more")
     ensure_model(page)
+    open_phone_tab(page, "chats")

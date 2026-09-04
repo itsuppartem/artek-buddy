@@ -7,6 +7,7 @@ from tests.live.helpers import (
     create_named_bot,
     ensure_model,
     fulfill_json,
+    open_plugins,
     pair_fresh,
     restore_host,
     unique_bot,
@@ -36,7 +37,7 @@ def test_plugins_pane_key_connect_docs_then_chat_answers(
     name = unique_bot("PlugWin")
     pair_fresh(page, client_url, host_url)
     expect(page.get_by_role("button", name="Plugins")).to_be_visible()
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     _plugins_ready(page)
     leftover = page.get_by_test_id("plugins-remove")
     if leftover.count() and leftover.first.is_visible():
@@ -83,7 +84,7 @@ def test_plugins_pane_key_connect_docs_then_chat_answers(
     expect(card).to_contain_text("Docs", timeout=8_000)
     expect(card).to_contain_text("Subotica")
     expect(page.get_by_test_id("plugin-ask-docs")).to_have_count(0)
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     expect(page.get_by_test_id("plugins-pane")).to_be_visible()
     page.get_by_test_id("plugins-remove").click()
     expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
@@ -94,7 +95,7 @@ def test_plugins_pane_key_connect_docs_then_chat_answers(
 def test_plugin_login_link_opens_owner_browser(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("PlugLogin")
     pair_fresh(page, client_url, host_url)
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     _plugins_ready(page)
     leftover = page.get_by_test_id("plugins-remove")
     if leftover.count() and leftover.first.is_visible():
@@ -123,7 +124,7 @@ def test_plugin_login_link_opens_owner_browser(page: Page, client_url: str, host
     expect(opened.value).to_have_url("https://example.test/authorize?app=mail")
     opened.value.close()
     page.context.unroute("https://example.test/**")
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     _plugins_ready(page)
     expect(page.get_by_test_id("plugins-key-saved")).to_contain_text("Key saved")
     page.get_by_test_id("plugins-remove").click()
@@ -134,7 +135,7 @@ def test_plugin_login_link_opens_owner_browser(page: Page, client_url: str, host
 def test_chat_connects_docs_without_pane_click(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("PlugChat")
     pair_fresh(page, client_url, host_url)
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     _plugins_ready(page)
     leftover = page.get_by_test_id("plugins-remove")
     if leftover.count() and leftover.first.is_visible():
@@ -155,7 +156,7 @@ def test_chat_connects_docs_without_pane_click(page: Page, client_url: str, host
     expect(card).to_contain_text("Connected")
     expect(page.get_by_test_id("plugins-ask")).to_have_count(0)
     expect(page.get_by_test_id("plugin-ask-docs")).to_have_count(0)
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     expect(page.get_by_test_id("plugins-pane")).to_be_visible()
     page.get_by_test_id("plugins-remove").click()
     expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
@@ -167,7 +168,7 @@ def test_plugins_connect_explains_when_start_fails(
     page: Page, client_url: str, host_url: str
 ) -> None:
     pair_fresh(page, client_url, host_url)
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     _plugins_key_form(page)
     key = page.get_by_label("Plugins key")
     key.fill("ak-test-secret-setup")
@@ -192,7 +193,7 @@ def test_plugin_connect_does_not_send_please_use(
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
     ensure_model(page)
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     _plugins_key_form(page)
     page.get_by_label("Plugins key").fill("ak-test-secret-nosend")
     page.get_by_test_id("plugins-save").click()
@@ -209,7 +210,7 @@ def test_plugin_connect_does_not_send_please_use(
     expect(page.get_by_test_id("plugin-ask-docs")).to_have_count(0)
     expect(composer(page)).to_have_value("")
     expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     expect(page.get_by_test_id("plugins-pane")).to_be_visible()
     page.get_by_test_id("plugins-remove").click()
     expect(page.get_by_text("Paste a key to connect apps.")).to_be_visible()
@@ -218,7 +219,7 @@ def test_plugin_connect_does_not_send_please_use(
 
 def test_plugins_search_keeps_pane_open(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     _plugins_key_form(page)
     page.get_by_label("Plugins key").fill("ak-test-secret-search-open")
     page.get_by_test_id("plugins-save").click()
@@ -244,7 +245,7 @@ def test_plugins_search_keeps_pane_open(page: Page, client_url: str, host_url: s
 
 def test_plugins_search_filters_without_enter(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     _plugins_key_form(page)
     page.get_by_label("Plugins key").fill("ak-test-secret-search")
     page.get_by_test_id("plugins-save").click()
@@ -282,7 +283,7 @@ def test_plugins_closed_wheel_does_not_open_and_one_close(
     page.mouse.wheel(0, 800)
     expect(page.get_by_test_id("plugins-pane")).to_have_count(0)
     expect(hatch).to_have_attribute("data-hatch-open", "0")
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     expect(page.get_by_test_id("plugins-pane")).to_be_visible()
     expect(hatch).to_have_attribute("data-hatch-open", "1")
     expect(hatch).to_have_css("pointer-events", "auto")
@@ -295,7 +296,7 @@ def test_plugins_closed_wheel_does_not_open_and_one_close(
 def test_plugins_status_error_is_not_checking(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
     fulfill_json(page, "**/v1/connections/status", 500, '{"detail":"status down"}', method="GET")
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     expect(page.get_by_test_id("plugins-error")).to_contain_text("status down", timeout=8_000)
     expect(page.get_by_text("Checking the key…")).to_have_count(0)
     expect(page.get_by_text("Paste a key to connect apps.")).to_have_count(0)
@@ -305,7 +306,7 @@ def test_plugins_status_error_is_not_checking(page: Page, client_url: str, host_
 
 def test_plugins_remove_keeps_key_on_host_error(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
-    page.get_by_test_id("open-plugins").click()
+    open_plugins(page)
     _plugins_key_form(page)
     key = page.get_by_label("Plugins key")
     key.fill("ak-test-secret-remove-fail")

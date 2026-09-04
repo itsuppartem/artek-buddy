@@ -80,6 +80,7 @@ import {
   writeStoredList,
 } from "../lib/offline-queue";
 import { openOwnerBrowser } from "../lib/owner-browser";
+import { clampPaneWidth, constrainPaneWidth } from "../lib/pane-resize";
 import { panelEscapeAction } from "../lib/panel-escape";
 import {
   nextPhoneTab,
@@ -157,15 +158,7 @@ import type {
 } from "../types";
 import { BotAvatar } from "../ui/bot-avatar";
 import { Button } from "../ui/button";
-import {
-  IconClose,
-  IconComputer,
-  IconPlus,
-  IconSearch,
-  IconSend,
-  IconSettings,
-  IconStop,
-} from "../ui/icons";
+import { IconClose, IconComputer, IconPlus, IconSearch, IconSend, IconStop } from "../ui/icons";
 import { WindowChrome } from "../ui/window-chrome";
 import { BotContextMenu, type ContextMenuPosition } from "./BotContextMenu";
 import { MessageContextMenu } from "./MessageContextMenu";
@@ -176,11 +169,41 @@ import { ComputerPane } from "./shell/ComputerPane";
 import { CreateBotForm } from "./shell/CreateBotForm";
 import { HostPhoneBanners } from "./shell/HostPhoneBanners";
 import { InboxList } from "./shell/InboxList";
+import { LibraryPane } from "./shell/LibraryPane";
+import { MemoryPanel } from "./shell/MemoryPanel";
 import { MessageView, messageCopyText, replyExcerpt } from "./shell/MessageView";
 import { ModelsPane } from "./shell/ModelsPane";
+import { PaneResizeHandle } from "./shell/PaneResizeHandle";
 import { PluginsPane } from "./shell/PluginsPane";
+import { RoutinesPanel } from "./shell/RoutinesPanel";
+import { TodayView } from "./shell/TodayView";
+import { WorkLogPane } from "./shell/WorkLogPane";
+import { WorkspaceRail, type WorkspaceView } from "./shell/WorkspaceRail";
 
-type Panel = "computer" | "settings" | "create" | "models" | "plugins" | null;
+type Panel =
+  | "computer"
+  | "settings"
+  | "create"
+  | "models"
+  | "plugins"
+  | "memory"
+  | "routines"
+  | "library"
+  | "worklog"
+  | null;
+
+const DEFAULT_RACK_WIDTH = 276;
+const DEFAULT_HATCH_WIDTH = 360;
+
+function savedPaneWidth(pane: "left" | "right", fallback: number): number {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const stored = Number(window.localStorage.getItem(`artek-pane-width-${pane}`));
+    return Number.isFinite(stored) && stored > 0 ? clampPaneWidth(pane, stored) : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 export function ShellPage() {
   const { botId } = useParams();
@@ -190,7 +213,10 @@ export function ShellPage() {
   const [query, setQuery] = useState("");
   const [archivedBots, setArchivedBots] = useState<Bot[]>([]);
   const [sidebarView, setSidebarView] = useState<SidebarView>("inbox");
-  const [phoneTab, setPhoneTab] = useState<PhoneTab>("chat");
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() =>
+    botId ? "chats" : "today",
+  );
+  const [phoneTab, setPhoneTab] = useState<PhoneTab>(() => (botId ? "chat" : "today"));
   const [phoneShell, setPhoneShell] = useState(() =>
     typeof window === "undefined"
       ? false
@@ -201,6 +227,8 @@ export function ShellPage() {
       ? false
       : shouldUsePhoneDeskControls(window.matchMedia("(hover: hover) and (pointer: fine)").matches),
   );
+  const [rackWidth, setRackWidth] = useState(() => savedPaneWidth("left", DEFAULT_RACK_WIDTH));
+  const [hatchWidth, setHatchWidth] = useState(() => savedPaneWidth("right", DEFAULT_HATCH_WIDTH));
   const [memoryFocusFact, setMemoryFocusFact] = useState<string | null>(null);
   const [alertOffer, setAlertOffer] = useState<"hide" | "ask" | "ready">(() =>
     shouldOfferWebAlerts({
@@ -227,9 +255,12 @@ export function ShellPage() {
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
-  const panelAfterSettings = useRef<"computer" | null>(null);
+  const panelAfterSettings = useRef<"library" | null>(null);
   const panelAfterCreate = useRef<"computer" | null>(null);
-  const panelAfterModels = useRef<"computer" | null>(null);
+  const createFromToday = useRef(false);
+  const panelAfterModels = useRef<"computer" | "library" | null>(null);
+  const panelAfterPlugins = useRef<"computer" | "library" | null>(null);
+  const panelAfterContext = useRef<"library" | null>(null);
   const creatingBot = useRef(false);
   const filesEpoch = useRef(0);
   const queueFilesRef = useRef<(incoming: File[]) => void>(() => undefined);
@@ -237,6 +268,16 @@ export function ShellPage() {
     new Map<string, { alert: AttentionAlert; notifyOnFinish: boolean; key: string }>(),
   );
   const fulfilledOwnerJobs = useRef(new Set<string>());
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("artek-pane-width-left", String(rackWidth));
+      localStorage.setItem("artek-pane-width-right", String(hatchWidth));
+    } catch {
+      // Persistence is optional on restricted browser surfaces.
+    }
+  }, [rackWidth, hatchWidth]);
+
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const screenUrlRef = useRef<string | null>(null);
@@ -254,6 +295,12 @@ export function ShellPage() {
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ShellErrorKind>("host");
   const errorKindRef = useRef<ShellErrorKind>("host");
+  useEffect(() => {
+    if (!error || errorKind !== "auth") return;
+    setWorkspaceView("chats");
+    setPhoneTab("chat");
+    setPanel(null);
+  }, [error, errorKind]);
   const [offlineQueue, setOfflineQueue] = useState<QueuedSend[]>(() =>
     parseStoredList<QueuedSend>(window.localStorage.getItem(OFFLINE_QUEUE_KEY)),
   );
@@ -579,6 +626,7 @@ export function ShellPage() {
     requestedBotId.current = id;
     activeIdRef.current = id;
     botIdRef.current = id;
+    setWorkspaceView("chats");
     setPhoneTab(nextPhoneTab("select-bot"));
     navigate(`/app/${id}`);
   }
@@ -762,8 +810,10 @@ export function ShellPage() {
   }
 
   function openModels() {
-    panelAfterModels.current = panel === "computer" ? "computer" : null;
-    setPhoneTab(nextPhoneTab("open-desk"));
+    panelAfterModels.current =
+      panel === "computer" ? "computer" : panel === "library" ? "library" : null;
+    setWorkspaceView("library");
+    setPhoneTab(nextPhoneTab("open-more"));
     setPanel("models");
   }
 
@@ -772,6 +822,7 @@ export function ShellPage() {
     panelAfterModels.current = null;
     setPanel(restore);
     if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+    setWorkspaceView(restore === "library" ? "library" : "chats");
   }
 
   function closeSettings() {
@@ -779,9 +830,18 @@ export function ShellPage() {
     panelAfterSettings.current = null;
     setPanel(restore);
     if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+    setWorkspaceView(restore === "library" ? "library" : "chats");
   }
 
   function closeCreate() {
+    if (createFromToday.current) {
+      createFromToday.current = false;
+      panelAfterCreate.current = null;
+      setPanel(null);
+      setWorkspaceView("today");
+      if (phoneShell) setPhoneTab(nextPhoneTab("open-today"));
+      return;
+    }
     const restore = panelAfterCreate.current;
     panelAfterCreate.current = null;
     setPanel(restore);
@@ -789,8 +849,53 @@ export function ShellPage() {
   }
 
   function openPlugins() {
-    setPhoneTab(nextPhoneTab("open-desk"));
+    panelAfterPlugins.current =
+      panel === "computer" ? "computer" : panel === "library" ? "library" : null;
+    setWorkspaceView("library");
+    setPhoneTab(nextPhoneTab("open-more"));
     setPanel("plugins");
+  }
+
+  function closePlugins() {
+    const restore = panelAfterPlugins.current;
+    panelAfterPlugins.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+    setWorkspaceView(restore === "library" ? "library" : "chats");
+  }
+
+  function openLibrary() {
+    setWorkspaceView("library");
+    setPhoneTab(nextPhoneTab("open-more"));
+    setPanel("library");
+  }
+
+  function openRoutines() {
+    panelAfterContext.current = panel === "library" ? "library" : null;
+    setWorkspaceView(activeIdRef.current ? "routines" : "library");
+    setPhoneTab(nextPhoneTab("open-more"));
+    setPanel(activeIdRef.current ? "routines" : "library");
+  }
+
+  function openMemory() {
+    panelAfterContext.current = panel === "library" ? "library" : null;
+    setWorkspaceView("library");
+    setPhoneTab(nextPhoneTab("open-more"));
+    setPanel(activeIdRef.current ? "memory" : "library");
+  }
+
+  function closeSubcontext() {
+    const restore = panelAfterContext.current;
+    panelAfterContext.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+    setWorkspaceView(restore === "library" ? "library" : "chats");
+  }
+
+  function closeContextPanel() {
+    setPanel(null);
+    setWorkspaceView("chats");
+    if (phoneShell) setPhoneTab(nextPhoneTab("open-chat"));
   }
 
   function persistQueue(next: QueuedSend[]): QueuedSend[] {
@@ -1290,6 +1395,11 @@ export function ShellPage() {
       if (action === "close-create") {
         event.preventDefault();
         closeCreate();
+        return;
+      }
+      if (action === "close-panel") {
+        event.preventDefault();
+        closeContextPanel();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -1305,8 +1415,33 @@ export function ShellPage() {
     [archivedBots, query],
   );
   const emptyInbox = inboxEmptyState(bots.length, archivedBots.length);
+  const attentionCount = bots.filter((bot) => bot.unread).length;
   const needsModel = !modelState?.defaultModel;
   const hatchOpen = hatchIsOpen(panel, Boolean(active));
+
+  function resizeRack(width: number) {
+    setRackWidth(
+      constrainPaneWidth("left", width, {
+        viewportWidth: window.innerWidth,
+        otherPaneWidth: hatchOpen ? hatchWidth : 0,
+        railWidth: 88,
+        separatorWidth: 8,
+        conversationMinWidth: 360,
+      }),
+    );
+  }
+
+  function resizeHatch(width: number) {
+    setHatchWidth(
+      constrainPaneWidth("right", width, {
+        viewportWidth: window.innerWidth,
+        otherPaneWidth: rackWidth,
+        railWidth: 88,
+        separatorWidth: 8,
+        conversationMinWidth: 360,
+      }),
+    );
+  }
 
   function writeDraft(value: string, reset = false) {
     if (reset) {
@@ -1480,6 +1615,32 @@ export function ShellPage() {
       return;
     }
     attachLocalPaths(transferFilePaths(event.dataTransfer));
+  }
+
+  async function startTask(botId: string, task: string) {
+    const target = bots.find((bot) => bot.id === botId);
+    const text = task.trim();
+    if (!target || !text) throw new Error("Choose a bot and describe the outcome first");
+    if (hostDownRef.current) {
+      parkSend(target.id, text, null, undefined);
+      openBot(target.id);
+      return;
+    }
+    try {
+      await api.threads.send(target.id, text, null);
+      openBot(target.id);
+    } catch (err) {
+      const classified = classifyError(err);
+      if (shouldQueueSend(classified.kind)) {
+        parkSend(target.id, text, null, undefined);
+        openBot(target.id);
+        return;
+      }
+      if (classified.kind === "auth") {
+        showError(err, classified.message);
+      }
+      throw err;
+    }
   }
 
   async function send(textOverride?: string) {
@@ -1715,10 +1876,12 @@ export function ShellPage() {
       });
       freshBotIds.current.add(bot.id);
       await refreshBots();
+      setWorkspaceView("chats");
       setPhoneTab(nextPhoneTab("select-bot"));
       navigate(`/app/${bot.id}`);
       setPanel(panelAfterCreate.current);
       panelAfterCreate.current = null;
+      createFromToday.current = false;
     } catch (err) {
       showError(err, "Could not create chat");
     } finally {
@@ -1728,7 +1891,9 @@ export function ShellPage() {
 
   function openCreate() {
     panelAfterCreate.current = panel === "computer" ? "computer" : null;
-    setPhoneTab(nextPhoneTab("open-desk"));
+    createFromToday.current = workspaceView === "today";
+    setWorkspaceView("chats");
+    setPhoneTab(nextPhoneTab("open-more"));
     setPanel("create");
   }
 
@@ -1772,6 +1937,7 @@ export function ShellPage() {
     <div
       className="relative flex h-full min-w-0 flex-col overflow-hidden bg-ink text-paper"
       data-surface={pageSurface()}
+      data-workspace-view={workspaceView}
       data-phone-tab={phoneTab}
       data-phone-shell={phoneShell ? "1" : "0"}
       data-desk-overlay={computerOpen ? "1" : "0"}
@@ -1799,20 +1965,57 @@ export function ShellPage() {
         }}
       />
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <WorkspaceRail
+          active={workspaceView}
+          attentionCount={attentionCount}
+          onToday={() => {
+            setWorkspaceView("today");
+            setPanel(null);
+          }}
+          onChats={() => {
+            setWorkspaceView("chats");
+            setPanel(null);
+          }}
+          onRoutines={openRoutines}
+          onLibrary={openLibrary}
+        />
+        <div
+          data-shell="today"
+          data-phone-show={phoneTab === "today" ? "1" : "0"}
+          data-workspace-visible={
+            phoneShell ? (phoneTab === "today" ? "1" : "0") : workspaceView === "today" ? "1" : "0"
+          }
+          className="min-w-0 flex-1"
+        >
+          <TodayView
+            bots={bots}
+            botsReady={botsReady}
+            onOpenBot={openBot}
+            onStartTask={startTask}
+            onOpenRoutines={openRoutines}
+            onCreateBot={openCreate}
+          />
+        </div>
         <aside
           data-shell="rack"
           data-phone-show={phoneTab === "chats" ? "1" : "0"}
-          className="flex w-[252px] shrink-0 flex-col border-r border-hairline bg-ink"
+          data-workspace-visible={phoneShell || workspaceView !== "today" ? "1" : "0"}
+          style={phoneShell ? undefined : { width: rackWidth }}
+          className="flex shrink-0 flex-col bg-plate"
         >
-          <div className="app-drag flex items-center justify-between px-3 pb-2 pt-3">
+          <div className="app-drag flex min-h-11 items-center justify-between px-3 pb-1 pt-3">
             {pageSurface() === "host" ? (
-              <span className="text-[13px] text-mute">Artek Buddy</span>
+              <span className="text-[12px] font-semibold text-mute">Artek Buddy</span>
             ) : (
               <WindowChrome />
             )}
           </div>
+          <div className="px-3 pt-2 pb-3">
+            <h2 className="text-[18px] font-bold tracking-[-0.03em] text-paper">Work</h2>
+            <p className="mt-0.5 text-[11px] text-mute">Open and recent tasks</p>
+          </div>
           <div className="mb-2 flex items-center gap-2 px-3">
-            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-[8px] border border-hairline bg-raised px-2.5 py-1.5 text-[14px] text-mute">
+            <label className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[10px] border border-hairline bg-ink px-2.5 text-[13px] text-mute">
               <IconSearch />
               <input
                 value={query}
@@ -1835,11 +2038,12 @@ export function ShellPage() {
             </label>
             <button
               type="button"
+              aria-label="New bot"
               onClick={() => openCreate()}
-              className="app-no-drag inline-flex h-[34px] shrink-0 items-center gap-1 rounded-[8px] border border-hairline bg-raised px-2.5 text-[13px] text-paper"
+              className="app-no-drag inline-flex min-h-10 shrink-0 items-center gap-1 rounded-[10px] bg-tan px-3 text-[12px] font-bold text-ink"
             >
               <IconPlus />
-              New bot
+              New
             </button>
           </div>
           <div className="ab-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
@@ -1863,58 +2067,50 @@ export function ShellPage() {
               onOpenArchived={() => setSidebarView("archived")}
             />
           </div>
-          <button
-            type="button"
-            data-testid="open-plugins"
-            aria-label="Plugins"
-            onClick={() => openPlugins()}
-            className={`flex w-full items-center gap-[11px] border-t px-[14px] py-3.5 text-left ${
-              panel === "plugins" ? "border-tan bg-plate" : "border-hairline hover:bg-raised"
-            }`}
-          >
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-raised text-[12px] text-mute">
-              P
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[14px] text-paper">Plugins</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            data-testid="open-models"
-            data-models-ready={needsModel ? "false" : "true"}
-            aria-label="Models"
-            onClick={() => openModels()}
-            className={`flex w-full items-center gap-[11px] border-t px-[14px] py-3.5 text-left ${
-              panel === "models" ? "border-tan bg-plate" : "border-hairline hover:bg-raised"
-            }`}
-          >
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-raised text-[12px] text-mute">
-              Y
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[13px] text-mute">You</span>
-              <span className="block text-[14px] text-paper">Models</span>
-            </span>
-          </button>
         </aside>
+        {!phoneShell && workspaceView !== "today" ? (
+          <PaneResizeHandle
+            pane="left"
+            width={rackWidth}
+            defaultWidth={DEFAULT_RACK_WIDTH}
+            onChange={resizeRack}
+          />
+        ) : null}
 
         <main
           data-testid="thread-pane"
           data-phone-show={phoneTab === "chat" ? "1" : "0"}
+          data-workspace-visible={phoneShell || workspaceView !== "today" ? "1" : "0"}
           className="relative flex min-w-0 flex-1 flex-col bg-ink"
           onPaste={onChatPaste}
         >
-          <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
+          <div className="flex min-h-[58px] items-center justify-between border-b border-hairline bg-plate px-4 py-2.5">
             <div data-testid="thread-header" className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                data-testid="phone-chat-back"
+                aria-label="Back to chats"
+                onClick={() => setPhoneTab(nextPhoneTab("open-chats"))}
+                className="phone-chat-back grid h-10 w-10 shrink-0 place-items-center rounded-[10px] border border-hairline text-paper"
+              >
+                ←
+              </button>
               {active ? <BotAvatar color={active.color} size={26} /> : null}
-              <span className="min-w-0 truncate font-display text-[16px] font-semibold text-paper">
-                {active?.name ?? "Select a bot"}
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-bold text-paper">
+                  {active?.name ?? "Select a bot"}
+                </span>
+                {active ? (
+                  <span className="mt-0.5 block truncate text-[10.5px] text-mute">
+                    {isBusy ? flightText || "Working" : active.title || "Ready"}
+                  </span>
+                ) : null}
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
+                aria-label="Computer"
                 disabled={!active}
                 onClick={() => {
                   if (panel === "computer") {
@@ -1922,34 +2118,18 @@ export function ShellPage() {
                     if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
                     return;
                   }
+                  setWorkspaceView("chats");
                   setPhoneTab(nextPhoneTab("open-desk"));
                   setPanel("computer");
                 }}
-                className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
+                className={`thread-action inline-flex h-[36px] items-center gap-1.5 rounded-[9px] border px-2.5 text-[12px] disabled:opacity-40 ${
                   panel === "computer"
                     ? "border-tan bg-raised text-paper"
-                    : "border-hairline bg-raised text-paper"
+                    : "border-hairline bg-ink text-paper"
                 }`}
               >
                 <IconComputer />
-                Computer
-              </button>
-              <button
-                type="button"
-                disabled={!active}
-                onClick={() => {
-                  setPhoneTab(nextPhoneTab("open-desk"));
-                  panelAfterSettings.current = panel === "computer" ? "computer" : null;
-                  setPanel("settings");
-                }}
-                className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] disabled:opacity-40 ${
-                  panel === "settings"
-                    ? "border-tan bg-raised text-paper"
-                    : "border-hairline bg-raised text-paper"
-                }`}
-              >
-                <IconSettings />
-                Settings
+                <span className="thread-action-label">Computer</span>
               </button>
             </div>
           </div>
@@ -2016,6 +2196,54 @@ export function ShellPage() {
                   {later}
                 </div>
               ) : null}
+            </div>
+          ) : null}
+          {active && thread?.run ? (
+            <div className="px-4 pt-3">
+              <div
+                data-testid="work-summary"
+                className="flex items-center gap-3 rounded-[12px] border border-hairline bg-plate px-3.5 py-2.5"
+              >
+                <span
+                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                    isParked
+                      ? "bg-copper"
+                      : isBusy
+                        ? "ab-live-dot bg-sage"
+                        : thread.run.status === "failed"
+                          ? "bg-danger"
+                          : "bg-tan"
+                  }`}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-bold text-paper">
+                    {isParked
+                      ? "Needs your decision"
+                      : isBusy
+                        ? "Working on this task"
+                        : thread.run.status === "failed"
+                          ? "Task failed"
+                          : "Task is complete"}
+                  </p>
+                  <p className="mt-0.5 truncate text-[11px] text-mute">
+                    {flightText ||
+                      (isParked
+                        ? "Open the computer or answer the request to continue."
+                        : "The conversation keeps the result and decisions.")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  data-testid="open-work-log"
+                  onClick={() => {
+                    setPhoneTab(nextPhoneTab("open-more"));
+                    setPanel("worklog");
+                  }}
+                  className="shrink-0 text-[11px] font-semibold text-tan"
+                >
+                  Show work log
+                </button>
+              </div>
             </div>
           ) : null}
           {error && errorKind !== "host" ? (
@@ -2161,8 +2389,7 @@ export function ShellPage() {
                   onOpenComputer={() => void openOverlay("preview")}
                   onOpenMemory={(fact) => {
                     setMemoryFocusFact(fact);
-                    setPanel("computer");
-                    if (phoneShell) setPhoneTab(nextPhoneTab("open-desk"));
+                    openMemory();
                   }}
                   onOpenBot={(id) => {
                     void refreshBots().then(() => navigate(`/app/${id}`));
@@ -2252,6 +2479,11 @@ export function ShellPage() {
                 ))}
               </div>
             ) : null}
+            {isBusy ? (
+              <p className="mb-1.5 px-1 text-[10.5px] text-mute">
+                This task is still running · replies steer it
+              </p>
+            ) : null}
             {/* File drop and paste land on the Message row, not a dedicated control. */}
             {/* biome-ignore lint/a11y/noStaticElementInteractions: composer drop/paste target */}
             <div
@@ -2325,37 +2557,107 @@ export function ShellPage() {
           </div>
         </main>
 
+        {!phoneShell && workspaceView !== "today" && hatchOpen ? (
+          <PaneResizeHandle
+            pane="right"
+            width={hatchWidth}
+            defaultWidth={DEFAULT_HATCH_WIDTH}
+            onChange={resizeHatch}
+          />
+        ) : null}
         <aside
           data-shell="hatch"
           data-hatch-open={hatchOpen ? "1" : "0"}
-          data-phone-show={phoneTab === "desk" ? "1" : "0"}
+          data-phone-show={phoneTab === "desk" || phoneTab === "more" ? "1" : "0"}
+          data-workspace-visible={phoneShell || workspaceView !== "today" ? "1" : "0"}
           onWheel={(event) => {
             if (hatchOpen) event.stopPropagation();
           }}
+          style={phoneShell ? undefined : { width: hatchOpen ? hatchWidth : 0 }}
           className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-ink ${
             hatchPointerEvents(hatchOpen) === "none" ? "pointer-events-none" : "pointer-events-auto"
           } ${
             phoneShell
               ? "w-full max-w-none border-l-0"
               : hatchOpen
-                ? "w-[360px] border-l border-hairline"
-                : "w-0"
+                ? "border-l border-hairline"
+                : ""
           }`}
         >
           {hatchOpen ? (
             <div
-              className={`ab-scroll h-full overflow-y-auto px-4 py-3 ${
-                phoneShell ? "w-full" : "w-[360px]"
-              }`}
+              style={phoneShell ? undefined : { width: hatchWidth }}
+              className={`ab-scroll h-full overflow-y-auto px-4 py-3 ${phoneShell ? "w-full" : ""}`}
             >
-              {panel === "plugins" ? (
-                <PluginsPane
-                  onClose={() => {
-                    setPanel(null);
-                    if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
+              {panel === "library" ? (
+                <LibraryPane
+                  botName={active?.name}
+                  hasActiveBot={Boolean(active)}
+                  modelsReady={!needsModel}
+                  showRoutines={phoneShell}
+                  onOpenPlugins={openPlugins}
+                  onOpenModels={openModels}
+                  onOpenMemory={openMemory}
+                  onOpenRoutines={openRoutines}
+                  onOpenSettings={() => {
+                    if (!active) return;
+                    panelAfterSettings.current = "library";
+                    setPanel("settings");
                   }}
+                  onClose={closeContextPanel}
                 />
               ) : null}
+              {panel === "memory" && active ? (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-mono text-[10px] text-tan uppercase">Context used</p>
+                      <h2 className="mt-1 text-[18px] font-bold text-paper">Memory</h2>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Close Memory"
+                      onClick={closeSubcontext}
+                      className="rounded-[9px] border border-hairline px-3 py-2 text-[12px] text-paper"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <MemoryPanel botId={active.id} focusFact={memoryFocusFact} onLater={setLater} />
+                </div>
+              ) : null}
+              {panel === "routines" && active ? (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-mono text-[10px] text-tan uppercase">
+                        Repeat approved work
+                      </p>
+                      <h2 className="mt-1 text-[18px] font-bold text-paper">Routines</h2>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Close Routines"
+                      onClick={closeSubcontext}
+                      className="rounded-[9px] border border-hairline px-3 py-2 text-[12px] text-paper"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <RoutinesPanel botId={active.id} onLater={setLater} />
+                </div>
+              ) : null}
+              {panel === "worklog" && active ? (
+                <WorkLogPane
+                  botName={active.name}
+                  runId={thread?.run?.id}
+                  runStatus={thread?.run?.status}
+                  progress={flightText}
+                  workers={thread?.subagents ?? []}
+                  onClose={closeContextPanel}
+                />
+              ) : null}
+              {panel === "plugins" ? <PluginsPane onClose={closePlugins} /> : null}
               {panel === "models" ? (
                 <ModelsPane
                   botId={active?.id}
@@ -2397,10 +2699,6 @@ export function ShellPage() {
                     setPanel(null);
                     if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
                   }}
-                  onSettings={() => {
-                    panelAfterSettings.current = "computer";
-                    setPanel("settings");
-                  }}
                   onOpenFullscreen={() => void openOverlay("preview")}
                   onStart={() =>
                     void bootComputer({
@@ -2411,8 +2709,6 @@ export function ShellPage() {
                   onRelease={() => void releaseComputer()}
                   onRetryScreen={retryScreen}
                   onScreenFrameLoad={onScreenFrameLoad}
-                  onLater={setLater}
-                  memoryFocusFact={memoryFocusFact}
                 />
               ) : null}
             </div>
@@ -2543,30 +2839,51 @@ export function ShellPage() {
       <nav data-testid="phone-nav" className="phone-nav" aria-label="Phone sections">
         <button
           type="button"
+          data-testid="phone-tab-today"
+          aria-current={phoneTab === "today" ? "page" : undefined}
+          onClick={() => {
+            setWorkspaceView("today");
+            setPhoneTab(nextPhoneTab("open-today"));
+            setPanel(null);
+          }}
+        >
+          Today
+        </button>
+        <button
+          type="button"
           data-testid="phone-tab-chats"
-          aria-current={phoneTab === "chats" ? "page" : undefined}
-          onClick={() => setPhoneTab(nextPhoneTab("open-chats"))}
+          aria-current={phoneTab === "chats" || phoneTab === "chat" ? "page" : undefined}
+          onClick={() => {
+            setWorkspaceView("chats");
+            setPhoneTab(nextPhoneTab("open-chats"));
+            setPanel(null);
+          }}
         >
           Chats
         </button>
         <button
           type="button"
-          data-testid="phone-tab-chat"
-          aria-current={phoneTab === "chat" ? "page" : undefined}
-          onClick={() => setPhoneTab(nextPhoneTab("open-chat"))}
-        >
-          Chat
-        </button>
-        <button
-          type="button"
           data-testid="phone-tab-desk"
           aria-current={phoneTab === "desk" ? "page" : undefined}
+          disabled={!active}
           onClick={() => {
             setPhoneTab(nextPhoneTab("open-desk"));
-            if (active) setPanel((current) => current || "computer");
+            setPanel((current) => current || "computer");
           }}
         >
           Desktop
+        </button>
+        <button
+          type="button"
+          data-testid="phone-tab-more"
+          aria-current={phoneTab === "more" ? "page" : undefined}
+          onClick={() => {
+            setWorkspaceView("library");
+            setPhoneTab(nextPhoneTab("open-more"));
+            setPanel("library");
+          }}
+        >
+          More
         </button>
       </nav>
 

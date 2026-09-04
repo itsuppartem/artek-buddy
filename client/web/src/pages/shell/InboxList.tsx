@@ -106,15 +106,15 @@ export function InboxList({
             event.preventDefault();
             onContextMenu(bot, event);
           }}
-          className={`flex gap-2.5 border-l-[3px] px-2.5 py-[11px] text-left ${
-            activeId === bot.id ? "border-tan bg-plate" : "border-transparent hover:bg-raised"
+          className={`flex min-h-[68px] gap-2.5 rounded-r-[10px] border-l-[3px] px-2.5 py-[11px] text-left transition ${
+            activeId === bot.id ? "border-tan bg-soft-blue" : "border-transparent hover:bg-raised"
           }`}
         >
           <BotAvatar color={bot.color} size={38} />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
               <span
-                className={`flex items-center gap-1.5 font-display text-[14.5px] text-paper ${
+                className={`flex items-center gap-1.5 text-[13.5px] text-paper ${
                   bot.unread ? "font-semibold" : "font-normal"
                 }`}
               >
@@ -125,7 +125,7 @@ export function InboxList({
                   </span>
                 ) : null}
               </span>
-              <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-mute">
+              <span className="flex shrink-0 items-center gap-1.5 font-mono text-[8.5px] uppercase text-mute">
                 {bot.status === "idle" ? "" : bot.status}
                 {bot.unread ? (
                   <span
@@ -139,7 +139,7 @@ export function InboxList({
             </div>
             <div
               data-testid="bot-preview"
-              className={`mt-0.5 truncate text-[12.5px] ${
+              className={`mt-1 truncate text-[11.5px] ${
                 bot.unread ? "font-medium text-paper" : "text-mute"
               }`}
             >

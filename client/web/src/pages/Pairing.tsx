@@ -52,84 +52,113 @@ export function PairingPage({
   }
 
   return (
-    <div className="flex h-full flex-col bg-ink text-paper">
-      <div className="flex items-center gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top,0px))]">
+    <div className="pairing-screen flex h-full flex-col bg-ink text-paper">
+      <div className="app-drag flex min-h-14 items-center gap-3 px-4 pt-[env(safe-area-inset-top,0px)]">
         {hostPage ? null : <WindowChrome />}
-        <img src="/favicon.png" alt="" width={18} height={18} className="rounded-[5px]" />
-        <span className="text-[13px] text-mute">Artek Buddy</span>
+        <img src="/favicon.png" alt="" width={22} height={22} className="rounded-[7px]" />
+        <span className="text-[12px] font-semibold text-mute">Artek Buddy</span>
       </div>
-      <div className="flex flex-1 items-center justify-center px-6 pb-16">
+      <div className="ab-scroll flex flex-1 items-start justify-center overflow-y-auto px-4 py-4 sm:px-6 md:items-center md:py-6 md:pb-14">
         <form
           onSubmit={submit}
           data-testid="pairing"
-          className="w-full max-w-[420px] rounded-2xl border border-hairline bg-plate p-6"
+          className="grid w-full max-w-[820px] overflow-hidden rounded-[20px] border border-hairline bg-plate shadow-[0_28px_80px_rgba(25,48,82,0.14)] md:grid-cols-[0.9fr_1.1fr]"
         >
-          <img
-            data-testid="app-mark"
-            src="/pairing-mark.png"
-            alt=""
-            width={80}
-            height={80}
-            className="mb-4 h-20 w-20 rounded-2xl object-cover"
-          />
-          <div className="font-display text-[21px] font-semibold text-paper">
-            {hostPage ? "Pair this phone" : "Pair this computer"}
+          <div className="relative min-h-[190px] overflow-hidden bg-soft-blue p-5 md:flex md:min-h-[520px] md:flex-col md:justify-between md:p-8">
+            <div>
+              <p className="font-mono text-[9px] tracking-[0.08em] text-tan uppercase">
+                Private control surface
+              </p>
+              <h1 className="mt-3 max-w-[13rem] text-[23px] font-bold leading-[1.05] tracking-[-0.045em] text-paper md:max-w-[16rem] md:text-[34px]">
+                One code. Then Artek is yours.
+              </h1>
+              <p className="mt-3 hidden max-w-[18rem] text-[12.5px] leading-5 text-mute md:block">
+                Pair this screen with your host. No account form and no credential copied into the
+                page.
+              </p>
+            </div>
+            <img
+              data-testid="app-mark"
+              src="/pairing-mark.png"
+              alt=""
+              width={360}
+              height={360}
+              className="pairing-mascot pointer-events-none absolute right-0 bottom-0 w-[175px] object-contain md:static md:mx-auto md:-mb-12 md:w-[min(100%,330px)]"
+            />
           </div>
-          <p className="mt-2 text-[14px] leading-6 text-mute">{PAIRING_BODY}</p>
-          {hostPage ? null : (
-            <label className="mt-5 block text-[12.5px] text-mute">
-              Host URL
+          <div className="flex flex-col justify-center p-6 md:p-9">
+            <p className="font-mono text-[9px] tracking-[0.08em] text-tan uppercase">
+              {hostPage ? "Phone pairing" : "Computer pairing"}
+            </p>
+            <div className="mt-2 text-[24px] font-bold tracking-[-0.04em] text-paper">
+              {hostPage ? "Pair this phone" : "Pair this computer"}
+            </div>
+            <p className="mt-2 text-[13px] leading-5 text-mute">{PAIRING_BODY}</p>
+            <label className="mt-6 block text-[11px] font-semibold text-paper">
+              Pairing code
               <input
-                value={url}
-                onChange={(event) => setUrl(event.target.value)}
-                placeholder="https://host.example"
+                value={code}
+                onChange={(event) => setCode(formatPairingCode(event.target.value))}
+                placeholder="XXXX-XXXX"
                 autoComplete="off"
-                className="mt-1.5 h-10 w-full rounded-[10px] border border-hairline bg-raised px-3 text-[14px] text-paper"
+                spellCheck={false}
+                className="mt-2 h-12 w-full rounded-[11px] border border-hairline bg-ink px-3.5 text-center font-mono text-[17px] tracking-[0.2em] text-paper"
               />
             </label>
-          )}
-          <label className={`${hostPage ? "mt-5" : "mt-3"} block text-[12.5px] text-mute`}>
-            Pairing code
-            <input
-              value={code}
-              onChange={(event) => setCode(formatPairingCode(event.target.value))}
-              placeholder="XXXX-XXXX"
-              autoComplete="off"
-              spellCheck={false}
-              className="mt-1.5 h-10 w-full rounded-[10px] border border-hairline bg-raised px-3 font-mono text-[15px] tracking-[0.18em] text-paper"
-            />
-          </label>
-          <label className="mt-3 block text-[12.5px] text-mute">
-            Device name
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="mt-1.5 h-10 w-full rounded-[10px] border border-hairline bg-raised px-3 text-[14px] text-paper"
-            />
-          </label>
-          {error ? (
-            <div data-testid="pairing-error" className="mt-3 text-[13px] text-danger">
-              {error}
-            </div>
-          ) : null}
-          {homeHint ? (
-            <p data-testid="home-screen-hint" className="mt-3 text-[13px] leading-5 text-tan">
-              On iPhone: Share → Add to Home Screen, then open that icon and pair there. Alerts need
-              Turn on alerts and only fire while this app is open. iPhone will not run it in the
-              background.
-            </p>
-          ) : null}
-          <Button type="submit" variant="cream" className="mt-5 w-full" disabled={busy || !code}>
-            {busy ? "Pairing…" : "Pair"}
-          </Button>
-          {hostPage ? null : (
-            <p
-              data-testid="pairing-host-command"
-              className="mt-4 text-[12.5px] leading-5 text-mute"
+            <details className="mt-4 rounded-[11px] border border-hairline bg-ink px-3.5 py-2.5">
+              <summary className="cursor-pointer text-[11.5px] font-semibold text-mute">
+                Pairing options
+              </summary>
+              {hostPage ? null : (
+                <label className="mt-3 block text-[11px] text-mute">
+                  Host URL
+                  <input
+                    value={url}
+                    onChange={(event) => setUrl(event.target.value)}
+                    placeholder="https://host.example"
+                    autoComplete="off"
+                    className="mt-1.5 h-10 w-full rounded-[9px] border border-hairline bg-plate px-3 text-[13px] text-paper"
+                  />
+                </label>
+              )}
+              <label className="mt-3 block text-[11px] text-mute">
+                Device name
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  className="mt-1.5 h-10 w-full rounded-[9px] border border-hairline bg-plate px-3 text-[13px] text-paper"
+                />
+              </label>
+            </details>
+            {error ? (
+              <div data-testid="pairing-error" className="mt-3 text-[12.5px] text-danger">
+                {error}
+              </div>
+            ) : null}
+            {homeHint ? (
+              <p data-testid="home-screen-hint" className="mt-3 text-[12px] leading-5 text-tan">
+                On iPhone: Share → Add to Home Screen, then open that icon and pair there. Alerts
+                work only while the app is open.
+              </p>
+            ) : null}
+            <Button
+              type="submit"
+              variant="cream"
+              className="mt-5 min-h-11 w-full"
+              disabled={busy || !code}
             >
-              On the Pi: <span className="font-mono text-paper/70">{PAIRING_HOST_COMMAND}</span>
-            </p>
-          )}
+              {busy ? "Pairing…" : "Pair"}
+            </Button>
+            {hostPage ? null : (
+              <p
+                data-testid="pairing-host-command"
+                className="mt-4 text-[10.5px] leading-5 text-mute"
+              >
+                Create a code on the Pi:{" "}
+                <span className="font-mono text-paper/70">{PAIRING_HOST_COMMAND}</span>
+              </p>
+            )}
+          </div>
         </form>
       </div>
     </div>
