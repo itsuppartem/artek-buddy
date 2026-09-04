@@ -35,6 +35,7 @@
       const url = `${protocol}://${window.location.host}${prefix}${path}`;
       const rfb = new RFB(document.getElementById("screen"), url);
       rfb.viewOnly = flag("view_only");
+      rfb.compressionLevel = 1;
       rfb.scaleViewport = true;
       rfb.clipViewport = false;
       const CAPS = 0xffe5;

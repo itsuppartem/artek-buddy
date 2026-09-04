@@ -180,6 +180,7 @@ Open **Desktop** for **Demo** (Private) or Team.
 | Preview is a live screen, caption **Preview · view only**. Not black text «Desktop is running». Click on the preview does **not** take control | [ ] | [ ] |
 | fluxbox panel: window title, close, menu. Not a bare X | [ ] | [ ] |
 | **Take control** → mouse / keys go to the guest. Caps Lock raises case (`abc` → `ABC`). **Release** → the same turn continues; typing dots and Stop work again | [ ] | [ ] |
+| In one active box, drag a window, type in Terminal, and scroll a normal page. Pointer/key feedback starts promptly; Files, Chromium, Terminal, and the guest picture all remain usable | [ ] | [ ] |
 | Take control from Sleeping (or Open screen before pixels): overlay says **Waking the desktop…** until the guest is on the glass, not a black void | [ ] | [ ] |
 | No pointer for **2 minutes** on the overlay → host Releases itself (holder is bot again) | [ ] | [ ] |
 | In chat, **without** pressing start: «Открой https://example.com» (or `HTTPS://…`). Card Allow once / Always / Deny | [ ] | [ ] |
@@ -619,7 +620,7 @@ If time is short, in this order:
 4. **§4 Skill from the web**
 5. **§5 Bot asks bot**
 6. **§6 Connections** (pane Connect or chat attach; no chip; the bot uses the app). `please e2e-connect-mail` / GitHub **Open to connect** opens the owner browser
-7. **§7 Desktop** + **§7a Hands on the guest** (Release keeps the picture; Sleeping → Take control shows Waking the desktop…)
+7. **§7 Desktop** + **§7a Hands on the guest** (drag/type/scroll respond promptly; Release keeps the picture; Sleeping → Take control shows Waking the desktop…)
 8. **§11 Phone chrome** + **§29 meaningful context return**
 9. **§12 Pad and Cyrillic**
 10. **§25 File + §26 Picture + §27 Ctrl+V**

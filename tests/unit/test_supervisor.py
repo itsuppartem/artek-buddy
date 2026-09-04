@@ -398,6 +398,9 @@ def test_inspect_is_hardened_rejects_unlimited_box() -> None:
     )
     inspect = {"Config": {}, "HostConfig": spec["HostConfig"]}
     assert inspect_is_hardened(inspect) is True
+    old_cpu_limit = dict(spec["HostConfig"])
+    old_cpu_limit["NanoCpus"] = 1_000_000_000
+    assert inspect_is_hardened({"Config": {}, "HostConfig": old_cpu_limit}) is False
     unlimited = dict(spec["HostConfig"])
     unlimited["CapDrop"] = []
     assert inspect_is_hardened({"Config": {}, "HostConfig": unlimited}) is False

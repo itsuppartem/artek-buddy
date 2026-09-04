@@ -93,7 +93,8 @@ if [[ "$browser_up" -ne 1 ]]; then
   fi
 fi
 
-x11vnc -display :1 -forever -shared -viewonly -nopw -listen 127.0.0.1 -rfbport 5900 -xkb -ncache 0 -noxdamage -noshm -noxinerama -threads -wait 100 -defer 100 >/tmp/artek/x11vnc.log 2>&1 &
+# Poll fast enough for pointer/key feedback; briefly coalesce repaint bursts.
+x11vnc -display :1 -forever -shared -viewonly -nopw -listen 127.0.0.1 -rfbport 5900 -xkb -ncache 0 -noxdamage -noshm -noxinerama -threads -wait 30 -defer 20 >/tmp/artek/x11vnc.log 2>&1 &
 
 NOVNC_ROOT=/usr/share/novnc
 if [[ ! -d "$NOVNC_ROOT" ]]; then
