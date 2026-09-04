@@ -140,6 +140,14 @@ describe("thread snapshot cache", () => {
     expect(peekThread(cache, "a")?.snapshot.olderCursor).toBeNull();
   });
 
+  it("marks a snapshot without an older cursor as the beginning", () => {
+    const cache = createThreadSnapshotCache();
+
+    applySnapshotForBot(cache, "a", snap("a", ["first"], { olderCursor: null }));
+
+    expect(peekThread(cache, "a")?.atStart).toBe(true);
+  });
+
   it("ignores an older page that belongs to another thread", () => {
     const cache = createThreadSnapshotCache();
     applySnapshotForBot(cache, "a", snap("a", ["stay"]));

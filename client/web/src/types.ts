@@ -31,6 +31,7 @@ export type ThreadMessagePage = Camelize<Schema["ThreadMessagePage"]>;
 export type MemoryDocument = Camelize<Schema["MemoryDocument"]>;
 export type Routine = Camelize<Schema["Routine"]>;
 export type ThreadSendResult = Camelize<Schema["ThreadSendResult"]>;
+export type WorkspaceDispatchResult = Camelize<Schema["WorkspaceDispatchResult"]>;
 export type HealthResponse = Camelize<Schema["HealthResponse"]>;
 export type Me = Camelize<Schema["Me"]>;
 export type DeploymentSettings = Camelize<Schema["DeploymentSettings"]>;

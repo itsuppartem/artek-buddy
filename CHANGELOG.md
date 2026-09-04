@@ -4,7 +4,7 @@
 
 ### Added
 - Library / phone More now has one Appearance control: System follows the OS color scheme, while Light and Dark persist as a device-local override.
-- The paired window now opens on Today: describe an outcome, see the suggested bot, and scan decisions before active work and ready results. A workspace rail separates Today, Chats, Routines, and Library; Work log keeps worker/tool detail out of the durable conversation.
+- The paired window now opens on Today: describe an outcome and a hidden workspace routing layer reads every existing bot's profile, activity, and bounded recent context before choosing the bot that owns it. The router is not a pinned bot or a chat. A workspace rail separates Today, Chats, Routines, and Library; Work log keeps worker/tool detail out of the durable conversation.
 - Library groups Connections, Models, selected-bot Memory, and profile/access. Phone More also exposes Routines. Pairing and bot marks use a redrawn navy / sky / cream Cavalier across the `.deb`, host page, PWA, and launcher icons.
 - A background worker can report a short owner-safe step. That text replaces the waiting dots in one in-flight status slot (`please e2e-worker-progress`) instead of appending chat bubbles. No worker card or native alert.
 - Owner jobs have a short client delivery ACK and a separate queued / acknowledged / terminal lifecycle. A new `.deb` claims a job before touching This PC; older clients may still return a result without ACK.
@@ -40,6 +40,11 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+- A takeover request now parks the open run immediately, so the computer card no longer races with stale Working dots and Stop controls.
+- Ctrl+V while controlling the remote desktop now forwards host clipboard text through the active control lease into the focused guest field instead of dropping it at the noVNC frame.
+- The `.deb` now maps physical Ctrl+A/C/X/V/Z/Y editing shortcuts on the Russian Ubuntu layout; text and screenshot paste, selection, copy/cut, undo, and redo no longer depend on Latin key values.
+- A delayed thread snapshot can no longer erase a newer Ask card delivered live; the owner can still answer the same waiting run.
+- Reaching the oldest message now keeps **Beginning of this chat.** through live refreshes and cached chat switches.
 - Unchecking Fast on an idle chat starts a new model session immediately. A live turn still keeps going; the send after it (including a waiting follow-up) is not Fast. New bot already has that session, so the first Send does not open a second one unless Fast or Reasoning changed. Changing those during a live turn writes `This turn keeps going.` into the open chat without dropping Working.
 - Native controls, including Cursor Reasoning and its option list, now use the active theme's surface and foreground instead of an unreadable browser-white combination.
 - Every packaged hicolor size now comes from the same sky-blue Cavalier source; compact launcher and dock slots no longer select leftover black icon files.

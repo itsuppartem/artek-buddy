@@ -78,6 +78,10 @@ def test_background_worker_chat_keeps_lead_free(client, auth_header) -> None:
     worker_id = workers[0]["id"]
     assert workers[0]["status"] == "running"
     assert workers[0]["name"] == WORKER_NAME
+    listed = client.get("/v1/bots", headers=auth_header)
+    assert listed.status_code == 200
+    listed_bot = next(item for item in listed.json()["bots"] if item["id"] == bot_id)
+    assert listed_bot["status"] == "running"
     assert not any(text.startswith("Started ") for text in message_texts(snap))
     reconnect = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
     assert reconnect.status_code == 200
@@ -113,6 +117,10 @@ def test_background_worker_chat_keeps_lead_free(client, auth_header) -> None:
     assert not any(text.startswith(("Started ", "Finished ", "Stopped ")) for text in texts)
     finished = [item for item in _workers(client, auth_header, bot_id) if item["id"] == worker_id]
     assert finished and finished[0]["status"] == "completed"
+    listed = client.get("/v1/bots", headers=auth_header)
+    assert listed.status_code == 200
+    listed_bot = next(item for item in listed.json()["bots"] if item["id"] == bot_id)
+    assert listed_bot["status"] == "idle"
 
 
 def test_worker_steer_applies_once_without_restart(client, auth_header) -> None:

@@ -6,6 +6,7 @@ import {
   type DeskInput,
   overlayHolderText,
   overlayTitle,
+  remoteClipboardInput,
   visualViewportBox,
 } from "../../lib/phone-desk";
 import {
@@ -119,15 +120,27 @@ export function ComputerOverlay({
     const doc = overlayFrameRef.current?.contentDocument;
     if (!doc) return;
     const onAct = () => reportOwnerActivity();
+    const onPaste = (event: ClipboardEvent) => {
+      const input = remoteClipboardInput(event.clipboardData?.getData("text/plain") ?? "");
+      if (!input) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      reportOwnerActivity();
+      deskGateRef.current?.(input);
+    };
     doc.addEventListener("pointerdown", onAct);
     doc.addEventListener("pointermove", onAct);
     doc.addEventListener("keydown", onAct);
+    doc.addEventListener("paste", onPaste, true);
     doc.addEventListener("wheel", onAct, { passive: true });
+    window.addEventListener("paste", onPaste, true);
     return () => {
       doc.removeEventListener("pointerdown", onAct);
       doc.removeEventListener("pointermove", onAct);
       doc.removeEventListener("keydown", onAct);
+      doc.removeEventListener("paste", onPaste, true);
       doc.removeEventListener("wheel", onAct);
+      window.removeEventListener("paste", onPaste, true);
     };
   }, [open, computer?.controlHolder, overlayFrameRef, screenEpoch, screenUrl, frameReady]);
 

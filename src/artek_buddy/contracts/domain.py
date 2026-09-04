@@ -685,6 +685,18 @@ class ThreadSendInput(BaseModel):
         return self
 
 
+class WorkspaceDispatchInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    text: str = Field(min_length=1, max_length=20000)
+
+    @model_validator(mode="after")
+    def need_text(self) -> WorkspaceDispatchInput:
+        if not self.text.strip():
+            raise ValueError("text required")
+        return self
+
+
 class ThreadFollowUpInput(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -770,6 +782,15 @@ class ThreadSendResult(BaseModel):
     seq: int
     message: ThreadMessage | None = None
     run: Run | None = None
+    queued: bool = False
+
+
+class WorkspaceDispatchResult(BaseModel):
+    bot_id: Id
+    bot_name: str
+    task_id: Id
+    run_id: Id
+    seq: int
     queued: bool = False
 
 

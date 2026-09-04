@@ -73,15 +73,17 @@ to the Pi. Remove `ssh-mux` to return to ordinary SSH behavior.
 
 ## Live now
 
-`bots.list` / `bots.create` / `bots.delete`, `threads.get` / `threads.messages` /
-`threads.send` / `threads.subscribe`, parallel subagents / worker cards, memory
-documents, routines, and live computer screen streaming (view-only preview and
-interactive takeover). Enter sends, Shift+Enter adds a newline in the composer.
+`bots.list` / `bots.create` / `bots.delete`, `workspace.dispatch`, `threads.get` /
+`threads.messages` / `threads.send` / `threads.subscribe`, parallel subagents /
+worker cards, memory documents, routines, and live computer screen streaming
+(view-only preview and interactive takeover). Enter sends, Shift+Enter adds a
+newline in the composer.
 Plus, drop, or Ctrl+V attaches files (including a file-manager copy that only
 puts a path on the clipboard); a screenshot paste and image/video/audio
 show a preview before send and on the file card after send. Download opens the
 system Save dialog. Ordinary Ctrl+V text stays in Message. Bot `http(s)` links
 open in the system browser; their context menu can open or copy the URL. Browse
-that bot's home with Files on the sandbox desktop.
+that bot's home with Files on the sandbox desktop. In the `.deb`, physical
+Ctrl+A/C/X/V/Y/Z editing shortcuts also work on the Russian Ubuntu layout.
 
 UI pieces for later host stages stay out of the window until those routes exist.

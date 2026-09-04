@@ -13,6 +13,7 @@ class AgentRuntime(Protocol):
     store: Any
     computers: Any
     default_agent_id: str | None
+    workspace_dispatcher_agent_id: str | None
     memory: Any
     subagents: Any
     events: Any

@@ -291,7 +291,6 @@ export function ShellPage() {
   const autoBooted = useRef<string | null>(null);
   const sleepHeld = useRef(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [threadAtStart, setThreadAtStart] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ShellErrorKind>("host");
   const errorKindRef = useRef<ShellErrorKind>("host");
@@ -364,8 +363,7 @@ export function ShellPage() {
   const cachedEntry = active ? peekThread(threadCache.current, active.id) : undefined;
   const cachedSnapshot = cachedEntry?.snapshot ?? null;
   const thread = active && snapshot?.botId === active.id ? snapshot : cachedSnapshot;
-  const historyAtStart =
-    snapshot?.botId === active?.id ? threadAtStart : Boolean(cachedEntry?.atStart);
+  const historyAtStart = Boolean(cachedEntry?.atStart);
   const loadingThread = Boolean(active && !thread && !error);
   const isParked = thread?.run?.status === "waiting_takeover";
   const isBusy = Boolean(
@@ -1138,7 +1136,6 @@ export function ShellPage() {
     const entry = applySnapshotForBot(threadCache.current, id, snap);
     if (!entry || activeIdRef.current !== id) return snap;
     setSnapshot(entry.snapshot);
-    setThreadAtStart(entry.atStart);
     setComputer(snap.computer);
     for (const consentId of pendingOwnerJobIds(snap)) startOwnerFulfill(consentId);
     if (stickToEnd) {
@@ -1162,7 +1159,6 @@ export function ShellPage() {
       const entry = applyOlderPageForBot(threadCache.current, requested, page);
       if (!entry || activeIdRef.current !== requested) return;
       setSnapshot(entry.snapshot);
-      if (entry.atStart) setThreadAtStart(true);
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
         if (element) element.scrollTop += element.scrollHeight - previousHeight;
@@ -1214,7 +1210,6 @@ export function ShellPage() {
     screenRetries.current = 0;
     const cached = touchThread(threadCache.current, active.id);
     setSnapshot(cached?.snapshot ?? null);
-    setThreadAtStart(cached?.atStart ?? false);
     setComputer(cached?.snapshot.computer ?? null);
     setLoadingOlder(false);
     const abort = new AbortController();
@@ -1617,25 +1612,20 @@ export function ShellPage() {
     attachLocalPaths(transferFilePaths(event.dataTransfer));
   }
 
-  async function startTask(botId: string, task: string) {
-    const target = bots.find((bot) => bot.id === botId);
+  async function startTask(task: string) {
     const text = task.trim();
-    if (!target || !text) throw new Error("Choose a bot and describe the outcome first");
+    if (!text) throw new Error("Describe the outcome first");
     if (hostDownRef.current) {
-      parkSend(target.id, text, null, undefined);
-      openBot(target.id);
-      return;
+      throw new Error("Reconnect the host before starting workspace work");
     }
     try {
-      await api.threads.send(target.id, text, null);
-      openBot(target.id);
+      const dispatched = await api.workspace.dispatch(text);
+      setBots((list) =>
+        list.map((bot) => (bot.id === dispatched.botId ? { ...bot, status: "running" } : bot)),
+      );
+      void refreshBots().catch(() => undefined);
     } catch (err) {
       const classified = classifyError(err);
-      if (shouldQueueSend(classified.kind)) {
-        parkSend(target.id, text, null, undefined);
-        openBot(target.id);
-        return;
-      }
       if (classified.kind === "auth") {
         showError(err, classified.message);
       }
@@ -2651,7 +2641,7 @@ export function ShellPage() {
                 <WorkLogPane
                   botName={active.name}
                   runId={thread?.run?.id}
-                  runStatus={thread?.run?.status}
+                  runStatus={isBusy ? "working" : thread?.run?.status}
                   progress={flightText}
                   workers={thread?.subagents ?? []}
                   onClose={closeContextPanel}

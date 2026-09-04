@@ -56,6 +56,8 @@ class ProductToolsCore:
         self.runtime = runtime
 
     def specs(self, role: str = "lead") -> list[ToolSpec]:
+        if role == "dispatcher":
+            return []
         extra = self._connected_specs()
         if role == "subagent":
             return [spec for spec in TOOL_SPECS if not spec.lead_only] + extra

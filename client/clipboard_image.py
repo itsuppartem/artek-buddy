@@ -8,18 +8,42 @@ import re
 _FILE_REF = re.compile(
     r"(?is)^(file:/|https?://\S+\.(?:png|jpe?g|webp|gif)(?:\s|$)|~?/[\w./-]+\.(?:png|jpe?g|webp|gif)\s*$)"
 )
+_RU_PHYSICAL_KEYS = {
+    "ф": "a",
+    "с": "c",
+    "м": "v",
+    "ч": "x",
+    "н": "y",
+    "я": "z",
+}
+
+
+def ctrl_edit_action(keyval: int, ctrl: bool, shift: bool) -> str | None:
+    if not ctrl:
+        return None
+    try:
+        key = chr(int(keyval)).lower()
+    except (OverflowError, ValueError):
+        return None
+    key = _RU_PHYSICAL_KEYS.get(key, key)
+    actions = {"a": "SelectAll", "c": "Copy", "v": "Paste", "x": "Cut"}
+    if key == "z":
+        return "Redo" if shift else "Undo"
+    if key == "y" and not shift:
+        return "Redo"
+    return actions.get(key)
 
 
 def is_ctrl_v(keyval: int, ctrl: bool) -> bool:
-    return bool(ctrl) and int(keyval) in {ord("v"), ord("V"), 118, 86}
+    return ctrl_edit_action(keyval, ctrl, False) == "Paste"
 
 
 def is_ctrl_z(keyval: int, ctrl: bool, shift: bool) -> bool:
-    return bool(ctrl) and not shift and int(keyval) in {ord("z"), ord("Z"), 122, 90}
+    return ctrl_edit_action(keyval, ctrl, shift) == "Undo"
 
 
 def is_ctrl_shift_z(keyval: int, ctrl: bool, shift: bool) -> bool:
-    return bool(ctrl) and shift and int(keyval) in {ord("z"), ord("Z"), 122, 90}
+    return ctrl_edit_action(keyval, ctrl, shift) == "Redo"
 
 
 _GNOME_CLIP_ACTIONS = {"copy", "cut", "link"}
@@ -122,6 +146,17 @@ def _run_script(view: object, script: str) -> bool:
     return True
 
 
+def _run_editing_command(view: object, command: str) -> bool:
+    execute = getattr(view, "execute_editing_command", None)
+    if not callable(execute):
+        return False
+    try:
+        execute(command)
+    except Exception:
+        return False
+    return True
+
+
 def bind_webkit_paste(view: object) -> None:
     try:
         from gi.repository import Gdk
@@ -136,19 +171,21 @@ def bind_webkit_paste(view: object) -> None:
         keyval = int(getattr(event, "keyval", 0) or 0)
         ctrl = bool(state & control)
         shifted = bool(state & shift)
-        if is_ctrl_z(keyval, ctrl, shifted):
+        action = ctrl_edit_action(keyval, ctrl, shifted)
+        if action == "Undo":
             return _run_script(view, composer_undo_script())
-        if is_ctrl_shift_z(keyval, ctrl, shifted):
+        if action == "Redo":
             return _run_script(view, composer_redo_script())
-        if not is_ctrl_v(keyval, ctrl):
+        if action is None:
             return False
-        try:
-            png, text = read_gtk3_clipboard()
-        except Exception:
-            return False
-        if not should_inject_clipboard_image(png, text) or png is None:
-            return False
-        return _run_script(view, attach_image_script(png))
+        if action == "Paste":
+            try:
+                png, text = read_gtk3_clipboard()
+            except Exception:
+                png, text = None, ""
+            if should_inject_clipboard_image(png, text) and png is not None:
+                return _run_script(view, attach_image_script(png))
+        return _run_editing_command(view, action)
 
     connect = getattr(view, "connect", None)
     if callable(connect):
