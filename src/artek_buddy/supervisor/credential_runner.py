@@ -61,13 +61,18 @@ def resolve_credential_home(
     _working_dir(cwd)
     base = os.path.abspath(str(Path(data_dir) / "homes"))
     os.makedirs(base, exist_ok=True)
-    root = Path(base)
-    if os.path.islink(os.path.join(base, home_key)):
-        raise ValueError("credential runner home cannot be a symlink")
-    home = contained_under(root, home_key)
-    if home is None:
+    # Same sanitizer CodeQL models in fs_jail: normpath + startswith, then islink.
+    # codeql[py/path-injection]
+    lexical = os.path.normpath(os.path.join(base, home_key))  # lgtm[py/path-injection]
+    if lexical == base or not lexical.startswith(base + os.sep):
         raise ValueError("invalid home key")
-    home.mkdir(parents=True, exist_ok=True)
+    if os.path.islink(lexical):
+        raise ValueError("credential runner home cannot be a symlink")
+    os.makedirs(lexical, exist_ok=True)
+    home = Path(os.path.realpath(lexical))
+    real_base = os.path.realpath(base)
+    if home.parent != Path(real_base):
+        raise ValueError("invalid home key")
     relative = (cwd or ".").strip() or "."
     if relative == ".":
         return home, home

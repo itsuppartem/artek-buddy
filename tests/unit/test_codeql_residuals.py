@@ -19,7 +19,8 @@ def test_named_codeql_residuals_keep_inline_lgtm() -> None:
     assert "lgtm[py/path-injection]" in paths
     assert "lgtm[py/path-injection]" in jail
     assert "codeql[py/path-injection]" in jail
-    assert "contained_under" in runner
+    assert "lgtm[py/path-injection]" in runner
+    assert "codeql[py/path-injection]" in runner
     assert "lgtm[py/clear-text-storage-sensitive-data]" in creds
     assert "codeql[py/clear-text-storage-sensitive-data]" in creds
     assert "py/command-line-injection" in threat
