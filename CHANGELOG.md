@@ -39,6 +39,7 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+- Ctrl+V while controlling the remote desktop now forwards host clipboard text through the active control lease into the focused guest field instead of dropping it at the noVNC frame.
 - The `.deb` now maps physical Ctrl+A/C/X/V/Z/Y editing shortcuts on the Russian Ubuntu layout; text and screenshot paste, selection, copy/cut, undo, and redo no longer depend on Latin key values.
 - A delayed thread snapshot can no longer erase a newer Ask card delivered live; the owner can still answer the same waiting run.
 - Reaching the oldest message now keeps **Beginning of this chat.** through live refreshes and cached chat switches.

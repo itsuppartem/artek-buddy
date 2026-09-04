@@ -498,6 +498,79 @@ def test_release_keeps_view_preview_and_drops_control(
     expect(view_frame).to_have_attribute("src", re.compile(r"view_only=true"))
 
 
+def test_controlled_desktop_forwards_host_clipboard(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("DeskPaste")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    view = (
+        "/novnc/YWJj/6080/view/9999999999999."
+        "abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=true"
+    )
+    control = (
+        "/novnc/YWJj/6081/control/9999999999999."
+        "abcdefghijklmnopqrstuvwxyz0123456789ABC/embed.html?view_only=false"
+    )
+    holder = {"value": "bot"}
+
+    def computer_route(route):
+        url = route.request.url.split("?", 1)[0]
+        parts = url.rstrip("/").split("/")
+        method = route.request.method
+        if method == "POST" and parts[-1] == "takeover":
+            holder["value"] = "user"
+            route.continue_()
+            return
+        if method == "GET" and parts[-1] == "screen":
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps({"url": control if holder["value"] == "user" else view}),
+            )
+            return
+        route.continue_()
+
+    page.route(
+        "**/novnc/**",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="text/html",
+            body="<html><body><input id='guest' /></body></html>",
+        ),
+    )
+    page.route("**/v1/computer/**", computer_route)
+    open_computer_pane(page)
+    page.get_by_test_id("computer-start").click()
+    expect(page.get_by_test_id("computer-state")).to_have_attribute(
+        "data-state", "running", timeout=15_000
+    )
+    page.get_by_role("button", name="Take control").click()
+    overlay = page.get_by_test_id("computer-overlay")
+    frame = overlay.frame_locator('iframe[src*="/control/"]')
+    guest = frame.locator("#guest")
+    expect(guest).to_be_visible(timeout=15_000)
+
+    with page.expect_request(
+        lambda request: request.url.endswith("/input")
+        and request.post_data_json.get("kind") == "clipboard"
+    ) as forwarded:
+        guest.evaluate(
+            """element => {
+              element.focus();
+              const data = new DataTransfer();
+              data.setData("text/plain", "host clipboard текст");
+              element.dispatchEvent(new ClipboardEvent("paste", {
+                bubbles: true,
+                cancelable: true,
+                clipboardData: data,
+              }));
+            }"""
+        )
+
+    assert forwarded.value.post_data_json["payload"]["text"] == "host clipboard текст"
+
+
 def test_release_keeps_overlay_guest_iframe(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("RelKeep")
     pair_fresh(page, client_url, host_url)

@@ -16,6 +16,7 @@ import {
   overlayHolderText,
   overlayTitle,
   padStyleFromDesk,
+  remoteClipboardInput,
   visualViewportBox,
 } from "./phone-desk";
 import { shouldUsePhoneShell } from "./phone-shell";
@@ -71,6 +72,14 @@ describe("phone desk pad", () => {
 });
 
 describe("phone desk keys", () => {
+  it("forwards host clipboard text to the controlled guest", () => {
+    expect(remoteClipboardInput("текст с хоста")).toEqual({
+      kind: "clipboard",
+      payload: { text: "текст с хоста" },
+    });
+    expect(remoteClipboardInput("")).toBeNull();
+  });
+
   it("types the added run and sends BackSpace for a delete", () => {
     expect(keysFromField("hel", "hello")).toEqual([{ kind: "clipboard", payload: { text: "lo" } }]);
     expect(keysFromField("", "привет")).toEqual([

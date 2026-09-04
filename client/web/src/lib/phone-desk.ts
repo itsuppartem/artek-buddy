@@ -124,6 +124,11 @@ export function keysFromField(prev: string, next: string): DeskInput[] {
   return [{ kind: "clipboard", payload: { text: next } }];
 }
 
+export function remoteClipboardInput(text: string): DeskInput | null {
+  if (!text) return null;
+  return { kind: "clipboard", payload: { text } };
+}
+
 export const EXTRA_KEYS = [
   { label: "Esc", key: "Escape" },
   { label: "Tab", key: "Tab" },
