@@ -43,21 +43,55 @@ class UpstreamMixin:
         try:
             conn.request(self.command, path, body=body or None, headers=headers)
             resp = conn.getresponse()
+            body_expected = self.command != "HEAD" and resp.status not in {204, 304}
+            content_length = (
+                resp.getheader("Content-Length") if body_expected and not resp.chunked else None
+            )
+            chunked = body_expected and content_length is None
             self.send_response(resp.status)
-            skip = {"transfer-encoding", "connection", "keep-alive", "content-length"}
+            connection_headers = {
+                item.strip().lower()
+                for value in (resp.headers.get_all("Connection") or [])
+                for item in value.split(",")
+            }
+            skip = {
+                "connection",
+                "content-length",
+                "keep-alive",
+                "proxy-authenticate",
+                "proxy-authorization",
+                "te",
+                "trailer",
+                "transfer-encoding",
+                "upgrade",
+                *connection_headers,
+            }
             for key, value in resp.getheaders():
                 if key.lower() in skip:
                     continue
                 self.send_header(key, value)
+            if content_length is not None:
+                self.send_header("Content-Length", content_length)
+            elif chunked:
+                self.send_header("Transfer-Encoding", "chunked")
             self.send_header("Cache-Control", "no-cache")
             self.end_headers()
-            while True:
-                chunk = resp.read1(16384) if hasattr(resp, "read1") else resp.read(16384)
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
+            if body_expected:
+                while True:
+                    chunk = resp.read1(16384) if hasattr(resp, "read1") else resp.read(16384)
+                    if not chunk:
+                        break
+                    if chunked:
+                        self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
+                        self.wfile.write(chunk)
+                        self.wfile.write(b"\r\n")
+                    else:
+                        self.wfile.write(chunk)
+                    self.wfile.flush()
+            if chunked:
+                self.wfile.write(b"0\r\n\r\n")
                 self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
             return
         finally:
             conn.close()

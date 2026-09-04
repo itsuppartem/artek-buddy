@@ -71,6 +71,7 @@ class LocalRpcMixin:
             return False
         limit = ATTACH_TOTAL_MAX * 2 if self._route() == "/local/attach-files" else LOCAL_JSON_MAX
         if length > limit:
+            self._drain_oversized_body(length=length, limit=limit)
             self.send_error(413, "payload too large")
             return False
         expected = getattr(self.server, "local_nonce", "") or ""
@@ -79,6 +80,18 @@ class LocalRpcMixin:
             self.send_error(403, "forbidden")
             return False
         return True
+
+    def _drain_oversized_body(self, *, length: int, limit: int) -> None:
+        remaining = min(length, limit + 1)
+        drained = 0
+        while remaining:
+            chunk = self.rfile.read(min(remaining, 64 * 1024))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            drained += len(chunk)
+        if drained < length:
+            self.close_connection = True
 
     def _json(self, status: int, payload: dict) -> None:
         data = json.dumps(payload).encode("utf-8")
@@ -198,6 +211,9 @@ class LocalRpcMixin:
         if not self._local_only():
             self.send_error(403)
             return
+        length = int(self.headers.get("Content-Length") or 0)
+        if length:
+            self.rfile.read(length)
         path = _proxy_mod()._config_dir() / "token"
         try:
             path.unlink()
