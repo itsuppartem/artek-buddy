@@ -196,6 +196,7 @@ class ChatToolsMixin:
         blocks: list[dict[str, Any]],
         *,
         mark_sent: bool = True,
+        terminal: bool = False,
     ) -> dict[str, Any]:
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if self.runtime.store is None or not bot_id:
@@ -206,7 +207,7 @@ class ChatToolsMixin:
         try:
             msg = self.runtime.store.append_bot_message(bot, blocks, run_id=run_id)
             if mark_sent:
-                self.runtime.mark_message_sent(run_id)
+                self.runtime.mark_message_sent(run_id, terminal=terminal)
             if self.runtime.events is not None:
                 event = ProductEvent(
                     id=new_id("evt"),
@@ -256,10 +257,15 @@ class ChatToolsMixin:
         }
 
     def _exec_send_message(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
+        if "terminal" not in args or not isinstance(args["terminal"], bool):
+            return {"ok": False, "error": "terminal is required and must be a boolean"}
+        terminal = args["terminal"]
         text = str(args.get("text") or args.get("message") or "").strip()
         if not text:
             return {"ok": False, "error": "text is required"}
         raw_options = args.get("options")
+        if terminal and isinstance(raw_options, list) and raw_options:
+            return {"ok": False, "error": "send_message with options cannot be terminal"}
         if isinstance(raw_options, list) and raw_options:
             actions = [
                 {"id": f"opt_{i + 1}", "label": str(opt)} for i, opt in enumerate(raw_options)
@@ -275,7 +281,22 @@ class ChatToolsMixin:
             ]
         else:
             blocks = [{"kind": "text", "text": text}]
-        return self._append_bot_blocks(args, bound_bot_id, blocks)
+        posted = self._append_bot_blocks(
+            args,
+            bound_bot_id,
+            blocks,
+            terminal=terminal,
+        )
+        if not posted.get("ok"):
+            return posted
+        posted["terminal"] = terminal
+        posted["owner_instruction"] = (
+            "This complete reply is already posted. Do not repeat or paraphrase it in the "
+            "turn finish; end the turn without another owner-facing answer."
+            if terminal
+            else "This was an interim update. Continue the task and provide a distinct final answer."
+        )
+        return posted
 
     def _agent_file_roots(self, bot_id: str | None) -> list[Path]:
         roots: list[Path] = []

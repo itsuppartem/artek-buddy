@@ -55,6 +55,7 @@ class RuntimeBase:
         self._owner_intent: dict[str, str] = {}
         self._bot_by_agent: dict[str, str] = {}
         self._messages_sent_in_turn: set[str] = set()
+        self._terminal_messages_sent_in_turn: set[str] = set()
         self._fresh_sessions: set[str] = set()
         self._cancelled_runs: set[str] = set()
 
@@ -298,11 +299,24 @@ class RuntimeBase:
         return None
 
     def has_sent_message_in_turn(self, run_id: str | None) -> bool:
-        return bool(run_id and run_id in self._messages_sent_in_turn)
+        if not run_id:
+            return False
+        with self._turn_lock:
+            return run_id in self._messages_sent_in_turn
 
-    def mark_message_sent(self, run_id: str | None) -> None:
-        if run_id:
+    def has_sent_terminal_message_in_turn(self, run_id: str | None) -> bool:
+        if not run_id:
+            return False
+        with self._turn_lock:
+            return run_id in self._terminal_messages_sent_in_turn
+
+    def mark_message_sent(self, run_id: str | None, *, terminal: bool = False) -> None:
+        if not run_id:
+            return
+        with self._turn_lock:
             self._messages_sent_in_turn.add(run_id)
+            if terminal:
+                self._terminal_messages_sent_in_turn.add(run_id)
 
     def clear_active_turn(self, bot_id: str | None = None, run_id: str | None = None) -> None:
         with self._turn_lock:
@@ -311,6 +325,7 @@ class RuntimeBase:
                 self._turn_roles.pop(run_id, None)
                 self._frozen_by_run.pop(run_id, None)
                 self._messages_sent_in_turn.discard(run_id)
+                self._terminal_messages_sent_in_turn.discard(run_id)
                 self._owner_intent.pop(run_id, None)
                 for agent_id, frozen in list(self._frozen_by_agent.items()):
                     if frozen.run_id == run_id:
@@ -326,6 +341,8 @@ class RuntimeBase:
                     self._active_turns.pop(key, None)
                     self._turn_roles.pop(key, None)
                     self._frozen_by_run.pop(key, None)
+                    self._messages_sent_in_turn.discard(key)
+                    self._terminal_messages_sent_in_turn.discard(key)
                     self._owner_intent.pop(key, None)
             for agent_id, frozen in list(self._frozen_by_agent.items()):
                 if frozen.bot_id == bot_id:

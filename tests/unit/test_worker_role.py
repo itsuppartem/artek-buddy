@@ -19,9 +19,28 @@ def _runtime(tmp_path) -> RuntimeBase:
     )
 
 
+def _message_tools(tmp_path):
+    runtime = _runtime(tmp_path)
+    bot = SimpleNamespace(id="bot_a")
+    appended: list[str] = []
+
+    def append_message(_bot, _blocks, run_id):
+        appended.append(run_id)
+        return SimpleNamespace(id=f"msg_{run_id}")
+
+    runtime.store = SimpleNamespace(
+        get_bot=lambda bot_id: bot if bot_id == bot.id else None,
+        append_bot_message=append_message,
+    )
+    turn = TurnContext(bot_id=bot.id, run_id="run_message", thread_id="th", role="lead")
+    runtime.freeze_turn(turn)
+    return runtime, ProductTools(runtime), bot, turn, appended
+
+
 def test_lead_cannot_use_worker_only_tools() -> None:
     tools = ProductTools(SimpleNamespace(store=None, settings=None))
-    lead = {spec.name for spec in tools.specs("lead")}
+    lead_specs = tools.specs("lead")
+    lead = {spec.name for spec in lead_specs}
     worker = {spec.name for spec in tools.specs("subagent")}
     assert "spawn_subagent" in lead
     assert "send_message" in lead
@@ -32,6 +51,79 @@ def test_lead_cannot_use_worker_only_tools() -> None:
     assert "report_progress" in worker
     assert "report_progress" not in lead
     assert "spawn_subagent" not in worker
+
+
+def test_send_message_spec_distinguishes_terminal_from_interim() -> None:
+    tools = ProductTools(SimpleNamespace(store=None, settings=None))
+    send = next(spec for spec in tools.specs("lead") if spec.name == "send_message")
+    terminal = send.input_schema["properties"]["terminal"]
+    assert terminal["type"] == "boolean"
+    assert send.input_schema["required"] == ["text", "terminal"]
+    assert "default" not in terminal
+    assert "terminal=true" in send.description
+    assert "interim" in send.description
+
+
+def test_terminal_send_message_marks_only_its_run_and_instructs_the_lead(tmp_path) -> None:
+    runtime, tools, bot, terminal, appended = _message_tools(tmp_path)
+    interim = TurnContext(bot_id=bot.id, run_id="run_interim", thread_id="th", role="lead")
+    runtime.freeze_turn(interim)
+
+    result = tools.execute(
+        "send_message",
+        {"text": "The complete answer.", "terminal": True},
+        bound_bot_id=bot.id,
+        turn=terminal,
+    )
+
+    assert result["ok"] is True
+    assert result["terminal"] is True
+    assert "Do not repeat or paraphrase" in result["owner_instruction"]
+    assert runtime.has_sent_terminal_message_in_turn(terminal.run_id) is True
+    assert runtime.has_sent_terminal_message_in_turn(interim.run_id) is False
+    assert appended == [terminal.run_id]
+    runtime.clear_active_turn(run_id=terminal.run_id)
+    assert runtime.has_sent_terminal_message_in_turn(terminal.run_id) is False
+
+
+def test_send_message_rejects_missing_or_malformed_terminal_choice(tmp_path) -> None:
+    runtime, tools, bot, turn, appended = _message_tools(tmp_path)
+
+    missing = tools.execute(
+        "send_message",
+        {"text": "A full answer without a choice."},
+        bound_bot_id=bot.id,
+        turn=turn,
+    )
+    malformed = tools.execute(
+        "send_message",
+        {"text": "A full answer with a malformed choice.", "terminal": "true"},
+        bound_bot_id=bot.id,
+        turn=turn,
+    )
+
+    assert missing == {"ok": False, "error": "terminal is required and must be a boolean"}
+    assert malformed == {"ok": False, "error": "terminal is required and must be a boolean"}
+    assert appended == []
+    assert runtime.has_sent_message_in_turn(turn.run_id) is False
+
+
+def test_send_message_rejects_terminal_owner_question(tmp_path) -> None:
+    runtime, tools, bot, turn, appended = _message_tools(tmp_path)
+
+    result = tools.execute(
+        "send_message",
+        {"text": "Which city?", "options": ["Belgrade", "Novi Sad"], "terminal": True},
+        bound_bot_id=bot.id,
+        turn=turn,
+    )
+
+    assert result == {
+        "ok": False,
+        "error": "send_message with options cannot be terminal",
+    }
+    assert appended == []
+    assert runtime.has_sent_terminal_message_in_turn(turn.run_id) is False
 
 
 def test_lead_and_worker_get_connected_app_tools() -> None:
