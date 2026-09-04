@@ -36,7 +36,7 @@ def test_plugins_pane_key_connect_docs_then_chat_answers(
 ) -> None:
     name = unique_bot("PlugWin")
     pair_fresh(page, client_url, host_url)
-    expect(page.get_by_role("button", name="Plugins")).to_be_visible()
+    expect(page.get_by_role("button", name="Library")).to_be_visible()
     open_plugins(page)
     _plugins_ready(page)
     leftover = page.get_by_test_id("plugins-remove")
@@ -269,7 +269,7 @@ def test_plugins_search_filters_without_enter(page: Page, client_url: str, host_
     page.get_by_role("button", name="Close Plugins").click()
 
 
-def test_plugins_closed_wheel_does_not_open_and_one_close(
+def test_plugins_closed_wheel_does_not_open_and_close_returns_to_library(
     page: Page, client_url: str, host_url: str
 ) -> None:
     pair_fresh(page, client_url, host_url)
@@ -289,6 +289,9 @@ def test_plugins_closed_wheel_does_not_open_and_one_close(
     expect(hatch).to_have_css("pointer-events", "auto")
     page.get_by_role("button", name="Close Plugins").click()
     expect(page.get_by_test_id("plugins-pane")).to_have_count(0)
+    expect(page.get_by_test_id("library-pane")).to_be_visible()
+    expect(hatch).to_have_attribute("data-hatch-open", "1")
+    page.get_by_role("button", name="Close Library").click()
     expect(hatch).to_have_attribute("data-hatch-open", "0")
     expect(hatch).to_have_css("pointer-events", "none")
 

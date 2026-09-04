@@ -98,5 +98,6 @@ def expect_bot_in_chats(page: Page, name: str) -> None:
 
 def ensure_model_phone(page: Page) -> None:
     open_phone_tab(page, "more")
+    expect(page.get_by_test_id("library-pane")).to_be_visible(timeout=8_000)
     ensure_model(page)
     open_phone_tab(page, "chats")

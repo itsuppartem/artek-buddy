@@ -320,6 +320,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | After pair, the credential is not visible in the page (Deb: `~/.config/artek-buddy/token` mode 600; Phone: httpOnly cookie) | [ ] | [ ] |
 | Auth error: **Pair this computer again** (Deb) / **Pair this phone again** (Phone). Click unpairs to the matching pair screen. Does not queue as an offline send | [ ] | [ ] |
 | Workspace `/v1/events` 401/403 (inbox still loads) still shows Pair again, not a quiet shell | [ ] | [ ] |
+| A host/action failure while Today is open returns to Chats so **Reconnecting to the host** / **Dismiss** is visible instead of hiding the recovery control behind Today | [ ] | [ ] |
 | Unpair returns to the pair screen. Re-pair with a new code restores the inbox | [ ] | [ ] |
 | Pairing lands on **Today**. It does **not** open Desktop or Models and does **not** boot a desktop | [ ] | [ ] |
 

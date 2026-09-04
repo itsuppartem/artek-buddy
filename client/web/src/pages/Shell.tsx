@@ -295,12 +295,6 @@ export function ShellPage() {
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ShellErrorKind>("host");
   const errorKindRef = useRef<ShellErrorKind>("host");
-  useEffect(() => {
-    if (!error || errorKind !== "auth") return;
-    setWorkspaceView("chats");
-    setPhoneTab("chat");
-    setPanel(null);
-  }, [error, errorKind]);
   const [offlineQueue, setOfflineQueue] = useState<QueuedSend[]>(() =>
     parseStoredList<QueuedSend>(window.localStorage.getItem(OFFLINE_QUEUE_KEY)),
   );
@@ -312,6 +306,12 @@ export function ShellPage() {
   const offlineCaptionsRef = useRef(offlineCaptions);
   const hostDownRef = useRef(hostDown);
   const flushingQueue = useRef(false);
+  useEffect(() => {
+    if (!error && !hostDown) return;
+    setWorkspaceView((current) => (current === "today" ? "chats" : current));
+    setPhoneTab((current) => (current === "today" ? (botId ? "chat" : "chats") : current));
+    if (errorKind === "auth") setPanel(null);
+  }, [botId, error, errorKind, hostDown]);
   offlineQueueRef.current = offlineQueue;
   offlineCaptionsRef.current = offlineCaptions;
   hostDownRef.current = hostDown;

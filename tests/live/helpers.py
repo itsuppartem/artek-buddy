@@ -86,13 +86,13 @@ def arm_page(page: Page) -> None:
 
 
 def open_computer_pane(page: Page) -> None:
-    """Memory and routines live in the side pane. Gear does not boot the desktop."""
+    """Open the desktop-only computer context pane."""
     arm_page(page)
-    memory = page.get_by_test_id("new-memory")
-    if memory.count() > 0 and memory.first.is_visible():
+    state = page.get_by_test_id("computer-state")
+    if state.count() > 0 and state.first.is_visible():
         return
     page.get_by_role("button", name="Computer").click()
-    expect(memory).to_be_visible(timeout=8_000)
+    expect(state).to_be_visible(timeout=8_000)
 
 
 def expect_cancelled_turn(page: Page) -> None:
@@ -329,9 +329,7 @@ def assert_readable_control(control) -> None:
     background = control.evaluate("el => getComputedStyle(el).backgroundColor")
     ratio = _contrast_ratio(color, background)
     if ratio < 4.5:
-        raise AssertionError(
-            f"control contrast {ratio:.2f} < 4.5 ({color} on {background})"
-        )
+        raise AssertionError(f"control contrast {ratio:.2f} < 4.5 ({color} on {background})")
 
 
 def _css_rgb(value: str) -> tuple[int, int, int]:

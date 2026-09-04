@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-from tests.live.helpers import composer, create_named_bot, open_settings, pair_fresh, unique_bot
+from tests.live.helpers import (
+    composer,
+    create_named_bot,
+    open_settings,
+    pair_fresh,
+    send_message,
+    unique_bot,
+)
 
 pytestmark = pytest.mark.live
 
@@ -235,9 +242,7 @@ def test_installed_client_runs_scripted_credential_worker_without_leaking(
     box.fill(f"REGISTRY_TOKEN={secret}")
     box.press("Enter")
     expect(page.get_by_text("••••ZZZZ")).to_be_visible(timeout=8_000)
-    box.fill("please e2e-credential-command")
-    box.press("Enter")
-    expect(page.get_by_text("Working in the background.")).to_be_visible(timeout=8_000)
+    send_message(page, "please e2e-credential-command", name)
     card = page.get_by_test_id("consent-card")
     expect(card).to_be_visible(timeout=20_000)
     page.get_by_test_id("ask-option").filter(has_text="Allow once").click()
