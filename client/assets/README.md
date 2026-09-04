@@ -1,8 +1,8 @@
 # Artek Buddy marks
 
 Original marks for the Linux `.deb` and the product window. The face is the
-owner's tricolor Cavalier (black ears, white blaze, tan eyebrows). The lying
-pose with the toy is pairing only. Toy colors stay out of chrome.
+owner's tricolor Cavalier (black ears, white blaze, tan eyebrows), redrawn in
+the navy / sky / cream product palette. The lying pose is pairing only.
 
 | File | Use |
 | --- | --- |

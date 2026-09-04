@@ -14,6 +14,7 @@ from tests.live.helpers import (
     expect_cancelled_turn,
     expect_stays_absent,
     open_chat,
+    open_settings,
     pair_fresh,
     restore_host,
     send_message,
@@ -805,6 +806,10 @@ def test_worker_progress_line_without_status_ping(
         page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_PROGRESS_LINE)
     ).to_have_count(0)
     expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+    expect(page.get_by_test_id("open-work-log")).to_have_count(1)
+    page.get_by_test_id("open-work-log").click()
+    expect(page.get_by_test_id("work-log-pane")).to_be_visible()
+    expect(page.get_by_test_id("work-log-worker")).to_be_visible()
     expect(page.get_by_test_id("thread-stop")).to_be_visible()
     expect(composer(page)).to_be_enabled()
     expect(status).to_contain_text(E2E_WORKER_PROGRESS_LINE_2, timeout=8_000)
@@ -1035,7 +1040,7 @@ def test_notify_off_mutes_replied_not_ask(page: Page, client_url: str, host_url:
     watcher = unique_bot("Hear")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, speaker)
-    page.get_by_test_id("thread-pane").get_by_role("button", name="Settings").click()
+    open_settings(page, speaker)
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     page.get_by_test_id("notify-on-finish").uncheck()
     page.get_by_label("Close settings").click()

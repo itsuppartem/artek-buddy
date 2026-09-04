@@ -12,6 +12,8 @@ from tests.live.helpers import (
     create_named_bot,
     open_chat,
     open_computer_pane,
+    open_memory,
+    open_routines,
     open_settings,
     pair_fresh,
     send_message,
@@ -32,7 +34,9 @@ def test_create_memory_routine_and_settings(
     open_computer_pane(page)
     expect(page.get_by_test_id("computer-start")).to_be_visible()
     expect(page.get_by_text("Offline • Click to start")).to_be_visible()
+    close_computer_pane(page)
 
+    open_memory(page, name)
     expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
     page.get_by_test_id("new-memory").click()
     expect(page.get_by_test_id("memory-scope-bot")).to_have_attribute("aria-pressed", "true")
@@ -71,6 +75,7 @@ def test_create_memory_routine_and_settings(
     shared.get_by_role("button", name="Remove").click()
     expect(shared).to_have_count(0)
 
+    open_routines(page, name)
     page.get_by_test_id("new-routine").click()
     page.get_by_placeholder("Name").fill("Morning")
     page.get_by_placeholder("0 9 * * *").fill("not cron")
@@ -92,7 +97,6 @@ def test_create_memory_routine_and_settings(
     page.get_by_test_id("bot-name-input").fill(renamed)
     page.get_by_role("button", name="Save").click()
     expect(bot_row(page, renamed)).to_be_visible(timeout=8_000)
-    close_computer_pane(page)
 
 
 def test_new_memory_defaults_this_bot_and_remove_is_a_verb(
@@ -101,7 +105,7 @@ def test_new_memory_defaults_this_bot_and_remove_is_a_verb(
     name = unique_bot("MemScope")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
-    open_computer_pane(page)
+    open_memory(page, name)
     page.get_by_test_id("new-memory").click()
     bot_scope = page.get_by_test_id("memory-scope-bot")
     shared_scope = page.get_by_test_id("memory-scope-shared")
@@ -128,7 +132,7 @@ def test_routine_survives_reload(page: Page, client_url: str, host_url: str) -> 
     name = unique_bot("Cron")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
-    open_computer_pane(page)
+    open_routines(page, name)
     page.get_by_test_id("new-routine").click()
     page.get_by_placeholder("Name").fill("Stay")
     page.get_by_placeholder("Prompt to send").fill("still here")
@@ -137,7 +141,7 @@ def test_routine_survives_reload(page: Page, client_url: str, host_url: str) -> 
     page.reload(wait_until="domcontentloaded")
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     open_chat(page, name)
-    open_computer_pane(page)
+    open_routines(page, name)
     expect(page.get_by_test_id("routine-row")).to_contain_text("Stay", timeout=8_000)
     page.get_by_test_id("routine-row").get_by_role("button", name="Delete").click()
     expect(page.get_by_test_id("routine-row")).to_have_count(0)
@@ -147,7 +151,7 @@ def test_routine_next_run_has_no_microseconds(page: Page, client_url: str, host_
     name = unique_bot("Next")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
-    open_computer_pane(page)
+    open_routines(page, name)
     page.get_by_test_id("new-routine").click()
     page.get_by_placeholder("Name").fill("Monday")
     page.get_by_placeholder("0 9 * * *").fill("30 9 * * 1")
@@ -167,10 +171,11 @@ def test_offline_click_to_start_is_view_only(page: Page, client_url: str, host_u
     create_named_bot(page, name, private=True)
     open_computer_pane(page)
     expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "offline")
-    page.get_by_role("button", name="Settings").last.click()
+    open_settings(page, name)
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Offline")
     page.get_by_label("Close settings").click()
+    open_computer_pane(page)
     expect(page.get_by_test_id("computer-state")).to_have_attribute("data-state", "offline")
     expect(page.get_by_text("Offline • Click to start")).to_be_visible()
     page.get_by_test_id("computer-start").click()
@@ -200,7 +205,7 @@ def test_computer_pane_start_and_close(page: Page, client_url: str, host_url: st
     )
     expect(page.get_by_label("Close computer")).to_have_count(0)
     expect(page.get_by_test_id("computer-running")).to_be_visible()
-    page.get_by_role("button", name="Settings").last.click()
+    open_settings(page, name)
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
     page.get_by_test_id("computer-stop").click()
@@ -210,8 +215,9 @@ def test_computer_pane_start_and_close(page: Page, client_url: str, host_url: st
     page.get_by_test_id("computer-restart-confirm").click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running", timeout=15_000)
     page.get_by_label("Close settings").click()
+    open_computer_pane(page)
     page.get_by_title("Close panel").click()
-    expect(page.get_by_test_id("new-memory")).to_have_count(0)
+    expect(page.get_by_test_id("computer-state")).to_have_count(0)
 
 
 def test_team_busy_shows_other_bot(page: Page, client_url: str, host_url: str) -> None:
@@ -233,14 +239,14 @@ def test_team_busy_shows_other_bot(page: Page, client_url: str, host_url: str) -
     expect(page.get_by_text(f"{alpha} is using the computer")).to_be_visible(timeout=8_000)
     expect(page.get_by_role("button", name="Take control")).to_be_disabled()
     expect(page.get_by_test_id("computer-start")).to_be_disabled()
-    page.get_by_role("button", name="Settings").last.click()
+    open_settings(page, bravo)
     expect(page.get_by_text(f"{alpha} is using this computer.")).to_be_visible()
     expect(page.get_by_test_id("computer-restart")).to_be_disabled()
     expect(page.get_by_test_id("computer-stop")).to_be_disabled()
     expect(page.get_by_test_id("computer-reset")).to_be_disabled()
 
 
-def test_computer_pane_stays_open_after_settings_release_and_create(
+def test_computer_pane_stays_open_after_release_and_create(
     page: Page,
     client_url: str,
     host_url: str,
@@ -250,11 +256,7 @@ def test_computer_pane_stays_open_after_settings_release_and_create(
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, first, private=True)
     open_computer_pane(page)
-    expect(page.get_by_test_id("new-memory")).to_be_visible()
-    page.get_by_role("button", name="Settings").last.click()
-    expect(page.get_by_text("Bot Settings")).to_be_visible()
-    page.get_by_label("Close settings").click()
-    expect(page.get_by_test_id("new-memory")).to_be_visible()
+    expect(page.get_by_test_id("computer-state")).to_be_visible()
     page.get_by_test_id("computer-start").click()
     expect(page.get_by_test_id("computer-state")).to_have_attribute(
         "data-state", "running", timeout=15_000
@@ -264,9 +266,8 @@ def test_computer_pane_stays_open_after_settings_release_and_create(
     expect(page.get_by_label("Close computer")).to_be_visible(timeout=15_000)
     page.get_by_label("Close computer").click()
     page.get_by_role("button", name="Release").click()
-    expect(page.get_by_test_id("new-memory")).to_be_visible()
+    expect(page.get_by_test_id("computer-state")).to_be_visible()
     create_named_bot(page, second, private=True)
-    expect(page.get_by_test_id("new-memory")).to_be_visible()
     expect(page.get_by_test_id("computer-label")).to_be_visible()
 
 
@@ -332,12 +333,13 @@ def test_settings_stop_shows_sleeping_on_pane(page: Page, client_url: str, host_
     )
     expect(page.get_by_label("Close computer")).to_have_count(0)
     expect(page.get_by_test_id("computer-running")).to_be_visible()
-    page.get_by_role("button", name="Settings").last.click()
+    open_settings(page, name)
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
     page.get_by_test_id("computer-stop").click()
     page.get_by_test_id("computer-stop-confirm").click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Sleeping", timeout=8_000)
     page.get_by_label("Close settings").click()
+    open_computer_pane(page)
     expect(page.get_by_test_id("computer-state")).to_have_attribute(
         "data-state", "sleeping", timeout=8_000
     )
@@ -363,7 +365,7 @@ def test_settings_stop_and_restart_confirm_before_acting(
     expect(page.get_by_test_id("computer-state")).to_have_attribute(
         "data-state", "running", timeout=15_000
     )
-    page.get_by_role("button", name="Settings").last.click()
+    open_settings(page, name)
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Running")
     page.get_by_test_id("computer-stop").click()
     expect(page.get_by_test_id("computer-stop-confirm")).to_be_visible()
@@ -608,11 +610,12 @@ def test_take_control_from_sleeping_shows_waking_until_frame(
     expect(page.get_by_test_id("computer-state")).to_have_attribute(
         "data-state", "running", timeout=15_000
     )
-    page.get_by_role("button", name="Settings").last.click()
+    open_settings(page, name)
     page.get_by_test_id("computer-stop").click()
     page.get_by_test_id("computer-stop-confirm").click()
     expect(page.get_by_test_id("computer-power-state")).to_contain_text("Sleeping", timeout=8_000)
     page.get_by_label("Close settings").click()
+    open_computer_pane(page)
     expect(page.get_by_text("Sleeping • Click to start")).to_be_visible()
     page.route("**/novnc/**", park_novnc)
     page.get_by_role("button", name="Take control").click()
@@ -666,7 +669,7 @@ def test_chat_identity_city_shows_in_memory_pane(
     first, second = f"Osijek{stem}", f"Split{stem}"
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
-    open_computer_pane(page)
+    open_memory(page, name)
     expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
     expect(page.get_by_test_id("memory-doc").filter(has_text=first)).to_have_count(0)
 
@@ -697,6 +700,6 @@ def test_hello_does_not_add_identity_city_card(
     expect(
         page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="ok")
     ).to_be_visible(timeout=8_000)
-    open_computer_pane(page)
+    open_memory(page, name)
     expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
     expect(page.get_by_test_id("memory-doc").filter(has_text=token)).to_have_count(0)

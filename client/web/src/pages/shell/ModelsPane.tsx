@@ -408,7 +408,7 @@ function ProviderRow({
                 id="models-effort-cursor"
                 data-testid="models-effort-cursor"
                 aria-label="Reasoning"
-                className="ml-2 h-9 rounded-[8px] border border-hairline bg-paper px-2 text-[13px] text-ink"
+                className="ml-2 h-9 rounded-[8px] border border-hairline bg-plate px-2 text-[13px] text-paper"
                 value={effort}
                 onChange={(event) => onEffort(event.target.value)}
               >

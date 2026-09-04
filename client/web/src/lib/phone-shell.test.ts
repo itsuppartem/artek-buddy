@@ -7,15 +7,20 @@ import {
 } from "./phone-shell";
 
 describe("phone shell tabs", () => {
-  it("opens chat after picking a bot and desk after Computer", () => {
+  it("keeps Today and More one tap away around chat and desktop", () => {
+    expect(nextPhoneTab("open-today")).toBe("today");
     expect(nextPhoneTab("select-bot")).toBe("chat");
     expect(nextPhoneTab("open-desk")).toBe("desk");
     expect(nextPhoneTab("open-chats")).toBe("chats");
     expect(nextPhoneTab("open-chat")).toBe("chat");
+    expect(nextPhoneTab("open-more")).toBe("more");
     expect(nextPhoneTab("close-desk")).toBe("chat");
     expect(phoneTabAfterPanel(null)).toBe("chat");
-    expect(phoneTabAfterPanel("models")).toBe("desk");
-    expect(phoneTabAfterPanel("plugins")).toBe("desk");
+    expect(phoneTabAfterPanel("models")).toBe("more");
+    expect(phoneTabAfterPanel("plugins")).toBe("more");
+    expect(phoneTabAfterPanel("library")).toBe("more");
+    expect(phoneTabAfterPanel("routines")).toBe("more");
+    expect(phoneTabAfterPanel("worklog")).toBe("more");
     expect(phoneTabAfterPanel("computer")).toBe("desk");
   });
 

@@ -33,12 +33,15 @@ def test_pairing_form_fields_and_rejected_url(page: Page, client_url: str) -> No
     expect(form).to_be_visible(timeout=20_000)
     expect(form.get_by_test_id("app-mark")).to_be_visible()
     expect(form.locator('img[src="/pairing-mark.png"]')).to_be_visible()
+    form.get_by_text("Pairing options", exact=True).click()
     expect(page.get_by_label("Host URL")).to_be_visible()
     expect(page.get_by_label("Pairing code")).to_be_visible()
     expect(page.get_by_label("Device name")).to_have_value("This computer")
     expect(page.get_by_role("button", name="Pair")).to_be_disabled()
     expect(form.get_by_text("Pair this computer")).to_be_visible()
-    expect(form).to_contain_text("On the Pi, create a pairing code. Type it here, then Pair.")
+    expect(form).to_contain_text(
+        "Create a one-use pairing code on the Pi. Enter it here, then choose Pair."
+    )
     expect(form).not_to_contain_text("token")
     expect(form).not_to_contain_text("mint")
     expect(page.get_by_test_id("pairing-host-command")).to_contain_text(
@@ -56,6 +59,7 @@ def test_pairing_rejects_glued_host_url(page: Page, client_url: str) -> None:
     page.goto(client_url)
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
+    form.get_by_text("Pairing options", exact=True).click()
     page.get_by_placeholder("https://host.example").fill(
         "http://127.0.0.1:8080http://127.0.0.1:8080"
     )

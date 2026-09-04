@@ -86,13 +86,13 @@ def arm_page(page: Page) -> None:
 
 
 def open_computer_pane(page: Page) -> None:
-    """Memory and routines live in the side pane. Gear does not boot the desktop."""
+    """Open the desktop-only computer context pane."""
     arm_page(page)
-    memory = page.get_by_test_id("new-memory")
-    if memory.count() > 0 and memory.first.is_visible():
+    state = page.get_by_test_id("computer-state")
+    if state.count() > 0 and state.first.is_visible():
         return
     page.get_by_role("button", name="Computer").click()
-    expect(memory).to_be_visible(timeout=8_000)
+    expect(state).to_be_visible(timeout=8_000)
 
 
 def expect_cancelled_turn(page: Page) -> None:
@@ -114,13 +114,34 @@ def expect_stays_absent(locator, timeout: int = 4_000) -> None:
 
 
 def open_chat(page: Page, name: str) -> None:
+    row = bot_row(page, name)
+    if not row.is_visible(timeout=0):
+        rail = page.get_by_test_id("workspace-rail")
+        if rail.count() and rail.is_visible(timeout=0):
+            rail.get_by_role("button", name="Chats").click()
     bot_row(page, name).click()
     expect(thread_header(page)).to_contain_text(name, timeout=8_000)
 
 
 def open_models(page: Page) -> None:
-    page.get_by_test_id("open-models").click()
+    door = page.get_by_test_id("library-open-models")
+    if not door.is_visible(timeout=0):
+        rail = page.get_by_test_id("workspace-rail")
+        if rail.count() and rail.is_visible(timeout=0):
+            rail.get_by_role("button", name="Library").click()
+    door = page.get_by_test_id("library-open-models")
+    door.click()
     expect(page.get_by_test_id("models-pane")).to_be_visible(timeout=8_000)
+
+
+def open_plugins(page: Page) -> None:
+    door = page.get_by_test_id("library-open-plugins")
+    if not door.is_visible(timeout=0):
+        rail = page.get_by_test_id("workspace-rail")
+        if rail.count() and rail.is_visible(timeout=0):
+            rail.get_by_role("button", name="Library").click()
+    page.get_by_test_id("library-open-plugins").click()
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible(timeout=8_000)
 
 
 def _picker_values(page: Page, test_id: str) -> list[str]:
@@ -132,15 +153,40 @@ def _picker_values(page: Page, test_id: str) -> list[str]:
 
 def _close_models_ready(page: Page) -> None:
     page.get_by_role("button", name="Close Models").click()
-    expect(page.get_by_test_id("open-models")).to_have_attribute(
-        "data-models-ready", "true", timeout=8_000
-    )
+    door = page.get_by_test_id("library-open-models")
+    expect(door).to_have_attribute("data-models-ready", "true", timeout=8_000)
+
+
+def _restore_context_after_model_check(
+    page: Page, context: str | None, opened_library: bool
+) -> None:
+    if context == "computer":
+        page.get_by_role("button", name="Computer").click()
+        expect(page.get_by_test_id("computer-state")).to_be_visible(timeout=8_000)
+    elif context == "memory":
+        page.get_by_test_id("library-open-memory").click()
+        expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
+    elif opened_library:
+        page.get_by_role("button", name="Close Library").click()
+        expect(page.get_by_test_id("library-pane")).to_have_count(0)
 
 
 def ensure_model(page: Page) -> None:
-    door = page.get_by_test_id("open-models")
+    door = page.get_by_test_id("library-open-models")
+    context = None
+    if page.get_by_test_id("computer-state").is_visible(timeout=0):
+        context = "computer"
+    elif page.get_by_test_id("new-memory").is_visible(timeout=0):
+        context = "memory"
+    opened_library = not door.is_visible(timeout=0)
+    if not door.is_visible(timeout=0):
+        rail = page.get_by_test_id("workspace-rail")
+        if rail.count() and rail.is_visible(timeout=0):
+            rail.get_by_role("button", name="Library").click()
+    door = page.get_by_test_id("library-open-models")
     expect(door).to_be_visible(timeout=20_000)
     if door.get_attribute("data-models-ready") == "true":
+        _restore_context_after_model_check(page, context, opened_library)
         return
     open_models(page)
     cursor_status = page.get_by_test_id("models-status-cursor")
@@ -148,6 +194,7 @@ def ensure_model(page: Page) -> None:
         using = page.get_by_test_id("models-using")
         if using.count() and (using.inner_text() or "").strip():
             _close_models_ready(page)
+            _restore_context_after_model_check(page, context, opened_library)
             return
         retry = page.get_by_test_id("models-retry-cursor")
         if retry.count() and retry.first.is_visible(timeout=0) and retry.first.is_enabled():
@@ -164,6 +211,7 @@ def ensure_model(page: Page) -> None:
             page.get_by_test_id("models-use-cursor").click()
         expect(page.get_by_test_id("models-using")).to_contain_text(chosen, timeout=8_000)
         _close_models_ready(page)
+        _restore_context_after_model_check(page, context, opened_library)
         return
     key = page.get_by_label("OpenRouter API key")
     if key.count() and key.first.is_visible(timeout=0):
@@ -171,6 +219,7 @@ def ensure_model(page: Page) -> None:
         page.get_by_test_id("models-save-openrouter").click()
     expect(page.get_by_test_id("models-using")).to_be_visible(timeout=10_000)
     _close_models_ready(page)
+    _restore_context_after_model_check(page, context, opened_library)
 
 
 def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
@@ -191,8 +240,24 @@ def send_message(page: Page, text: str, bot_name: str | None = None) -> None:
 
 def open_settings(page: Page, name: str) -> None:
     open_chat(page, name)
-    page.get_by_test_id("thread-pane").get_by_role("button", name="Settings").click()
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Library").click()
+    expect(page.get_by_test_id("library-pane")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("library-open-settings").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=8_000)
+
+
+def open_memory(page: Page, name: str) -> None:
+    open_chat(page, name)
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Library").click()
+    expect(page.get_by_test_id("library-pane")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("library-open-memory").click()
+    expect(page.get_by_role("heading", name="Memory")).to_be_visible(timeout=8_000)
+
+
+def open_routines(page: Page, name: str) -> None:
+    open_chat(page, name)
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Routines").click()
+    expect(page.get_by_role("heading", name="Routines")).to_be_visible(timeout=8_000)
 
 
 def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | None = None) -> None:
@@ -200,11 +265,14 @@ def pair_fresh(page: Page, client_url: str, host_url: str, device_name: str | No
     page.goto(client_url, timeout=20_000, wait_until="domcontentloaded")
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
+    form.get_by_text("Pairing options", exact=True).click()
     page.get_by_placeholder("https://host.example").fill(host_url)
     page.get_by_placeholder("XXXX-XXXX").fill(mint_pairing_code())
     if device_name is not None:
         page.get_by_label("Device name").fill(device_name)
     page.get_by_role("button", name="Pair").click()
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Chats").click()
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
 
 
@@ -278,6 +346,14 @@ def assert_readable_chip(chip) -> None:
     ratio = _contrast_ratio(color, background)
     if ratio < 3.0:
         raise AssertionError(f"model chip contrast {ratio:.2f} < 3 ({color} on {background})")
+
+
+def assert_readable_control(control) -> None:
+    color = control.evaluate("el => getComputedStyle(el).color")
+    background = control.evaluate("el => getComputedStyle(el).backgroundColor")
+    ratio = _contrast_ratio(color, background)
+    if ratio < 4.5:
+        raise AssertionError(f"control contrast {ratio:.2f} < 4.5 ({color} on {background})")
 
 
 def _css_rgb(value: str) -> tuple[int, int, int]:

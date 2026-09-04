@@ -113,7 +113,7 @@ export function MessageView({
           }
           return (
             <div key={index} className="flex justify-start" data-testid="progress-block">
-              <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[16px] bg-plate px-[18px] py-3 text-[15.5px] leading-[1.5] text-paper">
+              <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[14px] border border-hairline bg-plate px-[18px] py-3 text-[15px] leading-[1.5] text-paper shadow-[0_8px_24px_rgba(27,49,80,0.05)]">
                 <ChatMarkdown streaming>{block.text}</ChatMarkdown>
               </div>
             </div>
@@ -151,7 +151,7 @@ export function MessageView({
             <div key={index} className="flex flex-col items-end gap-1">
               <div
                 data-testid="user-text"
-                className="max-w-[70%] min-w-0 break-words whitespace-pre-wrap [overflow-wrap:anywhere] rounded-[16px] bg-paper px-[18px] py-3 text-[15.5px] leading-[1.45] text-ink"
+                className="max-w-[70%] min-w-0 break-words whitespace-pre-wrap [overflow-wrap:anywhere] rounded-[14px] bg-paper px-[18px] py-3 text-[15px] leading-[1.45] text-ink shadow-[0_8px_24px_rgba(27,49,80,0.08)]"
               >
                 {block.text}
               </div>
@@ -173,7 +173,7 @@ export function MessageView({
         if (block.kind === "text") {
           return (
             <div key={index} className="flex justify-start">
-              <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[16px] bg-plate px-[18px] py-3 text-[15.5px] leading-[1.5] text-paper">
+              <div className="max-w-[74%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[14px] border border-hairline bg-plate px-[18px] py-3 text-[15px] leading-[1.5] text-paper shadow-[0_8px_24px_rgba(27,49,80,0.05)]">
                 <ChatMarkdown>{block.text}</ChatMarkdown>
               </div>
             </div>
@@ -186,7 +186,7 @@ export function MessageView({
                 {block.lines.map((line) => (
                   <div key={line.k} className="flex items-baseline gap-2.5 text-[15px]">
                     <span className="text-sage">✓</span>
-                    <span className="font-semibold text-white">{line.k}</span>
+                    <span className="font-semibold text-paper">{line.k}</span>
                     <span className="text-mute">→</span>
                     <span>{line.v}</span>
                   </div>

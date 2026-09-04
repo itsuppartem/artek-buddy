@@ -1,21 +1,30 @@
-export type PhoneTab = "chats" | "chat" | "desk";
+export type PhoneTab = "today" | "chats" | "chat" | "desk" | "more";
 
 export const PHONE_BREAKPOINT_PX = 720;
 export const PHONE_LANDSCAPE_MAX_HEIGHT_PX = 480;
 export const DESKTOP_MIN_WIDTH_PX = 1280;
 
 export function nextPhoneTab(
-  action: "select-bot" | "open-chats" | "open-chat" | "open-desk" | "close-desk",
+  action:
+    | "select-bot"
+    | "open-today"
+    | "open-chats"
+    | "open-chat"
+    | "open-desk"
+    | "open-more"
+    | "close-desk",
 ): PhoneTab {
+  if (action === "open-today") return "today";
   if (action === "open-chats") return "chats";
   if (action === "open-desk") return "desk";
+  if (action === "open-more") return "more";
   return "chat";
 }
 
-const DESK_PANELS = new Set(["computer", "models", "plugins", "settings", "create"]);
-
 export function phoneTabAfterPanel(panel: string | null | undefined): PhoneTab {
-  return panel && DESK_PANELS.has(panel) ? "desk" : "chat";
+  if (panel === "computer") return "desk";
+  if (panel) return "more";
+  return "chat";
 }
 
 export function shouldUsePhoneShell(width: number, height = width): boolean {

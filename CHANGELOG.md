@@ -3,12 +3,15 @@
 ## Unreleased
 
 ### Added
+- Library / phone More now has one Appearance control: System follows the OS color scheme, while Light and Dark persist as a device-local override.
+- The paired window now opens on Today: describe an outcome, see the suggested bot, and scan decisions before active work and ready results. A workspace rail separates Today, Chats, Routines, and Library; Work log keeps worker/tool detail out of the durable conversation.
+- Library groups Connections, Models, selected-bot Memory, and profile/access. Phone More also exposes Routines. Pairing and bot marks use a redrawn navy / sky / cream Cavalier across the `.deb`, host page, PWA, and launcher icons.
 - A background worker can report a short owner-safe step. That text replaces the waiting dots in one in-flight status slot (`please e2e-worker-progress`) instead of appending chat bubbles. No worker card or native alert.
 - Owner jobs have a short client delivery ACK and a separate queued / acknowledged / terminal lifecycle. A new `.deb` claims a job before touching This PC; older clients may still return a result without ACK.
 - The Linux client can opt into SSH connection reuse with `~/.config/artek-buddy/ssh-mux`. Its private ControlMaster socket never changes `~/.ssh/config`; related small remote checks are batched into one SSH session.
 - A replaced Cursor lead session receives one bounded, redacted resume brief with known workspace, path/branch facts, constraints, and the last visible result.
-- Phone desktop overlay only: the remote screen is a pad (drag moves the pointer, tap left click, two fingers right click). Keyboard opens the phone keyboard. Chats and Chat stay as they were. The host page clears the iPhone notch (`safe-area-inset-top`) and does not leave a second empty strip under the nav.
-- The same Funnel / tailnet URL serves the window. A phone pairs with a code; the device token stays in an httpOnly cookie. Narrow screens stack Chats / Chat / Desktop (iPhone 11 Pro 375×812). iPhone Add to Home Screen plus Turn on alerts (only while that app is open — no background). This-PC files stay on the Linux `.deb`. CI splits `ui` (`.deb`) from `ui_web` / `live_web` (host page).
+- Phone desktop overlay only: the remote screen is a pad (drag moves the pointer, tap left click, two fingers right click). Keyboard opens the phone keyboard. The host page clears the iPhone notch (`safe-area-inset-top`) and does not leave a second empty strip under the nav.
+- The same Funnel / tailnet URL serves the window. A phone pairs with a code; the device token stays in an httpOnly cookie. Narrow screens use Today / Chats / Desktop / More (iPhone 11 Pro 375×812). iPhone Add to Home Screen plus Turn on alerts works only while that app is open. This-PC files stay on the Linux `.deb`. CI splits `ui` (`.deb`) from `ui_web` / `live_web`.
 - The owner can keep a published skill for this chat (`install_book` from a public URL after Allow). The stored body is the fetched markdown. The next turn sees names only; the agent calls `open_book` itself when the description matches the task. No Settings form or owner trigger.
 - Models and Plugins Save name a host error instead of staying silent. A row's model is the host default (no second Default list). Cursor exposes reasoning and Fast; Save prefers grok-4.6 extra-high fast when that id is on the list. A Plugins key already on the host at boot shows as Key saved.
 - After an app is connected, the lead and a worker already have that app's tools this turn and call them themselves. The thread shows that app's result as a card. There is no chip above Message.
@@ -18,10 +21,12 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Changed
+- Desktop inbox and context panes now have pointer- and keyboard-resizable dividers with persisted widths. Work log collapses long worker briefs into scannable rows, and its run summary is the only trigger.
+- Bot profile & access is the single visible Settings route. Desktop contains only desktop controls, and Connections / Models no longer repeat under the inbox.
 - Scripted E2E prompts live in `runtime/scripted_scenarios.py`. `ScriptedRuntime` still runs them.
 - `ARCHITECTURE.md` matches the running tree: 26 SQL migrations, host-owned `CONNECTIONS_CALLBACK_URL`, and `release.yml` as `workflow_dispatch` on `main`.
 - Owner-job claim, file, and result transport lives in `consent_jobs.py`. Ask-card Allow/Deny stays on `ConsentHub`.
-- Inbox highlight, host-page banners, and the chat list live in `pages/shell/`. `ShellPage` still composes the window.
+- Today, Work log, Library, workspace navigation, inbox highlight, host-page banners, and the chat list live in `pages/shell/`. `ShellPage` still composes the window.
 - Turn registry and bot-ask delivery are separate modules. `http.turns` still re-exports the helpers other routers import.
 - Host-page `/local/*` same-origin is scheme + host + port (default ports implied), not only `Origin` netloc vs `Host`.
 - Coverage `fail_under` is 71% (remeasured 2026-09-03). Auth, owner jail, the migration runner, and supervisor write have higher per-file floors so they cannot hide behind the blob.
@@ -35,7 +40,9 @@
 
 ### Fixed
 - Unchecking Fast on an idle chat starts a new model session immediately. A live turn still keeps going; the send after it (including a waiting follow-up) is not Fast. New bot already has that session, so the first Send does not open a second one unless Fast or Reasoning changed. Changing those during a live turn writes `This turn keeps going.` into the open chat without dropping Working.
-- A token typed in Message for a bot is stored in the private credential-broker volume, stripped from the thread, and listed in Settings by name and last four — not only GitHub and PyPI. The Linux `.deb` proxies PUT so Store works from that window. Reset and Team ↔ Private keep tokens; Forget and Delete chat remove them. A worker asks Allow once / Always before a credential-scoped command runs in one disposable, selected-home container. An unlabeled secret still needs a name in Settings. Memory and a question answer still refuse a paste.
+- Native controls, including Cursor Reasoning and its option list, now use the active theme's surface and foreground instead of an unreadable browser-white combination.
+- Every packaged hicolor size now comes from the same sky-blue Cavalier source; compact launcher and dock slots no longer select leftover black icon files.
+- A token typed in Message for a bot is stored in the private credential-broker volume, stripped from the thread, and listed in Bot profile & access by name and last four. The form starts with one arbitrary name + secret pair instead of hardcoded providers. The Linux `.deb` proxies PUT so Store works from that window. Reset and Team ↔ Private keep secrets; Forget and Delete chat remove them. A worker asks Allow once / Always before a credential-scoped command runs in one disposable, selected-home container. An unlabeled secret still needs a name in Bot profile & access. Memory and a question answer still refuse a paste.
 - Switching chats keeps a bounded in-memory snapshot of recent threads, so the column does not flash empty and Load earlier pages survive a round trip. A first visit shows Loading this chat…
 - Unsent Message text, files, and Reply stay on the chat they belong to. A slow Send in one chat does not disable Send in another; a late failure restores files on the originating chat.
 - Stop UI tests wait for a cancelled turn to settle instead of a 3s sleep. Computer pane open/close no longer swallow a missed click. Loopback unpair is a client RPC test; the window still unpairs via Pair this computer again.

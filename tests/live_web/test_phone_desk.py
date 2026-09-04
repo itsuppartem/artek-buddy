@@ -60,7 +60,7 @@ def test_host_page_desktop_overlay_is_a_phone_pad(page: Page, host_url: str) -> 
     assert wide["width"] >= 800
     page.get_by_label("Close computer").click()
     expect(page.get_by_test_id("computer-overlay")).to_have_count(0)
-    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("phone-tab-chats")).to_have_attribute("aria-current", "page")
 
 
 def _controlled_phone_overlay(page: Page, host_url: str, bot: str):

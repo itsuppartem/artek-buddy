@@ -11,10 +11,10 @@ This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packag
 | | |
 | --- | --- |
 | `main` | Release **0.10.27**. |
-| `develop` | Daily since then: window look, Models / keys, memory book, bot-to-bot, plugins, skill from the web, phone page. `VERSION` is still **0.10.27** until a bump lands on `main`. |
+| `develop` | Daily since then: task-first Today, workspace rail, Work log, Library, Models / keys, memory book, bot-to-bot, connections, phone page. `VERSION` is still **0.10.27** until a bump lands on `main`. |
 | Pad / keyboard / Cyrillic | In `develop` (phone overlay). Drag/tap must keep control until Release; the Type on the desktop field is tappable. After pad or typing, the guest picture must update within a couple of seconds. |
 | GitHub Release `.deb` | **Old.** Do not use it for this pass. |
-| Linux | Window **built from this tree** (`client/build-deb.sh`, optionally `ARTEK_BAKE_URL=1` for a local URL). Wide shell, about 1280×720, three columns. |
+| Linux | Window **built from this tree** (`client/build-deb.sh`, optionally `ARTEK_BAKE_URL=1` for a local URL). Wide shell, about 1280×720: workspace rail, optional chat rack, main surface, context pane. |
 | Phone | Home Screen on the **same host URL**. After a UI change, fully kill the icon and open it again. Viewport is iPhone 11 Pro: **375×812** CSS pixels (notch + home indicator). |
 | Host page on a computer | Same `:8080` URL in a desktop browser (mouse). Take control is the `.deb` overlay (pointer into the screen, no pad), even if the window is narrow. |
 
@@ -24,14 +24,14 @@ One demo: Linux first, then the phone. A cell with an em dash means that check d
 
 | Code | How to open | Size |
 | --- | --- | --- |
-| **Deb** | Installed Linux client from this tree, opened as the real GTK/WebKit window (not `--serve` in Chromium) | Wide. Must stay three-column, not the phone stack. |
-| **Phone** | Safari → Share → Add to Home Screen → that icon | 375×812. Bottom **Chats / Chat / Desktop**. |
+| **Deb** | Installed Linux client from this tree, opened as the real GTK/WebKit window (not `--serve` in Chromium) | Wide. Workspace rail + optional Chats rack + main surface + on-demand context. Not the phone stack. |
+| **Phone** | Safari → Share → Add to Home Screen → that icon | 375×812. Bottom **Today / Chats / Desktop / More**. |
 
 Phone Safari and the Home Screen icon do **not** share the login. Pair from the icon.
 
 ## 0. Start
 
-Host is live. **Models** already has a working Cursor row (Connected / Key saved). A model is chosen.
+Host is live. **Library → Models** already has a working Cursor row (Connected / Key saved). A model is chosen.
 
 Two clients: `.deb` on the PC and Home Screen on the phone, both on this host.
 
@@ -51,19 +51,27 @@ Mint three bots for the run. Names can differ; they must be distinct:
 
 ---
 
-## 1. Window look (not in 0.10.27)
+## 1. Today, navigation, and visual system (not in 0.10.27)
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| **New bot**, **Computer**, **Settings**, **Send**, **Stop** are words, not mystery icons | [ ] | [ ] |
+| Pairing uses the new navy / sky / cream Cavalier. The dog belongs to this palette; no old warm-card art remains | [ ] | [ ] |
+| After Pair the first surface is **Today**, not a random bot. It shows **What needs doing?** and does not boot a desktop | [ ] | [ ] |
+| Type an outcome that overlaps a bot's role. Before submit, the form names that suggested bot; submit opens the bot chat and sends exactly once | [ ] | [ ] |
+| Unknown work falls back to a pinned bot. With no bots, the action says to create one and stays disabled | [ ] | [ ] |
+| Today orders **Needs your decision** before **In progress**, then **Ready for you**. Open each card and it lands in the named chat | [ ] | [ ] |
+| Desktop rail keeps **Today / Chats / Routines / Library** visible once. Chats shows an attention count when unread work exists; there is no duplicate Settings control | [ ] | — |
+| **New bot**, **Desktop**, **Show work log**, **Bot profile & access**, **Send**, and **Stop** are words, not mystery icons | [ ] | [ ] |
 | **Send** is grey while Message is empty (no text and no files) | [ ] | [ ] |
-| **You** opens **Models**, not the bot profile | [ ] | [ ] |
-| **Plugins** opens even with an empty inbox | [ ] | [ ] |
+| Desktop **Library** groups Connections, Models, Memory, and bot profile/access without repeating shortcuts under the inbox. Phone More also exposes Routines. Connections opens with an empty inbox | [ ] | [ ] |
+| **Library / More → Appearance** defaults to System and follows Ubuntu/iOS when the OS theme changes. Light and Dark override the OS immediately, survive a full app restart, and keep every label/control readable | [ ] | [ ] |
+| Drag the divider after the inbox and the divider before the context pane. Left and right widths change, the conversation remains usable, and widths survive reload. Arrow Left / Right works when a divider is focused; double-click restores the default | [ ] | — |
+| In `please e2e-worker-progress`, the compact summary shows current state. There is exactly one **Show work log** control. Worker briefs are collapsed, scannable rows—not a full prompt wall—and detail is not duplicated as durable chat messages | [ ] | [ ] |
 | Create a bot → focus lands in the new chat | [ ] | [ ] |
-| **Settings** from the gear does **not** boot the desktop. Escape closes Settings and New bot (composer text stays; overlay Esc still drops fullscreen first) | [ ] | [ ] |
-| Settings, Memory, Routines, ask/file cards, and the overlay share the same warm tokens as pairing and the thread (ink / paper / mute / tan / sage). Not a cool gray hatch | [ ] | [ ] |
+| **Library → Bot profile & access** does **not** boot the desktop. Escape closes it and New bot (composer text stays; overlay Esc still drops fullscreen first) | [ ] | [ ] |
+| Pairing, Today, Chats, Library, Settings, Memory, Routines, ask/file cards, and the overlay share the navy / pale canvas / white plate / soft-blue / copper / sage system | [ ] | [ ] |
 
-Phone: Create / Models / Plugins open the **Desktop** tab (also in §11).
+Phone: Today is first; Chats is list + selected thread; Models / Connections live under More; Desktop is only the bot computer (also §11).
 
 ---
 
@@ -71,7 +79,8 @@ Phone: Create / Models / Plugins open the **Desktop** tab (also in §11).
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Open Models. Model names are readable (not white on white) | [ ] | [ ] |
+| Open **Library → Models** (Phone: **More → Models**). Model names are readable (not white on white) | [ ] | [ ] |
+| Cursor **Reasoning** and its opened option list have readable foreground/background contrast in System, Light, and Dark | [ ] | [ ] |
 | Save on an empty key → error under that row, not silence | [ ] | [ ] |
 | Change Reasoning (e.g. Low) — no second Save — open chat shows `Using … · Low · Fast` (if Fast is on) | [ ] | [ ] |
 | Uncheck Fast — Using line drops Fast; reopen stays off. If no reply is running, the next Send is not Fast | [ ] | [ ] |
@@ -99,7 +108,7 @@ In **Demo**:
 3. New chat / new question about the city: the answer is **Нови-Сад**, not Belgrade.
 4. «Привет» alone must not rewrite the book (`hello` on a scripted host).
 
-Computer → Memory: the **identity** chapter updated while that pane is open (no need to close and reopen); the old city is not sitting next to it. Owner place/person rows are labeled identity, not place.
+Library → Memory: the **identity** chapter updated while that pane is open (no need to close and reopen); the old city is not sitting next to it. Owner place/person rows are labeled identity, not place.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
@@ -142,12 +151,12 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 
 ---
 
-## 6. Plugins
+## 6. Connections
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Plugins → key → Save → **Key saved** + last four. Key field gone. Full key never on the page | [ ] | [ ] |
-| Wheel the thread with Plugins closed: hatch stays shut. Open Plugins, one Close, pane is gone | [ ] | [ ] |
+| Library → Connections → key → Save → **Key saved** + last four. Key field gone. Full key never on the page | [ ] | [ ] |
+| Wheel the thread with Connections closed: hatch stays shut. Open Connections, one Close returns to Library | [ ] | [ ] |
 | Search apps filters as you type (no Enter needed). Enter does **not** close the pane. Catalog scroll stays put | [ ] | [ ] |
 | Search → Connect a simple app (no browser) → Connected. No new user bubble. Composer stays empty. No chip above Message | [ ] | [ ] |
 | If Connect cannot start, a human line under the pane says what to do next (not a dead Connect and not only `could not start that connection`) | [ ] | [ ] |
@@ -163,7 +172,7 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 
 ## 7. Desktop (the most visible `develop` change)
 
-Computer pane on **Demo** (Private) or Team.
+Open **Desktop** for **Demo** (Private) or Team.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
@@ -270,15 +279,15 @@ Home Screen, phone width (375×812). Also confirm the wide Deb window does **not
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Pair title **Pair this phone**, device name Phone, **no** host URL field. Code `XXXX-XXXX` → Pair | — | [ ] |
-| Deb pair is **Pair this computer**, has a Host URL field, device name is this PC | [ ] | — |
-| Bottom **Chats / Chat / Desktop**, targets about 44px. Top notch / safe area present; **no** second empty belt under the nav | — | [ ] |
-| Inbox: chats sit between Search and Plugins / Models, not a black hole | — | [ ] |
-| Create / Models / Plugins open the Desktop tab | — | [ ] |
-| Close on Computer / Models / Plugins, the Desktop pane, and overlay ✕ → **Chat** tab with the thread (blank Desktop is a fail) | — | [ ] |
-| Share → Add to Home Screen: hint at the **top**, not over Models / nav. Got it hides it | — | [ ] |
+| Pair title **Pair this phone**, code `XXXX-XXXX` → Pair. Pairing options contains device name Phone; **no** host URL field | — | [ ] |
+| Deb pair is **Pair this computer**. Pairing options contains Host URL and this PC's device name | [ ] | — |
+| After Pair, **Today** is visible. Bottom **Today / Chats / Desktop / More**, targets at least 44px. Top notch / safe area present; **no** second empty belt under the nav | — | [ ] |
+| Chats shows the inbox between Search and the bottom nav. Tap a bot for the thread; Chats remains selected and Back returns to the list | — | [ ] |
+| More opens Library. Models and Connections open there and Close returns to Library / More | — | [ ] |
+| Desktop opens only the bot computer. Close on Desktop or overlay ✕ returns to the selected thread under Chats (blank Desktop is a fail) | — | [ ] |
+| Share → Add to Home Screen: hint at the **top**, not over Today / More / nav. Got it hides it | — | [ ] |
 | Turn on alerts — only from the home-screen icon, and only while the app is open. No background | — | [ ] |
-| Wide window (Deb 1280×720) stays three-column, not «phone» | [ ] | — |
+| Wide window (Deb 1280×720) keeps the workspace rail and desktop layout, not «phone» | [ ] | — |
 
 ---
 
@@ -298,7 +307,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | iOS Done check **dismisses** the keyboard. Tap on the desk does not | — | [ ] |
 | Russian layout types into the guest field (address bar / input). Latin still works | — | [ ] |
 | After pad drag or typing, the guest picture updates within a couple of seconds (a freeze over ~5s is a fail) | — | [ ] |
-| Overlay ✕ works on the first tap → Chat | — | [ ] |
+| Overlay ✕ works on the first tap → the selected chat under Chats | — | [ ] |
 
 ---
 
@@ -307,12 +316,13 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Fresh pair with a 15-minute one-use code works. A second use of the same code fails under the form | [ ] | [ ] |
-| Pairing body: create a code on the Pi, type it here, Pair. Phone has **no** token / mint / `python -m`. Deb shows `docker exec artek-buddy python -m artek_buddy pair` | [ ] | [ ] |
+| Pairing body says to create a one-use code on the Pi and choose Pair. **Pairing options** reveals Host URL only on Deb and device name on both surfaces. Phone has no token / mint / `python -m`; Deb shows `docker exec artek-buddy python -m artek_buddy pair` | [ ] | [ ] |
 | After pair, the credential is not visible in the page (Deb: `~/.config/artek-buddy/token` mode 600; Phone: httpOnly cookie) | [ ] | [ ] |
 | Auth error: **Pair this computer again** (Deb) / **Pair this phone again** (Phone). Click unpairs to the matching pair screen. Does not queue as an offline send | [ ] | [ ] |
 | Workspace `/v1/events` 401/403 (inbox still loads) still shows Pair again, not a quiet shell | [ ] | [ ] |
+| A host/action failure while Today is open returns to Chats so **Reconnecting to the host** / **Dismiss** is visible instead of hiding the recovery control behind Today | [ ] | [ ] |
 | Unpair returns to the pair screen. Re-pair with a new code restores the inbox | [ ] | [ ] |
-| Pairing does **not** open the computer pane or Models and does **not** boot a desktop | [ ] | [ ] |
+| Pairing lands on **Today**. It does **not** open Desktop or Models and does **not** boot a desktop | [ ] | [ ] |
 
 ---
 
@@ -324,7 +334,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Click a row opens **that** chat on the first click (not the previous one). After Research, one click Lead → header and composer are Lead. Same after a third bot. Unsent Message text stays on the chat it was typed in | [ ] | [ ] |
 | Switching chats does not blank the thread or jump inbox order under the pointer. A recently opened chat paints immediately even if the snapshot GET is still in flight. A first visit (or one evicted from the three-chat cache) shows **Loading this chat…** under that header, not an empty column | [ ] | [ ] |
 | Opening a chat in the focused window marks it read. Looking at or dismissing an OS notification does **not**. A reply while that chat is focused on screen does not leave the unread pin | [ ] | [ ] |
-| Unread pin is a tan circle named Unread (not a hidden 7px square). The name is bold | [ ] | [ ] |
+| Unread pin is a visible blue circle named Unread (not a hidden 7px square). The name is bold | [ ] | [ ] |
 | Right-click (Deb) / long-press if offered (Phone): Pin / Unpin, Mark as unread (sticks until you leave and open again), Edit profile, Duplicate, Archive, Delete | [ ] | [ ] |
 | Empty inbox: Restore from Archived, or create a first bot | [ ] | [ ] |
 | Create: Name (inbox), Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team / Private. Focusing Name does not mint a bot; only Create does. Escape closes New bot the same as × | [ ] | [ ] |
@@ -347,6 +357,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | `please e2e-blocked-browser`: Ask card visibly waits. An option or free-text answer stays on the card and continues the **same run**, without a second user bubble. A second answer is rejected without breaking the thread | [ ] | [ ] |
 | `please e2e-send-terminal`: one complete answer after reload — no paraphrased second bubble, Stop, or typing dots. `please e2e-send-then-answer`: an interim teaser then a distinct final answer, both in order after reload. `please e2e-send-then-repeat` stays one bubble | [ ] | [ ] |
 | Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks **on this window**. The other paired device still sees a card | [ ] | [ ] |
+| Header shows bot identity plus **Computer** only. Work summary names decision / working / complete / failed and owns the single **Show work log** action without covering the transcript or composer | [ ] | [ ] |
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
@@ -407,7 +418,7 @@ rebuilt client. This stays in the long walk because it needs a real owner alias.
 
 ## 19. Memory pane (beyond the book in §3)
 
-Computer → Memory.
+Library → select a bot → Memory.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
@@ -418,7 +429,7 @@ Computer → Memory.
 
 ## 20. Routines
 
-Computer → Routines.
+Workspace rail → Routines. Phone: More → Routines.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
@@ -433,14 +444,14 @@ Computer → Routines.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Settings: Name, Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team \| Private, notifyOnFinish, Restart… / Stop… / Reset… (each confirms), Delete. Escape closes Settings the same as Close | [ ] | [ ] |
-| Tokens: GitHub, PyPI, or **Another token** (name + secret) for **this bot**. Store then `••••` + last four. Copy says **host credential broker** and never re-shows the value. Another bot's Settings does not show that token. Forget empties the row. Reset / Team ↔ Private keep it. A named token in Message is stored there and stripped from the bubble | [ ] | [ ] |
+| The only visible entry is **Library → Bot profile & access** (Phone: More). No Settings button in the workspace rail, thread header, or Desktop pane. It has Name, Title, Description, Instructions, Team \| Private, notifyOnFinish, Restart… / Stop… / Reset… (each confirms), Delete | [ ] | [ ] |
+| Secrets have no hardcoded providers. Add any **Secret name** + hidden value for this bot, Store, then see `••••` + last four, Replace, Forget. Copy says **host credential broker** and never re-shows the value. Another bot does not show it. Reset / Team ↔ Private keep it. A named token in Message is stored here and stripped from the bubble | [ ] | [ ] |
 | Scripted host: send `REGISTRY_TOKEN=reg_ZZZZZZZZZZZZZZZZZZZZZZZZ`, then `please e2e-credential-command`. The lead delegates, the worker finishes, one final result lands, and neither fixture nor `env.sh` appears in thread/result/history after refresh | [ ] | [ ] |
 | With `CONSENT_AUTO=ask`, the credential command waits on Allow once / Always / Deny. The card shows command, cwd, token name/last four, never value. Deny does not run it; Allow once runs once; Always skips only later credential-command cards for this bot/device | [ ] | [ ] |
-| Replace the named token and rerun: the next execution uses the replacement. Forget then rerun: no credential command runs. Reset and Team ↔ Private preserve execution. Delete chat removes its broker metadata; another bot never sees or executes it | [ ] | [ ] |
-| Paste a secret with no name in Message → error, no user bubble. Use Settings to name it | [ ] | [ ] |
+| Replace the named secret and rerun: the next execution uses the replacement. Forget then rerun: no credential command runs. Reset and Team ↔ Private preserve execution. Delete chat removes its broker metadata; another bot never sees or executes it | [ ] | [ ] |
+| Paste a secret with no name in Message → error, no user bubble. Use Bot profile & access to name it | [ ] | [ ] |
 | Title keeps what you typed through blur / Tab and Save (the field must not empty). Save flashes Saved. Reopen Edit profile shows the same title | [ ] | [ ] |
-| Settings opened from the computer pane returns to that pane. Create / Models Close do the same if the pane was open | [ ] | [ ] |
+| Bot profile, Models, Connections, and Memory opened from Library return to Library. New bot Save returns to its chat | [ ] | [ ] |
 | Changing Team ↔ Private rebinds the desktop; the old home is **not** copied | [ ] | [ ] |
 | Settings Stop… confirms, then leaves the box **Sleeping**, not a dead Offline preview | [ ] | [ ] |
 | Reset wipes that home. Team Reset wipes the shared desktop for every Team bot. Team Reset stays disabled while another bot holds the box | [ ] | [ ] |
@@ -450,7 +461,7 @@ Computer → Routines.
 
 ## 22. Files on the sandbox desktop
 
-The computer pane is screen, memory, and routines — not a second file list.
+The computer pane is only the screen and its control state—not Settings, Memory, Routines, or a second file list.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
@@ -463,7 +474,7 @@ The computer pane is screen, memory, and routines — not a second file list.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Show Applications lists **Artek Buddy** with the packaged mark. After launch, the dock shows that mark and name, not `artek_buddy.py` or a generic gear | [ ] | — |
+| Show Applications lists **Artek Buddy** with the sky-blue Cavalier mark. The launcher, dock, window, tray, and notifications do not fall back to the old black icon at compact sizes | [ ] | — |
 | The installed client shows an **Artek Buddy** tray icon. Its menu **Open Artek Buddy** presents the window; **Quit** exits | [ ] | — |
 | Close the window with ×: it hides to the tray and keeps running. Start it again only if the desktop has no indicator support and close therefore exits | [ ] | — |
 | Click the Artek Buddy launcher three times: GTK3 presents one existing window / tray process. It does not create three hidden clients or three subscriptions | [ ] | — |
@@ -484,9 +495,9 @@ The computer pane is screen, memory, and routines — not a second file list.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Deb ~1280×720: rack + thread + hatch. Not the phone nav | [ ] | — |
+| Deb ~1280×720: workspace rail, Today or Chats rack + thread, and an on-demand context pane. Not the phone nav | [ ] | — |
 | Phone 375×812: one column + bottom nav. Safe-area top and bottom. No double spacer under the nav | — | [ ] |
-| If you stretch a phone browser past ~720px it becomes the three-column shell (Safari, not the icon) | — | [ ] |
+| If you stretch a phone browser past ~720px it becomes the wide workspace shell (Safari, not the icon) | — | [ ] |
 
 ---
 
@@ -557,20 +568,21 @@ Product issue: #229.
 
 ---
 
-## 29. Phone Computer must not blank the chat
+## 29. Phone context must return somewhere meaningful
 
-This is the hole we hit on the 375×812 pass (#226). Deb is three-column; it does not use this tab.
+Deb is multi-column; it does not use this phone transition.
 
 From **inside a chat** on Phone:
 
 | Check | Deb | Phone |
 | --- | :---: | :---: |
-| Computer (thread header) or Desktop tab opens the computer pane. The chat is still there if you go back | — | [ ] |
-| Close on the computer pane → **Chat** tab, thread visible, not a black / empty Desktop | — | [ ] |
-| Overlay ✕ on Models / Plugins / Create → **Chat** tab with the thread, not a blank Desktop | — | [ ] |
-| Open Computer, Close, open again — pane comes back, no stuck empty shell | — | [ ] |
+| Desktop (thread header or nav) opens the computer. The selected chat is still there after Close | — | [ ] |
+| Close on Desktop or its overlay → **Chats** selected, thread visible, not a black / empty Desktop | — | [ ] |
+| More → Models / Connections → Close returns to **Library / More**, not a blank context | — | [ ] |
+| New bot Save opens the new chat. Cancel returns to the previous meaningful context | — | [ ] |
+| Open Desktop, Close, open again — pane comes back, no stuck empty shell | — | [ ] |
 
-`nextPhoneTab("close-desk")` is already `chat`. Scripted: `test_phone_computer_open_close_returns_to_chat` and `test_phone_models_plugins_close_returns_to_chat`.
+Scripted: `test_phone_computer_open_close_returns_to_chat` and `test_phone_models_plugins_close_returns_to_more`.
 
 ---
 
@@ -601,27 +613,28 @@ Out of this pass: collaboration (#154–#169) and research tickets (#98, #100).
 
 If time is short, in this order:
 
-1. **§2 Models**
-2. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated). Click a long Remembered line → that Memory card. Same rule thrice / worker remember → one Remembered line or none from the worker. `please e2e-remember-git-approval` stays one card; `please e2e-remember-git-free` revises it
-3. **§4 Skill from the web**
-4. **§5 Bot asks bot**
-5. **§6 Plugins** (pane Connect or chat attach; no chip; the bot uses the app). `please e2e-connect-mail` / GitHub **Open to connect** opens the owner browser
-6. **§7 Desktop** + **§7a Hands on the guest** (Release keeps the picture; Sleeping → Take control shows Waking the desktop…)
-7. **§11 Phone chrome** + **§29 Computer must not blank**
-8. **§12 Pad and Cyrillic**
-9. **§25 File + §26 Picture + §27 Ctrl+V**
-10. **§28 Save feedback**
-11. **§10 workers** `please e2e-background-worker-chat` then status; the acknowledgement is immediate and does not start a second plan; Message stays usable; one final result. `please e2e-worker-progress`: **Still working:** in the waiting slot, not a chat bubble, and no worker card. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
-12. **§1 / §21 Escape** on Settings and New bot. **§21 Tokens**: Store a named token last four on one bot; the other bot is empty; Message strips the value; `please e2e-credential-command` delegates, asks consent when `CONSENT_AUTO=ask`, and returns no plaintext. Replace changes the next execution; Forget blocks it; Reset / Team ↔ Private preserve it
-13. **§14 Inbox** Search empty + one click opens that row. Switch A↔B keeps messages (no empty flash); a first/uncached visit shows Loading this chat…
-14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Plugin **Open to connect** is the same kind of link. `please e2e-send-terminal`: one complete answer, no paraphrased second bubble. `please e2e-send-then-answer`: teaser then the spec, both stay. Stop / typing dots clear and Message is usable. Unsent draft stays on that chat after a switch
-15. **§8 / §15 Dismiss** on needs-you keeps the current chat. Park while this chat is open, then switch — still «needs you»
-16. **§9 Queue** pending mark, then local Sent while offline
-17. **§15 Stop** on a live turn shows Stopped. A late complete does not land
-18. **§15 dead wait** after 60+ minutes idle, the first live Send completes without a red line; scripted `please e2e-dead-wait` completes on that send and `please e2e-dead-wait-stuck` still shows one terminal error
-19. **§23 Notifications** launch three times → one client; unfocused, minimized, or hidden `please e2e-slow` → one Artek Buddy row, and opening that chat withdraws it
+1. **§1 Today + rail + resizable panes + Library + System/Light/Dark + compact Work log**. Switch the OS theme once; on a scripted host use `please e2e-worker-progress`
+2. **§2 Models**
+3. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated). Click a long Remembered line → that Memory card. Same rule thrice / worker remember → one Remembered line or none from the worker. `please e2e-remember-git-approval` stays one card; `please e2e-remember-git-free` revises it
+4. **§4 Skill from the web**
+5. **§5 Bot asks bot**
+6. **§6 Connections** (pane Connect or chat attach; no chip; the bot uses the app). `please e2e-connect-mail` / GitHub **Open to connect** opens the owner browser
+7. **§7 Desktop** + **§7a Hands on the guest** (Release keeps the picture; Sleeping → Take control shows Waking the desktop…)
+8. **§11 Phone chrome** + **§29 meaningful context return**
+9. **§12 Pad and Cyrillic**
+10. **§25 File + §26 Picture + §27 Ctrl+V**
+11. **§28 Save feedback**
+12. **§10 workers** `please e2e-background-worker-chat` then status; the acknowledgement is immediate and does not start a second plan; Message stays usable; one final result. `please e2e-worker-progress`: **Still working:** in the waiting slot and Work log, not a durable chat bubble, and no worker card. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
+13. **§1 / §21 Escape** on Bot profile & access and New bot. **§21 Secrets**: Store an arbitrary named secret with last four on one bot; the other bot is empty; Message strips the value; `please e2e-credential-command` delegates, asks consent when `CONSENT_AUTO=ask`, and returns no plaintext. Replace changes the next execution; Forget blocks it; Reset / Team ↔ Private preserve it
+14. **§14 Inbox** Search empty + one click opens that row. Switch A↔B keeps messages (no empty flash); a first/uncached visit shows Loading this chat…
+15. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Connection **Open to connect** is the same kind of link. `please e2e-send-terminal`: one complete answer, no paraphrased second bubble. `please e2e-send-then-answer`: teaser then the spec, both stay. Stop / typing dots clear and Message is usable. Unsent draft stays on that chat after a switch
+16. **§8 / §15 Dismiss** on needs-you keeps the current chat. Park while this chat is open, then switch — still «needs you»
+17. **§9 Queue** pending mark, then local Sent while offline
+18. **§15 Stop** on a live turn shows Stopped. A late complete does not land
+19. **§15 dead wait** after 60+ minutes idle, the first live Send completes without a red line; scripted `please e2e-dead-wait` completes on that send and `please e2e-dead-wait-stuck` still shows one terminal error
+20. **§23 Notifications** launch three times → one client; unfocused, minimized, or hidden `please e2e-slow` → one Artek Buddy row, and opening that chat withdraws it
 
-Then **§1 Window look** (coat: Settings / Memory match pairing), 6, 8, 9, 10, 13–24, 30.
+Then the rest of §1, 6, 8, 9, 10, 13–24, 30.
 
 ---
 

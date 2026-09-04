@@ -7,6 +7,7 @@ describe("desk hatch", () => {
     expect(hatchIsOpen("plugins", false)).toBe(true);
     expect(hatchIsOpen("models", false)).toBe(true);
     expect(hatchIsOpen("create", false)).toBe(true);
+    expect(hatchIsOpen("library", false)).toBe(true);
     expect(hatchIsOpen("settings", false)).toBe(false);
     expect(hatchIsOpen("settings", true)).toBe(true);
     expect(hatchIsOpen("computer", true)).toBe(true);

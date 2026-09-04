@@ -10,7 +10,8 @@ export function formatPairingCode(value: string): string {
 /** Same Compose exec as README. Deb pairing only; the phone page has no command. */
 export const PAIRING_HOST_COMMAND = "docker exec artek-buddy python -m artek_buddy pair";
 
-export const PAIRING_BODY = "On the Pi, create a pairing code. Type it here, then Pair.";
+export const PAIRING_BODY =
+  "Create a one-use pairing code on the Pi. Enter it here, then choose Pair.";
 
 export type LocalStatus = {
   paired: boolean;

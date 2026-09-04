@@ -27,6 +27,41 @@ export function IconSearch() {
   );
 }
 
+export function IconToday() {
+  return (
+    <svg {...icon} aria-hidden="true">
+      <rect x="4" y="5" width="16" height="14" rx="2" />
+      <path d="M8 9h8M8 13h5" />
+    </svg>
+  );
+}
+
+export function IconChat() {
+  return (
+    <svg {...icon} aria-hidden="true">
+      <path d="M5 6.5h14v9H9l-4 3v-12Z" />
+    </svg>
+  );
+}
+
+export function IconRoutines() {
+  return (
+    <svg {...icon} aria-hidden="true">
+      <path d="M7 3.5v3M17 3.5v3M4.5 8.5h15v11h-15z" />
+      <path d="M8 12.5h3M13 12.5h3M8 16h3" />
+    </svg>
+  );
+}
+
+export function IconLibrary() {
+  return (
+    <svg {...icon} aria-hidden="true">
+      <path d="M5 5.5h5v13H5zM14 5.5h5v13h-5z" />
+      <path d="M7.5 9h0M16.5 9h0" />
+    </svg>
+  );
+}
+
 export function IconComputer() {
   return (
     <svg {...icon} aria-hidden="true">

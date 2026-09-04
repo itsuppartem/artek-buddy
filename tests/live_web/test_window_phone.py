@@ -26,7 +26,9 @@ def test_host_page_pairing_copy_has_no_token_or_module(page: Page, host_url: str
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
     expect(form.get_by_text("Pair this phone")).to_be_visible()
-    expect(form).to_contain_text("On the Pi, create a pairing code. Type it here, then Pair.")
+    expect(form).to_contain_text(
+        "Create a one-use pairing code on the Pi. Enter it here, then choose Pair."
+    )
     expect(form).not_to_contain_text("token")
     expect(form).not_to_contain_text("mint")
     expect(form).not_to_contain_text("python -m")
@@ -45,63 +47,79 @@ def test_host_page_pairs_and_stacks_on_iphone_11_pro(page: Page, host_url: str) 
     expect(page.get_by_test_id("thread-header")).to_contain_text(name, timeout=8_000)
     expect_bot_in_chats(page, name)
     open_phone_tab(page, "desk")
-    expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("computer-state")).to_be_visible(timeout=8_000)
+    expect(page.get_by_text("Settings", exact=True)).to_have_count(0)
+    expect(page.get_by_test_id("new-memory")).to_have_count(0)
     page.get_by_title("Close panel").click()
-    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("phone-tab-chats")).to_have_attribute("aria-current", "page")
     expect(page.get_by_test_id("thread-header")).to_contain_text(name)
 
 
 def test_host_page_home_screen_hint_leaves_models_tappable(page: Page, host_url: str) -> None:
     pair_host_page(page, host_url)
     expect(page.get_by_test_id("home-screen-hint")).to_be_visible()
-    open_phone_tab(page, "chats")
+    open_phone_tab(page, "more")
     expect(page.get_by_test_id("home-screen-hint")).to_be_visible()
-    page.get_by_test_id("open-models").click()
+    page.get_by_test_id("library-open-models").click()
     expect(page.get_by_test_id("models-pane")).to_be_visible(timeout=8_000)
+
+
+def test_phone_appearance_follows_system_and_allows_override(page: Page, host_url: str) -> None:
+    page.emulate_media(color_scheme="dark")
+    pair_host_page(page, host_url)
+    create_named_bot_phone(page, unique_bot("PhoneTheme"))
+    open_phone_tab(page, "more")
+
+    picker = page.get_by_test_id("theme-picker")
+    expect(picker.get_by_role("radio", name="System")).to_be_checked()
+    expect(page.locator("body")).to_have_css("background-color", "rgb(13, 23, 39)")
+
+    picker.get_by_text("Light", exact=True).click()
+    expect(page.locator("html")).to_have_attribute("data-theme", "light")
+    expect(page.locator("body")).to_have_css("background-color", "rgb(244, 247, 251)")
+    expect(page.get_by_test_id("phone-tab-more")).to_have_attribute("aria-current", "page")
 
 
 def test_phone_computer_open_close_returns_to_chat(page: Page, host_url: str) -> None:
     pair_host_page(page, host_url)
     name = unique_bot("DeskBack")
     create_named_bot_phone(page, name)
-    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("phone-tab-chats")).to_have_attribute("aria-current", "page")
     page.get_by_role("button", name="Computer").click()
     expect(page.get_by_test_id("phone-tab-desk")).to_have_attribute("aria-current", "page")
     expect(page.get_by_test_id("computer-state")).to_be_visible(timeout=8_000)
     page.get_by_title("Close panel").click()
-    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("phone-tab-chats")).to_have_attribute("aria-current", "page")
     expect(page.get_by_test_id("thread-header")).to_contain_text(name)
     expect(page.get_by_test_id("thread-pane")).to_be_visible()
     expect(page.get_by_test_id("computer-state")).to_have_count(0)
 
 
-def test_phone_models_plugins_close_returns_to_chat(page: Page, host_url: str) -> None:
+def test_phone_models_plugins_close_returns_to_more(page: Page, host_url: str) -> None:
     pair_host_page(page, host_url)
     name = unique_bot("HatchBack")
     create_named_bot_phone(page, name)
-    open_phone_tab(page, "chats")
-    page.get_by_test_id("open-models").click()
+    open_phone_tab(page, "more")
+    page.get_by_test_id("library-open-models").click()
     expect(page.get_by_test_id("models-pane")).to_be_visible(timeout=8_000)
-    expect(page.get_by_test_id("phone-tab-desk")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("phone-tab-more")).to_have_attribute("aria-current", "page")
     page.get_by_role("button", name="Close Models").click()
-    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
-    expect(page.get_by_test_id("thread-header")).to_contain_text(name)
+    expect(page.get_by_test_id("phone-tab-more")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("library-pane")).to_be_visible()
     expect(page.get_by_test_id("models-pane")).to_have_count(0)
 
-    open_phone_tab(page, "chats")
-    page.get_by_test_id("open-plugins").click()
+    page.get_by_test_id("library-open-plugins").click()
     expect(page.get_by_test_id("plugins-pane")).to_be_visible(timeout=8_000)
-    expect(page.get_by_test_id("phone-tab-desk")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("phone-tab-more")).to_have_attribute("aria-current", "page")
     page.get_by_role("button", name="Close Plugins").click()
-    expect(page.get_by_test_id("phone-tab-chat")).to_have_attribute("aria-current", "page")
-    expect(page.get_by_test_id("thread-header")).to_contain_text(name)
+    expect(page.get_by_test_id("phone-tab-more")).to_have_attribute("aria-current", "page")
+    expect(page.get_by_test_id("library-pane")).to_be_visible()
     expect(page.get_by_test_id("plugins-pane")).to_have_count(0)
-    expect(page.get_by_test_id("thread-pane")).to_be_visible()
 
 
 def test_host_page_auth_error_says_pair_this_phone_again(page: Page, host_url: str) -> None:
     pair_host_page(page, host_url)
-    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
     fulfill_json(page, "**/v1/**", 401, '{"detail":"invalid token"}')
     page.reload()
     card = page.get_by_test_id("auth-error")
@@ -117,7 +135,7 @@ def test_host_page_workspace_events_auth_says_pair_this_phone_again(
     page: Page, host_url: str
 ) -> None:
     pair_host_page(page, host_url)
-    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
     fulfill_json(page, "**/v1/events", 401, '{"detail":"invalid token"}')
     page.reload()
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)

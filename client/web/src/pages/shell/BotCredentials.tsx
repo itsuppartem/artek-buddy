@@ -4,11 +4,6 @@ import { storeButtonLabel, useSaveAck } from "../../lib/save-ack";
 import type { BotCredential } from "../../types";
 import { Button } from "../../ui/button";
 
-const PINNED: { provider: string; label: string }[] = [
-  { provider: "github", label: "GitHub" },
-  { provider: "pypi", label: "PyPI" },
-];
-
 function slugify(raw: string): string {
   return raw
     .trim()
@@ -21,8 +16,6 @@ function slugify(raw: string): string {
 }
 
 function labelFor(provider: string): string {
-  const pinned = PINNED.find((row) => row.provider === provider);
-  if (pinned) return pinned.label;
   return provider.replace(/-/g, " ");
 }
 
@@ -33,8 +26,6 @@ export function BotCredentials({ botId }: { botId: string }) {
     void api.bots.credentials(botId).then(setRows);
   }, [botId]);
 
-  const extras = rows.filter((item) => !PINNED.some((row) => row.provider === item.provider));
-
   function reload() {
     void api.bots.credentials(botId).then(setRows);
   }
@@ -44,24 +35,13 @@ export function BotCredentials({ botId }: { botId: string }) {
       className="mt-6 rounded-xl border border-hairline bg-ink p-3.5"
       data-testid="bot-credentials"
     >
-      <div className="text-[13.5px] text-paper">Tokens</div>
+      <div className="text-[13.5px] text-paper">Secrets</div>
       <p className="mt-2 text-[12.5px] leading-5 text-mute">
-        Saved for this bot in the host credential broker. Before a worker uses them, you approve the
-        command. It runs in a disposable container without returning the value. Reset and Team ↔
-        Private do not delete them. A token in Message is stored there and stripped from the chat.
+        Add any named secret this bot needs. The host credential broker keeps values hidden. Before
+        a worker uses one, you approve its disposable command. Reset and Team ↔ Private keep them.
       </p>
       <div className="mt-3 flex flex-col gap-3">
-        {PINNED.map((row) => (
-          <CredentialRow
-            key={row.provider}
-            botId={botId}
-            provider={row.provider}
-            label={row.label}
-            saved={rows.find((item) => item.provider === row.provider)}
-            onChange={reload}
-          />
-        ))}
-        {extras.map((item) => (
+        {rows.map((item) => (
           <CredentialRow
             key={item.provider}
             botId={botId}
@@ -105,15 +85,17 @@ function AddCredential({
 
   return (
     <div data-testid="bot-credential-add">
-      <div className="text-[12px] text-mute">Another token · this bot</div>
+      <div className="text-[12px] font-medium text-paper">Add secret</div>
       <label className="mt-1 block text-[12px] text-mute">
-        Token name
+        Secret name
         <input
           data-testid="bot-credential-add-name"
+          name="secret-name"
           type="text"
           autoComplete="off"
           value={name}
           onChange={(event) => setName(event.target.value)}
+          placeholder="e.g. Sentry auth…"
           className="mt-1 w-full rounded-lg border border-hairline bg-raised px-3 py-1.5 text-[14px] text-paper"
         />
       </label>
@@ -121,6 +103,7 @@ function AddCredential({
         Secret
         <input
           data-testid="bot-credential-add-secret"
+          name="secret-value"
           type="password"
           autoComplete="off"
           value={draft}
@@ -135,7 +118,7 @@ function AddCredential({
       ) : null}
       {taken ? (
         <p className="mt-1 text-[12.5px] text-mute">
-          That name is already stored. Use Replace on its row.
+          That name is already stored. Replace it above.
         </p>
       ) : null}
       <div className="mt-2">
@@ -193,7 +176,7 @@ function CredentialRow({
 
   return (
     <div data-testid={`bot-credential-${provider}`}>
-      <div className="text-[12px] text-mute">{label} · this bot</div>
+      <div className="text-[12px] font-medium text-paper">{label}</div>
       {saved && !replacing ? (
         <p
           className="mt-1 text-[13px] leading-5 text-sage"
@@ -204,9 +187,10 @@ function CredentialRow({
       ) : null}
       {showField ? (
         <label className="mt-1 block text-[12px] text-mute">
-          {saved ? `Replace ${label} token` : `${label} token`}
+          Replace secret
           <input
             data-testid={`bot-credential-${provider}-secret`}
+            name={`secret-${provider}`}
             type="password"
             autoComplete="off"
             value={draft}

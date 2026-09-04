@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
-from tests.live.helpers import composer, create_named_bot, open_settings, pair_fresh, unique_bot
+from tests.live.helpers import (
+    composer,
+    create_named_bot,
+    open_settings,
+    pair_fresh,
+    send_message,
+    unique_bot,
+)
 
 pytestmark = pytest.mark.live
 
@@ -136,7 +143,7 @@ def test_escape_closes_settings_and_new_bot(page: Page, client_url: str, host_ur
     expect(box).to_have_value("keep me")
 
 
-def test_settings_github_token_stays_on_that_bot(
+def test_settings_arbitrary_secret_stays_on_that_bot(
     page: Page, client_url: str, host_url: str
 ) -> None:
     from tests.support import mask_secret
@@ -151,20 +158,19 @@ def test_settings_github_token_stays_on_that_bot(
     open_settings(page, alpha)
     expect(page.get_by_test_id("bot-credentials")).to_be_visible()
     expect(page.get_by_test_id("bot-credentials")).to_contain_text("host credential broker")
-    page.get_by_test_id("bot-credential-github-secret").fill(secret)
-    expect(page.get_by_test_id("bot-credential-github-save")).to_have_text("Store")
-    page.get_by_test_id("bot-credential-github-save").click()
-    expect(page.get_by_test_id("bot-credential-github-status")).to_contain_text("••••AAAA")
+    page.get_by_test_id("bot-credential-add-name").fill("DEPLOY_KEY")
+    page.get_by_test_id("bot-credential-add-secret").fill(secret)
+    page.get_by_test_id("bot-credential-add-save").click()
+    expect(page.get_by_test_id("bot-credential-deploy-key-status")).to_contain_text("••••AAAA")
     page.get_by_label("Close settings").click()
     open_settings(page, bravo)
-    expect(page.get_by_test_id("bot-credential-github-status")).to_have_count(0)
-    expect(page.get_by_test_id("bot-credential-github-secret")).to_be_visible()
+    expect(page.get_by_test_id("bot-credential-deploy-key-status")).to_have_count(0)
+    expect(page.get_by_test_id("bot-credential-add-name")).to_be_visible()
     page.get_by_label("Close settings").click()
     open_settings(page, alpha)
-    expect(page.get_by_test_id("bot-credential-github-status")).to_contain_text("••••AAAA")
-    page.get_by_test_id("bot-credential-github-forget").click()
-    expect(page.get_by_test_id("bot-credential-github-secret")).to_be_visible()
-    expect(page.get_by_test_id("bot-credential-github-status")).to_have_count(0)
+    expect(page.get_by_test_id("bot-credential-deploy-key-status")).to_contain_text("••••AAAA")
+    page.get_by_test_id("bot-credential-deploy-key-forget").click()
+    expect(page.get_by_test_id("bot-credential-deploy-key-status")).to_have_count(0)
 
 
 def test_settings_named_token_stays_on_that_bot(page: Page, client_url: str, host_url: str) -> None:
@@ -236,9 +242,7 @@ def test_installed_client_runs_scripted_credential_worker_without_leaking(
     box.fill(f"REGISTRY_TOKEN={secret}")
     box.press("Enter")
     expect(page.get_by_text("••••ZZZZ")).to_be_visible(timeout=8_000)
-    box.fill("please e2e-credential-command")
-    box.press("Enter")
-    expect(page.get_by_text("Working in the background.")).to_be_visible(timeout=8_000)
+    send_message(page, "please e2e-credential-command", name)
     card = page.get_by_test_id("consent-card")
     expect(card).to_be_visible(timeout=20_000)
     page.get_by_test_id("ask-option").filter(has_text="Allow once").click()

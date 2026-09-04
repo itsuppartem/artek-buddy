@@ -4,6 +4,7 @@ import pytest
 from playwright.sync_api import Page, expect
 from tests.live.helpers import (
     assert_readable_chip,
+    assert_readable_control,
     composer,
     create_named_bot,
     ensure_model,
@@ -93,6 +94,7 @@ def test_models_cursor_save_sets_effort_fast_and_keeps_using(
     expect(page.get_by_test_id("models-status-cursor")).to_contain_text("Connected", timeout=8_000)
     expect(page.get_by_test_id("models-using")).to_contain_text("scripted")
     expect(page.get_by_test_id("models-effort-cursor")).to_have_value("xhigh")
+    assert_readable_control(page.get_by_test_id("models-effort-cursor"))
     expect(page.get_by_test_id("models-fast-cursor")).to_be_checked()
     chip = page.get_by_test_id("models-picker-cursor").locator("[data-model]").first
     expect(chip).to_be_visible()
