@@ -6,6 +6,7 @@ from http.cookies import CookieError, SimpleCookie
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, WebSocket
 
 from artek_buddy.auth import host_token_match
+from artek_buddy.bot_credentials import BotCredentialStore
 from artek_buddy.bus import EventHub
 from artek_buddy.computer.service import (
     ComputerBusy,
@@ -66,6 +67,13 @@ def consent() -> ConsentHub:
     if hub is None:
         raise HTTPException(status_code=503, detail="consent is not available")
     return hub
+
+
+def credentials() -> BotCredentialStore:
+    broker = getattr(current_app().state, "credential_store", None)
+    if broker is None:
+        raise HTTPException(status_code=503, detail="credential broker unavailable")
+    return broker
 
 
 COOKIE_NAME = "artek_device"

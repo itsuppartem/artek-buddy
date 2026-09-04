@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from artek_buddy.supervisor.credential_runner import (
+    credential_runner_spec,
+    resolve_credential_home,
+    run_credential_container,
+)
 from artek_buddy.supervisor.desktop_spec import desktop_create_spec, inspect_is_hardened
 from artek_buddy.supervisor.docker_engine import published_port
 from artek_buddy.supervisor.logic import (
@@ -43,6 +48,21 @@ def test_published_port_reads_host_binding() -> None:
     inspect = {"NetworkSettings": {"Ports": {"6080/tcp": [{"HostPort": "33100"}]}}}
     assert published_port(inspect, "6080") == 33100
     assert published_port({}, "6080") is None
+
+
+def test_docker_log_demux_bounds_each_stream() -> None:
+    from artek_buddy.supervisor.docker_engine import _demux_docker_streams
+
+    def frame(stream: int, body: bytes) -> bytes:
+        return bytes([stream, 0, 0, 0]) + len(body).to_bytes(4, "big") + body
+
+    stdout, stderr, truncated = _demux_docker_streams(
+        frame(1, b"abcdef") + frame(2, b"uvwxyz"),
+        4,
+    )
+    assert stdout == "abcd"
+    assert stderr == "uvwx"
+    assert truncated is True
 
 
 def test_observe_command_skips_screenshot_by_default() -> None:
@@ -138,6 +158,224 @@ def test_desktop_create_spec_capdrop_all_and_pi5_limits() -> None:
     assert hc["PortBindings"]["6081/tcp"][0]["HostIp"] == "127.0.0.1"
     assert hc["Binds"] == ["/data/homes/team-ws:/home/artek"]
     assert hc["NetworkMode"] == "artek-computers"
+
+
+def test_credential_runner_mounts_one_home_and_is_disposable() -> None:
+    spec = credential_runner_spec(
+        name="artek-credential-runner-abc",
+        image="ghcr.io/itsuppartem/artek-buddy:0.10.28",
+        home="/data/homes/team-ws",
+        home_key="team-ws",
+        cwd="project",
+        command="gh auth status && uv --version",
+        network="artek-computers",
+        injected_env={"GH_TOKEN": "fixture", "UV_PUBLISH_TOKEN": "fixture-pypi"},
+    )
+    hc = spec["HostConfig"]
+    assert spec["Image"] == "ghcr.io/itsuppartem/artek-buddy:0.10.28"
+    assert spec["Entrypoint"] == ["/usr/bin/prlimit"]
+    assert spec["Cmd"][0] == "--as=2147483648:2147483648"
+    assert spec["Cmd"][-3:] == ["/bin/sh", "-c", "gh auth status && uv --version"]
+    assert spec["WorkingDir"] == "/workspace/project"
+    assert spec["Env"] == []
+    assert spec["Cmd"][4:-3] == [
+        "HOME=/workspace",
+        "PATH=/usr/local/bin:/usr/bin:/bin",
+        "LANG=C.UTF-8",
+        "LC_ALL=C.UTF-8",
+        "GIT_TERMINAL_PROMPT=0",
+        "GH_TOKEN=fixture",
+        "UV_PUBLISH_TOKEN=fixture-pypi",
+    ]
+    assert hc["Binds"] == ["/data/homes/team-ws:/workspace"]
+    assert hc["NetworkMode"] == "artek-computers"
+    assert hc["CapDrop"] == ["ALL"]
+    assert hc["SecurityOpt"] == ["no-new-privileges:true"]
+    assert hc["ReadonlyRootfs"] is True
+    assert hc["Memory"] == 256 * 1024 * 1024
+    assert hc["NanoCpus"] == 500_000_000
+    assert hc["PidsLimit"] == 64
+    assert hc["Tmpfs"] == {"/tmp": "rw,noexec,nosuid,nodev,size=64m,mode=1777"}
+    assert hc["RestartPolicy"] == {"Name": "no"}
+    assert hc["LogConfig"] == {
+        "Type": "local",
+        "Config": {
+            "max-size": "128k",
+            "max-file": "1",
+            "compress": "false",
+        },
+    }
+    assert "PortBindings" not in hc
+    assert "credential" not in " ".join(hc["Binds"])
+
+
+def test_credential_runner_rejects_latest_and_escaping_cwd() -> None:
+    import pytest
+
+    base = {
+        "name": "artek-credential-runner-abc",
+        "home": "/data/homes/bot_a",
+        "home_key": "bot_a",
+        "command": "true",
+        "network": "artek-computers",
+        "injected_env": {},
+    }
+    with pytest.raises(ValueError, match="pinned"):
+        credential_runner_spec(image="artek-buddy:latest", cwd=".", **base)
+    with pytest.raises(ValueError, match="cwd"):
+        credential_runner_spec(image="artek-buddy:0.10.28", cwd="../other", **base)
+
+
+def test_credential_runner_creates_only_selected_unbooted_home(tmp_path) -> None:
+    home, target = resolve_credential_home(tmp_path / "data", "bot_a", ".")
+    assert home == (tmp_path / "data" / "homes" / "bot_a").resolve()
+    assert target == home
+    assert home.is_dir()
+    assert list((tmp_path / "data" / "homes").iterdir()) == [home]
+
+
+def test_credential_runner_rejects_symlink_home_alias(tmp_path) -> None:
+    import pytest
+
+    homes = tmp_path / "data" / "homes"
+    other = homes / "bot-b"
+    other.mkdir(parents=True)
+    (homes / "bot-a").symlink_to(other, target_is_directory=True)
+    with pytest.raises(ValueError, match="home"):
+        resolve_credential_home(tmp_path / "data", "bot-a", ".")
+
+
+class _CredentialRunnerEngine:
+    def __init__(self, *, finished: bool = True) -> None:
+        self.finished = finished
+        self.calls: list[str] = []
+
+    def create(self, _spec):
+        self.calls.append("create")
+        return "runner-id"
+
+    def start(self, _container_id):
+        self.calls.append("start")
+
+    def wait(self, _container_id, _timeout):
+        self.calls.append("wait")
+        return self.finished, 7 if self.finished else None
+
+    def stop(self, _container_id, timeout=0):
+        self.calls.append(f"stop:{timeout}")
+
+    def logs(self, _container_id, _max_bytes):
+        self.calls.append("logs")
+        return "token-value\n", "err token-value\n", False
+
+    def remove(self, _container_id):
+        self.calls.append("remove")
+
+
+def test_credential_runner_redacts_and_always_removes_container() -> None:
+    engine = _CredentialRunnerEngine()
+    result = run_credential_container(
+        engine,
+        {"name": "runner"},
+        timeout_seconds=5,
+        redacted_secrets=["token-value"],
+    )
+    assert result.ok is False
+    assert result.exit_code == 7
+    assert result.stdout == "[redacted]\n"
+    assert result.stderr == "err [redacted]\n"
+    assert engine.calls == ["create", "start", "wait", "logs", "remove"]
+
+
+def test_credential_runner_timeout_kills_container_before_logs_and_remove() -> None:
+    engine = _CredentialRunnerEngine(finished=False)
+    result = run_credential_container(
+        engine,
+        {"name": "runner"},
+        timeout_seconds=0.1,
+        redacted_secrets=["token-value"],
+    )
+    assert result.ok is False
+    assert result.exit_code == 124
+    assert result.timed_out is True
+    assert engine.calls == ["create", "start", "wait", "stop:0", "logs", "remove"]
+
+
+def test_supervisor_credential_endpoint_uses_distinct_token_and_creates_home(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    import json
+    import threading
+    import urllib.error
+    import urllib.request
+    from types import SimpleNamespace
+
+    import pytest
+
+    from artek_buddy.supervisor import server as supervisor_server
+
+    engine = _CredentialRunnerEngine()
+    engine.spec = None
+    engine.ensure_network = lambda _name: "artek-computers"
+    real_create = engine.create
+
+    def record_create(spec):
+        engine.spec = spec
+        return real_create(spec)
+
+    engine.create = record_create
+    state = SimpleNamespace(
+        engine=engine,
+        token="supervisor-token",
+        credential_executor_token="executor-token",
+        credential_runner_image="artek-buddy:0.10.28",
+        data_dir=tmp_path / "data",
+    )
+    monkeypatch.setattr(supervisor_server, "STATE", state)
+    server = supervisor_server.serve("127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}/credential-executions"
+    body = json.dumps(
+        {
+            "bot_id": "bot_" + ("a" * 16),
+            "home_key": "bot-home",
+            "command": "printf '%s' \"$GH_TOKEN\"",
+            "cwd": ".",
+            "timeout_seconds": 2,
+            "injected_env": {"GH_TOKEN": "token-value"},
+        }
+    ).encode()
+    try:
+        for token in ("host-token", "supervisor-token"):
+            request = urllib.request.Request(
+                url,
+                data=body,
+                headers={"Authorization": f"Bearer {token}"},
+                method="POST",
+            )
+            with pytest.raises(urllib.error.HTTPError) as caught:
+                urllib.request.urlopen(request, timeout=2)
+            assert caught.value.code == 401
+        request = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Authorization": "Bearer executor-token"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=2) as response:
+            result = json.loads(response.read())
+        assert result["stdout"] == "[redacted]\n"
+        assert result["stderr"] == "err [redacted]\n"
+        assert (tmp_path / "data" / "homes" / "bot-home").is_dir()
+        assert engine.spec["HostConfig"]["Binds"] == [
+            f"{tmp_path / 'data' / 'homes' / 'bot-home'}:/workspace"
+        ]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def test_inspect_is_hardened_rejects_unlimited_box() -> None:

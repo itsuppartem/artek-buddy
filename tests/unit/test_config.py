@@ -21,6 +21,8 @@ def test_settings_accepts_non_placeholder_token() -> None:
     settings = _settings()
     assert settings.agent_runtime == "scripted"
     assert settings.sandbox_provider == "fake"
+    assert settings.credential_broker_url == "http://127.0.0.1:8431"
+    assert settings.credential_broker_token == ""
 
 
 @pytest.mark.parametrize("value", ["", "change-me", "token", "secret", "password"])

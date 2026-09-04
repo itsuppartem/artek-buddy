@@ -144,6 +144,32 @@ class DockerEngine:
         if status not in {204, 404} and status >= 300:
             raise RuntimeError(f"docker remove failed: {status} {data}")
 
+    def wait(self, container_id: str, timeout: float) -> tuple[bool, int | None]:
+        try:
+            status, data = self.request(
+                "POST",
+                f"/containers/{quote(container_id)}/wait?condition=not-running",
+                timeout=timeout,
+            )
+        except TimeoutError:
+            return False, None
+        if status >= 300 or not isinstance(data, dict):
+            raise RuntimeError(f"docker wait failed: {status}")
+        return True, int(data.get("StatusCode") or 0)
+
+    def logs(self, container_id: str, max_bytes: int) -> tuple[str, str, bool]:
+        path = f"/containers/{quote(container_id)}/logs?stdout=1&stderr=1&timestamps=0"
+        conn = UnixHTTPConnection(self.socket_path, timeout=10)
+        try:
+            conn.request("GET", path, headers={"Content-Type": "application/json"})
+            response = conn.getresponse()
+            raw = response.read(max_bytes * 4 + 1)
+            if response.status >= 300:
+                raise RuntimeError(f"docker logs failed: {response.status}")
+        finally:
+            conn.close()
+        return _demux_docker_streams(raw, max_bytes)
+
     def put_file(self, container_id: str, path: str, data: bytes) -> None:
         parent = str(Path(path).parent)
         payload = tar_one_file(Path(path).name, data)
@@ -259,3 +285,32 @@ def _demux_docker(raw: bytes) -> str:
             offset += 8 + size
         return b"".join(chunks).decode("utf-8", errors="replace")
     return raw.decode("utf-8", errors="replace")
+
+
+def _demux_docker_streams(raw: bytes, max_bytes: int) -> tuple[str, str, bool]:
+    stdout = bytearray()
+    stderr = bytearray()
+    offset = 0
+    truncated = len(raw) > max_bytes * 4
+    while offset + 8 <= len(raw):
+        stream = raw[offset]
+        size = int.from_bytes(raw[offset + 4 : offset + 8], "big")
+        end = offset + 8 + size
+        if end > len(raw):
+            truncated = True
+            break
+        target = stderr if stream == 2 else stdout
+        room = max_bytes - len(target)
+        if room > 0:
+            target.extend(raw[offset + 8 : end][:room])
+        if size > room:
+            truncated = True
+        offset = end
+    if offset == 0 and raw:
+        stdout.extend(raw[:max_bytes])
+        truncated = truncated or len(raw) > max_bytes
+    return (
+        stdout.decode("utf-8", errors="replace"),
+        stderr.decode("utf-8", errors="replace"),
+        truncated,
+    )

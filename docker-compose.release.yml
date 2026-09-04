@@ -16,8 +16,10 @@ services:
     depends_on:
       memory:
         condition: service_healthy
+      credential-broker:
+        condition: service_healthy
       supervisor:
-        condition: service_started
+        condition: service_healthy
     environment:
       AGENT_CWD: /workspace
       AGENT_DATA_DIR: /data
@@ -28,9 +30,11 @@ services:
       SANDBOX_PROVIDER: docker
       COMPUTER_IMAGE: ${COMPUTER_IMAGE:?set COMPUTER_IMAGE}
       MEMORY_GATEWAY_URL: http://127.0.0.1:8420
+      CREDENTIAL_BROKER_URL: http://127.0.0.1:8431
+      CREDENTIAL_BROKER_TOKEN: ${CREDENTIAL_BROKER_TOKEN:-}
       LOG_FORMAT: json
     volumes:
-      # Persistent host data, including /data/credentials (bot GitHub/PyPI tokens).
+      # Bot credentials live only in the credential-data volume below.
       - ./workspace:/workspace
       - ./data:/data
     healthcheck:
@@ -50,16 +54,32 @@ services:
     <<: *host
     container_name: artek-buddy-supervisor
     environment:
-      AGENT_DATA_DIR: /data
+      # Docker resolves runner bind sources on the host, so this path must be
+      # identical inside the supervisor container and on the host.
+      AGENT_DATA_DIR: ${PWD}/data
       SUPERVISOR_HOST: 127.0.0.1
       SUPERVISOR_PORT: "7091"
       COMPUTER_IMAGE: ${COMPUTER_IMAGE:?set COMPUTER_IMAGE}
       DOCKER_SOCKET: /var/run/docker.sock
+      CREDENTIAL_EXECUTOR_TOKEN: ${CREDENTIAL_EXECUTOR_TOKEN:-}
+      CREDENTIAL_RUNNER_IMAGE: ghcr.io/itsuppartem/artek-buddy:${ARTEK_VERSION:?set ARTEK_VERSION}
       LOG_FORMAT: json
     volumes:
-      - ./data:/data
+      - ${PWD}/data:${PWD}/data
       - /var/run/docker.sock:/var/run/docker.sock
     command: ["python", "-m", "artek_buddy", "supervisor"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7091/health')",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
   worker:
     <<: *host
@@ -83,9 +103,61 @@ services:
       MEMORY_GATEWAY_HOST: 127.0.0.1
       MEMORY_GATEWAY_PORT: "8420"
       MEMORY_GATEWAY_DIR: /data/agent-memory
+      CREDENTIAL_BROKER_TOKEN: ""
+      CREDENTIAL_EXECUTOR_TOKEN: ""
     volumes:
       - ./data:/data
     command: ["python", "-m", "artek_buddy", "memory-gateway"]
+
+  credential-migrator:
+    image: ghcr.io/itsuppartem/artek-buddy:${ARTEK_VERSION:?set ARTEK_VERSION}
+    pull_policy: always
+    container_name: artek-buddy-credential-migrator
+    restart: "on-failure:3"
+    network_mode: none
+    environment:
+      LEGACY_CREDENTIAL_DIR: /legacy-credentials
+      CREDENTIAL_BROKER_DIR: /var/lib/artek-buddy/credentials
+      LOG_FORMAT: json
+    volumes:
+      - ./data/credentials:/legacy-credentials
+      - credential-data:/var/lib/artek-buddy/credentials
+    command: ["python", "-m", "artek_buddy", "credential-migrate"]
+
+  credential-broker:
+    image: ghcr.io/itsuppartem/artek-buddy:${ARTEK_VERSION:?set ARTEK_VERSION}
+    pull_policy: always
+    restart: unless-stopped
+    network_mode: host
+    container_name: artek-buddy-credential-broker
+    depends_on:
+      credential-migrator:
+        condition: service_completed_successfully
+      supervisor:
+        condition: service_healthy
+    environment:
+      AGENT_HTTP_TOKEN: ${AGENT_HTTP_TOKEN:?set AGENT_HTTP_TOKEN in .env}
+      CREDENTIAL_BROKER_TOKEN: ${CREDENTIAL_BROKER_TOKEN:-}
+      CREDENTIAL_EXECUTOR_TOKEN: ${CREDENTIAL_EXECUTOR_TOKEN:-}
+      CREDENTIAL_EXECUTOR_URL: http://127.0.0.1:7091
+      CREDENTIAL_BROKER_PORT: "8431"
+      CREDENTIAL_BROKER_DIR: /var/lib/artek-buddy/credentials
+      LOG_FORMAT: json
+    volumes:
+      - credential-data:/var/lib/artek-buddy/credentials
+    command: ["python", "-m", "artek_buddy", "credential-broker"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8431/health')",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
   memory:
     image: postgres:16-alpine
@@ -108,3 +180,4 @@ services:
 
 volumes:
   memory-data:
+  credential-data:

@@ -1611,6 +1611,11 @@ export interface components {
         };
         /** BotCredential */
         BotCredential: {
+            /**
+             * Env Name
+             * @default
+             */
+            env_name: string;
             /** Last Four */
             last_four: string;
             /** Provider */

@@ -18,6 +18,7 @@ def test_host_page_settings_github_token_last_four(page: Page, host_url: str) ->
     page.get_by_test_id("thread-pane").get_by_role("button", name="Settings").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible(timeout=8_000)
     expect(page.get_by_test_id("bot-credentials")).to_be_visible()
+    expect(page.get_by_test_id("bot-credentials")).to_contain_text("host credential broker")
     page.get_by_test_id("bot-credential-github-secret").fill(secret)
     expect(page.get_by_test_id("bot-credential-github-save")).to_have_text("Store")
     page.get_by_test_id("bot-credential-github-save").click()

@@ -459,6 +459,11 @@
       },
       "BotCredential": {
         "properties": {
+          "env_name": {
+            "default": "",
+            "title": "Env Name",
+            "type": "string"
+          },
           "last_four": {
             "title": "Last Four",
             "type": "string"

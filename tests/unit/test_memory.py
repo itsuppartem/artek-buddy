@@ -29,6 +29,8 @@ def test_wrap_turn_prompt_lead_mentions_takeover_and_slim_observe() -> None:
     assert "once per fact" in wrapped
     assert "list_apps" in wrapped
     assert "connect_app" in wrapped
+    assert "run_credential_scoped_command" in wrapped
+    assert "spawn a worker" in wrapped
 
 
 def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
@@ -46,6 +48,8 @@ def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
     assert "no text update" in lead
     assert "call send_message first" in lead
     assert "status-only ping" in lead
+    assert "~/.config/*/env.sh" in worker
+    assert "run_credential_scoped_command" in worker
 
 
 def test_wrap_turn_prompt_keeps_user_tail() -> None:

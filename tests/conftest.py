@@ -6,9 +6,11 @@ import tempfile
 from pathlib import Path
 
 # Never inherit the Pi .env / ./data / live DATABASE_URL.
+# Packaged UI/live jobs mint AGENT_HTTP_TOKEN into GITHUB_ENV for Compose; keep it.
 if os.environ.get("ARTEK_LIVE") != "1":
     _root = Path(tempfile.mkdtemp(prefix="artek-pytest-"))
-    os.environ["AGENT_HTTP_TOKEN"] = "ci-host-token-aabbccddeeff001122334455"
+    if not os.environ.get("ARTEK_CI_ENV"):
+        os.environ["AGENT_HTTP_TOKEN"] = "ci-host-token-aabbccddeeff001122334455"
     os.environ["AGENT_RUNTIME"] = "scripted"
     os.environ["SANDBOX_PROVIDER"] = "fake"
     os.environ["CONSENT_AUTO"] = "ask"

@@ -8,7 +8,8 @@ How to report a vuln: [SECURITY.md](SECURITY.md).
 ## What is trusted
 
 - The Raspberry Pi: kernel, Docker Engine, host API container, worker,
-  supervisor, Postgres, optional memory gateway.
+  supervisor, credential broker and one-shot migrator,
+  Postgres, optional memory gateway.
 - The owner’s paired Linux `.deb` (device token on that PC).
 - Cursor Cloud as the live model runtime (prompts and relevant context leave
   the Pi).
@@ -18,8 +19,8 @@ that container that can `printenv` is not a product bug ([SECURITY.md](SECURITY.
 
 ## What is not trusted
 
-- Bot desktop containers (Xvfb / Chromium / noVNC). They are the agent’s
-  environment, not the owner PC.
+- Bot desktop containers (Xvfb / Chromium / noVNC) and one-command credential
+  runners. They are agent environments, not the owner PC.
 - Model output and anything the model puts in a tool call.
 - Recalled memory text used as *instructions* (the host marks it as data).
 - Any client that can reach `:8080` without a valid bearer (LAN, Funnel, a
@@ -40,8 +41,12 @@ flowchart LR
     API["FastAPI :8080"]
     DB[(Postgres :5432 on 127.0.0.1)]
     Super["Supervisor :7091 on 127.0.0.1"]
+    Broker["Credential broker :8431 on 127.0.0.1"]
+    Creds[(credential-data volume)]
+    Homes["selected bot home"]
     Engine["Docker Engine"]
     Box["Untrusted desktop"]
+    Runner["Untrusted one-command runner"]
   end
   Cursor["Cursor Cloud"]
   Deb -->|"REST / SSE + device token"| API
@@ -49,15 +54,27 @@ flowchart LR
   API --> DB
   API -->|"prompts"| Cursor
   API -->|"loopback + supervisor token"| Super
+  API -->|"loopback + derived broker token"| Broker
+  Broker --> Creds
+  Broker -->|"one bot's mapping + executor token"| Super
   Super -->|"docker.sock"| Engine
   Engine --> Box
+  Engine --> Runner
+  Runner --> Homes
   Deb -->|"preview / takeover via the host"| Box
 ```
 
 `AGENT_HTTP_TOKEN` and `docker.sock` stay on the Pi. Pairing mints a **device
 token** for the window. The supervisor bearer is derived from the host token
 (or `SANDBOX_SUPERVISOR_TOKEN`) and is **not** interchangeable with
-`AGENT_HTTP_TOKEN`.
+`AGENT_HTTP_TOKEN`. The credential-broker bearer is independently derived
+(or `CREDENTIAL_BROKER_TOKEN`) and the raw host bearer does not authenticate
+to `:8431`. Broker-to-execution calls use another independently derived bearer
+(or `CREDENTIAL_EXECUTOR_TOKEN`) on a dedicated supervisor route; neither the
+host bearer, regular supervisor bearer, nor broker bearer authenticates that
+route. Both internal HTTP listeners bind loopback only. A trusted process that
+has `AGENT_HTTP_TOKEN` can derive these internal tokens; blank `CREDENTIAL_*`
+overrides are not a security boundary.
 
 ## Bind story (`:8080`)
 
@@ -67,9 +84,10 @@ Today the API listens on **every interface the kernel has**:
 | --- | --- |
 | Compose | `network_mode: host` |
 | Settings | `HTTP_HOST` default `0.0.0.0` (`config.py`, compose `HTTP_HOST: 0.0.0.0`) |
-| Supervisor | `SUPERVISOR_HOST=127.0.0.1`, port `7091` |
+| Supervisor | `SUPERVISOR_HOST=127.0.0.1`, port `7091`; credential execution has a distinct bearer |
 | Postgres | published `127.0.0.1:5432` |
 | Memory gateway | `127.0.0.1:8420` |
+| Credential broker | `127.0.0.1:8431`; authenticated operations only |
 | Desktop noVNC | host ports bound `127.0.0.1` (random high ports) |
 
 Tailscale is **policy**, not a bind. MagicDNS / a tailnet IP is how the owner
@@ -96,7 +114,7 @@ that file is not served.
 | Device token (`dev_…`) | Stolen `~/.config/artek-buddy/token` or the host page cookie | Owner PC / phone browser + host HTTP | CSPRNG `token_urlsafe`; files mode `600`; cookie is `HttpOnly` + `SameSite=Lax` (Secure on HTTPS); missing bearer 401, bad token 403; host token in a cookie is ignored | A leaked device token is a full API credential. Funnel makes it a public credential. The phone cookie is that token. |
 | Host-served window | Funnel visitor sees pairing + `/v1` | Host HTTP | Pairing code; cookie auth; `/local/owner-*` on the host is 403; HTML gets CSP (`frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` | The page is the API origin. CSP does not replace cookie auth. This-PC tools stay on the Linux `.deb`. iOS home-screen alerts only fire while that app is open unless we later add Web Push. |
 | Pairing code | Online guess / replay | Host HTTP | 8 chars from a 32-symbol alphabet, 15‑minute TTL, hashed at rest, 8 failures / 5 min per client | Limiter is in-memory (resets on host restart). Host token still mints codes. |
-| Supervisor token / `:7091` | Call create/exec/remove as the supervisor | Loopback HTTP | Listen `127.0.0.1`; separate derived bearer; host token must not work on `:7091`; `secrets.compare_digest` on the token | Process on the Pi that can hit loopback and the token owns Docker via the supervisor. Client 500s are a generic `supervisor error`. |
+| Supervisor tokens / `:7091` | Call create/exec/remove or dispatch credential execution | Loopback HTTP | Listen `127.0.0.1`; regular supervisor and credential-execution routes use different derived bearers; raw host and broker bearers are rejected; `secrets.compare_digest` | A trusted process with the host token can derive both. A process with either matching token reaches root-equivalent Docker orchestration exposed by that route. Client 500s are generic. |
 | `docker.sock` on the supervisor | Container breakout = root on the Pi | Unix socket mount | Only the supervisor container gets the socket; desktops do not | The supervisor **is** root-equivalent. A bug in that process is a host compromise. |
 | Untrusted desktop | Agent breakout, lateral movement, noisy neighbors | Container + `artek-computers` network | `CapDrop: ALL`; `no-new-privileges`; 1536 MiB / 1 CPU / 512 pids; tmpfs `/tmp` (`noexec`); `enable_icc=false` on create; an existing network with ICC on is deleted when unused or refused when boxes are attached; noVNC on `127.0.0.1`; capability consent in the thread | **Still root in the box.** Live browse canary (`test_browse_allow_starts_chromium`) saw no `chromium` process after Allow as uid 1000. Chromium stderr is inside the box, not compose logs. Chromium uses `--no-sandbox --disable-setuid-sandbox`. Rootfs is writable. No gVisor. Fluxbox is started from `/usr`, not a script on `/tmp`. A host that already has live boxes on a permissive `artek-computers` will not start until those boxes are stopped. |
 | Funnel / public HTTPS | Whole API on the internet | Tailscale Funnel | Documented as optional and dangerous; `/novnc` Bearer or device cookie; host HTML CSP / nosniff / no-referrer | Funnel is not “safe HTTPS for the window”. It is a public bind of `:8080`. Headers do not replace that. |
@@ -115,9 +133,9 @@ that file is not served.
 | GHCR / Release `.deb` | Supply-chain swap | GitHub + Actions | Privileged `release.yml` is not loaded via default-branch `workflow_run`. Publish is `workflow_dispatch` on `main`; the job prints `workflow_sha` / `released_sha` / `test_sha`, requires them equal, on `main`, a green push `test` on that SHA, and completed successful CodeQL checks on that SHA (`analyze (python)`, `analyze (javascript-typescript)`, and the check named `CodeQL`). Bind prints `check_run_id` and `codeql_run_id` for that SHA and refuses a missing or red `codeql` workflow run. An existing VERSION tag or GitHub Release aborts before registry login; `force` cannot skip that. Workflow `concurrency` serializes dispatch without cancel-in-progress. Host image Trivy HIGH/CRITICAL on the digest; GHCR `VERSION` / `latest` move only after `gh release create`. No `--clobber`; Releases are not pruned by the default workflow; `SHA256SUMS`; CycloneDX SBOM of the packaged `.deb` and host image; GitHub Artifact Attestations; Actions pinned by commit SHA; pip-audit / Trivy | pytest-only pip-audit ignores (not in the host image) are listed in `.github/pip-audit-ignore.txt` with a reason and expiry. Computer image is **not** built in Actions. A digest that fails Trivy is still in GHCR until GC, untagged as `latest`. Dispatch from `develop` is skipped by the job `if`. The Release tag is created at the tested `main` SHA and peeled before GHCR `VERSION` / `latest` move; `gh release create` uses `--verify-tag` so a missing tag is not taken from default `develop`. If `imagetools` fails after that Release exists, `force` cannot retry; an emergency republish is a separate GitHub Environment, not `force`. |
 | `CURSOR_API_KEY` | Leak in Actions logs or the window | Actions secret + host env | `ui` job does not get the key; workflows must not `echo` env / `docker compose config` | Live canary needs the secret. A workflow edit that prints env is a leak. |
 | Provider keys in Postgres | Stolen DB dump or a verbose log line | Host Postgres on loopback | Keys stay on the Pi; `GET /v1/models/credentials` returns last four only; connect body is not logged; `observe` redacts env `CURSOR_API_KEY` | A process that can read Postgres on the Pi owns every pasted key. Forget clears the row; an env seed recreates Cursor only when no Cursor row exists. |
-| Bot authorization tokens | Stolen file under `/data/credentials`, a chat paste, computer Reset leftover, or a log/resume line | Host API process + `/data` bind | Files are `0600` under `/data/credentials/<bot_id>/`, not `/root` and not `/data/homes`. `bot_id` is `bot_` + 16 hex, provider is a `[a-z][a-z0-9-]{0,31}` slug, then `contained_under`. HTTP returns last four only; a chat paste that is a named token or a known token shape is stored here and stripped from the thread before persist; an unlabeled secret blob is 400 until Settings names it; memory/answer/bot-ask paste is 400; Forget and bot delete unlink the files; Reset and Team ↔ Private do not; `observe` redacts stored values | A process that can read `/data` on the Pi owns those tokens. The store is plaintext files on the volume (no external vault). CodeQL `py/clear-text-storage-sensitive-data` on that write is an accepted residual. Joins go through `contained_under` (`normpath` + `startswith`); `py/path-injection` on that join is named if it still fires. Symlinks that already sit under `/data` are a residual. The local Cursor shell does not receive tokens via process-wide env (that would leak across bots). Tokens that already sat in older chat history should be rotated. |
+| Bot authorization tokens | App `/data`, Postgres, another bot, a chat paste, command output, or a log/resume line exposes a token | Loopback credential broker + dedicated `credential-data` volume + disposable runner | Only broker/migrator mount the named volume; neither mounts homes. Metadata-only APIs have no secret read operation. Server state binds bot/home; the worker supplies only command/cwd. Every command requires the credential-exec consent class (Allow once / Always / Deny). The broker sends one bot's mapping over loopback to the distinct-auth supervisor route. The supervisor creates one runner with only that resolved home, `env -i` minimal shell env, `sh -c` (not login shell), outbound `artek-computers` with ICC off, CapDrop ALL, no-new-privileges, read-only root, bounded tmpfs, Docker 256 MiB memory request plus hard 2 GiB address-space fallback, CPU/PIDs/time/output, then force-removes the whole container. Supervisor redacts injected values before returning; broker redacts every stored value again. Chat intake strips before history; Forget/delete call broker. The no-network migrator uses insert-if-missing, confirms new inserts, never overwrites a different broker value, skips symlink bot directories, removes stale legacy copies, and blocks startup after bounded retries on failure. | Broker SQLite is plaintext mode `0600` in a root-only `0700` volume (`py/clear-text-storage-sensitive-data`). Pi root/broker compromise owns it. For one approved command, plaintext crosses loopback and is transiently visible to the root-equivalent Docker daemon in create payload/container metadata and to the runner environment until forced removal. The supervisor mounts all app data itself, though each runner receives one home only. On kernels without Docker memory-controller support, the 2 GiB virtual-address ceiling is weaker than a 256 MiB cgroup RSS limit. Cwd joins remain a named residual (`py/path-injection`). The approved command is arbitrary shell (`py/command-line-injection`) and can legitimately spend, transmit, encode, print, or write its token; exact-value redaction is not an exfiltration control. A Docker/supervisor failure can delay cleanup. Tokens already in old history should be rotated. |
 | Connected-app key in Postgres | Stolen DB dump, a verbose error, or a tool result that repeats the key | Host Postgres on loopback | `GET /v1/connections/status` returns last four only; errors strip the key; logs redact a broker key if it is also in the process env; `observe` redacts env `COMPOSIO_API_KEY` | A process that can read Postgres on the Pi owns the pasted key. An env seed writes the key only when no key exists yet. Catalog names and tool text from a connected app are untrusted, same class as owner-book injection. `connect_app` can put a third-party login URL on a thread card; the owner opens it. The host sends a fixed https callback (`CONNECTIONS_CALLBACK_URL`); a caller `redirect_url` is ignored. |
-| Host logs | Token, pairing code, or home path in a log line | Host / worker / supervisor | JSON in Docker; `request_id` on HTTP, `threads.send`, and tool lines; redact bearer, env secrets, pairing, `/novnc`, `/home/<user>` | Do not log bodies or screenshots. Funnel still means a stolen token is remote. |
+| Host logs | Token, pairing code, or home path in a log line | Host / worker / supervisor / credential broker | JSON in Docker; `request_id` on HTTP, `threads.send`, and tool lines; redact bearer, configured env secrets, pairing, `/novnc`, `/home/<user>`; broker/supervisor request bodies are not logged; runner streams are bounded and exact-value redacted at supervisor and broker boundaries before product logs/results | Docker itself transiently sees runner env and unredacted output. Encoded/transformed output evades exact-value redaction. Do not log bodies or screenshots. Funnel still makes a stolen device/host token remote. |
 
 ## Open by design
 

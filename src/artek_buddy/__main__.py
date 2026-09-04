@@ -6,7 +6,11 @@ import sys
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
 
-USAGE = "usage: python -m artek_buddy pair|worker|supervisor|memory-gateway"
+USAGE = (
+    "usage: python -m artek_buddy "
+    "pair|worker|supervisor|memory-gateway|credential-broker|"
+    "credential-migrate"
+)
 
 
 def pair() -> int:
@@ -45,6 +49,14 @@ def main(argv: list[str] | None = None) -> int:
         from artek_buddy.memory_gateway import main as gateway_main
 
         return gateway_main()
+    if args == ["credential-broker"]:
+        from artek_buddy.credential_broker import main as broker_main
+
+        return broker_main()
+    if args == ["credential-migrate"]:
+        from artek_buddy.credential_broker import migration_main
+
+        return migration_main()
     print(USAGE, file=sys.stderr)
     return 2
 
