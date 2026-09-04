@@ -157,8 +157,28 @@ def _close_models_ready(page: Page) -> None:
     expect(door).to_have_attribute("data-models-ready", "true", timeout=8_000)
 
 
+def _restore_context_after_model_check(
+    page: Page, context: str | None, opened_library: bool
+) -> None:
+    if context == "computer":
+        page.get_by_role("button", name="Computer").click()
+        expect(page.get_by_test_id("computer-state")).to_be_visible(timeout=8_000)
+    elif context == "memory":
+        page.get_by_test_id("library-open-memory").click()
+        expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
+    elif opened_library:
+        page.get_by_role("button", name="Close Library").click()
+        expect(page.get_by_test_id("library-pane")).to_have_count(0)
+
+
 def ensure_model(page: Page) -> None:
     door = page.get_by_test_id("library-open-models")
+    context = None
+    if page.get_by_test_id("computer-state").is_visible(timeout=0):
+        context = "computer"
+    elif page.get_by_test_id("new-memory").is_visible(timeout=0):
+        context = "memory"
+    opened_library = not door.is_visible(timeout=0)
     if not door.is_visible(timeout=0):
         rail = page.get_by_test_id("workspace-rail")
         if rail.count() and rail.is_visible(timeout=0):
@@ -166,6 +186,7 @@ def ensure_model(page: Page) -> None:
     door = page.get_by_test_id("library-open-models")
     expect(door).to_be_visible(timeout=20_000)
     if door.get_attribute("data-models-ready") == "true":
+        _restore_context_after_model_check(page, context, opened_library)
         return
     open_models(page)
     cursor_status = page.get_by_test_id("models-status-cursor")
@@ -173,6 +194,7 @@ def ensure_model(page: Page) -> None:
         using = page.get_by_test_id("models-using")
         if using.count() and (using.inner_text() or "").strip():
             _close_models_ready(page)
+            _restore_context_after_model_check(page, context, opened_library)
             return
         retry = page.get_by_test_id("models-retry-cursor")
         if retry.count() and retry.first.is_visible(timeout=0) and retry.first.is_enabled():
@@ -189,6 +211,7 @@ def ensure_model(page: Page) -> None:
             page.get_by_test_id("models-use-cursor").click()
         expect(page.get_by_test_id("models-using")).to_contain_text(chosen, timeout=8_000)
         _close_models_ready(page)
+        _restore_context_after_model_check(page, context, opened_library)
         return
     key = page.get_by_label("OpenRouter API key")
     if key.count() and key.first.is_visible(timeout=0):
@@ -196,6 +219,7 @@ def ensure_model(page: Page) -> None:
         page.get_by_test_id("models-save-openrouter").click()
     expect(page.get_by_test_id("models-using")).to_be_visible(timeout=10_000)
     _close_models_ready(page)
+    _restore_context_after_model_check(page, context, opened_library)
 
 
 def send_message(page: Page, text: str, bot_name: str | None = None) -> None:

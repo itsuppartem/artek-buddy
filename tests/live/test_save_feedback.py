@@ -5,7 +5,7 @@ from playwright.sync_api import Page, expect
 from tests.live.helpers import (
     create_named_bot,
     fulfill_json,
-    open_computer_pane,
+    open_memory,
     open_settings,
     pair_fresh,
     unique_bot,
@@ -35,7 +35,7 @@ def test_memory_save_shows_saved(page: Page, client_url: str, host_url: str) -> 
     note = f"Keep {name}"
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, name)
-    open_computer_pane(page)
+    open_memory(page, name)
     page.get_by_test_id("new-memory").click()
     facts = page.get_by_placeholder("Facts to remember")
     facts.fill(note)
@@ -44,7 +44,7 @@ def test_memory_save_shows_saved(page: Page, client_url: str, host_url: str) -> 
     expect(page.get_by_test_id("memory-doc").filter(has_text=note)).to_be_visible(timeout=8_000)
     page.reload(wait_until="domcontentloaded")
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
-    open_computer_pane(page)
+    open_memory(page, name)
     expect(page.get_by_test_id("memory-doc").filter(has_text=note)).to_be_visible(timeout=8_000)
 
 

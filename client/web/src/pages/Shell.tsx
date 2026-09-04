@@ -309,9 +309,9 @@ export function ShellPage() {
   useEffect(() => {
     if (!error && !hostDown) return;
     setWorkspaceView((current) => (current === "today" ? "chats" : current));
-    setPhoneTab((current) => (current === "today" ? (botId ? "chat" : "chats") : current));
+    setPhoneTab((current) => (current === "today" ? "chat" : current));
     if (errorKind === "auth") setPanel(null);
-  }, [botId, error, errorKind, hostDown]);
+  }, [error, errorKind, hostDown]);
   offlineQueueRef.current = offlineQueue;
   offlineCaptionsRef.current = offlineCaptions;
   hostDownRef.current = hostDown;
