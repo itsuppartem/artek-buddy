@@ -234,6 +234,15 @@ describe("isRawRunFailedMessage", () => {
 });
 
 describe("reduceThreadSnapshot", () => {
+  it("parks the live run as soon as takeover is requested", () => {
+    const prev = snap({ run: run({ status: "running" }) });
+
+    const next = reduceThreadSnapshot(prev, event({ type: "computer.takeover.requested" }));
+
+    expect(next?.run?.status).toBe("waiting_takeover");
+    expect(next?.cursor).toBe(2);
+  });
+
   it("does not let a late complete overwrite a cancelled run", () => {
     const prev = snap({
       run: run({ status: "cancelled" }),

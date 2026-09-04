@@ -102,6 +102,17 @@ export function reduceThreadSnapshot(
       pendingAutoConsentId: autoId,
     };
   }
+  if (event.type === "computer.takeover.requested") {
+    const run = prev.run;
+    if (!run || (event.runId && run.id !== event.runId)) {
+      return { ...prev, cursor: event.seq };
+    }
+    return {
+      ...prev,
+      cursor: event.seq,
+      run: { ...run, status: "waiting_takeover" },
+    };
+  }
   if (
     event.type === "run.completed" ||
     event.type === "run.failed" ||
