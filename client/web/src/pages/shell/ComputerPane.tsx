@@ -117,7 +117,7 @@ export function ComputerPane({
       </div>
 
       <div className="group relative aspect-[16/10] w-full overflow-hidden rounded-[8px] border border-hairline bg-ink shadow-[inset_0_0_0_2px_var(--color-tan)]">
-        {!heldByOther && preview ? (
+        {!heldByOther && isRunning && preview ? (
           <>
             <iframe
               ref={previewFrameRef}

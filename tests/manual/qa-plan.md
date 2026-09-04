@@ -159,7 +159,7 @@ In **Lead**: «Спроси Research: в двух предложениях, чт
 | Wheel the thread with Connections closed: hatch stays shut. Open Connections, one Close returns to Library | [ ] | [ ] |
 | Search apps filters as you type (no Enter needed). Enter does **not** close the pane. Catalog scroll stays put | [ ] | [ ] |
 | Search → Connect a simple app (no browser) → Connected. No new user bubble. Composer stays empty. No chip above Message | [ ] | [ ] |
-| If Connect cannot start, a human line under the pane says what to do next (not a dead Connect and not only `could not start that connection`) | [ ] | [ ] |
+| If Connect cannot start, a human line under the pane says what to do next (not a dead Connect and not only `could not start that connection`). It stays visible even if the key/catalog refresh finishes just after the click | [ ] | [ ] |
 | Or chat `please e2e-connect-docs` (scripted host) / «подключи Docs» — **plugin-card**, not git setup. Still no chip | [ ] | [ ] |
 | `please e2e-connect-mail` (or GitHub from chat): **Open to connect** on the card opens the owner browser / a tab. Not the bot desktop. Right-click can Copy URL | [ ] | [ ] |
 | Ask the connected app (`please e2e-plugin-docs` / `please use Docs` on a scripted host, or a real task after GitHub Connect) — the bot calls the tools; thread **plugin-card** (name + result) | [ ] | [ ] |
@@ -190,7 +190,7 @@ Optional evening:
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Quiet box **15 minutes** with no input → **Sleeping** (sage). Open pane and pulse do not keep it warm. Click Sleeping wakes view-only; Take control is separate | [ ] | [ ] |
+| Quiet box **15 minutes** with no input → **Sleeping** (sage). The pane shows **Sleeping • Click to start**, never a stale preview or Connecting layer. Open pane and pulse do not keep it warm. Click Sleeping wakes view-only; Take control is separate | [ ] | [ ] |
 
 Team:
 
