@@ -26,6 +26,7 @@ def _row(status) -> BotCredential:
         scope=status.scope,
         last_four=status.last_four,
         updated_at=status.updated_at,
+        env_name=status.env_name or "",
     )
 
 

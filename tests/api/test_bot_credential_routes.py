@@ -45,6 +45,8 @@ def test_credentials_survive_new_store_and_stay_isolated(client, auth_header) ->
     assert NAMED_FIXTURE not in saved_n.text
     assert saved_g.json()["last_four"] == last_four(GITHUB_FIXTURE)
     assert saved_n.json()["last_four"] == last_four(NAMED_FIXTURE)
+    assert saved_g.json()["env_name"] == "GH_TOKEN"
+    assert saved_n.json()["env_name"] == "REGISTRY_TOKEN"
     assert saved_g.json()["scope"] == "this_bot"
 
     listed_a = client.get(f"/v1/bots/{alpha}/credentials", headers=auth_header)

@@ -297,6 +297,16 @@ class ScriptedRuntime(RuntimeBase):
                 else:
                     tool_result = tools.execute(step.tool, step.args, bound_bot_id=bot_id)
                 self.last_tool_results.append((step.tool, tool_result))
+                if step.require_ok and (
+                    not isinstance(tool_result, dict) or not tool_result.get("ok")
+                ):
+                    status = "failed"
+                    error = str(
+                        (tool_result or {}).get("error")
+                        if isinstance(tool_result, dict)
+                        else "tool failed"
+                    )
+                    break
                 for typ, payload in _map_tool_to_events(
                     step.tool, step.tool, step.args, "completed"
                 ):

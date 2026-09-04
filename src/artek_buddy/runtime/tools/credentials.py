@@ -32,6 +32,7 @@ class CredentialsToolsMixin:
                 {
                     "provider": row.provider,
                     "last_four": row.last_four,
+                    "env_name": row.env_name or "",
                     "present": True,
                 }
                 for row in rows

@@ -669,7 +669,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name="list_bot_credentials",
         description=(
             "List host-saved authorization tokens for this bot. "
-            "Returns names and last four characters only. Never returns the secret. "
+            "Returns names, env names, and last four characters only. Never returns the secret. "
             "Tokens are not stored in chat, memory, or the computer home."
         ),
         input_schema={"type": "object", "properties": {}},

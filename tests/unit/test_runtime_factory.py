@@ -137,6 +137,7 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert credential[0].args["task"] == "please e2e-credential-worker"
     credential_worker = steps_for_prompt("please e2e-credential-worker")
     assert credential_worker[0].tool == "run_credential_scoped_command"
+    assert credential_worker[0].require_ok is True
     assert "REGISTRY_TOKEN" in credential_worker[0].args["command"]
     progress = steps_for_prompt("please e2e-worker-progress")
     assert progress[0].tool == "spawn_subagent"

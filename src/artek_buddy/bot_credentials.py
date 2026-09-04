@@ -191,6 +191,12 @@ def _env_from_slug(slug: str) -> str:
         return "GH_TOKEN"
     if slug == "pypi":
         return "UV_PUBLISH_TOKEN"
+    if slug == "npm":
+        return "NPM_TOKEN"
+    if slug == "gitlab":
+        return "GITLAB_TOKEN"
+    if slug == "huggingface":
+        return "HF_TOKEN"
     return slug.upper().replace("-", "_")
 
 
@@ -453,8 +459,8 @@ class InMemoryCredentialStore:
         mapped = credential_env(bot_rows)
         available = any(name in command for name in mapped)
         return CredentialExecutionResult(
-            ok=True,
-            exit_code=0,
-            stdout="credential available\n" if available else "credential command completed\n",
+            ok=available,
+            exit_code=0 if available else 1,
+            stdout="credential available\n" if available else "credential missing\n",
             stderr="",
         )

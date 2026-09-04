@@ -84,6 +84,7 @@ E2E_BOOK_URL = ""
 class ScriptedStep:
     event: tuple[str, dict[str, Any]] | None = None
     tool: str | None = None
+    require_ok: bool = False
     args: dict[str, Any] = field(default_factory=dict)
     consent: dict[str, Any] | None = None
     blocks: list[dict[str, Any]] | None = None
@@ -128,8 +129,8 @@ def scripted_progress(text: str, kind: str = "thinking") -> ScriptedStep:
     return ScriptedStep(event=("thread.progress", {"text": text, "kind": kind, "replace": True}))
 
 
-def scripted_tool(tool: str, **args: Any) -> ScriptedStep:
-    return ScriptedStep(tool=tool, args=dict(args))
+def scripted_tool(tool: str, *, require_ok: bool = False, **args: Any) -> ScriptedStep:
+    return ScriptedStep(tool=tool, args=dict(args), require_ok=require_ok)
 
 
 def scripted_delay(seconds: float, *, ignore_cancel: bool = False) -> ScriptedStep:
@@ -350,6 +351,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         return [
             scripted_tool(
                 "run_credential_scoped_command",
+                require_ok=True,
                 command=(
                     "python -c \"import os; print('credential available' "
                     "if os.getenv('REGISTRY_TOKEN') else 'credential missing')\""

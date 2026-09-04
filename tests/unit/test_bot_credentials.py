@@ -93,16 +93,24 @@ def test_store_roundtrip_and_isolation(tmp_path: Path) -> None:
     assert github.last_four == last_four(GITHUB_FIXTURE)
     assert pypi.last_four == last_four(PYPI_FIXTURE)
     assert named.last_four == last_four(NAMED_FIXTURE)
+    assert named.env_name == "REGISTRY_TOKEN"
+    npm = vault.put(BOT_A, "npm", "npm_" + ("N" * 36))
+    assert npm.env_name == "NPM_TOKEN"
     assert github.scope == "this_bot"
     assert {row.provider for row in vault.list_for_bot(BOT_A)} == {
         "github",
         "pypi",
         "registry-token",
+        "npm",
     }
     assert vault.list_for_bot(BOT_B) == []
     assert _checks_env(vault, BOT_A, "GH_TOKEN", GITHUB_FIXTURE)
     assert _checks_env(vault, BOT_A, "UV_PUBLISH_TOKEN", PYPI_FIXTURE)
     assert _checks_env(vault, BOT_A, "REGISTRY_TOKEN", NAMED_FIXTURE)
+    assert _checks_env(vault, BOT_A, "NPM_TOKEN", "npm_" + ("N" * 36))
+    missing = vault.execute(BOT_A, BOT_A, "printf '%s' \"${MISSING_TOKEN-unset}\"")
+    assert missing.ok is False
+    assert missing.stdout == "credential missing\n"
     assert not hasattr(vault, "read")
 
 
