@@ -287,15 +287,12 @@ class ScriptedRuntime(RuntimeBase):
                 await asyncio.sleep(0)
                 continue
             if step.tool:
-                if step.tool == "ask_user":
-                    tool_result = await asyncio.to_thread(
-                        tools.execute,
-                        step.tool,
-                        step.args,
-                        bound_bot_id=bot_id,
-                    )
-                else:
-                    tool_result = tools.execute(step.tool, step.args, bound_bot_id=bot_id)
+                tool_result = await asyncio.to_thread(
+                    tools.execute,
+                    step.tool,
+                    step.args,
+                    bound_bot_id=bot_id,
+                )
                 self.last_tool_results.append((step.tool, tool_result))
                 if step.require_ok and (
                     not isinstance(tool_result, dict) or not tool_result.get("ok")

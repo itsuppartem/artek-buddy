@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -9,6 +10,7 @@ from artek_buddy.bot_credentials import (
     CredentialExecutionResult,
     normalized_credential_env,
 )
+from artek_buddy.fs_jail import contained_under
 
 RUNNER_MEMORY_BYTES = 256 * 1024 * 1024
 # Go CLIs reserve a large virtual arena even when RSS is small. Docker gets a
@@ -57,20 +59,24 @@ def resolve_credential_home(
     if not _HOME_KEY.fullmatch(home_key or ""):
         raise ValueError("invalid home key")
     _working_dir(cwd)
-    root = (Path(data_dir) / "homes").resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    candidate = root / home_key
-    if candidate.is_symlink():
+    base = os.path.abspath(str(Path(data_dir) / "homes"))
+    os.makedirs(base, exist_ok=True)
+    root = Path(base)
+    if os.path.islink(os.path.join(base, home_key)):
         raise ValueError("credential runner home cannot be a symlink")
-    # The key and cwd are validated before these resolved containment checks.
-    # codeql[py/path-injection]
-    home = candidate.resolve()  # lgtm[py/path-injection]
-    if home.parent != root:
+    home = contained_under(root, home_key)
+    if home is None:
         raise ValueError("invalid home key")
     home.mkdir(parents=True, exist_ok=True)
-    target = (home / (cwd or ".")).resolve()  # lgtm[py/path-injection]
-    if not target.is_relative_to(home) or not target.is_dir():
-        raise ValueError("cwd does not exist under this bot home")
+    relative = (cwd or ".").strip() or "."
+    if relative == ".":
+        return home, home
+    target = home
+    for part in PurePosixPath(relative).parts:
+        nested = contained_under(target, part)
+        if nested is None or not nested.is_dir():
+            raise ValueError("cwd does not exist under this bot home")
+        target = nested
     return home, target
 
 

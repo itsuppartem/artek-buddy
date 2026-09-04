@@ -4,7 +4,13 @@ import json
 import time
 from pathlib import Path
 
-from tests.api.helpers import create_bot, message_texts, wait_run, wait_thread_has
+from tests.api.helpers import (
+    consent_id_from_thread,
+    create_bot,
+    message_texts,
+    wait_run,
+    wait_thread_has,
+)
 
 from artek_buddy.bot_credentials import (
     PASTED_CREDENTIAL_DETAIL,
@@ -192,6 +198,24 @@ def test_scripted_credential_turn_delegates_and_keeps_fixture_out_of_history(
     assert sent.status_code == 200
     lead = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
     assert lead["run"]["status"] == "completed"
+
+    deadline = time.time() + 10
+    consent_id = None
+    while time.time() < deadline:
+        snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+        assert snap.status_code == 200
+        try:
+            consent_id = consent_id_from_thread(snap.json())
+            break
+        except AssertionError:
+            time.sleep(0.1)
+    assert consent_id is not None
+    allowed = client.post(
+        f"/v1/consents/{consent_id}",
+        headers=auth_header,
+        json={"decision": "once"},
+    )
+    assert allowed.status_code == 200, allowed.text
 
     deadline = time.time() + 10
     worker = None
