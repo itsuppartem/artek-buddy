@@ -433,7 +433,16 @@ export function canAnswerOwnerPrompt(
   if (pendingConsent) {
     return true;
   }
-  return run?.status === "waiting_input" && Boolean(message.runId) && message.runId === run.id;
+  const pendingQuestion = message.blocks.some(
+    (block) =>
+      block.kind === "ask" && !block.consentId && (block.status ?? "pending") === "pending",
+  );
+  return (
+    pendingQuestion &&
+    (run?.status === "running" || run?.status === "waiting_input") &&
+    Boolean(message.runId) &&
+    message.runId === run.id
+  );
 }
 
 export function isToolNoise(message: ThreadMessage): boolean {
