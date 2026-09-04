@@ -1612,25 +1612,20 @@ export function ShellPage() {
     attachLocalPaths(transferFilePaths(event.dataTransfer));
   }
 
-  async function startTask(botId: string, task: string) {
-    const target = bots.find((bot) => bot.id === botId);
+  async function startTask(task: string) {
     const text = task.trim();
-    if (!target || !text) throw new Error("Choose a bot and describe the outcome first");
+    if (!text) throw new Error("Describe the outcome first");
     if (hostDownRef.current) {
-      parkSend(target.id, text, null, undefined);
-      openBot(target.id);
-      return;
+      throw new Error("Reconnect the host before starting workspace work");
     }
     try {
-      await api.threads.send(target.id, text, null);
-      openBot(target.id);
+      const dispatched = await api.workspace.dispatch(text);
+      setBots((list) =>
+        list.map((bot) => (bot.id === dispatched.botId ? { ...bot, status: "running" } : bot)),
+      );
+      void refreshBots().catch(() => undefined);
     } catch (err) {
       const classified = classifyError(err);
-      if (shouldQueueSend(classified.kind)) {
-        parkSend(target.id, text, null, undefined);
-        openBot(target.id);
-        return;
-      }
       if (classified.kind === "auth") {
         showError(err, classified.message);
       }
@@ -2646,7 +2641,7 @@ export function ShellPage() {
                 <WorkLogPane
                   botName={active.name}
                   runId={thread?.run?.id}
-                  runStatus={thread?.run?.status}
+                  runStatus={isBusy ? "working" : thread?.run?.status}
                   progress={flightText}
                   workers={thread?.subagents ?? []}
                   onClose={closeContextPanel}

@@ -55,4 +55,16 @@ describe("WorkLogPane", () => {
 
     expect(workers.map((worker) => worker.id)).toEqual(["current"]);
   });
+
+  it("keeps the latest worker run when a later lead run has no workers", () => {
+    const workers = workersForRun(
+      [
+        { id: "latest", parentRunId: "run-worker", status: "completed", task: "Published package" },
+        { id: "old", parentRunId: "run-old", status: "completed", task: "Old work" },
+      ],
+      "run-status-check",
+    );
+
+    expect(workers.map((worker) => worker.id)).toEqual(["latest"]);
+  });
 });

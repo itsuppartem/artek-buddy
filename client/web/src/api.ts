@@ -30,6 +30,7 @@ import type {
   ThreadMessagePage,
   ThreadSendResult,
   ThreadSnapshot,
+  WorkspaceDispatchResult,
 } from "./types";
 
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -141,6 +142,11 @@ export async function request<T>(
 }
 
 export const api = {
+  workspace: {
+    dispatch(text: string) {
+      return request<WorkspaceDispatchResult>("POST", "/v1/workspace/dispatch", { text });
+    },
+  },
   local: {
     status() {
       return request<LocalStatus>("GET", "/local/status").then((status) => {

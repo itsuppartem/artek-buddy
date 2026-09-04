@@ -159,6 +159,14 @@ PROCEDURES: list[Procedure] = [
         "ProductEventStream",
         True,
     ),
+    _p(
+        "workspace.dispatch",
+        "POST",
+        "/v1/workspace/dispatch",
+        "WorkspaceDispatchInput",
+        "WorkspaceDispatchResult",
+        True,
+    ),
     _p("workspace.subscribe", "GET", "/v1/events", None, "ProductEventStream", True),
     _p(
         "threads.send",

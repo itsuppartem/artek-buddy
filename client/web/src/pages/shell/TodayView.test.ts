@@ -59,6 +59,10 @@ describe("TodayView", () => {
     expect(html).toContain("Mail");
     expect(html).toContain("Research desk");
     expect(html).toContain("Release helper");
+    expect(html).toContain("Workspace routing");
+    expect(html).toContain("uses every bot");
+    expect(html).toContain("Send to workspace");
+    expect(html).not.toContain("Suggested:");
     expect(html).toContain("Open routines");
   });
 

@@ -47,6 +47,7 @@ from artek_buddy.http.page import router as page_router
 from artek_buddy.http.routines import router as routines_router
 from artek_buddy.http.session import router as session_router
 from artek_buddy.http.threads import router as threads_router
+from artek_buddy.http.workspace import router as workspace_router
 from artek_buddy.http.turns import (
     _handle_takeover_request,
     _kick_inbox,
@@ -158,6 +159,7 @@ app.include_router(memory_router)
 app.include_router(routines_router)
 app.include_router(connections_router)
 app.include_router(computer_router)
+app.include_router(workspace_router)
 
 
 def _health_bits() -> tuple[bool, bool]:

@@ -1,5 +1,5 @@
 import { type FormEvent, useMemo, useState } from "react";
-import { type BotTaskStage, botTaskStage, suggestTaskBot } from "../../lib/task-flow";
+import { type BotTaskStage, botTaskStage } from "../../lib/task-flow";
 import type { Bot } from "../../types";
 import { BotAvatar } from "../../ui/bot-avatar";
 
@@ -20,14 +20,13 @@ export function TodayView({
   bots: Bot[];
   botsReady: boolean;
   onOpenBot: (id: string) => void;
-  onStartTask: (botId: string, task: string) => void | Promise<void>;
+  onStartTask: (task: string) => void | Promise<void>;
   onOpenRoutines: () => void;
   onCreateBot: () => void;
 }) {
   const [task, setTask] = useState("");
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
-  const suggested = useMemo(() => suggestTaskBot(bots, task), [bots, task]);
   const grouped = useMemo(
     () =>
       new Map(
@@ -40,7 +39,7 @@ export function TodayView({
     event.preventDefault();
     const text = task.trim();
     if (!botsReady || starting) return;
-    if (!suggested) {
+    if (!bots.length) {
       onCreateBot();
       return;
     }
@@ -48,7 +47,7 @@ export function TodayView({
     setStarting(true);
     setError("");
     try {
-      await onStartTask(suggested.id, text);
+      await onStartTask(text);
       setTask("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start that task");
@@ -79,7 +78,11 @@ export function TodayView({
             What needs doing?
           </label>
           <p className="mt-1 text-[12px] text-mute">
-            Artek suggests the most relevant bot before anything starts.
+            {bots.length
+              ? `Workspace routing reads the context of ${bots.length} ${
+                  bots.length === 1 ? "bot" : "bots"
+                } and delegates the outcome.`
+              : "Create a bot before the workspace can delegate work."}
           </p>
           <div className="mt-3 flex min-h-12 items-end gap-2 rounded-[12px] border border-hairline bg-ink p-1.5 pl-3">
             <textarea
@@ -93,22 +96,21 @@ export function TodayView({
             />
             <button
               type="submit"
-              disabled={!botsReady || starting || Boolean(suggested && !task.trim())}
+              disabled={!botsReady || starting || Boolean(bots.length && !task.trim())}
               className="min-h-10 shrink-0 rounded-[10px] bg-tan px-4 text-[13px] font-bold text-ink transition disabled:opacity-40"
             >
               {!botsReady
                 ? "Loading bots…"
                 : starting
                   ? "Starting…"
-                  : suggested
-                    ? `Continue with ${suggested.name}`
+                  : bots.length
+                    ? "Send to workspace"
                     : "Create your first bot"}
             </button>
           </div>
-          {task.trim() && suggested ? (
-            <p data-testid="task-router" className="mt-2 text-[11.5px] text-mute">
-              Suggested: <span className="font-semibold text-paper">{suggested.name}</span> · you
-              can change the bot in chat before sending another task.
+          {bots.length ? (
+            <p data-testid="workspace-routing" className="mt-2 text-[11.5px] text-mute">
+              Workspace routing · uses every bot&apos;s context
             </p>
           ) : null}
           {error ? (

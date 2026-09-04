@@ -57,8 +57,8 @@ Mint three bots for the run. Names can differ; they must be distinct:
 | --- | --- | --- |
 | Pairing uses the new navy / sky / cream Cavalier. The dog belongs to this palette; no old warm-card art remains | [ ] | [ ] |
 | After Pair the first surface is **Today**, not a random bot. It shows **What needs doing?** and does not boot a desktop | [ ] | [ ] |
-| Type an outcome that overlaps a bot's role. Before submit, the form names that suggested bot; submit opens the bot chat and sends exactly once | [ ] | [ ] |
-| Unknown work falls back to a pinned bot. With no bots, the action says to create one and stays disabled | [ ] | [ ] |
+| Today identifies **Workspace routing · uses every bot's context**; there is no coordinator bot in Chats and pinning does not choose one. Submit an outcome: the host reads existing bot profiles, activity, and bounded recent context, routes once, stays on Today, and the selected existing bot moves to **In progress** | [ ] | [ ] |
+| Open the routed bot: the exact outcome appears once in that bot's durable chat. With no bots, the action says **Create your first bot**; it never invents a lead chat | [ ] | [ ] |
 | Today orders **Needs your decision** before **In progress**, then **Ready for you**. Open each card and it lands in the named chat | [ ] | [ ] |
 | Desktop rail keeps **Today / Chats / Routines / Library** visible once. Chats shows an attention count when unread work exists; there is no duplicate Settings control | [ ] | — |
 | **New bot**, **Desktop**, **Show work log**, **Bot profile & access**, **Send**, and **Stop** are words, not mystery icons | [ ] | [ ] |
@@ -350,7 +350,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | --- | --- | --- |
 | Enter sends. Shift+Enter inserts a newline (Deb) and that break stays in the sent bubble. Phone return key follows the on-screen keyboard. Ctrl+A selects the draft and does not Send; Enter then sends one copy. Slow Send in one chat does not disable Send in another; a late failure restores files on the chat that sent | [ ] | [ ] |
 | Message placeholder stays readable: full name, or `Message …` with an ellipsis — not a clipped mid-word (`Message Resea`) | [ ] | [ ] |
-| Deb WebKit: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo), not only Chromium `--serve` | [ ] | — |
+| Deb WebKit: switch Ubuntu to the Russian keyboard layout. Physical Ctrl+A/C/X/V still Select all / Copy / Cut / Paste, Ctrl+Z undoes, and Ctrl+Shift+Z / Ctrl+Y redo in Message. Repeat Ctrl+V with a screenshot: it attaches one image instead of typing a path. These are not Chromium `--serve` checks | [ ] | — |
 | Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays through a live refresh. Switching to another chat and back keeps that loaded page while the chat is still in the recent cache | [ ] | [ ] |
 | Right-click Reply (Deb) puts a quote in the next user bubble. **Copy** copies that message; on a link, **Copy URL** is still there | [ ] | — |
 | `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Copy**, **Open in browser**, **Copy URL**, and Reply; Copy URL changes to **URL copied** | [ ] | [ ] |
