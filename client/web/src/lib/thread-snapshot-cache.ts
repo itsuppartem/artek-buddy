@@ -74,7 +74,7 @@ export function applySnapshotForBot(
     {
       snapshot,
       preserveLoadedHistory: prev?.preserveLoadedHistory ?? false,
-      atStart: prev?.atStart ?? false,
+      atStart: snapshot.olderCursor == null || (prev?.atStart ?? false),
     },
     limit,
   );

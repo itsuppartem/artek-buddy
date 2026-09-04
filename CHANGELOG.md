@@ -39,6 +39,8 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+- A delayed thread snapshot can no longer erase a newer Ask card delivered live; the owner can still answer the same waiting run.
+- Reaching the oldest message now keeps **Beginning of this chat.** through live refreshes and cached chat switches.
 - Unchecking Fast on an idle chat starts a new model session immediately. A live turn still keeps going; the send after it (including a waiting follow-up) is not Fast. New bot already has that session, so the first Send does not open a second one unless Fast or Reasoning changed. Changing those during a live turn writes `This turn keeps going.` into the open chat without dropping Working.
 - Native controls, including Cursor Reasoning and its option list, now use the active theme's surface and foreground instead of an unreadable browser-white combination.
 - Every packaged hicolor size now comes from the same sky-blue Cavalier source; compact launcher and dock slots no longer select leftover black icon files.

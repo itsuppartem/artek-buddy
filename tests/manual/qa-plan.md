@@ -351,10 +351,10 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Enter sends. Shift+Enter inserts a newline (Deb) and that break stays in the sent bubble. Phone return key follows the on-screen keyboard. Ctrl+A selects the draft and does not Send; Enter then sends one copy. Slow Send in one chat does not disable Send in another; a late failure restores files on the chat that sent | [ ] | [ ] |
 | Message placeholder stays readable: full name, or `Message …` with an ellipsis — not a clipped mid-word (`Message Resea`) | [ ] | [ ] |
 | Deb WebKit: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo), not only Chromium `--serve` | [ ] | — |
-| Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays. Switching to another chat and back keeps that loaded page while the chat is still in the recent cache | [ ] | [ ] |
+| Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays through a live refresh. Switching to another chat and back keeps that loaded page while the chat is still in the recent cache | [ ] | [ ] |
 | Right-click Reply (Deb) puts a quote in the next user bubble. **Copy** copies that message; on a link, **Copy URL** is still there | [ ] | — |
 | `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Copy**, **Open in browser**, **Copy URL**, and Reply; Copy URL changes to **URL copied** | [ ] | [ ] |
-| `please e2e-blocked-browser`: Ask card visibly waits and never flashes **No longer active** while its waiting event catches up. An option or free-text answer stays on the card and continues the **same run**, without a second user bubble. A second answer is rejected without breaking the thread | [ ] | [ ] |
+| `please e2e-blocked-browser`: Ask card visibly waits, survives a simultaneous thread refresh, and never flashes **No longer active** while its waiting event catches up. An option or free-text answer stays on the card and continues the **same run**, without a second user bubble. A second answer is rejected without breaking the thread | [ ] | [ ] |
 | `please e2e-send-terminal`: one complete answer after reload — no paraphrased second bubble, Stop, or typing dots. `please e2e-send-then-answer`: an interim teaser then a distinct final answer, both in order after reload. `please e2e-send-then-repeat` stays one bubble | [ ] | [ ] |
 | Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks **on this window**. The other paired device still sees a card | [ ] | [ ] |
 | Header shows bot identity plus **Computer** only. Work summary names decision / working / complete / failed and owns the single **Show work log** action without covering the transcript or composer | [ ] | [ ] |
@@ -590,9 +590,9 @@ Scripted: `test_phone_computer_open_close_returns_to_chat` and `test_phone_model
 
 | Check | Deb | Phone |
 | --- | :---: | :---: |
-| `please e2e-blocked-browser`: Ask card waits. Option or free-text answer continues the same run; no second user bubble. Stop, timeout, and a second answer do not leave a live stale card | [ ] | [ ] |
+| `please e2e-blocked-browser`: Ask card waits and does not disappear during a delayed thread refresh. Option or free-text answer continues the same run; no second user bubble. Stop, timeout, and a second answer do not leave a live stale card | [ ] | [ ] |
 | Right-click Reply (Deb) quotes in the next user bubble. Cancel drops the quote | [ ] | — |
-| Load earlier is a bordered button and pulls older messages. After the last page, **Beginning of this chat.** stays. If you were pinned to the bottom, new cards stay in view | [ ] | [ ] |
+| Load earlier is a bordered button and pulls older messages. After the last page, **Beginning of this chat.** stays through refresh and a chat switch. If you were pinned to the bottom, new cards stay in view | [ ] | [ ] |
 
 ---
 

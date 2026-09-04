@@ -8,6 +8,7 @@ import {
   isRawRunFailedMessage,
   isToolNoise,
   liveMessageId,
+  mergeThreadSnapshot,
   reduceComputerStatus,
   reduceThreadSnapshot,
 } from "./thread-events";
@@ -128,6 +129,34 @@ describe("canAnswerOwnerPrompt", () => {
     expect(canAnswerOwnerPrompt(message, run({ status: "waiting_input" }))).toBe(true);
     expect(canAnswerOwnerPrompt(message, run({ status: "running" }))).toBe(true);
     expect(canAnswerOwnerPrompt(message, run({ status: "completed" }))).toBe(false);
+  });
+});
+
+describe("mergeThreadSnapshot", () => {
+  it("keeps a persisted SSE message newer than a delayed snapshot", () => {
+    const question = {
+      id: "m-ask",
+      threadId: "t",
+      seq: 2,
+      role: "bot" as const,
+      blocks: [{ kind: "ask" as const, text: "Which city?", status: "pending" }],
+      runId: "run1",
+      createdAt: "2026-01-01T00:00:01Z",
+    };
+    const live = snap({
+      cursor: 2,
+      messages: [question],
+      run: run({ status: "waiting_input" }),
+    });
+    const delayed = snap({
+      cursor: 1,
+      messages: [],
+      run: run({ status: "running" }),
+    });
+
+    const merged = mergeThreadSnapshot(live, delayed);
+
+    expect(merged.messages).toContainEqual(question);
   });
 });
 
