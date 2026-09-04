@@ -42,3 +42,11 @@ def test_fluxbox_starts_from_usr_not_a_tmp_script() -> None:
     assert "fluxbox -rc /tmp/fluxbox-home/.fluxbox/init" in text
     assert "chmod +x /tmp/fluxbox-home/.fluxbox/startup" not in text
     assert "/tmp/fluxbox-home/.fluxbox/startup" not in text
+
+
+def test_preview_refresh_and_encoding_favor_interaction_latency() -> None:
+    startup = (ROOT / "infra" / "computer" / "start.sh").read_text(encoding="utf-8")
+    embed = (ROOT / "infra" / "computer" / "embed.html").read_text(encoding="utf-8")
+    assert "-wait 30 -defer 20" in startup
+    assert "-wait 100 -defer 100" not in startup
+    assert "rfb.compressionLevel = 1;" in embed
