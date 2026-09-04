@@ -33,6 +33,7 @@ class RuntimeBase:
         self.on_takeover_requested: Any | None = None
         self.on_bot_ask: Any | None = None
         self.default_agent_id: str | None = None
+        self.workspace_dispatcher_agent_id: str | None = None
         self.last_prompt: str | None = None
         self.memory: Any | None = None
         self.consent: Any | None = None

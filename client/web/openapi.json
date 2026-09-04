@@ -4032,6 +4032,62 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "WorkspaceDispatchInput": {
+        "properties": {
+          "text": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "WorkspaceDispatchInput",
+        "type": "object"
+      },
+      "WorkspaceDispatchResult": {
+        "properties": {
+          "bot_id": {
+            "minLength": 1,
+            "title": "Bot Id",
+            "type": "string"
+          },
+          "bot_name": {
+            "title": "Bot Name",
+            "type": "string"
+          },
+          "queued": {
+            "default": false,
+            "title": "Queued",
+            "type": "boolean"
+          },
+          "run_id": {
+            "minLength": 1,
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "task_id": {
+            "minLength": 1,
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bot_id",
+          "bot_name",
+          "task_id",
+          "run_id",
+          "seq"
+        ],
+        "title": "WorkspaceDispatchResult",
+        "type": "object"
       }
     }
   },
@@ -10771,6 +10827,78 @@
           }
         },
         "summary": "Mark Thread Unread"
+      }
+    },
+    "/v1/workspace/dispatch": {
+      "post": {
+        "operationId": "dispatch_workspace_task_v1_workspace_dispatch_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "artek_device",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Artek Device"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceDispatchInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceDispatchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dispatch Workspace Task"
       }
     },
     "/{full_path}": {

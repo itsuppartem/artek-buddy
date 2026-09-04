@@ -52,6 +52,7 @@ from artek_buddy.http.turns import (
     _kick_inbox,
     _shutdown_work,
 )
+from artek_buddy.http.workspace import router as workspace_router
 
 
 @asynccontextmanager
@@ -158,6 +159,7 @@ app.include_router(memory_router)
 app.include_router(routines_router)
 app.include_router(connections_router)
 app.include_router(computer_router)
+app.include_router(workspace_router)
 
 
 def _health_bits() -> tuple[bool, bool]:

@@ -57,8 +57,8 @@ Mint three bots for the run. Names can differ; they must be distinct:
 | --- | --- | --- |
 | Pairing uses the new navy / sky / cream Cavalier. The dog belongs to this palette; no old warm-card art remains | [ ] | [ ] |
 | After Pair the first surface is **Today**, not a random bot. It shows **What needs doing?** and does not boot a desktop | [ ] | [ ] |
-| Type an outcome that overlaps a bot's role. Before submit, the form names that suggested bot; submit opens the bot chat and sends exactly once | [ ] | [ ] |
-| Unknown work falls back to a pinned bot. With no bots, the action says to create one and stays disabled | [ ] | [ ] |
+| Today identifies **Workspace routing · uses every bot's context**; there is no coordinator bot in Chats and pinning does not choose one. Submit an outcome: the host reads existing bot profiles, activity, and bounded recent context, routes once, stays on Today, and the selected existing bot moves to **In progress** | [ ] | [ ] |
+| Open the routed bot: the exact outcome appears once in that bot's durable chat. With no bots, the action says **Create your first bot**; it never invents a lead chat | [ ] | [ ] |
 | Today orders **Needs your decision** before **In progress**, then **Ready for you**. Open each card and it lands in the named chat | [ ] | [ ] |
 | Desktop rail keeps **Today / Chats / Routines / Library** visible once. Chats shows an attention count when unread work exists; there is no duplicate Settings control | [ ] | — |
 | **New bot**, **Desktop**, **Show work log**, **Bot profile & access**, **Send**, and **Stop** are words, not mystery icons | [ ] | [ ] |
@@ -217,6 +217,7 @@ On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; t
 | Host URL in a desktop browser: Take control has no pad and no Keyboard button; the pointer goes into the screen like Deb | [ ] | — |
 | Phone: drag on the pad moves the beige dot across the 1280×800 picture; it does not jump under the finger. After a drag or tap the overlay still shows **Release**, not Take control | — | [ ] |
 | Type `hello` into a guest field (address bar or input). The letters appear **in the guest**, not only in our Message box | [ ] | [ ] |
+| Deb and the host URL in a desktop browser: copy `host clipboard текст`, focus a guest field, then Ctrl+V. The full text appears once in the guest and never in the hidden Message composer | [ ] | — |
 | After pad or keyboard input, the guest picture updates within a couple of seconds. A freeze over ~5s is a fail | [ ] | [ ] |
 | Phone Keyboard: Esc / Tab / Enter / Bksp work in the guest. Russian layout types Cyrillic into that same field | — | [ ] |
 | Scroll (wheel on Deb, two-finger on Phone) moves the guest page | [ ] | [ ] |
@@ -350,11 +351,11 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | --- | --- | --- |
 | Enter sends. Shift+Enter inserts a newline (Deb) and that break stays in the sent bubble. Phone return key follows the on-screen keyboard. Ctrl+A selects the draft and does not Send; Enter then sends one copy. Slow Send in one chat does not disable Send in another; a late failure restores files on the chat that sent | [ ] | [ ] |
 | Message placeholder stays readable: full name, or `Message …` with an ellipsis — not a clipped mid-word (`Message Resea`) | [ ] | [ ] |
-| Deb WebKit: Ctrl+Z undoes typing in Message (Ctrl+Shift+Z / Ctrl+Y redo), not only Chromium `--serve` | [ ] | — |
-| Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays. Switching to another chat and back keeps that loaded page while the chat is still in the recent cache | [ ] | [ ] |
+| Deb WebKit: switch Ubuntu to the Russian keyboard layout. Physical Ctrl+A/C/X/V still Select all / Copy / Cut / Paste, Ctrl+Z undoes, and Ctrl+Shift+Z / Ctrl+Y redo in Message. Repeat Ctrl+V with a screenshot: it attaches one image instead of typing a path. These are not Chromium `--serve` checks | [ ] | — |
+| Load earlier is a bordered button. After the oldest page, **Beginning of this chat.** stays through a live refresh. Switching to another chat and back keeps that loaded page while the chat is still in the recent cache | [ ] | [ ] |
 | Right-click Reply (Deb) puts a quote in the next user bubble. **Copy** copies that message; on a link, **Copy URL** is still there | [ ] | — |
 | `please e2e-markdown-preview`: **Open docs** opens the system browser / a browser tab. Right-click the link on Deb shows **Copy**, **Open in browser**, **Copy URL**, and Reply; Copy URL changes to **URL copied** | [ ] | [ ] |
-| `please e2e-blocked-browser`: Ask card visibly waits and never flashes **No longer active** while its waiting event catches up. An option or free-text answer stays on the card and continues the **same run**, without a second user bubble. A second answer is rejected without breaking the thread | [ ] | [ ] |
+| `please e2e-blocked-browser`: Ask card visibly waits, survives a simultaneous thread refresh, and never flashes **No longer active** while its waiting event catches up. An option or free-text answer stays on the card and continues the **same run**, without a second user bubble. A second answer is rejected without breaking the thread | [ ] | [ ] |
 | `please e2e-send-terminal`: one complete answer after reload — no paraphrased second bubble, Stop, or typing dots. `please e2e-send-then-answer`: an interim teaser then a distinct final answer, both in order after reload. `please e2e-send-then-repeat` stays one bubble | [ ] | [ ] |
 | Consent card: Allow once / Always / Deny. Deny does not run the action. Always covers later same-kind asks **on this window**. The other paired device still sees a card | [ ] | [ ] |
 | Header shows bot identity plus **Computer** only. Work summary names decision / working / complete / failed and owns the single **Show work log** action without covering the transcript or composer | [ ] | [ ] |
@@ -362,7 +363,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
 | Failed / cancelled run shows a run-error, not a silent hole. After 60+ minutes idle, the first live Cursor Send may restart its local bridge but still completes on that Send with no red line. Scripted `please e2e-dead-wait` proves the bounded hidden retry (bot `ok`, no Send-again); `please e2e-dead-wait-stuck` still shows one terminal error | [ ] | [ ] |
-| A follow-up while `waiting_takeover` starts a turn (does not only enqueue) | [ ] | [ ] |
+| `please e2e-park-takeover`: as soon as the computer card appears, typing dots and Stop are gone. A follow-up while `waiting_takeover` starts a turn (does not only enqueue) | [ ] | [ ] |
 | Stop keeps the run cancelled: a late complete does not append the essay (scripted `please e2e-late-complete` or a live Cursor turn). **Stopped.** is one `run-error` line. Queued owner lines survive Stop and prepend to the **next** send. Stop must not leave a running zombie; `please e2e-lead-owner-ssh` then another Send is a new run | [ ] | [ ] |
 
 ---
@@ -590,9 +591,9 @@ Scripted: `test_phone_computer_open_close_returns_to_chat` and `test_phone_model
 
 | Check | Deb | Phone |
 | --- | :---: | :---: |
-| `please e2e-blocked-browser`: Ask card waits. Option or free-text answer continues the same run; no second user bubble. Stop, timeout, and a second answer do not leave a live stale card | [ ] | [ ] |
+| `please e2e-blocked-browser`: Ask card waits and does not disappear during a delayed thread refresh. Option or free-text answer continues the same run; no second user bubble. Stop, timeout, and a second answer do not leave a live stale card | [ ] | [ ] |
 | Right-click Reply (Deb) quotes in the next user bubble. Cancel drops the quote | [ ] | — |
-| Load earlier is a bordered button and pulls older messages. After the last page, **Beginning of this chat.** stays. If you were pinned to the bottom, new cards stay in view | [ ] | [ ] |
+| Load earlier is a bordered button and pulls older messages. After the last page, **Beginning of this chat.** stays through refresh and a chat switch. If you were pinned to the bottom, new cards stay in view | [ ] | [ ] |
 
 ---
 

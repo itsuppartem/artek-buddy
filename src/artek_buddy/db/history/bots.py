@@ -347,9 +347,20 @@ class BotsMixin:
         with self._conn() as conn:
             rows = conn.execute(
                 """
-                SELECT * FROM bots
-                WHERE archived_at IS NULL
-                ORDER BY pinned DESC, updated_at DESC, created_at DESC
+                SELECT bots.*,
+                       CASE
+                           WHEN bots.status = 'idle' AND EXISTS (
+                               SELECT 1
+                               FROM subagents
+                               WHERE subagents.bot_id = bots.id
+                                 AND subagents.status IN ('queued', 'running')
+                           )
+                           THEN 'running'
+                           ELSE bots.status
+                       END AS effective_status
+                FROM bots
+                WHERE bots.archived_at IS NULL
+                ORDER BY bots.pinned DESC, bots.updated_at DESC, bots.created_at DESC
                 """
             ).fetchall()
             conn.commit()
@@ -417,7 +428,7 @@ class BotsMixin:
             parent_bot_id=row["parent_bot_id"],
             thread_id=row["thread_id"],
             preview=row["preview"] or "",
-            status=row["status"] or "idle",
+            status=row.get("effective_status") or row["status"] or "idle",
             computer_mode="dedicated" if row["computer_mode"] == "dedicated" else "team",
             cursor_agent_id=row.get("cursor_agent_id"),
             updated_at=parse_iso(row["updated_at"]),

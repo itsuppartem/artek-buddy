@@ -18,8 +18,10 @@ export function summarizeWorkItem(task: string, maxLength = 76): string {
 }
 
 export function workersForRun(workers: WorkLogWorker[], runId?: string | null): WorkLogWorker[] {
-  if (!runId) return [];
-  return workers.filter((worker) => worker.parentRunId === runId);
+  const current = runId ? workers.filter((worker) => worker.parentRunId === runId) : [];
+  if (current.length) return current;
+  const latestRunId = workers.find((worker) => worker.parentRunId)?.parentRunId;
+  return latestRunId ? workers.filter((worker) => worker.parentRunId === latestRunId) : [];
 }
 
 export function WorkLogPane({
@@ -61,9 +63,9 @@ export function WorkLogPane({
 
       <section className="mt-5 rounded-[13px] border border-hairline bg-plate p-3.5">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-[13px] font-bold text-paper">Current run</h3>
+          <h3 className="text-[13px] font-bold text-paper">Latest work</h3>
           <span className="font-mono text-[9px] text-sage uppercase">
-            {runStatus || "No active run"}
+            {runStatus || "No recent run"}
           </span>
         </div>
         <p className="mt-2 text-[12.5px] leading-5 text-mute">

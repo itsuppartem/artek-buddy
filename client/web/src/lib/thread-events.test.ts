@@ -8,6 +8,7 @@ import {
   isRawRunFailedMessage,
   isToolNoise,
   liveMessageId,
+  mergeThreadSnapshot,
   reduceComputerStatus,
   reduceThreadSnapshot,
 } from "./thread-events";
@@ -131,6 +132,34 @@ describe("canAnswerOwnerPrompt", () => {
   });
 });
 
+describe("mergeThreadSnapshot", () => {
+  it("keeps a persisted SSE message newer than a delayed snapshot", () => {
+    const question = {
+      id: "m-ask",
+      threadId: "t",
+      seq: 2,
+      role: "bot" as const,
+      blocks: [{ kind: "ask" as const, text: "Which city?", status: "pending" }],
+      runId: "run1",
+      createdAt: "2026-01-01T00:00:01Z",
+    };
+    const live = snap({
+      cursor: 2,
+      messages: [question],
+      run: run({ status: "waiting_input" }),
+    });
+    const delayed = snap({
+      cursor: 1,
+      messages: [],
+      run: run({ status: "running" }),
+    });
+
+    const merged = mergeThreadSnapshot(live, delayed);
+
+    expect(merged.messages).toContainEqual(question);
+  });
+});
+
 describe("isToolNoise", () => {
   it("hides empty computer blocks and tool: ids", () => {
     expect(
@@ -205,6 +234,15 @@ describe("isRawRunFailedMessage", () => {
 });
 
 describe("reduceThreadSnapshot", () => {
+  it("parks the live run as soon as takeover is requested", () => {
+    const prev = snap({ run: run({ status: "running" }) });
+
+    const next = reduceThreadSnapshot(prev, event({ type: "computer.takeover.requested" }));
+
+    expect(next?.run?.status).toBe("waiting_takeover");
+    expect(next?.cursor).toBe(2);
+  });
+
   it("does not let a late complete overwrite a cancelled run", () => {
     const prev = snap({
       run: run({ status: "cancelled" }),

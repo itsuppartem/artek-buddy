@@ -88,6 +88,8 @@ from artek_buddy.contracts.domain import (
     UpdateDeploymentInput,
     UpdateRoutineInput,
     UsageRecord,
+    WorkspaceDispatchInput,
+    WorkspaceDispatchResult,
 )
 from artek_buddy.contracts.events import (
     MessageBlock,
@@ -216,4 +218,6 @@ __all__ = [
     "UpdateRoutineInput",
     "UsageRecord",
     "WindowState",
+    "WorkspaceDispatchInput",
+    "WorkspaceDispatchResult",
 ]

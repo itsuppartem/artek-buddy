@@ -1431,6 +1431,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspace/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dispatch Workspace Task */
+        post: operations["dispatch_workspace_task_v1_workspace_dispatch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/{full_path}": {
         parameters: {
             query?: never;
@@ -2803,6 +2820,29 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WorkspaceDispatchInput */
+        WorkspaceDispatchInput: {
+            /** Text */
+            text: string;
+        };
+        /** WorkspaceDispatchResult */
+        WorkspaceDispatchResult: {
+            /** Bot Id */
+            bot_id: string;
+            /** Bot Name */
+            bot_name: string;
+            /**
+             * Queued
+             * @default false
+             */
+            queued: boolean;
+            /** Run Id */
+            run_id: string;
+            /** Seq */
+            seq: number;
+            /** Task Id */
+            task_id: string;
         };
     };
     responses: never;
@@ -6249,6 +6289,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dispatch_workspace_task_v1_workspace_dispatch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceDispatchInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDispatchResult"];
                 };
             };
             /** @description Validation Error */

@@ -27,17 +27,20 @@ export function mergeThreadSnapshot(
 ): ThreadSnapshot {
   if (!prev || prev.threadId !== next.threadId) return mergeSubagentCards(next, prev);
   const seen = new Set(next.messages.map((message) => message.id));
-  const older = preserveLoadedHistory
-    ? prev.messages.filter((message) => !seen.has(message.id) && !isLive(message.id))
-    : [];
+  const retained = prev.messages.filter(
+    (message) =>
+      !seen.has(message.id) &&
+      !isLive(message.id) &&
+      (preserveLoadedHistory || message.seq > next.cursor),
+  );
   const live = isActiveRun(next.run?.status)
     ? prev.messages.filter((message) => isLive(message.id) && !seen.has(message.id))
     : [];
-  if (!older.length && !live.length) return mergeSubagentCards(next, prev);
+  if (!retained.length && !live.length) return mergeSubagentCards(next, prev);
   return mergeSubagentCards(
     {
       ...next,
-      messages: [...older, ...next.messages, ...live].sort((a, b) => a.seq - b.seq),
+      messages: [...retained, ...next.messages, ...live].sort((a, b) => a.seq - b.seq),
     },
     prev,
   );
@@ -97,6 +100,17 @@ export function reduceThreadSnapshot(
       cursor: event.seq,
       run: { ...run, status: "waiting_input" },
       pendingAutoConsentId: autoId,
+    };
+  }
+  if (event.type === "computer.takeover.requested") {
+    const run = prev.run;
+    if (!run || (event.runId && run.id !== event.runId)) {
+      return { ...prev, cursor: event.seq };
+    }
+    return {
+      ...prev,
+      cursor: event.seq,
+      run: { ...run, status: "waiting_takeover" },
     };
   }
   if (
