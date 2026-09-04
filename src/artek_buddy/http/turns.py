@@ -721,6 +721,7 @@ async def _run_turn(
         unbind_turn(run.id)
 
     has_sent = rt.has_sent_message_in_turn(run.id)
+    has_terminal = rt.has_sent_terminal_message_in_turn(run.id)
     rt.clear_active_turn(run_id=run.id)
 
     if status == "cancelled":
@@ -729,6 +730,8 @@ async def _run_turn(
         error = owner_visible_error(error, run.id)
         if has_sent or not reply_text or reply_text.strip() == error:
             reply_text = ""
+    elif has_terminal:
+        reply_text = ""
     elif has_sent:
         body = (reply_text or "").strip()
         if not body or body in _posted_bot_texts(history, bot, run.id):

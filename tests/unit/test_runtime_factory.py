@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from artek_buddy.bot_asks import ASKED_YOU_MARK
 from artek_buddy.config import Settings
 from artek_buddy.runtime.factory import open_runtime, runtime_kind
 from artek_buddy.runtime.scripted import (
@@ -17,7 +18,9 @@ from artek_buddy.runtime.scripted import (
     E2E_META_TEXT,
     E2E_OLDER_COUNT,
     E2E_SEND_ANSWER,
+    E2E_SEND_PARAPHRASE,
     E2E_SEND_TEASER,
+    E2E_SEND_TERMINAL,
     E2E_SUBAGENT_NAME,
     E2E_WORKER_ACK,
     E2E_WORKER_BLOCK_S,
@@ -220,8 +223,32 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     teaser = steps_for_prompt("please e2e-send-then-answer")
     assert teaser[0].tool == "send_message"
     assert teaser[0].args.get("text") == E2E_SEND_TEASER
+    assert teaser[0].args.get("terminal") is False
     assert teaser[-1].result == E2E_SEND_ANSWER
+    terminal = steps_for_prompt("please e2e-send-terminal")
+    assert terminal[0].tool == "send_message"
+    assert terminal[0].args.get("text") == E2E_SEND_TERMINAL
+    assert terminal[0].args.get("terminal") is True
+    assert terminal[-1].result == E2E_SEND_PARAPHRASE
     same = steps_for_prompt("please e2e-send-then-repeat")
     assert same[0].tool == "send_message"
     assert same[0].args.get("text") == E2E_SEND_TEASER
     assert same[-1].result == E2E_SEND_TEASER
+
+
+def test_scripted_send_message_steps_make_terminal_choice_explicit() -> None:
+    expected = {
+        ASKED_YOU_MARK: [True],
+        "please e2e-close-browser": [False],
+        "please e2e-worker-status": [False],
+        "open wikipedia": [False, True],
+        "attractions, weather in parallel": [False, False, True],
+        "please e2e-send-then-repeat": [False],
+        "please e2e-send-then-answer": [False],
+        "please e2e-send-terminal": [True],
+        "please e2e-generate-image-fail": [False],
+        "please e2e-generate-image": [False],
+    }
+    for prompt, choices in expected.items():
+        sent = [step for step in steps_for_prompt(prompt) if step.tool == "send_message"]
+        assert [step.args.get("terminal") for step in sent] == choices

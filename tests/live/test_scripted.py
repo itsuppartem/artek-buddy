@@ -134,3 +134,29 @@ def test_scripted_send_then_distinct_finish_shows_both_and_exits_live(
     expect(again.nth(0)).to_contain_text(E2E_SEND_TEASER)
     expect(again.nth(1)).to_contain_text(E2E_SEND_ANSWER)
     expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
+    expect(page.get_by_test_id("thread-stop")).to_have_count(0)
+
+
+def test_scripted_terminal_send_suppresses_paraphrased_finish_and_exits_live(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    from artek_buddy.runtime.scripted import E2E_SEND_PARAPHRASE, E2E_SEND_TERMINAL
+
+    name = _open_named(page, client_url, host_url, "SendTerminal")
+    send_message(page, "please e2e-send-terminal", name)
+    bots = page.locator('[data-testid="thread-message"][data-role="bot"]')
+    expect(bots).to_have_count(1, timeout=20_000)
+    expect(bots.nth(0)).to_contain_text(E2E_SEND_TERMINAL)
+    expect(page.get_by_text(E2E_SEND_PARAPHRASE, exact=True)).to_have_count(0)
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
+    expect(page.get_by_test_id("thread-stop")).to_have_count(0)
+
+    page.reload(wait_until="domcontentloaded")
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    open_chat(page, name)
+    again = page.locator('[data-testid="thread-message"][data-role="bot"]')
+    expect(again).to_have_count(1, timeout=20_000)
+    expect(again.nth(0)).to_contain_text(E2E_SEND_TERMINAL)
+    expect(page.get_by_text(E2E_SEND_PARAPHRASE, exact=True)).to_have_count(0)
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
+    expect(page.get_by_test_id("thread-stop")).to_have_count(0)
