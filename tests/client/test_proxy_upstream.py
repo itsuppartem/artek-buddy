@@ -8,13 +8,17 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPResponse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
 CLIENT = Path(__file__).resolve().parents[2] / "client"
 if str(CLIENT) not in sys.path:
     sys.path.insert(0, str(CLIENT))
 
 import proxy  # noqa: E402
+import proxy_rpc  # noqa: E402
 
 FIRST_EVENT = b"id: progress-1\ndata: Still working: first step\n\n"
 
@@ -40,15 +44,21 @@ def running_server(handler: type[BaseHTTPRequestHandler]) -> Iterator[ThreadingH
 @contextmanager
 def running_proxy(upstream: ThreadingHTTPServer) -> Iterator[tuple[ThreadingHTTPServer, int]]:
     port = int(upstream.server_address[1])
-    server = proxy.serve(f"http://127.0.0.1:{port}", "device-token", 0)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield server, int(server.server_address[1])
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=5)
+    with TemporaryDirectory() as directory:
+        original_web_root = proxy.web_root
+        proxy.web_root = lambda: Path(directory)
+        try:
+            server = proxy.serve(f"http://127.0.0.1:{port}", "device-token", 0)
+        finally:
+            proxy.web_root = original_web_root
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield server, int(server.server_address[1])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
 
 
 def request_headers(port: int) -> dict[str, str]:
@@ -57,6 +67,16 @@ def request_headers(port: int) -> dict[str, str]:
         "Origin": f"http://127.0.0.1:{port}",
         "Accept": "text/event-stream",
     }
+
+
+def test_oversized_body_drain_stops_after_first_byte_over_limit() -> None:
+    stream = BytesIO(b"x" * 20)
+    handler = SimpleNamespace(rfile=stream)
+
+    proxy_rpc.LocalRpcMixin._drain_oversized_body(handler, length=20, limit=8)
+
+    assert stream.tell() == 9
+    assert stream.read() == b"x" * 11
 
 
 def test_first_sse_frame_is_chunked_before_upstream_closes() -> None:
