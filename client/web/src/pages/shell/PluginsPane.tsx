@@ -141,17 +141,23 @@ export function PluginsPane({
 
   async function connect(slug: string) {
     setBusy(`connect-${slug}`);
+    setError("");
+    mutateGen.current = nextPluginsFetchGen(mutateGen.current);
+    const gen = mutateGen.current;
     try {
       const started = await api.connections.begin(slug, window.location.origin);
+      if (!pluginsFetchIsCurrent(gen, mutateGen.current)) return;
       if (started.authorizationUrl) {
         openOwnerBrowser(started.authorizationUrl);
       }
       await refresh();
+      if (!pluginsFetchIsCurrent(gen, mutateGen.current)) return;
       onAppsChange?.();
     } catch (err) {
+      if (!pluginsFetchIsCurrent(gen, mutateGen.current)) return;
       setError(err instanceof Error ? err.message : "Could not connect that app.");
     } finally {
-      setBusy("");
+      if (pluginsFetchIsCurrent(gen, mutateGen.current)) setBusy("");
     }
   }
 
