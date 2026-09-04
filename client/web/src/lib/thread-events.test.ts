@@ -115,7 +115,7 @@ describe("canAnswerOwnerPrompt", () => {
     ).toBe(false);
   });
 
-  it("still requires the parked lead run for an owner question", () => {
+  it("keeps an owner question active while the waiting event catches up", () => {
     const message = {
       id: "m-ask",
       threadId: "t",
@@ -126,6 +126,7 @@ describe("canAnswerOwnerPrompt", () => {
       createdAt: "2026-01-01T00:00:00Z",
     };
     expect(canAnswerOwnerPrompt(message, run({ status: "waiting_input" }))).toBe(true);
+    expect(canAnswerOwnerPrompt(message, run({ status: "running" }))).toBe(true);
     expect(canAnswerOwnerPrompt(message, run({ status: "completed" }))).toBe(false);
   });
 });
