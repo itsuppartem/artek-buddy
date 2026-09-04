@@ -83,11 +83,15 @@ class LocalRpcMixin:
 
     def _drain_oversized_body(self, *, length: int, limit: int) -> None:
         remaining = min(length, limit + 1)
+        drained = 0
         while remaining:
             chunk = self.rfile.read(min(remaining, 64 * 1024))
             if not chunk:
                 break
             remaining -= len(chunk)
+            drained += len(chunk)
+        if drained < length:
+            self.close_connection = True
 
     def _json(self, status: int, payload: dict) -> None:
         data = json.dumps(payload).encode("utf-8")
@@ -207,6 +211,9 @@ class LocalRpcMixin:
         if not self._local_only():
             self.send_error(403)
             return
+        length = int(self.headers.get("Content-Length") or 0)
+        if length:
+            self.rfile.read(length)
         path = _proxy_mod()._config_dir() / "token"
         try:
             path.unlink()

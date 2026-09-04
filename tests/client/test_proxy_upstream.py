@@ -45,6 +45,7 @@ def running_server(handler: type[BaseHTTPRequestHandler]) -> Iterator[ThreadingH
 def running_proxy(upstream: ThreadingHTTPServer) -> Iterator[tuple[ThreadingHTTPServer, int]]:
     port = int(upstream.server_address[1])
     with TemporaryDirectory() as directory:
+        Path(directory, "index.html").write_text("<!doctype html>", encoding="utf-8")
         original_web_root = proxy.web_root
         proxy.web_root = lambda: Path(directory)
         try:
@@ -71,12 +72,49 @@ def request_headers(port: int) -> dict[str, str]:
 
 def test_oversized_body_drain_stops_after_first_byte_over_limit() -> None:
     stream = BytesIO(b"x" * 20)
-    handler = SimpleNamespace(rfile=stream)
+    handler = SimpleNamespace(rfile=stream, close_connection=False)
 
     proxy_rpc.LocalRpcMixin._drain_oversized_body(handler, length=20, limit=8)
 
     assert stream.tell() == 9
     assert stream.read() == b"x" * 11
+    assert handler.close_connection is True
+
+
+def test_unpair_consumes_body_before_next_request_on_same_connection() -> None:
+    with TemporaryDirectory() as directory:
+        original_config_dir = proxy._config_dir
+        proxy._config_dir = lambda: Path(directory)
+        try:
+            with running_server(QuietHandler) as upstream:
+                with running_proxy(upstream) as (server, port):
+                    server.token = "device-token"  # type: ignore[attr-defined]
+                    conn = HTTPConnection("127.0.0.1", port, timeout=5)
+                    try:
+                        conn.request(
+                            "POST",
+                            "/local/unpair",
+                            body=b"{}",
+                            headers={
+                                "Host": f"127.0.0.1:{port}",
+                                "Origin": f"http://127.0.0.1:{port}",
+                                "Content-Type": "application/json",
+                                "X-Artek-Local-Nonce": server.local_nonce,  # type: ignore[attr-defined]
+                            },
+                        )
+                        unpair = conn.getresponse()
+                        unpair.read()
+                        assert unpair.status == 200
+
+                        conn.request("GET", "/", headers={"Host": f"127.0.0.1:{port}"})
+                        page = conn.getresponse()
+                        body = page.read()
+                        assert page.status == 200
+                        assert body == b"<!doctype html>"
+                    finally:
+                        conn.close()
+        finally:
+            proxy._config_dir = original_config_dir
 
 
 def test_first_sse_frame_is_chunked_before_upstream_closes() -> None:
