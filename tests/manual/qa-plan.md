@@ -2,7 +2,7 @@
 
 Issue: [#220](https://github.com/itsuppartem/artek-buddy/issues/220). Daily tracker: [#174](https://github.com/itsuppartem/artek-buddy/issues/174). Pad / keys: [#218](https://github.com/itsuppartem/artek-buddy/issues/218) / [PR #219](https://github.com/itsuppartem/artek-buddy/pull/219).
 
-Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, do **2, 3, 5, 7, 11, 12, 15, 23, 25, 26, 27, 28, 29** first.
+Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, do **2, 3, 5, 7, 10, 11, 12, 15, 23, 25, 26, 27, 28, 29** first.
 
 This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packaged `.deb` `--serve`, `ui_web` = host page at 375×812). Do not treat a green check as a substitute for this list.
 
@@ -24,7 +24,7 @@ One demo: Linux first, then the phone. A cell with an em dash means that check d
 
 | Code | How to open | Size |
 | --- | --- | --- |
-| **Deb** | Installed Linux client from this tree | Wide. Must stay three-column, not the phone stack. |
+| **Deb** | Installed Linux client from this tree, opened as the real GTK/WebKit window (not `--serve` in Chromium) | Wide. Must stay three-column, not the phone stack. |
 | **Phone** | Safari → Share → Add to Home Screen → that icon | 375×812. Bottom **Chats / Chat / Desktop**. |
 
 Phone Safari and the Home Screen icon do **not** share the login. Pair from the icon.
@@ -252,7 +252,7 @@ On **Deb**: stop the `artek-buddy` container for about 30 seconds (or pull the n
 | --- | --- | --- |
 | Paste a screenshot into Message → chip `screenshot-1.png` (or the file name). Ordinary text is not an attachment | [ ] | [ ] |
 | Scripted `please e2e-background-worker-chat`: one **Working in the background.**, Message stays usable, **Stop** stays up, **no** worker card and **no** `Started …` / `Finished …` / `Stopped …` lines. `please e2e-worker-status` (or «ну что там?» on a live host) answers **Still working.** first — no second plan — then inspect if needed. Then exactly one **The background job is done.** | [ ] | [ ] |
-| Scripted `please e2e-worker-progress`: **Still working:** appears in the waiting slot under the thread, not as a bot bubble; Message stays usable; **no** worker card. A later step replaces that same slot. Exactly one **The background job is done.** and the slot is gone | [ ] | [ ] |
+| Scripted `please e2e-worker-progress`: on Deb, use the installed GTK/WebKit window (not browser `--serve`). The first **Still working:** line appears promptly in the waiting slot under the thread, not as a bot bubble; Message stays usable; **no** worker card. The second scripted progress line replaces that same slot. Then exactly one **The background job is done.** appears and the slot is gone | [ ] | [ ] |
 | Scripted `please e2e-worker-activity-no-text`: status (`please e2e-worker-status` or `please e2e-worker-false-idle`) keeps the **same** worker. Empty progress is not treated as idle; **Stop** is only the window control, not a status ping. | [ ] | [ ] |
 | Scripted `please e2e-lead-owner-ssh`: the lead turn finishes without grinding This-PC SSH. A following Send is a new run. Window **Stop** then Send is also a new turn, not a silent queue on a cancelled run | [ ] | [ ] |
 | Composer **Stop** while only the worker is running writes **Stopped.** and cancels that work | [ ] | [ ] |

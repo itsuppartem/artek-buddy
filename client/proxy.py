@@ -39,6 +39,7 @@ __all__ = [
 
 class Handler(LocalRpcMixin, UpstreamMixin, StaticMixin, BaseHTTPRequestHandler):
     server_version = "artek-buddy"
+    protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args) -> None:
         _log("client: " + (fmt % args))
