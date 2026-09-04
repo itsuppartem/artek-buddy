@@ -150,6 +150,7 @@ def test_settings_github_token_stays_on_that_bot(
     create_named_bot(page, bravo, private=True)
     open_settings(page, alpha)
     expect(page.get_by_test_id("bot-credentials")).to_be_visible()
+    expect(page.get_by_test_id("bot-credentials")).to_contain_text("host credential broker")
     page.get_by_test_id("bot-credential-github-secret").fill(secret)
     expect(page.get_by_test_id("bot-credential-github-save")).to_have_text("Store")
     page.get_by_test_id("bot-credential-github-save").click()

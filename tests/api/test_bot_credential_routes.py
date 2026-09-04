@@ -8,7 +8,7 @@ from tests.api.helpers import create_bot, message_texts
 from artek_buddy.bot_credentials import (
     PASTED_CREDENTIAL_DETAIL,
     UNNAMED_CREDENTIAL_DETAIL,
-    BotCredentialStore,
+    CredentialStoreUnavailable,
     last_four,
 )
 from artek_buddy.computer.service import wipe_computer_home
@@ -60,29 +60,24 @@ def test_credentials_survive_new_store_and_stay_isolated(client, auth_header) ->
     }
     assert listed_b.json()["credentials"] == []
 
-    vault = BotCredentialStore(client.app.state.settings.agent_data_dir)
-    assert vault.read(alpha, "github") == GITHUB_FIXTURE
-    assert vault.read(alpha, "pypi") == PYPI_FIXTURE
-    assert vault.read(alpha, "registry-token") == NAMED_FIXTURE
-    assert vault.read(bravo, "github") is None
-    assert vault.tool_env(bravo) == {}
-    env = vault.tool_env(alpha)
-    assert env["GH_TOKEN"] == GITHUB_FIXTURE
-    assert env["TWINE_PASSWORD"] == PYPI_FIXTURE
-    assert env["REGISTRY_TOKEN"] == NAMED_FIXTURE
-    assert "https://" not in " ".join(env.values())
+    assert {row.provider for row in client.app.state.credential_store.list_for_bot(alpha)} == {
+        "github",
+        "pypi",
+        "registry-token",
+    }
+    assert client.app.state.credential_store.list_for_bot(bravo) == []
+    assert not (Path(client.app.state.settings.agent_data_dir) / "credentials").exists()
 
 
-def test_fresh_app_over_same_data_keeps_tokens(client, auth_header) -> None:
+def test_settings_storage_never_writes_under_app_data(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "CredFresh")["id"]
     assert _put(client, auth_header, bot_id, "github", GITHUB_FIXTURE).status_code == 200
     assert _put(client, auth_header, bot_id, "pypi", PYPI_FIXTURE).status_code == 200
     data = Path(client.app.state.settings.agent_data_dir)
-    revived = BotCredentialStore(data)
-    assert revived.read(bot_id, "github") == GITHUB_FIXTURE
-    assert revived.read(bot_id, "pypi") == PYPI_FIXTURE
-    assert revived.tool_env(bot_id)["GH_TOKEN"] == GITHUB_FIXTURE
-    assert revived.tool_env(bot_id)["UV_PUBLISH_TOKEN"] == PYPI_FIXTURE
+    assert not (data / "credentials").exists()
+    listed = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
+    assert listed.status_code == 200
+    assert {row["provider"] for row in listed.json()["credentials"]} == {"github", "pypi"}
 
 
 def test_reset_and_mode_switch_keep_credentials(client, auth_header) -> None:
@@ -100,8 +95,6 @@ def test_reset_and_mode_switch_keep_credentials(client, auth_header) -> None:
     listed = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
     assert listed.status_code == 200
     assert listed.json()["credentials"][0]["last_four"] == last_four(GITHUB_FIXTURE)
-    vault = BotCredentialStore(client.app.state.settings.agent_data_dir)
-    assert vault.read(bot_id, "github") == GITHUB_FIXTURE
 
     switched = client.patch(
         f"/v1/bots/{bot_id}",
@@ -111,7 +104,6 @@ def test_reset_and_mode_switch_keep_credentials(client, auth_header) -> None:
     assert switched.status_code == 200, switched.text
     again = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
     assert again.json()["credentials"][0]["last_four"] == last_four(GITHUB_FIXTURE)
-    assert vault.read(bot_id, "github") == GITHUB_FIXTURE
 
 
 def test_replace_delete_and_forget_drop_old_secret(client, auth_header) -> None:
@@ -120,16 +112,18 @@ def test_replace_delete_and_forget_drop_old_secret(client, auth_header) -> None:
     replacement = "ghp_" + ("D" * 36)
     swapped = _put(client, auth_header, bot_id, "github", replacement)
     assert swapped.status_code == 200
-    vault = BotCredentialStore(client.app.state.settings.agent_data_dir)
-    assert vault.read(bot_id, "github") == replacement
-    assert vault.read(bot_id, "github") != GITHUB_FIXTURE
+    listed = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
+    assert listed.json()["credentials"][0]["last_four"] == "DDDD"
     forgotten = client.delete(f"/v1/bots/{bot_id}/credentials/github", headers=auth_header)
     assert forgotten.status_code == 200
-    assert vault.read(bot_id, "github") is None
+    assert (
+        client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header).json()["credentials"]
+        == []
+    )
     assert _put(client, auth_header, bot_id, "pypi", PYPI_FIXTURE).status_code == 200
     removed = client.delete(f"/v1/bots/{bot_id}", headers=auth_header)
     assert removed.status_code == 200
-    assert vault.read(bot_id, "pypi") is None
+    assert client.app.state.credential_store.list_for_bot(bot_id) == []
 
 
 def test_chat_named_token_is_stored_not_persisted(client, auth_header) -> None:
@@ -156,9 +150,7 @@ def test_chat_named_token_is_stored_not_persisted(client, auth_header) -> None:
     assert NAMED_FIXTURE not in creds.text
     names = {row["provider"] for row in creds.json()["credentials"]}
     assert "registry-token" in names
-    vault = BotCredentialStore(client.app.state.settings.agent_data_dir)
-    assert vault.read(bot_id, "registry-token") == NAMED_FIXTURE
-    assert vault.tool_env(bot_id)["REGISTRY_TOKEN"] == NAMED_FIXTURE
+    assert client.app.state.credential_store.list_for_bot(bot_id)[0].last_four == "ZZZZ"
 
 
 def test_unlabeled_chat_blob_is_refused(client, auth_header) -> None:
@@ -200,3 +192,35 @@ def test_memory_and_answer_reject_pasted_tokens(client, auth_header) -> None:
     )
     assert answer.status_code == 400
     assert GITHUB_FIXTURE not in answer.text
+
+
+def test_settings_and_chat_fail_closed_when_broker_is_unavailable(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "CredUnavailable")["id"]
+
+    class Unavailable:
+        def put(self, *_args, **_kwargs):
+            raise CredentialStoreUnavailable("fixture must not escape")
+
+        def forget_bot(self, *_args, **_kwargs):
+            raise CredentialStoreUnavailable("fixture must not escape")
+
+    original = client.app.state.credential_store
+    client.app.state.credential_store = Unavailable()
+    client.app.state.runtime.credential_store = client.app.state.credential_store
+    try:
+        saved = _put(client, auth_header, bot_id, "github", GITHUB_FIXTURE)
+        assert saved.status_code == 503
+        assert GITHUB_FIXTURE not in saved.text
+        sent = client.post(
+            f"/v1/threads/{bot_id}/messages",
+            headers=auth_header,
+            json={"text": f"REGISTRY_TOKEN={NAMED_FIXTURE}"},
+        )
+        assert sent.status_code == 503
+        assert NAMED_FIXTURE not in sent.text
+        removed = client.delete(f"/v1/bots/{bot_id}", headers=auth_header)
+        assert removed.status_code == 503
+        assert client.get(f"/v1/bots/{bot_id}", headers=auth_header).status_code == 200
+    finally:
+        client.app.state.credential_store = original
+        client.app.state.runtime.credential_store = original

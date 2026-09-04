@@ -346,6 +346,26 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(E2E_WORKER_ACK),
         ]
+    if "e2e-credential-worker" in hay:
+        return [
+            scripted_tool(
+                "run_credential_scoped_command",
+                command=(
+                    "python -c \"import os; print('credential available' "
+                    "if os.getenv('REGISTRY_TOKEN') else 'credential missing')\""
+                ),
+            ),
+            scripted_finish("Credential-scoped command finished."),
+        ]
+    if "e2e-credential-command" in hay:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name="CredentialWorker",
+                task="please e2e-credential-worker",
+            ),
+            scripted_finish(E2E_WORKER_ACK),
+        ]
     if "e2e-background-worker-remember" in hay:
         return [
             scripted_tool(

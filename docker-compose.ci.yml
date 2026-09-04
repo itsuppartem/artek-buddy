@@ -8,6 +8,8 @@ services:
     depends_on:
       memory:
         condition: service_healthy
+      credential-broker:
+        condition: service_healthy
       supervisor:
         condition: service_started
     env_file:
@@ -21,9 +23,11 @@ services:
       SANDBOX_SUPERVISOR_URL: http://127.0.0.1:7091
       SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-docker}
       COMPUTER_IMAGE: artek-buddy-computer:ci
+      CREDENTIAL_BROKER_URL: http://127.0.0.1:8431
+      CREDENTIAL_EXECUTOR_TOKEN: ""
       LOG_FORMAT: json
     volumes:
-      # Persistent host data, including /data/credentials (bot GitHub/PyPI tokens).
+      # Bot credentials live only in the ci-credential volume below.
       - ${ARTEK_CI_WORKSPACE}:/workspace
       - ${ARTEK_CI_DATA}:/data
     healthcheck:
@@ -51,11 +55,86 @@ services:
       SUPERVISOR_PORT: "7091"
       COMPUTER_IMAGE: artek-buddy-computer:ci
       DOCKER_SOCKET: /var/run/docker.sock
+      CREDENTIAL_BROKER_TOKEN: ""
+      CREDENTIAL_EXECUTOR_TOKEN: ""
       LOG_FORMAT: json
     volumes:
       - ${ARTEK_CI_DATA}:/data
       - /var/run/docker.sock:/var/run/docker.sock
     command: ["python", "-m", "artek_buddy", "supervisor"]
+
+  credential-migrator:
+    image: artek-buddy:ci
+    container_name: artek-buddy-credential-migrator
+    restart: "no"
+    network_mode: none
+    environment:
+      LEGACY_CREDENTIAL_DIR: /legacy-credentials
+      CREDENTIAL_BROKER_DIR: /var/lib/artek-buddy/credentials
+      LOG_FORMAT: json
+    volumes:
+      - ${ARTEK_CI_DATA}/credentials:/legacy-credentials
+      - ci-credential:/var/lib/artek-buddy/credentials
+    command: ["python", "-m", "artek_buddy", "credential-migrate"]
+
+  credential-executor:
+    image: artek-buddy:ci
+    container_name: artek-buddy-credential-executor
+    network_mode: host
+    environment:
+      AGENT_HTTP_TOKEN: ${AGENT_HTTP_TOKEN}
+      CREDENTIAL_EXECUTOR_TOKEN: ${CREDENTIAL_EXECUTOR_TOKEN:-}
+      CREDENTIAL_EXECUTOR_PORT: "8432"
+      CREDENTIAL_EXECUTOR_HOMES_DIR: /homes
+      LOG_FORMAT: json
+    volumes:
+      - ${ARTEK_CI_DATA}/homes:/homes
+    command: ["python", "-m", "artek_buddy", "credential-executor"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8432/health')",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  credential-broker:
+    image: artek-buddy:ci
+    container_name: artek-buddy-credential-broker
+    network_mode: host
+    depends_on:
+      credential-migrator:
+        condition: service_completed_successfully
+      credential-executor:
+        condition: service_healthy
+    environment:
+      AGENT_HTTP_TOKEN: ${AGENT_HTTP_TOKEN}
+      CREDENTIAL_BROKER_TOKEN: ${CREDENTIAL_BROKER_TOKEN:-}
+      CREDENTIAL_EXECUTOR_TOKEN: ${CREDENTIAL_EXECUTOR_TOKEN:-}
+      CREDENTIAL_EXECUTOR_URL: http://127.0.0.1:8432
+      CREDENTIAL_BROKER_PORT: "8431"
+      CREDENTIAL_BROKER_DIR: /var/lib/artek-buddy/credentials
+      LOG_FORMAT: json
+    volumes:
+      - ci-credential:/var/lib/artek-buddy/credentials
+    command: ["python", "-m", "artek_buddy", "credential-broker"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8431/health')",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
   memory:
     image: postgres:16-alpine
@@ -77,3 +156,4 @@ services:
 
 volumes:
   ci-memory:
+  ci-credential:

@@ -16,6 +16,7 @@ from artek_buddy.consent import ConsentHub
 from artek_buddy.contracts import (
     HealthResponse,
 )
+from artek_buddy.credential_broker import credential_store_for_settings
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
 from artek_buddy.memory_book import HostBookRewriter
@@ -57,6 +58,7 @@ from artek_buddy.http.turns import (
 async def lifespan(app: FastAPI):
     settings = get_settings()
     store = HistoryStore(settings.database_url)
+    credential_store = credential_store_for_settings(settings)
     try:
         store.open()
         store.apply_migrations()
@@ -85,6 +87,7 @@ async def lifespan(app: FastAPI):
             app.state.runtime = runtime
             app.state.store = store
             app.state.computers = computers
+            app.state.credential_store = credential_store
             app.state.hub = EventHub()
             app.state.active_turns = {}
             memory = MemoryHub(
@@ -93,6 +96,7 @@ async def lifespan(app: FastAPI):
                 rewriter=HostBookRewriter(store),
             )
             runtime.memory = memory
+            runtime.credential_store = credential_store
             app.state.memory = memory
             consent = ConsentHub(store, app.state.hub, settings)
             runtime.consent = consent

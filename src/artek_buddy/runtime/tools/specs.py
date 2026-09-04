@@ -638,6 +638,33 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         lead_only=True,
     ),
     ToolSpec(
+        name="run_credential_scoped_command",
+        description=(
+            "Run one shell command in this bot's computer home with only this bot's "
+            "host-saved tokens injected into that child process. Use for authenticated "
+            "GitHub, PyPI, or another named-token command. Output and errors redact every "
+            "stored token. Do not source or create ~/.config/*/env.sh."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "Shell command to run with this bot's saved token environment.",
+                },
+                "cwd": {
+                    "type": "string",
+                    "description": "Relative directory under this bot's computer home. Default '.'.",
+                },
+                "timeout_seconds": {
+                    "type": "number",
+                    "description": "Bounded command timeout; maximum 60 seconds.",
+                },
+            },
+            "required": ["command"],
+        },
+    ),
+    ToolSpec(
         name="list_bot_credentials",
         description=(
             "List host-saved authorization tokens for this bot. "

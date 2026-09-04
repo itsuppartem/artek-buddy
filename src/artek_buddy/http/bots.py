@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import Depends, HTTPException, Query
 
 from artek_buddy.bot_asks import BotAskError, normalize_question, resolve_ask
-from artek_buddy.bot_credentials import BotCredentialStore
+from artek_buddy.bot_credentials import BotCredentialStore, CredentialStoreError
 from artek_buddy.bus import EventHub
 from artek_buddy.computer.service import (
     ComputerBusy,
@@ -45,6 +45,7 @@ from artek_buddy.http.deps import (
     _db_error,
     _require_bot,
     computers,
+    credentials,
     current_app,
     hub,
     require_auth,
@@ -296,11 +297,19 @@ async def remove_bot(
     delete_memories: bool = Query(default=False),
     history: HistoryStore = Depends(store),
     boxes: ComputerService = Depends(computers),
+    vault: BotCredentialStore = Depends(credentials),
 ) -> OkResponse:
     try:
         bot = history.get_bot(bot_id)
         if bot is None:
             raise HTTPException(status_code=404, detail="bot not found")
+        try:
+            vault.forget_bot(bot.id)
+        except CredentialStoreError as err:
+            raise HTTPException(
+                status_code=503,
+                detail="credential broker unavailable",
+            ) from err
         _cancel_turns(bot.id)
         service = getattr(current_app().state, "subagents", None)
         if service is not None:
@@ -324,5 +333,4 @@ async def remove_bot(
     dest = contained_under(Path(current_app().state.settings.agent_data_dir) / "artifacts", bot.id)
     if dest is not None:
         shutil.rmtree(dest, ignore_errors=True)
-    BotCredentialStore(current_app().state.settings.agent_data_dir).forget_bot(bot.id)
     return OkResponse(ok=True)

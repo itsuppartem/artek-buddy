@@ -8,7 +8,8 @@ How to report a vuln: [SECURITY.md](SECURITY.md).
 ## What is trusted
 
 - The Raspberry Pi: kernel, Docker Engine, host API container, worker,
-  supervisor, Postgres, optional memory gateway.
+  supervisor, credential broker, credential executor and one-shot migrator,
+  Postgres, optional memory gateway.
 - The owner’s paired Linux `.deb` (device token on that PC).
 - Cursor Cloud as the live model runtime (prompts and relevant context leave
   the Pi).
@@ -40,6 +41,10 @@ flowchart LR
     API["FastAPI :8080"]
     DB[(Postgres :5432 on 127.0.0.1)]
     Super["Supervisor :7091 on 127.0.0.1"]
+    Broker["Credential broker :8431 on 127.0.0.1"]
+    Executor["Credential executor :8432 on 127.0.0.1"]
+    Creds[(credential-data volume)]
+    Homes["data/homes only"]
     Engine["Docker Engine"]
     Box["Untrusted desktop"]
   end
@@ -49,6 +54,10 @@ flowchart LR
   API --> DB
   API -->|"prompts"| Cursor
   API -->|"loopback + supervisor token"| Super
+  API -->|"loopback + derived broker token"| Broker
+  Broker --> Creds
+  Broker -->|"one bot's mapping + executor token"| Executor
+  Executor --> Homes
   Super -->|"docker.sock"| Engine
   Engine --> Box
   Deb -->|"preview / takeover via the host"| Box
@@ -57,7 +66,11 @@ flowchart LR
 `AGENT_HTTP_TOKEN` and `docker.sock` stay on the Pi. Pairing mints a **device
 token** for the window. The supervisor bearer is derived from the host token
 (or `SANDBOX_SUPERVISOR_TOKEN`) and is **not** interchangeable with
-`AGENT_HTTP_TOKEN`.
+`AGENT_HTTP_TOKEN`. The credential-broker bearer is independently derived
+(or `CREDENTIAL_BROKER_TOKEN`) and the raw host bearer does not authenticate
+to `:8431`. Broker-to-executor calls use another independently derived bearer
+(or `CREDENTIAL_EXECUTOR_TOKEN`); neither the host bearer nor broker bearer
+authenticates to `:8432`. Both internal services bind loopback only.
 
 ## Bind story (`:8080`)
 
@@ -70,6 +83,7 @@ Today the API listens on **every interface the kernel has**:
 | Supervisor | `SUPERVISOR_HOST=127.0.0.1`, port `7091` |
 | Postgres | published `127.0.0.1:5432` |
 | Memory gateway | `127.0.0.1:8420` |
+| Credential broker | `127.0.0.1:8431`; authenticated operations only |
 | Desktop noVNC | host ports bound `127.0.0.1` (random high ports) |
 
 Tailscale is **policy**, not a bind. MagicDNS / a tailnet IP is how the owner
@@ -115,9 +129,9 @@ that file is not served.
 | GHCR / Release `.deb` | Supply-chain swap | GitHub + Actions | Privileged `release.yml` is not loaded via default-branch `workflow_run`. Publish is `workflow_dispatch` on `main`; the job prints `workflow_sha` / `released_sha` / `test_sha`, requires them equal, on `main`, a green push `test` on that SHA, and completed successful CodeQL checks on that SHA (`analyze (python)`, `analyze (javascript-typescript)`, and the check named `CodeQL`). Bind prints `check_run_id` and `codeql_run_id` for that SHA and refuses a missing or red `codeql` workflow run. An existing VERSION tag or GitHub Release aborts before registry login; `force` cannot skip that. Workflow `concurrency` serializes dispatch without cancel-in-progress. Host image Trivy HIGH/CRITICAL on the digest; GHCR `VERSION` / `latest` move only after `gh release create`. No `--clobber`; Releases are not pruned by the default workflow; `SHA256SUMS`; CycloneDX SBOM of the packaged `.deb` and host image; GitHub Artifact Attestations; Actions pinned by commit SHA; pip-audit / Trivy | pytest-only pip-audit ignores (not in the host image) are listed in `.github/pip-audit-ignore.txt` with a reason and expiry. Computer image is **not** built in Actions. A digest that fails Trivy is still in GHCR until GC, untagged as `latest`. Dispatch from `develop` is skipped by the job `if`. The Release tag is created at the tested `main` SHA and peeled before GHCR `VERSION` / `latest` move; `gh release create` uses `--verify-tag` so a missing tag is not taken from default `develop`. If `imagetools` fails after that Release exists, `force` cannot retry; an emergency republish is a separate GitHub Environment, not `force`. |
 | `CURSOR_API_KEY` | Leak in Actions logs or the window | Actions secret + host env | `ui` job does not get the key; workflows must not `echo` env / `docker compose config` | Live canary needs the secret. A workflow edit that prints env is a leak. |
 | Provider keys in Postgres | Stolen DB dump or a verbose log line | Host Postgres on loopback | Keys stay on the Pi; `GET /v1/models/credentials` returns last four only; connect body is not logged; `observe` redacts env `CURSOR_API_KEY` | A process that can read Postgres on the Pi owns every pasted key. Forget clears the row; an env seed recreates Cursor only when no Cursor row exists. |
-| Bot authorization tokens | Stolen file under `/data/credentials`, a chat paste, computer Reset leftover, or a log/resume line | Host API process + `/data` bind | Files are `0600` under `/data/credentials/<bot_id>/`, not `/root` and not `/data/homes`. `bot_id` is `bot_` + 16 hex, provider is a `[a-z][a-z0-9-]{0,31}` slug, then `contained_under`. HTTP returns last four only; a chat paste that is a named token or a known token shape is stored here and stripped from the thread before persist; an unlabeled secret blob is 400 until Settings names it; memory/answer/bot-ask paste is 400; Forget and bot delete unlink the files; Reset and Team ↔ Private do not; `observe` redacts stored values | A process that can read `/data` on the Pi owns those tokens. The store is plaintext files on the volume (no external vault). CodeQL `py/clear-text-storage-sensitive-data` on that write is an accepted residual. Joins go through `contained_under` (`normpath` + `startswith`); `py/path-injection` on that join is named if it still fires. Symlinks that already sit under `/data` are a residual. The local Cursor shell does not receive tokens via process-wide env (that would leak across bots). Tokens that already sat in older chat history should be rotated. |
+| Bot authorization tokens | App `/data`, Postgres, another bot, a chat paste, command output, or a log/resume line exposes a token | Loopback credential broker + executor + dedicated `credential-data` volume | Only the broker mounts the named volume; it does not mount homes. Only the executor mounts `data/homes`; it does not mount the named volume, app `/data`, or Postgres. Authenticated app-to-broker and broker-to-executor calls use distinct derived bearers with `secrets.compare_digest`; the raw host bearer is rejected. List/put responses contain metadata only and there is no secret read API. The broker sends the executor only the selected bot's mapping. Execution validates bot/home ids, resolves relative cwd under the mounted home, uses a minimal child env, never mutates `os.environ`, caps command/timeout/output, and redacts the current mapping before returning to the broker; the broker redacts against every stored value again. Chat intake strips before history; Forget and bot delete call the broker. A network-disabled one-shot migrator sees both old `/data/credentials` and the new volume, confirms each put, then deletes only that old file; reruns are idempotent. | Storage is plaintext SQLite mode `0600` inside a root-only `0700` named volume; Pi root or broker compromise owns it (`py/clear-text-storage-sensitive-data`). The selected bot's plaintext mapping crosses loopback to the executor for one request. Cwd joins are resolved under the mounted home (`py/path-injection`). The authorized command is still an arbitrary shell (`py/command-line-injection`): it can spend a token, send it over the network, encode it to evade exact-value redaction, or deliberately write it into the shared Team home. Redaction prevents ordinary plaintext return, not hostile use. Tokens already present in old chat history should be rotated. |
 | Connected-app key in Postgres | Stolen DB dump, a verbose error, or a tool result that repeats the key | Host Postgres on loopback | `GET /v1/connections/status` returns last four only; errors strip the key; logs redact a broker key if it is also in the process env; `observe` redacts env `COMPOSIO_API_KEY` | A process that can read Postgres on the Pi owns the pasted key. An env seed writes the key only when no key exists yet. Catalog names and tool text from a connected app are untrusted, same class as owner-book injection. `connect_app` can put a third-party login URL on a thread card; the owner opens it. The host sends a fixed https callback (`CONNECTIONS_CALLBACK_URL`); a caller `redirect_url` is ignored. |
-| Host logs | Token, pairing code, or home path in a log line | Host / worker / supervisor | JSON in Docker; `request_id` on HTTP, `threads.send`, and tool lines; redact bearer, env secrets, pairing, `/novnc`, `/home/<user>` | Do not log bodies or screenshots. Funnel still means a stolen token is remote. |
+| Host logs | Token, pairing code, or home path in a log line | Host / worker / supervisor / credential broker / credential executor | JSON in Docker; `request_id` on HTTP, `threads.send`, and tool lines; redact bearer, configured env secrets, pairing, `/novnc`, `/home/<user>`; executor request bodies are not logged and command streams are value-redacted at executor and broker boundaries | Do not log bodies or screenshots. Encoded or transformed credential output can evade exact-value redaction. Funnel still means a stolen device or host token is remote. |
 
 ## Open by design
 

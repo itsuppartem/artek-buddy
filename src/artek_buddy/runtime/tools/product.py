@@ -37,6 +37,7 @@ WORKER_ONLY_TOOLS = frozenset(
         "computer_observe",
         "computer_act",
         "browser_act",
+        "run_credential_scoped_command",
         "report_progress",
     }
 )

@@ -9,7 +9,8 @@ the only live model runtime.
 ## Processes
 
 Compose services (`docker-compose.yml`): host API, worker, supervisor,
-memory gateway, Postgres. The computer *image* is built from
+memory gateway, credential broker, credential executor, Postgres, plus a
+one-shot credential migrator. The computer *image* is built from
 `infra/computer`; boxes are created at runtime by the supervisor, not as a
 long-running compose service.
 
@@ -25,8 +26,13 @@ flowchart TB
     Worker["worker"]
     Super["supervisor :7091"]
     GW["memory-gateway :8420"]
+    Broker["credential-broker :8431"]
+    Executor["credential-executor :8432"]
     DB[(Postgres :5432)]
     Homes["data/homes"]
+    Creds[("credential-data")]
+    Migrator["credential-migrator (one shot, no network)"]
+    Legacy["data/credentials (legacy only)"]
     Engine["Docker Engine"]
     Team["Team desktop"]
     Priv["Private desktop"]
@@ -39,6 +45,12 @@ flowchart TB
   Worker --> DB
   Worker -->|"same :8080"| API
   API --> GW
+  API -->|"loopback + derived broker token"| Broker
+  Broker --> Creds
+  Broker -->|"one bot's mapping + internal token"| Executor
+  Executor --> Homes
+  Legacy --> Migrator
+  Migrator --> Creds
   API -->|"prompts"| Cursor
   API -->|"loopback + supervisor token"| Super
   Super --> Engine
@@ -47,7 +59,17 @@ flowchart TB
   Engine --> Priv
 ```
 
-`network_mode: host` on API, worker, supervisor, and memory-gateway.
+`network_mode: host` on API, worker, supervisor, memory-gateway, credential
+broker, and credential executor. The broker binds only `127.0.0.1:8431`; its
+bearer is domain-separated from `AGENT_HTTP_TOKEN`. The executor binds only
+`127.0.0.1:8432` and uses a second domain-separated bearer. The migrator has
+`network_mode: none`, sees the legacy credential directory and the new named
+volume, and exits after confirmed copies. Only the broker mounts
+`credential-data`; it does not mount homes. Only the executor mounts
+`data/homes` at `/homes` for bounded command working directories; it does not
+mount app `/data`, `credential-data`, or Postgres storage. The broker owns the
+execution operation and gives the executor only the selected bot's mapped
+environment for that request.
 Postgres is published `127.0.0.1:5432`. Supervisor listens `127.0.0.1:7091`.
 Desktop noVNC ports bind `127.0.0.1`. The API default is `HTTP_HOST=0.0.0.0`.
 
@@ -57,6 +79,7 @@ Desktop noVNC ports bind `127.0.0.1`. The API default is `HTTP_HOST=0.0.0.0`.
 | --- | --- |
 | Threads, bots, devices, pairing hashes, memory book, routines, consent, artifacts | Postgres (`HistoryStore`, 26 SQL files under `src/artek_buddy/db/migrations/`). Host API and worker both call `apply_migrations` on boot; a session `pg_advisory_lock` serializes them. Each applied file stores a sha256; a rewritten historical file fails the run. |
 | Chromium profile, downloads, sandbox home | `data/homes/{home_key}` on the Pi |
+| Per-bot GitHub, PyPI, and named tokens | Broker-owned SQLite in Docker named volume `credential-data`; the API, worker, supervisor, credential executor, Postgres, and desktop boxes do not mount it |
 | Optional memory index files | `data/agent-memory` via the loopback gateway |
 | Host token, DB password, Cursor key | Pi `.env` (never in the page) |
 | Device token, remembered URL | Owner PC `~/.config/artek-buddy/` |

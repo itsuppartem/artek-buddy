@@ -1,21 +1,15 @@
-"""Per-bot authorization tokens on the persistent /data volume.
-
-The computer home under /data/homes is wiped by Reset and rebound on Team ↔
-Private. These files live beside that tree, not inside it, and are never
-returned after intake. Chat is intake: a pasted secret is stored here and
-stripped from the thread.
-"""
+"""Credential intake and the metadata-only broker client contract."""
 
 from __future__ import annotations
 
-import os
 import re
-import stat
+import threading
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from artek_buddy.db.shaping import isoformat_utc
-from artek_buddy.fs_jail import contained_under
 
 PASTED_CREDENTIAL_DETAIL = "Do not paste tokens here. Save them under Settings for this bot."
 UNNAMED_CREDENTIAL_DETAIL = "Name this token under Settings for this bot, then Store."
@@ -86,6 +80,27 @@ _LABELS = {
     "huggingface": "Hugging Face",
 }
 
+_RESERVED_ENV_NAMES = {
+    "BASH_ENV",
+    "BASHOPTS",
+    "CDPATH",
+    "ENV",
+    "GIT_TERMINAL_PROMPT",
+    "HOME",
+    "IFS",
+    "LANG",
+    "LC_ALL",
+    "LD_LIBRARY_PATH",
+    "LD_PRELOAD",
+    "PATH",
+    "PROMPT_COMMAND",
+    "PS4",
+    "PYTHONHOME",
+    "PYTHONPATH",
+    "SHELL",
+    "SHELLOPTS",
+}
+
 
 @dataclass(frozen=True)
 class BotCredentialStatus:
@@ -94,6 +109,51 @@ class BotCredentialStatus:
     last_four: str
     updated_at: str
     env_name: str = ""
+
+
+@dataclass(frozen=True)
+class CredentialExecutionResult:
+    ok: bool
+    exit_code: int
+    stdout: str
+    stderr: str
+    timed_out: bool = False
+    truncated: bool = False
+    error: str = ""
+
+
+class CredentialStoreError(RuntimeError):
+    """The isolated credential service rejected or could not perform an operation."""
+
+
+class CredentialStoreUnavailable(CredentialStoreError):
+    """The isolated credential service is unavailable."""
+
+
+class BotCredentialStore(Protocol):
+    def put(
+        self,
+        bot_id: str,
+        provider: str,
+        secret: str,
+        env_name: str = "",
+    ) -> BotCredentialStatus: ...
+
+    def list_for_bot(self, bot_id: str) -> list[BotCredentialStatus]: ...
+
+    def forget(self, bot_id: str, provider: str) -> bool: ...
+
+    def forget_bot(self, bot_id: str) -> None: ...
+
+    def execute(
+        self,
+        bot_id: str,
+        home_key: str,
+        command: str,
+        *,
+        cwd: str = ".",
+        timeout_seconds: float = 30,
+    ) -> CredentialExecutionResult: ...
 
 
 @dataclass(frozen=True)
@@ -131,6 +191,15 @@ def _env_from_slug(slug: str) -> str:
     if slug == "pypi":
         return "UV_PUBLISH_TOKEN"
     return slug.upper().replace("-", "_")
+
+
+def normalized_credential_env(provider: str, env_name: str = "") -> str:
+    env = (env_name or "").strip().upper() or _env_from_slug(provider)
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", env):
+        env = _env_from_slug(provider)
+    if env in _RESERVED_ENV_NAMES:
+        raise ValueError("credential environment name is reserved")
+    return env
 
 
 def _is_cred_env(name: str) -> bool:
@@ -250,48 +319,51 @@ def redact_found(text: str, found: list[_Found]) -> str:
     return out
 
 
-def apply_chat_credentials(data_dir: str | Path, bot_id: str, text: str) -> str:
+def apply_chat_credentials(store: BotCredentialStore, bot_id: str, text: str) -> str:
     raw = text or ""
     found = find_chat_credentials(raw)
     if not found and _is_secret_blob(raw.strip()):
         raise unnamed_credential_http_error()
     if not found:
         return raw
-    vault = BotCredentialStore(data_dir)
     try:
         for item in found:
-            vault.put(bot_id, item.provider, item.secret, env_name=item.env_name)
+            store.put(bot_id, item.provider, item.secret, env_name=item.env_name)
     except ValueError as err:
         from fastapi import HTTPException
 
         raise HTTPException(status_code=400, detail=str(err)) from err
+    except CredentialStoreError as err:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=503, detail="credential broker unavailable") from err
     return redact_found(raw, found)
 
 
-def _write_private(path: Path, body: str) -> None:
-    """Write a 0600 host-local file. Plaintext is the THREAT-MODEL.md residual."""
-    # codeql[py/clear-text-storage-sensitive-data]
-    path.write_text(body, encoding="utf-8")  # lgtm[py/clear-text-storage-sensitive-data]
+def credential_env(rows: Sequence[tuple[BotCredentialStatus, str]]) -> dict[str, str]:
+    env: dict[str, str] = {}
+    for row, secret in rows:
+        name = row.env_name or _env_from_slug(row.provider)
+        env[name] = secret
+        if row.provider == "github":
+            env["GH_TOKEN"] = secret
+            env["GITHUB_TOKEN"] = secret
+            env["GH_PROMPT"] = "never"
+        if row.provider == "pypi":
+            env["UV_PUBLISH_TOKEN"] = secret
+            env["PYPI_TOKEN"] = secret
+            env["TWINE_USERNAME"] = "__token__"
+            env["TWINE_PASSWORD"] = secret
+    return env
 
 
-class BotCredentialStore:
-    def __init__(self, data_dir: str | Path) -> None:
-        self.data_dir = Path(data_dir)
-        self.root = self.data_dir / "credentials"
+class InMemoryCredentialStore:
+    """Explicit test broker. Production settings default to the HTTP client."""
 
-    def _bot_dir(self, bot_id: str) -> Path | None:
-        if not _BOT_ID.fullmatch(bot_id or ""):
-            return None
-        return contained_under(self.root, bot_id)  # lgtm[py/path-injection]
-
-    def _secret_path(self, bot_id: str, provider: str) -> Path | None:
-        slug = provider_slug(provider)
-        if slug is None:
-            return None
-        folder = self._bot_dir(bot_id)
-        if folder is None:
-            return None
-        return contained_under(folder, slug)  # lgtm[py/path-injection]
+    def __init__(self, homes_root: str | Path) -> None:
+        self.homes_root = Path(homes_root)
+        self._rows: dict[tuple[str, str], tuple[BotCredentialStatus, str]] = {}
+        self._lock = threading.RLock()
 
     def put(
         self,
@@ -302,149 +374,71 @@ class BotCredentialStore:
     ) -> BotCredentialStatus:
         value = (secret or "").strip()
         slug = provider_slug(provider)
-        path = self._secret_path(bot_id, provider)
-        if path is None or slug is None:
+        if not _BOT_ID.fullmatch(bot_id or ""):
+            raise ValueError("invalid bot id")
+        if slug is None:
             raise ValueError("unknown provider")
         if not value:
             raise ValueError("secret is empty")
         if len(value) > 8000:
             raise ValueError("secret is too long")
-        env = (env_name or "").strip().upper() or _env_from_slug(slug)
-        if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", env):
-            env = _env_from_slug(slug)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        os.chmod(path.parent, stat.S_IRWXU)
-        tmp = path.with_suffix(".tmp")
-        _write_private(tmp, value)
-        os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)
-        tmp.replace(path)
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
-        stamp = isoformat_utc()
-        meta = path.with_suffix(".meta")
-        _write_private(meta, f"{last_four(value)}\n{stamp}\n{env}\n")
-        os.chmod(meta, stat.S_IRUSR | stat.S_IWUSR)
-        return BotCredentialStatus(
+        env = normalized_credential_env(slug, env_name)
+        row = BotCredentialStatus(
             provider=slug,
             scope="this_bot",
             last_four=last_four(value),
-            updated_at=stamp,
+            updated_at=isoformat_utc(),
             env_name=env,
         )
-
-    def read(self, bot_id: str, provider: str) -> str | None:
-        path = self._secret_path(bot_id, provider)
-        if path is None or not path.is_file():
-            return None
-        value = path.read_text(encoding="utf-8").strip()
-        return value or None
-
-    def status(self, bot_id: str, provider: str) -> BotCredentialStatus | None:
-        path = self._secret_path(bot_id, provider)
-        if path is None or not path.is_file():
-            return None
-        slug = provider_slug(provider) or provider
-        meta = path.with_suffix(".meta")
-        four = last_four(self.read(bot_id, provider) or "")
-        stamp = isoformat_utc()
-        env = _env_from_slug(slug)
-        if meta.is_file():
-            lines = meta.read_text(encoding="utf-8").splitlines()
-            if lines:
-                four = lines[0].strip() or four
-            if len(lines) > 1:
-                stamp = lines[1].strip() or stamp
-            if len(lines) > 2 and lines[2].strip():
-                env = lines[2].strip()
-        return BotCredentialStatus(
-            provider=slug,
-            scope="this_bot",
-            last_four=four,
-            updated_at=stamp,
-            env_name=env,
-        )
+        with self._lock:
+            self._rows[(bot_id, slug)] = (row, value)
+        return row
 
     def list_for_bot(self, bot_id: str) -> list[BotCredentialStatus]:
-        folder = self._bot_dir(bot_id)
-        names: list[str] = []
-        if folder is not None and folder.is_dir():
-            for child in folder.iterdir():
-                if not child.is_file():
-                    continue
-                if child.name.endswith((".meta", ".tmp")):
-                    continue
-                if provider_slug(child.name) is None:
-                    continue
-                names.append(child.name)
+        with self._lock:
+            rows = [
+                row
+                for (current, _provider), (row, _secret) in self._rows.items()
+                if current == bot_id
+            ]
         order = {"github": 0, "pypi": 1}
-        names.sort(key=lambda name: (order.get(name, 50), name))
-        rows: list[BotCredentialStatus] = []
-        for name in names:
-            row = self.status(bot_id, name)
-            if row is not None:
-                rows.append(row)
-        return rows
+        return sorted(rows, key=lambda row: (order.get(row.provider, 50), row.provider))
 
     def forget(self, bot_id: str, provider: str) -> bool:
-        path = self._secret_path(bot_id, provider)
-        if path is None:
+        slug = provider_slug(provider)
+        if slug is None:
             return False
-        existed = path.is_file()
-        for item in (
-            path,
-            path.with_suffix(".meta"),
-            path.with_suffix(".tmp"),
-        ):
-            if item.is_file():
-                item.unlink()
-        folder = path.parent
-        if folder.is_dir() and not any(folder.iterdir()):
-            folder.rmdir()
-        return existed
+        with self._lock:
+            return self._rows.pop((bot_id, slug), None) is not None
 
     def forget_bot(self, bot_id: str) -> None:
-        folder = self._bot_dir(bot_id)
-        if folder is None or not folder.is_dir():
-            return
-        for child in folder.iterdir():
-            if child.is_file():
-                child.unlink()
-        if folder.is_dir() and not any(folder.iterdir()):
-            folder.rmdir()
+        with self._lock:
+            for key in [key for key in self._rows if key[0] == bot_id]:
+                self._rows.pop(key, None)
 
-    def tool_env(self, bot_id: str) -> dict[str, str]:
-        env: dict[str, str] = {}
-        for row in self.list_for_bot(bot_id):
-            secret = self.read(bot_id, row.provider)
-            if not secret:
-                continue
-            name = row.env_name or _env_from_slug(row.provider)
-            env[name] = secret
-            if row.provider == "github":
-                env["GH_TOKEN"] = secret
-                env["GH_PROMPT"] = "never"
-            if row.provider == "pypi":
-                env["UV_PUBLISH_TOKEN"] = secret
-                env["TWINE_USERNAME"] = "__token__"
-                env["TWINE_PASSWORD"] = secret
-        return env
+    def execute(
+        self,
+        bot_id: str,
+        home_key: str,
+        command: str,
+        *,
+        cwd: str = ".",
+        timeout_seconds: float = 30,
+    ) -> CredentialExecutionResult:
+        from artek_buddy.credential_executor import execute_credential_command
 
-    def stored_secrets(self) -> list[str]:
-        found: list[str] = []
-        if not self.root.is_dir():
-            return found
-        for bot_dir in self.root.iterdir():
-            if not bot_dir.is_dir():
-                continue
-            for row in self.list_for_bot(bot_dir.name):
-                value = self.read(bot_dir.name, row.provider)
-                if value and len(value) >= 6:
-                    found.append(value)
-        return found
-
-
-def stored_secrets(data_dir: str | Path | None = None) -> list[str]:
-    root = data_dir or os.environ.get("AGENT_DATA_DIR", "/data")
-    try:
-        return BotCredentialStore(root).stored_secrets()
-    except OSError:
-        return []
+        with self._lock:
+            bot_rows = [
+                item for (current, _provider), item in self._rows.items() if current == bot_id
+            ]
+            secrets = [secret for _row, secret in self._rows.values()]
+        return execute_credential_command(
+            homes_root=self.homes_root,
+            bot_id=bot_id,
+            home_key=home_key,
+            command=command,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+            injected_env=credential_env(bot_rows),
+            redacted_secrets=secrets,
+        )

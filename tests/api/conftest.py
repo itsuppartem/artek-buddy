@@ -37,6 +37,7 @@ def client(
     monkeypatch.setenv("CURSOR_API_KEY", "")
     monkeypatch.setenv("COMPOSIO_API_KEY", "")
     monkeypatch.setenv("AGENT_HTTP_TOKEN", host_token)
+    monkeypatch.setenv("CREDENTIAL_BROKER_URL", "memory://api-tests")
     monkeypatch.chdir(tmp_path)
 
     from artek_buddy.main import app

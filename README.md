@@ -29,7 +29,7 @@ Pair the Linux window, ask a question, answer the bot’s card, reply in the thr
 
 | Part | Responsibility |
 | --- | --- |
-| Raspberry Pi host | FastAPI `:8080`, Postgres history and memory, optional loopback memory index `:8420`, cron worker, and the Docker supervisor |
+| Raspberry Pi host | FastAPI `:8080`, Postgres history and memory, optional loopback memory index `:8420`, credential broker `:8431`, credential executor `:8432`, cron worker, and the Docker supervisor |
 | Agent runtime | Cursor Cloud through `cursor-sdk`; default model is `grok-4.6`, configurable in `.env` |
 | Bot desktop | A graphical Linux container with Xvfb, Chromium, view-only VNC, and temporary user takeover |
 | Linux client | Pairing, bot list, live thread, notifications, memory/routine controls, and computer preview |
@@ -70,6 +70,7 @@ If you searched for a self-hosted Grok bot, a Cursor agent host, or computer-use
 - **Retain useful context from chat.** Talk normally — name, tone, paths, a standing ban. The bot writes those into a book (no profile form). A later fact revises the chapter instead of stacking a contradiction. The next turn already has the owner book and this chat's standing rules. Work notes come back when the turn is about that work. The Memory panel can show the same book.
 - **Keep a published skill for this chat.** Ask the bot to find a skill on the public web and keep it. Allow that origin; the stored document is the fetched markdown, not a paraphrase. On a matching task the agent opens the skill itself. Internal steps and controls do not clutter the owner chat. That is not a memory fact and not a routine.
 - **Attach a catalog app from chat.** Ask to connect GitHub (or Docs). The bot searches Plugins and starts Connect. It does not mint a git token on the Pi. After Connect, that app's tools are already on this turn; the bot calls them itself. There is no chip above Message.
+- **Use a bot-specific command token without putting it in chat or the desktop.** Save GitHub, PyPI, or a named token in that bot's Settings. A worker can run one credential-scoped command; the broker sends only that bot's mapping to the isolated executor, which injects it only into the child process. Returned output is redacted at both boundaries.
 - **Work on more than one thing at a time.** A lead agent can create workers for distinct tasks, show their progress in the chat, and stop, restart, or steer a worker when requirements change. A message sent while a lead is working is injected at the next tool (like Codex steer / Grok follow-up). If nothing is left to inject, it runs as a follow-up after the turn.
 - **Use a chat that can ask back.** When a browser or site needs one concrete human step, the agent posts an option or free-text question and waits. Your answer returns to the same run so it can continue instead of starting the task again. Completed answers stay on the card.
 - **Attach a file or a screenshot to the next send.** Plus, drop, or Ctrl+V. Copying a file on this PC (not only a screenshot) attaches the file — not the path as text. Images, video, and audio show a preview in the composer before you press Enter. The host copies them into that bot’s `inbox/`. Deleting the chat removes that chat’s inbox copies; a shared Team home and other bots’ files stay.
@@ -183,6 +184,15 @@ MEMORY_DB_PASSWORD=$(openssl rand -hex 16)
 `AGENT_HTTP_TOKEN` stays on the Pi. The desktop window never gets it. Devices pair and receive their own token.
 
 If you already run an older compose stack, add `MEMORY_DB_PASSWORD` to `.env` (use the password Postgres was created with) before the next `docker compose up`. Rebuild `artek-buddy-computer:local`, then stop and boot each desktop so boxes pick up CapDrop / resource limits and the isolated `artek-computers` network.
+
+On the first start with the credential broker, the network-disabled
+`credential-migrator` copies each existing `data/credentials/<bot>/…` token
+into the separate `credential-data` named volume, confirms the copy, deletes
+only that migrated legacy file, and exits. Re-running the update is
+idempotent. The API, worker, supervisor, Postgres, and bot desktops never
+mount `credential-data`; neither does the command executor. The broker does
+not mount bot homes. Only the executor mounts `data/homes`, and it does not
+mount app `/data` or the credential volume.
 
 Build the desktop box image once, then start the stack:
 
