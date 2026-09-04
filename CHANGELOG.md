@@ -34,7 +34,7 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
-- Unchecking Fast on an idle chat starts a new model session immediately. A live turn still keeps going; the send after it (including a waiting follow-up) is not Fast.
+- Unchecking Fast on an idle chat starts a new model session immediately. A live turn still keeps going; the send after it (including a waiting follow-up) is not Fast. New bot already has that session, so the first Send does not open a second one unless Fast or Reasoning changed. Changing those during a live turn writes `This turn keeps going.` into the open chat without dropping Working.
 - A token typed in Message for a bot is stored in the private credential-broker volume, stripped from the thread, and listed in Settings by name and last four — not only GitHub and PyPI. The Linux `.deb` proxies PUT so Store works from that window. Reset and Team ↔ Private keep tokens; Forget and Delete chat remove them. A worker asks Allow once / Always before a credential-scoped command runs in one disposable, selected-home container. An unlabeled secret still needs a name in Settings. Memory and a question answer still refuse a paste.
 - Switching chats keeps a bounded in-memory snapshot of recent threads, so the column does not flash empty and Load earlier pages survive a round trip. A first visit shows Loading this chat…
 - Unsent Message text, files, and Reply stay on the chat they belong to. A slow Send in one chat does not disable Send in another; a late failure restores files on the originating chat.

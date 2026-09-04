@@ -2362,6 +2362,10 @@ export function ShellPage() {
                   credentials={modelState}
                   onChange={setModelState}
                   onClose={closeModels}
+                  onApplied={() => {
+                    const id = activeIdRef.current;
+                    if (id) void refreshThread(id);
+                  }}
                 />
               ) : null}
               {panel === "create" ? (

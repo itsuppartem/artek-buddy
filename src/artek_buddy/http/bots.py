@@ -102,6 +102,9 @@ async def create_bot(
             cursor_agent_id=agent_id,
         )
         rt.bind_agent_bot(agent_id, bot.id)
+        stamp = history.model_fingerprint()
+        if stamp:
+            history.mark_applied_model(bot.id, stamp)
         return bot
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
@@ -119,6 +122,9 @@ async def duplicate_bot(
         duplicated = history.duplicate_bot(bot_id)
         attached = history.attach_agent(duplicated.id, agent_id)
         rt.bind_agent_bot(agent_id, attached.id)
+        stamp = history.model_fingerprint()
+        if stamp:
+            history.mark_applied_model(attached.id, stamp)
         return attached
     except DatabaseUnavailable as err:
         raise _db_error(err) from err

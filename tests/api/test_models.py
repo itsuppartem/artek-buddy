@@ -243,6 +243,20 @@ def _connect_cursor(client, auth_header: dict[str, str]) -> None:
     assert connected.status_code == 200
 
 
+def test_first_send_keeps_the_session_when_the_model_did_not_change(client, auth_header) -> None:
+    _connect_cursor(client, auth_header)
+    bot_id = create_bot(client, auth_header, "KeepSession")["id"]
+    before = _agent_id(client, auth_header, bot_id)
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "hello"},
+    )
+    assert sent.status_code == 200
+    wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert _agent_id(client, auth_header, bot_id) == before
+
+
 def test_unchecking_fast_on_an_idle_chat_starts_a_new_session(client, auth_header) -> None:
     _connect_cursor(client, auth_header)
     bot_id = create_bot(client, auth_header, "FastIdle")["id"]

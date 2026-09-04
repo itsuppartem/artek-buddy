@@ -75,7 +75,7 @@ Phone: Create / Models / Plugins open the **Desktop** tab (also in §11).
 | Save on an empty key → error under that row, not silence | [ ] | [ ] |
 | Change Reasoning (e.g. Low) — no second Save — open chat shows `Using … · Low · Fast` (if Fast is on) | [ ] | [ ] |
 | Uncheck Fast — Using line drops Fast; reopen stays off. If no reply is running, the next Send is not Fast | [ ] | [ ] |
-| While a reply is streaming, change Reasoning or Fast → the turn does **not** break; the line ends `This turn keeps going.` The send after it finishes is not Fast | [ ] | [ ] |
+| While a reply is streaming, change Reasoning or Fast → the turn does **not** break; the **open chat** shows `This turn keeps going.` (not only the inbox row). The send after it finishes is not Fast | [ ] | [ ] |
 | Click a model chip — that id is **Using** (tan). **Use this model** is the same commit. Empty providers say to paste a key; no dead Use this model | [ ] | [ ] |
 | The next Send uses the new settings | [ ] | [ ] |
 
