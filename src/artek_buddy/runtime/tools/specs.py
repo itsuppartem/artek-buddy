@@ -640,10 +640,11 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="run_credential_scoped_command",
         description=(
-            "Run one shell command in this bot's computer home with only this bot's "
-            "host-saved tokens injected into that child process. Use for authenticated "
-            "GitHub, PyPI, or another named-token command. Output and errors redact every "
-            "stored token. Do not source or create ~/.config/*/env.sh."
+            "Ask the owner, then run one shell command in a disposable container with only "
+            "this bot's computer home and host-saved tokens. Use for authenticated GitHub, "
+            "PyPI, or another named-token command. The container is removed after the command; "
+            "bounded output and errors redact every stored token. Do not source or create "
+            "~/.config/*/env.sh."
         ),
         input_schema={
             "type": "object",

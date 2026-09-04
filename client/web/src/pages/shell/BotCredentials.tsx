@@ -46,9 +46,9 @@ export function BotCredentials({ botId }: { botId: string }) {
     >
       <div className="text-[13.5px] text-paper">Tokens</div>
       <p className="mt-2 text-[12.5px] leading-5 text-mute">
-        Saved for this bot only in the host credential broker. Workers can use them for a scoped
-        command without returning the value. Reset and Team ↔ Private do not delete them. A token in
-        Message is stored there and stripped from the chat.
+        Saved for this bot in the host credential broker. Before a worker uses them, you approve the
+        command. It runs in a disposable container without returning the value. Reset and Team ↔
+        Private do not delete them. A token in Message is stored there and stripped from the chat.
       </p>
       <div className="mt-3 flex flex-col gap-3">
         {PINNED.map((row) => (

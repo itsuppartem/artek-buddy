@@ -158,6 +158,34 @@ class PrivateCredentialStorage:
             ).fetchall()
         return [_status(row) for row in rows]
 
+    def put_if_missing(
+        self,
+        bot_id: str,
+        provider: str,
+        secret: str,
+        env_name: str = "",
+    ) -> bool:
+        bot = _require_bot_id(bot_id)
+        slug = _require_provider(provider)
+        value = (secret or "").strip()
+        if not value:
+            raise ValueError("secret is empty")
+        if len(value) > 8000:
+            raise ValueError("secret is too long")
+        env = normalized_credential_env(slug, env_name)
+        with self._lock:
+            # Same broker-only plaintext-at-rest residual as put().
+            cursor = self._conn.execute(  # lgtm[py/clear-text-storage-sensitive-data]
+                """
+                INSERT OR IGNORE INTO credentials
+                    (bot_id, provider, secret, last_four, updated_at, env_name)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (bot, slug, value, last_four(value), isoformat_utc(), env),
+            )
+            self._conn.commit()
+        return bool(cursor.rowcount)
+
     def forget(self, bot_id: str, provider: str) -> bool:
         bot = _require_bot_id(bot_id)
         slug = _require_provider(provider)
@@ -175,13 +203,19 @@ class PrivateCredentialStorage:
             self._conn.execute("DELETE FROM credentials WHERE bot_id = ?", (bot,))
             self._conn.commit()
 
-    def execution_material(self, bot_id: str) -> tuple[dict[str, str], list[str], list[str]]:
+    def execution_material(
+        self,
+        bot_id: str,
+        credential_snapshot: list[dict[str, str]] | None = None,
+    ) -> tuple[dict[str, str], list[str], list[str]]:
         bot = _require_bot_id(bot_id)
         with self._lock:
             bot_rows = self._conn.execute(
                 """
                 SELECT provider, secret, last_four, updated_at, env_name
                 FROM credentials WHERE bot_id = ?
+                ORDER BY CASE provider WHEN 'github' THEN 0 WHEN 'pypi' THEN 1 ELSE 50 END,
+                         provider
                 """,
                 (bot,),
             ).fetchall()
@@ -199,6 +233,17 @@ class PrivateCredentialStorage:
             )
             for row in bot_rows
         ]
+        current_metadata = [
+            {
+                "provider": row.provider,
+                "last_four": row.last_four,
+                "updated_at": row.updated_at,
+                "env_name": row.env_name or "",
+            }
+            for row, _secret in mapped
+        ]
+        if credential_snapshot is not None and current_metadata != credential_snapshot:
+            raise ValueError("saved credentials changed; run the command again for fresh approval")
         current = [secret for _row, secret in mapped]
         return credential_env(mapped), current, [str(row["secret"]) for row in all_rows]
 
@@ -216,6 +261,20 @@ class PrivateCredentialStorage:
                 (bot, slug),
             ).fetchone()
         return row is not None and secrets.compare_digest(str(row["secret"]), expected)
+
+    def secret_state(self, bot_id: str, provider: str, expected: str) -> str:
+        bot = _require_bot_id(bot_id)
+        slug = _require_provider(provider)
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT secret FROM credentials WHERE bot_id = ? AND provider = ?",
+                (bot, slug),
+            ).fetchone()
+        if row is None:
+            return "missing"
+        if secrets.compare_digest(str(row["secret"]), expected):
+            return "same"
+        return "different"
 
 
 def _redact(value: str, stored: list[str]) -> str:
@@ -353,6 +412,7 @@ class CredentialBrokerClient:
         *,
         cwd: str = ".",
         timeout_seconds: float = 30,
+        credential_snapshot: list[dict[str, str]] | None = None,
     ) -> CredentialExecutionResult:
         body = self._post(
             "/v1/credentials/execute",
@@ -362,6 +422,7 @@ class CredentialBrokerClient:
                 "command": command,
                 "cwd": cwd,
                 "timeout_seconds": timeout_seconds,
+                "credential_snapshot": credential_snapshot,
             },
             timeout=max(
                 self.timeout,
@@ -457,7 +518,26 @@ class _CredentialBrokerHandler(BaseHTTPRequestHandler):
                 return
             if path == "/v1/credentials/execute":
                 bot_id = str(body.get("bot_id") or "")
-                injected_env, current, stored = storage.execution_material(bot_id)
+                raw_snapshot = body.get("credential_snapshot")
+                if raw_snapshot is not None and (
+                    not isinstance(raw_snapshot, list)
+                    or not all(isinstance(item, dict) for item in raw_snapshot)
+                ):
+                    raise ValueError("invalid credential snapshot")
+                snapshot = (
+                    [
+                        {
+                            "provider": str(item.get("provider") or ""),
+                            "last_four": str(item.get("last_four") or ""),
+                            "updated_at": str(item.get("updated_at") or ""),
+                            "env_name": str(item.get("env_name") or ""),
+                        }
+                        for item in raw_snapshot
+                    ]
+                    if isinstance(raw_snapshot, list)
+                    else None
+                )
+                injected_env, current, stored = storage.execution_material(bot_id, snapshot)
                 executor: CredentialExecutorClient = self.server.executor  # type: ignore[attr-defined]
                 result = executor.execute(
                     bot_id=bot_id,
@@ -502,6 +582,8 @@ def make_credential_broker_server(
 @dataclass(frozen=True)
 class MigrationReport:
     migrated: int = 0
+    cleaned_existing: int = 0
+    stale_removed: int = 0
     failed: int = 0
 
 
@@ -514,9 +596,11 @@ def migrate_legacy_credentials(
         return MigrationReport()
     resolved_root = root.resolve()
     migrated = 0
+    cleaned_existing = 0
+    stale_removed = 0
     failed = 0
     for bot_dir in sorted(root.iterdir()):
-        if not bot_dir.is_dir() or not _BOT_ID.fullmatch(bot_dir.name):
+        if bot_dir.is_symlink() or not bot_dir.is_dir() or not _BOT_ID.fullmatch(bot_dir.name):
             continue
         for source in sorted(bot_dir.iterdir()):
             if (
@@ -527,6 +611,7 @@ def migrate_legacy_credentials(
                 or not source.resolve().is_relative_to(resolved_root)
             ):
                 continue
+            inserted = False
             try:
                 value = source.read_text(encoding="utf-8").strip()
                 meta = source.with_suffix(".meta")
@@ -535,23 +620,67 @@ def migrate_legacy_credentials(
                     lines = meta.read_text(encoding="utf-8").splitlines()
                     if len(lines) > 2:
                         env_name = lines[2].strip()
-                storage.put(bot_dir.name, source.name, value, env_name=env_name)
-                if not storage.confirm_secret(bot_dir.name, source.name, value):
-                    raise CredentialStoreError("broker did not confirm migrated credential")
+                state = storage.secret_state(bot_dir.name, source.name, value)
+                if state == "missing":
+                    inserted = storage.put_if_missing(
+                        bot_dir.name,
+                        source.name,
+                        value,
+                        env_name=env_name,
+                    )
+                    if inserted and not storage.confirm_secret(
+                        bot_dir.name,
+                        source.name,
+                        value,
+                    ):
+                        raise CredentialStoreError("broker did not confirm migrated credential")
+                    state = (
+                        "same"
+                        if inserted
+                        else storage.secret_state(bot_dir.name, source.name, value)
+                    )
+                    if state == "missing":
+                        raise CredentialStoreError("broker did not retain migrated credential")
                 source.unlink()
                 if meta.is_file() and not meta.is_symlink():
                     meta.unlink()
-                migrated += 1
-            except (OSError, ValueError, CredentialStoreError):
+                if inserted:
+                    migrated += 1
+                elif state == "same":
+                    cleaned_existing += 1
+                else:
+                    stale_removed += 1
+                    log.warning(
+                        "removed stale legacy credential bot=%s provider=%s",
+                        bot_dir.name,
+                        source.name,
+                    )
+            except (OSError, ValueError, CredentialStoreError) as err:
                 failed += 1
-                log.exception(
-                    "credential migration failed bot=%s provider=%s",
+                log.error(
+                    "credential migration failed bot=%s provider=%s reason=%s; "
+                    "legacy cleanup is incomplete and startup is blocked",
                     bot_dir.name,
                     source.name,
+                    type(err).__name__,
                 )
         if bot_dir.is_dir() and not any(bot_dir.iterdir()):
-            bot_dir.rmdir()
-    return MigrationReport(migrated=migrated, failed=failed)
+            try:
+                bot_dir.rmdir()
+            except OSError as err:
+                failed += 1
+                log.error(
+                    "credential migration could not remove empty bot directory bot=%s "
+                    "reason=%s; fix permissions before restart",
+                    bot_dir.name,
+                    type(err).__name__,
+                )
+    return MigrationReport(
+        migrated=migrated,
+        cleaned_existing=cleaned_existing,
+        stale_removed=stale_removed,
+        failed=failed,
+    )
 
 
 def credential_store_for_settings(settings: Any):
@@ -586,7 +715,7 @@ def main() -> int:
             return 2
         executor_token = derive_credential_executor_token(host_token)
     executor = CredentialExecutorClient(
-        os.environ.get("CREDENTIAL_EXECUTOR_URL", "http://127.0.0.1:8432"),
+        os.environ.get("CREDENTIAL_EXECUTOR_URL", "http://127.0.0.1:7091"),
         executor_token,
     )
     server = make_credential_broker_server(
@@ -616,9 +745,21 @@ def migration_main() -> int:
         )
     finally:
         storage.close()
-    log.info(
-        "credential migration complete migrated=%s failed=%s",
-        report.migrated,
-        report.failed,
-    )
+    if report.failed:
+        log.error(
+            "credential migration incomplete migrated=%s cleaned_existing=%s "
+            "stale_removed=%s failed=%s; fix data/credentials permissions, then restart "
+            "credential-migrator",
+            report.migrated,
+            report.cleaned_existing,
+            report.stale_removed,
+            report.failed,
+        )
+    else:
+        log.info(
+            "credential migration complete migrated=%s cleaned_existing=%s stale_removed=%s",
+            report.migrated,
+            report.cleaned_existing,
+            report.stale_removed,
+        )
     return 1 if report.failed else 0

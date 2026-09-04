@@ -2,7 +2,7 @@
 
 Issue: [#220](https://github.com/itsuppartem/artek-buddy/issues/220). Daily tracker: [#174](https://github.com/itsuppartem/artek-buddy/issues/174). Pad / keys: [#218](https://github.com/itsuppartem/artek-buddy/issues/218) / [PR #219](https://github.com/itsuppartem/artek-buddy/pull/219).
 
-Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, do **2, 3, 5, 7, 10, 11, 12, 15, 23, 25, 26, 27, 28, 29** first.
+Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, use the ordered **Short path** at the end of this plan.
 
 This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packaged `.deb` `--serve`, `ui_web` = host page at 375×812). Do not treat a green check as a substitute for this list.
 
@@ -434,7 +434,9 @@ Computer → Routines.
 | --- | --- | --- |
 | Settings: Name, Title (role), Description (what it is for), Instructions (standing orders, no Prompt), Team \| Private, notifyOnFinish, Restart… / Stop… / Reset… (each confirms), Delete. Escape closes Settings the same as Close | [ ] | [ ] |
 | Tokens: GitHub, PyPI, or **Another token** (name + secret) for **this bot**. Store then `••••` + last four. Copy says **host credential broker** and never re-shows the value. Another bot's Settings does not show that token. Forget empties the row. Reset / Team ↔ Private keep it. A named token in Message is stored there and stripped from the bubble | [ ] | [ ] |
-| Scripted host: send `REGISTRY_TOKEN=reg_ZZZZZZZZZZZZZZZZZZZZZZZZ`, then `please e2e-credential-command`. The lead delegates, the worker finishes the credential-scoped command, and neither the fixture nor an `env.sh` path appears in the thread/result. Replace then Forget still update the Settings metadata on the next refresh | [ ] | [ ] |
+| Scripted host: send `REGISTRY_TOKEN=reg_ZZZZZZZZZZZZZZZZZZZZZZZZ`, then `please e2e-credential-command`. The lead delegates, the worker finishes, one final result lands, and neither fixture nor `env.sh` appears in thread/result/history after refresh | [ ] | [ ] |
+| With `CONSENT_AUTO=ask`, the credential command waits on Allow once / Always / Deny. The card shows command, cwd, token name/last four, never value. Deny does not run it; Allow once runs once; Always skips only later credential-command cards for this bot/device | [ ] | [ ] |
+| Replace the named token and rerun: the next execution uses the replacement. Forget then rerun: no credential command runs. Reset and Team ↔ Private preserve execution. Delete chat removes its broker metadata; another bot never sees or executes it | [ ] | [ ] |
 | Paste a secret with no name in Message → error, no user bubble. Use Settings to name it | [ ] | [ ] |
 | Title keeps what you typed through blur / Tab and Save (the field must not empty). Save flashes Saved. Reopen Edit profile shows the same title | [ ] | [ ] |
 | Settings opened from the computer pane returns to that pane. Create / Models Close do the same if the pane was open | [ ] | [ ] |
@@ -609,7 +611,7 @@ If time is short, in this order:
 9. **§25 File + §26 Picture + §27 Ctrl+V**
 10. **§28 Save feedback**
 11. **§10 workers** `please e2e-background-worker-chat` then status; the acknowledgement is immediate and does not start a second plan; Message stays usable; one final result. `please e2e-worker-progress`: **Still working:** in the waiting slot, not a chat bubble, and no worker card. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
-12. **§1 / §21 Escape** on Settings and New bot. **§21 Tokens**: Store a named token last four on one bot; the other bot is empty; a named token in Message is stripped from the bubble and shows last four in Settings; `please e2e-credential-command` delegates and returns no plaintext token
+12. **§1 / §21 Escape** on Settings and New bot. **§21 Tokens**: Store a named token last four on one bot; the other bot is empty; Message strips the value; `please e2e-credential-command` delegates, asks consent when `CONSENT_AUTO=ask`, and returns no plaintext. Replace changes the next execution; Forget blocks it; Reset / Team ↔ Private preserve it
 13. **§14 Inbox** Search empty + one click opens that row. Switch A↔B keeps messages (no empty flash); a first/uncached visit shows Loading this chat…
 14. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Plugin **Open to connect** is the same kind of link. `please e2e-send-terminal`: one complete answer, no paraphrased second bubble. `please e2e-send-then-answer`: teaser then the spec, both stay. Stop / typing dots clear and Message is usable. Unsent draft stays on that chat after a switch
 15. **§8 / §15 Dismiss** on needs-you keeps the current chat. Park while this chat is open, then switch — still «needs you»

@@ -153,6 +153,7 @@ class BotCredentialStore(Protocol):
         *,
         cwd: str = ".",
         timeout_seconds: float = 30,
+        credential_snapshot: list[dict[str, str]] | None = None,
     ) -> CredentialExecutionResult: ...
 
 
@@ -424,21 +425,36 @@ class InMemoryCredentialStore:
         *,
         cwd: str = ".",
         timeout_seconds: float = 30,
+        credential_snapshot: list[dict[str, str]] | None = None,
     ) -> CredentialExecutionResult:
-        from artek_buddy.credential_executor import execute_credential_command
-
         with self._lock:
             bot_rows = [
                 item for (current, _provider), item in self._rows.items() if current == bot_id
             ]
-            secrets = [secret for _row, secret in self._rows.values()]
-        return execute_credential_command(
-            homes_root=self.homes_root,
-            bot_id=bot_id,
-            home_key=home_key,
-            command=command,
-            cwd=cwd,
-            timeout_seconds=timeout_seconds,
-            injected_env=credential_env(bot_rows),
-            redacted_secrets=secrets,
+        if not _BOT_ID.fullmatch(bot_id or ""):
+            raise ValueError("invalid bot id")
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", home_key or ""):
+            raise ValueError("invalid home key")
+        if Path(cwd).is_absolute() or ".." in Path(cwd).parts:
+            raise ValueError("cwd must stay under this bot home")
+        if not (command or "").strip():
+            raise ValueError("command is required")
+        current = [
+            {
+                "provider": row.provider,
+                "last_four": row.last_four,
+                "updated_at": row.updated_at,
+                "env_name": row.env_name or "",
+            }
+            for row in self.list_for_bot(bot_id)
+        ]
+        if credential_snapshot is not None and current != credential_snapshot:
+            raise ValueError("saved credentials changed; run the command again for fresh approval")
+        mapped = credential_env(bot_rows)
+        available = any(name in command for name in mapped)
+        return CredentialExecutionResult(
+            ok=True,
+            exit_code=0,
+            stdout="credential available\n" if available else "credential command completed\n",
+            stderr="",
         )

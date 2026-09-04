@@ -458,7 +458,7 @@ def wrap_turn_prompt(
             "For an authenticated GitHub, PyPI, or named-token command, call "
             "list_bot_credentials, then run_credential_scoped_command. Never read, source, "
             "or create ~/.config/*/env.sh; the broker applies this bot's saved token only to "
-            "that child command and redacts it from returned output. "
+            "one owner-approved disposable runner and redacts it from returned output. "
             "Do not post to the owner chat. You do not have send_message; it is not in your catalog. "
             "After each meaningful milestone (not every tool), call report_progress with the current "
             "step and what is left. Never invent minutes remaining. "

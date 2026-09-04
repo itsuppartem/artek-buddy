@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
-from tests.api.helpers import create_bot, message_texts
+from tests.api.helpers import create_bot, message_texts, wait_run, wait_thread_has
 
 from artek_buddy.bot_credentials import (
     PASTED_CREDENTIAL_DETAIL,
@@ -95,6 +96,13 @@ def test_reset_and_mode_switch_keep_credentials(client, auth_header) -> None:
     listed = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
     assert listed.status_code == 200
     assert listed.json()["credentials"][0]["last_four"] == last_four(GITHUB_FIXTURE)
+    after_reset = client.app.state.credential_store.execute(
+        bot_id,
+        record.home_key,
+        "check GH_TOKEN",
+    )
+    assert after_reset.ok is True
+    assert after_reset.stdout == "credential available\n"
 
     switched = client.patch(
         f"/v1/bots/{bot_id}",
@@ -104,6 +112,13 @@ def test_reset_and_mode_switch_keep_credentials(client, auth_header) -> None:
     assert switched.status_code == 200, switched.text
     again = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
     assert again.json()["credentials"][0]["last_four"] == last_four(GITHUB_FIXTURE)
+    team_record = history.get_computer_for_bot(history.get_bot(bot_id))
+    after_switch = client.app.state.credential_store.execute(
+        bot_id,
+        team_record.home_key,
+        "check GH_TOKEN",
+    )
+    assert after_switch.stdout == "credential available\n"
 
 
 def test_replace_delete_and_forget_drop_old_secret(client, auth_header) -> None:
@@ -151,6 +166,68 @@ def test_chat_named_token_is_stored_not_persisted(client, auth_header) -> None:
     names = {row["provider"] for row in creds.json()["credentials"]}
     assert "registry-token" in names
     assert client.app.state.credential_store.list_for_bot(bot_id)[0].last_four == "ZZZZ"
+
+
+def test_scripted_credential_turn_delegates_and_keeps_fixture_out_of_history(
+    client,
+    auth_header,
+    caplog,
+) -> None:
+    bot_id = create_bot(client, auth_header, "CredScripted")["id"]
+    pasted = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": f"REGISTRY_TOKEN={NAMED_FIXTURE}"},
+    )
+    assert pasted.status_code == 200
+    wait_run(client, auth_header, bot_id, pasted.json()["run_id"])
+
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-credential-command"},
+    )
+    assert sent.status_code == 200
+    lead = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert lead["run"]["status"] == "completed"
+
+    deadline = time.time() + 10
+    worker = None
+    while time.time() < deadline:
+        listed = client.get(f"/v1/bots/{bot_id}/subagents", headers=auth_header)
+        assert listed.status_code == 200
+        workers = [
+            item for item in listed.json()["subagents"] if item.get("name") == "CredentialWorker"
+        ]
+        if workers and workers[0].get("status") == "completed":
+            worker = workers[0]
+            break
+        time.sleep(0.1)
+    assert worker is not None
+    assert "Credential-scoped command finished." in str(worker.get("result") or "")
+
+    final = wait_thread_has(
+        client,
+        auth_header,
+        bot_id,
+        "The background job is done.",
+    )
+    assert message_texts(final).count("The background job is done.") == 1
+    thread = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    messages = client.get(f"/v1/threads/{bot_id}/messages", headers=auth_header)
+    packed = thread.text + messages.text + json.dumps(worker)
+    assert NAMED_FIXTURE not in packed
+    assert "env.sh" not in packed
+    assert "ZZZZ" in packed
+    resumed = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "continue"},
+    )
+    assert resumed.status_code == 200
+    wait_run(client, auth_header, bot_id, resumed.json()["run_id"])
+    assert NAMED_FIXTURE not in str(client.app.state.runtime.last_prompt or "")
+    assert NAMED_FIXTURE not in caplog.text
 
 
 def test_unlabeled_chat_blob_is_refused(client, auth_header) -> None:

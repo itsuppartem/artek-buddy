@@ -11,5 +11,4 @@ def test_worker_once_is_a_supported_entrypoint() -> None:
 
 def test_credential_services_are_documented_entrypoints() -> None:
     assert "credential-broker" in USAGE
-    assert "credential-executor" in USAGE
     assert "credential-migrate" in USAGE

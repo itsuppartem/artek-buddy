@@ -29,34 +29,33 @@ def test_compose_isolates_credential_volume_and_migration() -> None:
     for name in ("docker-compose.yml", "docker-compose.release.yml"):
         text = (ROOT / name).read_text(encoding="utf-8")
         broker = _service(text, "credential-broker")
-        executor = _service(text, "credential-executor")
+        supervisor = _service(text, "supervisor")
         migrator = _service(text, "credential-migrator")
+        assert "\n  credential-executor:\n" not in text
         assert "127.0.0.1" in broker
         assert "credential-data:/var/lib/artek-buddy/credentials" in broker
         assert "./data/homes:/homes" not in broker
         assert "./data:/data" not in broker
         assert "env_file:" not in broker
         assert "AGENT_HTTP_TOKEN:" in broker
-        assert "./data/homes:/homes" in executor
-        assert "credential-data:" not in executor
-        assert "./data:/data" not in executor
-        assert "env_file:" not in executor
+        assert "CREDENTIAL_EXECUTOR_URL: http://127.0.0.1:7091" in broker
+        assert "CREDENTIAL_EXECUTOR_TOKEN:" in supervisor
+        assert "CREDENTIAL_RUNNER_IMAGE:" in supervisor
+        assert "AGENT_DATA_DIR: ${PWD}/data" in supervisor
+        assert "${PWD}/data:${PWD}/data" in supervisor
+        assert "credential-data:" not in supervisor
         assert "network_mode: none" in migrator
+        assert 'restart: "on-failure:3"' in migrator
         assert "./data/credentials:/legacy-credentials" in migrator
         assert "credential-data:/var/lib/artek-buddy/credentials" in migrator
-        assert 'CREDENTIAL_EXECUTOR_TOKEN: ""' in _service(text, "artek-buddy")
         for service in ("artek-buddy", "worker", "supervisor", "memory-gateway"):
             assert "credential-data:" not in _service(text, service)
-        for service in ("worker", "supervisor"):
-            block = _service(text, service)
-            assert 'CREDENTIAL_BROKER_TOKEN: ""' in block
-            assert 'CREDENTIAL_EXECUTOR_TOKEN: ""' in block
         assert "credential-data:" in text.partition("volumes:")[-1]
     ci = (ROOT / "docker-compose.ci.yml").read_text(encoding="utf-8")
+    assert "\n  credential-executor:\n" not in ci
     assert "ci-credential:/var/lib/artek-buddy/credentials" in _service(ci, "credential-broker")
     assert "ci-credential:" not in _service(ci, "artek-buddy")
     assert "ci-credential:" not in _service(ci, "supervisor")
-    assert "ci-credential:" not in _service(ci, "credential-executor")
-    assert 'CREDENTIAL_EXECUTOR_TOKEN: ""' in _service(ci, "artek-buddy")
-    assert 'CREDENTIAL_BROKER_TOKEN: ""' in _service(ci, "supervisor")
-    assert 'CREDENTIAL_EXECUTOR_TOKEN: ""' in _service(ci, "supervisor")
+    assert "CREDENTIAL_RUNNER_IMAGE: artek-buddy:ci" in _service(ci, "supervisor")
+    assert "AGENT_DATA_DIR: ${ARTEK_CI_DATA}" in _service(ci, "supervisor")
+    assert "${ARTEK_CI_DATA}:${ARTEK_CI_DATA}" in _service(ci, "supervisor")

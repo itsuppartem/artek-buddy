@@ -19,7 +19,7 @@ services:
       credential-broker:
         condition: service_healthy
       supervisor:
-        condition: service_started
+        condition: service_healthy
     environment:
       AGENT_CWD: /workspace
       AGENT_DATA_DIR: /data
@@ -31,7 +31,7 @@ services:
       COMPUTER_IMAGE: ${COMPUTER_IMAGE:?set COMPUTER_IMAGE}
       MEMORY_GATEWAY_URL: http://127.0.0.1:8420
       CREDENTIAL_BROKER_URL: http://127.0.0.1:8431
-      CREDENTIAL_EXECUTOR_TOKEN: ""
+      CREDENTIAL_BROKER_TOKEN: ${CREDENTIAL_BROKER_TOKEN:-}
       LOG_FORMAT: json
     volumes:
       # Bot credentials live only in the credential-data volume below.
@@ -54,18 +54,32 @@ services:
     <<: *host
     container_name: artek-buddy-supervisor
     environment:
-      AGENT_DATA_DIR: /data
+      # Docker resolves runner bind sources on the host, so this path must be
+      # identical inside the supervisor container and on the host.
+      AGENT_DATA_DIR: ${PWD}/data
       SUPERVISOR_HOST: 127.0.0.1
       SUPERVISOR_PORT: "7091"
       COMPUTER_IMAGE: ${COMPUTER_IMAGE:?set COMPUTER_IMAGE}
       DOCKER_SOCKET: /var/run/docker.sock
-      CREDENTIAL_BROKER_TOKEN: ""
-      CREDENTIAL_EXECUTOR_TOKEN: ""
+      CREDENTIAL_EXECUTOR_TOKEN: ${CREDENTIAL_EXECUTOR_TOKEN:-}
+      CREDENTIAL_RUNNER_IMAGE: ghcr.io/itsuppartem/artek-buddy:${ARTEK_VERSION:?set ARTEK_VERSION}
       LOG_FORMAT: json
     volumes:
-      - ./data:/data
+      - ${PWD}/data:${PWD}/data
       - /var/run/docker.sock:/var/run/docker.sock
     command: ["python", "-m", "artek_buddy", "supervisor"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7091/health')",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
   worker:
     <<: *host
@@ -79,8 +93,6 @@ services:
       HTTP_PORT: "8080"
       DATABASE_URL: postgresql://artek:${MEMORY_DB_PASSWORD:?set MEMORY_DB_PASSWORD in .env}@127.0.0.1:5432/artek_buddy
       WORKER_POLL_SECONDS: "15"
-      CREDENTIAL_BROKER_TOKEN: ""
-      CREDENTIAL_EXECUTOR_TOKEN: ""
       LOG_FORMAT: json
     command: ["python", "-m", "artek_buddy", "worker"]
 
@@ -101,7 +113,7 @@ services:
     image: ghcr.io/itsuppartem/artek-buddy:${ARTEK_VERSION:?set ARTEK_VERSION}
     pull_policy: always
     container_name: artek-buddy-credential-migrator
-    restart: "no"
+    restart: "on-failure:3"
     network_mode: none
     environment:
       LEGACY_CREDENTIAL_DIR: /legacy-credentials
@@ -112,33 +124,6 @@ services:
       - credential-data:/var/lib/artek-buddy/credentials
     command: ["python", "-m", "artek_buddy", "credential-migrate"]
 
-  credential-executor:
-    image: ${ARTEK_IMAGE:-ghcr.io/itsuppartem/artek-buddy:latest}
-    container_name: artek-buddy-credential-executor
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      AGENT_HTTP_TOKEN: ${AGENT_HTTP_TOKEN:?set AGENT_HTTP_TOKEN in .env}
-      CREDENTIAL_EXECUTOR_TOKEN: ${CREDENTIAL_EXECUTOR_TOKEN:-}
-      CREDENTIAL_EXECUTOR_PORT: "8432"
-      CREDENTIAL_EXECUTOR_HOMES_DIR: /homes
-      LOG_FORMAT: json
-    volumes:
-      - ./data/homes:/homes
-    command: ["python", "-m", "artek_buddy", "credential-executor"]
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8432/health')",
-        ]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-      start_period: 5s
-
   credential-broker:
     image: ghcr.io/itsuppartem/artek-buddy:${ARTEK_VERSION:?set ARTEK_VERSION}
     pull_policy: always
@@ -148,13 +133,13 @@ services:
     depends_on:
       credential-migrator:
         condition: service_completed_successfully
-      credential-executor:
+      supervisor:
         condition: service_healthy
     environment:
       AGENT_HTTP_TOKEN: ${AGENT_HTTP_TOKEN:?set AGENT_HTTP_TOKEN in .env}
       CREDENTIAL_BROKER_TOKEN: ${CREDENTIAL_BROKER_TOKEN:-}
       CREDENTIAL_EXECUTOR_TOKEN: ${CREDENTIAL_EXECUTOR_TOKEN:-}
-      CREDENTIAL_EXECUTOR_URL: http://127.0.0.1:8432
+      CREDENTIAL_EXECUTOR_URL: http://127.0.0.1:7091
       CREDENTIAL_BROKER_PORT: "8431"
       CREDENTIAL_BROKER_DIR: /var/lib/artek-buddy/credentials
       LOG_FORMAT: json

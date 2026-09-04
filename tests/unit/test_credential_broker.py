@@ -19,7 +19,7 @@ from artek_buddy.auth import (
     derive_credential_broker_token,
     derive_credential_executor_token,
 )
-from artek_buddy.bot_credentials import InMemoryCredentialStore
+from artek_buddy.bot_credentials import CredentialExecutionResult, InMemoryCredentialStore
 from artek_buddy.credential_broker import (
     CredentialBrokerClient,
     PrivateCredentialStorage,
@@ -29,8 +29,6 @@ from artek_buddy.credential_broker import (
 )
 from artek_buddy.credential_executor import (
     CredentialExecutorClient,
-    credential_executor_authorized,
-    make_credential_executor_server,
 )
 
 HOST_TOKEN = "ci-host-token-aabbccddeeff001122334455"
@@ -51,18 +49,51 @@ def _running_broker(tmp_path: Path) -> Iterator[tuple[CredentialBrokerClient, ob
     (homes / HOME_A).mkdir(parents=True)
     (homes / HOME_B).mkdir(parents=True)
     storage = PrivateCredentialStorage(tmp_path / "broker")
-    executor_server = make_credential_executor_server(
-        token=EXECUTOR_TOKEN,
-        homes_root=homes,
-        port=0,
-        forking=False,
-    )
-    executor_thread = threading.Thread(target=executor_server.serve_forever, daemon=True)
-    executor_thread.start()
-    executor = CredentialExecutorClient(
-        f"http://127.0.0.1:{executor_server.server_port}",
-        EXECUTOR_TOKEN,
-    )
+
+    class Executor:
+        def __init__(self) -> None:
+            self.calls: list[dict] = []
+
+        def execute(self, **kwargs):
+            self.calls.append(kwargs)
+            env = kwargs["injected_env"]
+            command = kwargs["command"]
+            relative = Path(kwargs["cwd"])
+            if relative.is_absolute() or ".." in relative.parts:
+                raise ValueError("cwd must stay under this bot home")
+            if "sleep(2)" in command:
+                return CredentialExecutionResult(
+                    ok=False,
+                    exit_code=124,
+                    stdout="",
+                    stderr="",
+                    timed_out=True,
+                    error="command timed out",
+                )
+            if "'x' * 100000" in command:
+                return CredentialExecutionResult(
+                    ok=True,
+                    exit_code=0,
+                    stdout="x" * (64 * 1024) + "\n[output truncated]",
+                    stderr="",
+                    truncated=True,
+                )
+            if "Path.cwd().name" in command:
+                return CredentialExecutionResult(
+                    ok=True,
+                    exit_code=0,
+                    stdout=f"{Path(kwargs['cwd']).name}\n",
+                    stderr="",
+                )
+            exposed = env.get("GH_TOKEN", "")
+            return CredentialExecutionResult(
+                ok=True,
+                exit_code=0,
+                stdout=f"fixture-seen=true\n{exposed}",
+                stderr=exposed,
+            )
+
+    executor = Executor()
     server = make_credential_broker_server(
         storage=storage,
         token=BROKER_TOKEN,
@@ -79,9 +110,6 @@ def _running_broker(tmp_path: Path) -> Iterator[tuple[CredentialBrokerClient, ob
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
-        executor_server.shutdown()
-        executor_server.server_close()
-        executor_thread.join(timeout=2)
         storage.close()
 
 
@@ -143,7 +171,7 @@ def test_execution_injects_aliases_redacts_both_streams_and_isolates_bots(
 ) -> None:
     github_hash = hashlib.sha256(GITHUB_FIXTURE.encode()).hexdigest()
     pypi_hash = hashlib.sha256(PYPI_FIXTURE.encode()).hexdigest()
-    with _running_broker(tmp_path) as (client, _server):
+    with _running_broker(tmp_path) as (client, server):
         client.put(BOT_A, "github", GITHUB_FIXTURE)
         client.put(BOT_A, "pypi", PYPI_FIXTURE)
         result = client.execute(
@@ -176,13 +204,18 @@ def test_execution_injects_aliases_redacts_both_streams_and_isolates_bots(
         assert isolated.ok is True
         assert "fixture-seen=true" in isolated.stdout
         assert "AAAA" not in json.dumps(asdict(isolated))
+        calls = server.executor.calls
+        assert calls[0]["injected_env"]["GH_TOKEN"] == GITHUB_FIXTURE
+        assert calls[0]["injected_env"]["UV_PUBLISH_TOKEN"] == PYPI_FIXTURE
+        assert "GH_TOKEN" not in calls[1]["injected_env"]
+        assert "UV_PUBLISH_TOKEN" not in calls[1]["injected_env"]
 
 
 def test_replace_forget_named_env_and_no_process_environment_mutation(tmp_path: Path) -> None:
     original_environment = dict(os.environ)
     replacement_hash = hashlib.sha256(GITHUB_REPLACEMENT.encode()).hexdigest()
     named = "reg_" + ("Z" * 24)
-    with _running_broker(tmp_path) as (client, _server):
+    with _running_broker(tmp_path) as (client, server):
         client.put(BOT_A, "github", GITHUB_FIXTURE)
         client.put(BOT_A, "github", GITHUB_REPLACEMENT)
         client.put(BOT_A, "registry-token", named, env_name="REGISTRY_TOKEN")
@@ -202,9 +235,33 @@ def test_replace_forget_named_env_and_no_process_environment_mutation(tmp_path: 
             _python_check("'GH_TOKEN' not in os.environ and 'REGISTRY_TOKEN' in os.environ"),
         )
         assert "fixture-seen=true" in forgotten.stdout
+        assert server.executor.calls[0]["injected_env"]["GH_TOKEN"] == GITHUB_REPLACEMENT
+        assert "GH_TOKEN" not in server.executor.calls[1]["injected_env"]
     assert dict(os.environ) == original_environment
     assert GITHUB_FIXTURE not in os.environ.values()
     assert GITHUB_REPLACEMENT not in os.environ.values()
+
+
+def test_broker_rejects_credential_change_after_owner_approval(tmp_path: Path) -> None:
+    with _running_broker(tmp_path) as (client, server):
+        approved = client.put(BOT_A, "github", GITHUB_FIXTURE)
+        snapshot = [
+            {
+                "provider": approved.provider,
+                "last_four": approved.last_four,
+                "updated_at": approved.updated_at,
+                "env_name": approved.env_name or "",
+            }
+        ]
+        client.put(BOT_A, "github", GITHUB_REPLACEMENT)
+        with pytest.raises(ValueError, match="fresh approval"):
+            client.execute(
+                BOT_A,
+                HOME_A,
+                "gh auth status",
+                credential_snapshot=snapshot,
+            )
+        assert server.executor.calls == []
 
 
 def test_execution_bounds_cwd_timeout_and_output(tmp_path: Path) -> None:
@@ -266,6 +323,84 @@ def test_private_store_mode_and_idempotent_legacy_migration(tmp_path: Path) -> N
         storage.close()
 
 
+def test_migration_never_overwrites_newer_broker_value(tmp_path: Path) -> None:
+    legacy = tmp_path / "legacy"
+    source = legacy / BOT_A
+    source.mkdir(parents=True)
+    stale = "reg_" + ("S" * 24)
+    current = "reg_" + ("N" * 24)
+    old_secret = source / "registry-token"
+    old_secret.write_text(stale, encoding="utf-8")
+    storage = PrivateCredentialStorage(tmp_path / "broker")
+    try:
+        storage.put(BOT_A, "registry-token", current, env_name="REGISTRY_TOKEN")
+        report = migrate_legacy_credentials(legacy, storage)
+        assert report.migrated == 0
+        assert report.stale_removed == 1
+        assert report.failed == 0
+        assert storage.confirm_secret(BOT_A, "registry-token", current)
+        assert not storage.confirm_secret(BOT_A, "registry-token", stale)
+        assert not old_secret.exists()
+    finally:
+        storage.close()
+
+
+def test_migration_retries_confirm_and_unlink_failures(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    legacy = tmp_path / "legacy"
+    source = legacy / BOT_A
+    source.mkdir(parents=True)
+    old_secret = source / "registry-token"
+    old_secret.write_text("reg_" + ("R" * 24), encoding="utf-8")
+    storage = PrivateCredentialStorage(tmp_path / "broker")
+    try:
+        real_confirm = storage.confirm_secret
+        monkeypatch.setattr(storage, "confirm_secret", lambda *_args: False)
+        failed_confirm = migrate_legacy_credentials(legacy, storage)
+        assert failed_confirm.failed == 1
+        assert old_secret.exists()
+        monkeypatch.setattr(storage, "confirm_secret", real_confirm)
+
+        real_unlink = Path.unlink
+
+        def fail_source_unlink(path: Path, *args, **kwargs):
+            if path == old_secret:
+                raise PermissionError("fixture unlink denied")
+            return real_unlink(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "unlink", fail_source_unlink)
+        failed_unlink = migrate_legacy_credentials(legacy, storage)
+        assert failed_unlink.failed == 1
+        assert old_secret.exists()
+        monkeypatch.setattr(Path, "unlink", real_unlink)
+        recovered = migrate_legacy_credentials(legacy, storage)
+        assert recovered.cleaned_existing == 1
+        assert recovered.failed == 0
+        assert not old_secret.exists()
+    finally:
+        storage.close()
+
+
+def test_migration_skips_symlink_bot_directory(tmp_path: Path) -> None:
+    legacy = tmp_path / "legacy"
+    outside = tmp_path / "outside" / BOT_A
+    outside.mkdir(parents=True)
+    secret = outside / "github"
+    secret.write_text(GITHUB_FIXTURE, encoding="utf-8")
+    legacy.mkdir()
+    (legacy / BOT_A).symlink_to(outside, target_is_directory=True)
+    storage = PrivateCredentialStorage(tmp_path / "broker")
+    try:
+        report = migrate_legacy_credentials(legacy, storage)
+        assert report == type(report)()
+        assert secret.exists()
+        assert storage.list_for_bot(BOT_A) == []
+    finally:
+        storage.close()
+
+
 def test_broker_rejects_environment_control_names(tmp_path: Path) -> None:
     storage = PrivateCredentialStorage(tmp_path / "broker")
     try:
@@ -315,12 +450,6 @@ def test_product_defaults_to_http_and_memory_broker_is_scripted_only(tmp_path: P
                 credential_broker_url="memory://not-production",
             )
         )
-
-
-def test_executor_uses_distinct_derived_bearer() -> None:
-    assert credential_executor_authorized(f"Bearer {EXECUTOR_TOKEN}", EXECUTOR_TOKEN)
-    assert not credential_executor_authorized(f"Bearer {HOST_TOKEN}", EXECUTOR_TOKEN)
-    assert not credential_executor_authorized(f"Bearer {BROKER_TOKEN}", EXECUTOR_TOKEN)
 
 
 def test_broker_client_refuses_non_loopback_url() -> None:

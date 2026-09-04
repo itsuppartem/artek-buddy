@@ -9,7 +9,7 @@ from artek_buddy.db.history import HistoryStore
 USAGE = (
     "usage: python -m artek_buddy "
     "pair|worker|supervisor|memory-gateway|credential-broker|"
-    "credential-executor|credential-migrate"
+    "credential-migrate"
 )
 
 
@@ -53,10 +53,6 @@ def main(argv: list[str] | None = None) -> int:
         from artek_buddy.credential_broker import main as broker_main
 
         return broker_main()
-    if args == ["credential-executor"]:
-        from artek_buddy.credential_executor import main as executor_main
-
-        return executor_main()
     if args == ["credential-migrate"]:
         from artek_buddy.credential_broker import migration_main
 

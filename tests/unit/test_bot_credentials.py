@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
 
 import pytest
@@ -31,13 +29,8 @@ def _store(tmp_path: Path) -> InMemoryCredentialStore:
 
 
 def _checks_env(store: InMemoryCredentialStore, bot_id: str, env_name: str, secret: str) -> bool:
-    digest = hashlib.sha256(secret.encode()).hexdigest()
-    body = (
-        "import hashlib,os;"
-        f"print(hashlib.sha256(os.environ.get({env_name!r}, '').encode()).hexdigest()"
-        f" == {digest!r})"
-    )
-    return store.execute(bot_id, bot_id, f"python -c {json.dumps(body)}").stdout.strip() == "True"
+    result = store.execute(bot_id, bot_id, f"check {env_name}")
+    return result.stdout == "credential available\n" and secret not in result.stdout
 
 
 def test_detects_named_and_github_shapes() -> None:
