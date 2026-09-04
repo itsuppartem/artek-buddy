@@ -638,10 +638,38 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         lead_only=True,
     ),
     ToolSpec(
+        name="run_credential_scoped_command",
+        description=(
+            "Ask the owner, then run one shell command in a disposable container with only "
+            "this bot's computer home and host-saved tokens. Use for authenticated GitHub, "
+            "PyPI, or another named-token command. The container is removed after the command; "
+            "bounded output and errors redact every stored token. Do not source or create "
+            "~/.config/*/env.sh."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "Shell command to run with this bot's saved token environment.",
+                },
+                "cwd": {
+                    "type": "string",
+                    "description": "Relative directory under this bot's computer home. Default '.'.",
+                },
+                "timeout_seconds": {
+                    "type": "number",
+                    "description": "Bounded command timeout; maximum 60 seconds.",
+                },
+            },
+            "required": ["command"],
+        },
+    ),
+    ToolSpec(
         name="list_bot_credentials",
         description=(
             "List host-saved authorization tokens for this bot. "
-            "Returns names and last four characters only. Never returns the secret. "
+            "Returns names, env names, and last four characters only. Never returns the secret. "
             "Tokens are not stored in chat, memory, or the computer home."
         ),
         input_schema={"type": "object", "properties": {}},

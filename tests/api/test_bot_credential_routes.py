@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
-from tests.api.helpers import create_bot, message_texts
+from tests.api.helpers import (
+    consent_id_from_thread,
+    create_bot,
+    message_texts,
+    wait_run,
+    wait_thread_has,
+)
 
 from artek_buddy.bot_credentials import (
     PASTED_CREDENTIAL_DETAIL,
     UNNAMED_CREDENTIAL_DETAIL,
-    BotCredentialStore,
+    CredentialStoreUnavailable,
     last_four,
 )
 from artek_buddy.computer.service import wipe_computer_home
@@ -44,6 +51,8 @@ def test_credentials_survive_new_store_and_stay_isolated(client, auth_header) ->
     assert NAMED_FIXTURE not in saved_n.text
     assert saved_g.json()["last_four"] == last_four(GITHUB_FIXTURE)
     assert saved_n.json()["last_four"] == last_four(NAMED_FIXTURE)
+    assert saved_g.json()["env_name"] == "GH_TOKEN"
+    assert saved_n.json()["env_name"] == "REGISTRY_TOKEN"
     assert saved_g.json()["scope"] == "this_bot"
 
     listed_a = client.get(f"/v1/bots/{alpha}/credentials", headers=auth_header)
@@ -60,29 +69,24 @@ def test_credentials_survive_new_store_and_stay_isolated(client, auth_header) ->
     }
     assert listed_b.json()["credentials"] == []
 
-    vault = BotCredentialStore(client.app.state.settings.agent_data_dir)
-    assert vault.read(alpha, "github") == GITHUB_FIXTURE
-    assert vault.read(alpha, "pypi") == PYPI_FIXTURE
-    assert vault.read(alpha, "registry-token") == NAMED_FIXTURE
-    assert vault.read(bravo, "github") is None
-    assert vault.tool_env(bravo) == {}
-    env = vault.tool_env(alpha)
-    assert env["GH_TOKEN"] == GITHUB_FIXTURE
-    assert env["TWINE_PASSWORD"] == PYPI_FIXTURE
-    assert env["REGISTRY_TOKEN"] == NAMED_FIXTURE
-    assert "https://" not in " ".join(env.values())
+    assert {row.provider for row in client.app.state.credential_store.list_for_bot(alpha)} == {
+        "github",
+        "pypi",
+        "registry-token",
+    }
+    assert client.app.state.credential_store.list_for_bot(bravo) == []
+    assert not (Path(client.app.state.settings.agent_data_dir) / "credentials").exists()
 
 
-def test_fresh_app_over_same_data_keeps_tokens(client, auth_header) -> None:
+def test_settings_storage_never_writes_under_app_data(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "CredFresh")["id"]
     assert _put(client, auth_header, bot_id, "github", GITHUB_FIXTURE).status_code == 200
     assert _put(client, auth_header, bot_id, "pypi", PYPI_FIXTURE).status_code == 200
     data = Path(client.app.state.settings.agent_data_dir)
-    revived = BotCredentialStore(data)
-    assert revived.read(bot_id, "github") == GITHUB_FIXTURE
-    assert revived.read(bot_id, "pypi") == PYPI_FIXTURE
-    assert revived.tool_env(bot_id)["GH_TOKEN"] == GITHUB_FIXTURE
-    assert revived.tool_env(bot_id)["UV_PUBLISH_TOKEN"] == PYPI_FIXTURE
+    assert not (data / "credentials").exists()
+    listed = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
+    assert listed.status_code == 200
+    assert {row["provider"] for row in listed.json()["credentials"]} == {"github", "pypi"}
 
 
 def test_reset_and_mode_switch_keep_credentials(client, auth_header) -> None:
@@ -100,8 +104,13 @@ def test_reset_and_mode_switch_keep_credentials(client, auth_header) -> None:
     listed = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
     assert listed.status_code == 200
     assert listed.json()["credentials"][0]["last_four"] == last_four(GITHUB_FIXTURE)
-    vault = BotCredentialStore(client.app.state.settings.agent_data_dir)
-    assert vault.read(bot_id, "github") == GITHUB_FIXTURE
+    after_reset = client.app.state.credential_store.execute(
+        bot_id,
+        record.home_key,
+        "check GH_TOKEN",
+    )
+    assert after_reset.ok is True
+    assert after_reset.stdout == "credential available\n"
 
     switched = client.patch(
         f"/v1/bots/{bot_id}",
@@ -111,7 +120,13 @@ def test_reset_and_mode_switch_keep_credentials(client, auth_header) -> None:
     assert switched.status_code == 200, switched.text
     again = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
     assert again.json()["credentials"][0]["last_four"] == last_four(GITHUB_FIXTURE)
-    assert vault.read(bot_id, "github") == GITHUB_FIXTURE
+    team_record = history.get_computer_for_bot(history.get_bot(bot_id))
+    after_switch = client.app.state.credential_store.execute(
+        bot_id,
+        team_record.home_key,
+        "check GH_TOKEN",
+    )
+    assert after_switch.stdout == "credential available\n"
 
 
 def test_replace_delete_and_forget_drop_old_secret(client, auth_header) -> None:
@@ -120,16 +135,18 @@ def test_replace_delete_and_forget_drop_old_secret(client, auth_header) -> None:
     replacement = "ghp_" + ("D" * 36)
     swapped = _put(client, auth_header, bot_id, "github", replacement)
     assert swapped.status_code == 200
-    vault = BotCredentialStore(client.app.state.settings.agent_data_dir)
-    assert vault.read(bot_id, "github") == replacement
-    assert vault.read(bot_id, "github") != GITHUB_FIXTURE
+    listed = client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header)
+    assert listed.json()["credentials"][0]["last_four"] == "DDDD"
     forgotten = client.delete(f"/v1/bots/{bot_id}/credentials/github", headers=auth_header)
     assert forgotten.status_code == 200
-    assert vault.read(bot_id, "github") is None
+    assert (
+        client.get(f"/v1/bots/{bot_id}/credentials", headers=auth_header).json()["credentials"]
+        == []
+    )
     assert _put(client, auth_header, bot_id, "pypi", PYPI_FIXTURE).status_code == 200
     removed = client.delete(f"/v1/bots/{bot_id}", headers=auth_header)
     assert removed.status_code == 200
-    assert vault.read(bot_id, "pypi") is None
+    assert client.app.state.credential_store.list_for_bot(bot_id) == []
 
 
 def test_chat_named_token_is_stored_not_persisted(client, auth_header) -> None:
@@ -156,9 +173,87 @@ def test_chat_named_token_is_stored_not_persisted(client, auth_header) -> None:
     assert NAMED_FIXTURE not in creds.text
     names = {row["provider"] for row in creds.json()["credentials"]}
     assert "registry-token" in names
-    vault = BotCredentialStore(client.app.state.settings.agent_data_dir)
-    assert vault.read(bot_id, "registry-token") == NAMED_FIXTURE
-    assert vault.tool_env(bot_id)["REGISTRY_TOKEN"] == NAMED_FIXTURE
+    assert client.app.state.credential_store.list_for_bot(bot_id)[0].last_four == "ZZZZ"
+
+
+def test_scripted_credential_turn_delegates_and_keeps_fixture_out_of_history(
+    client,
+    auth_header,
+    caplog,
+) -> None:
+    bot_id = create_bot(client, auth_header, "CredScripted")["id"]
+    pasted = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": f"REGISTRY_TOKEN={NAMED_FIXTURE}"},
+    )
+    assert pasted.status_code == 200
+    wait_run(client, auth_header, bot_id, pasted.json()["run_id"])
+
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-credential-command"},
+    )
+    assert sent.status_code == 200
+    lead = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert lead["run"]["status"] == "completed"
+
+    deadline = time.time() + 10
+    consent_id = None
+    while time.time() < deadline:
+        snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+        assert snap.status_code == 200
+        try:
+            consent_id = consent_id_from_thread(snap.json())
+            break
+        except AssertionError:
+            time.sleep(0.1)
+    assert consent_id is not None
+    allowed = client.post(
+        f"/v1/consents/{consent_id}",
+        headers=auth_header,
+        json={"decision": "once"},
+    )
+    assert allowed.status_code == 200, allowed.text
+
+    deadline = time.time() + 10
+    worker = None
+    while time.time() < deadline:
+        listed = client.get(f"/v1/bots/{bot_id}/subagents", headers=auth_header)
+        assert listed.status_code == 200
+        workers = [
+            item for item in listed.json()["subagents"] if item.get("name") == "CredentialWorker"
+        ]
+        if workers and workers[0].get("status") == "completed":
+            worker = workers[0]
+            break
+        time.sleep(0.1)
+    assert worker is not None
+    assert "Credential-scoped command finished." in str(worker.get("result") or "")
+
+    final = wait_thread_has(
+        client,
+        auth_header,
+        bot_id,
+        "The background job is done.",
+    )
+    assert message_texts(final).count("The background job is done.") == 1
+    thread = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    messages = client.get(f"/v1/threads/{bot_id}/messages", headers=auth_header)
+    packed = thread.text + messages.text + json.dumps(worker)
+    assert NAMED_FIXTURE not in packed
+    assert "env.sh" not in packed
+    assert "ZZZZ" in packed
+    resumed = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "continue"},
+    )
+    assert resumed.status_code == 200
+    wait_run(client, auth_header, bot_id, resumed.json()["run_id"])
+    assert NAMED_FIXTURE not in str(client.app.state.runtime.last_prompt or "")
+    assert NAMED_FIXTURE not in caplog.text
 
 
 def test_unlabeled_chat_blob_is_refused(client, auth_header) -> None:
@@ -200,3 +295,35 @@ def test_memory_and_answer_reject_pasted_tokens(client, auth_header) -> None:
     )
     assert answer.status_code == 400
     assert GITHUB_FIXTURE not in answer.text
+
+
+def test_settings_and_chat_fail_closed_when_broker_is_unavailable(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "CredUnavailable")["id"]
+
+    class Unavailable:
+        def put(self, *_args, **_kwargs):
+            raise CredentialStoreUnavailable("fixture must not escape")
+
+        def forget_bot(self, *_args, **_kwargs):
+            raise CredentialStoreUnavailable("fixture must not escape")
+
+    original = client.app.state.credential_store
+    client.app.state.credential_store = Unavailable()
+    client.app.state.runtime.credential_store = client.app.state.credential_store
+    try:
+        saved = _put(client, auth_header, bot_id, "github", GITHUB_FIXTURE)
+        assert saved.status_code == 503
+        assert GITHUB_FIXTURE not in saved.text
+        sent = client.post(
+            f"/v1/threads/{bot_id}/messages",
+            headers=auth_header,
+            json={"text": f"REGISTRY_TOKEN={NAMED_FIXTURE}"},
+        )
+        assert sent.status_code == 503
+        assert NAMED_FIXTURE not in sent.text
+        removed = client.delete(f"/v1/bots/{bot_id}", headers=auth_header)
+        assert removed.status_code == 503
+        assert client.get(f"/v1/bots/{bot_id}", headers=auth_header).status_code == 200
+    finally:
+        client.app.state.credential_store = original
+        client.app.state.runtime.credential_store = original

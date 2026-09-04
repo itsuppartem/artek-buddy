@@ -512,6 +512,7 @@ class BotCredential(BaseModel):
     scope: Literal["this_bot"] = "this_bot"
     last_four: str
     updated_at: str
+    env_name: str = ""
 
 
 class BotCredentialList(BaseModel):

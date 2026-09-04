@@ -13,6 +13,7 @@ export type BotCredential = {
   scope: "this_bot";
   lastFour: string;
   updatedAt: string;
+  envName: string;
 };
 export type ComputerStatus = Camelize<Schema["ComputerStatus"]>;
 export type ComputerFileEntry = Camelize<Schema["ComputerFileEntry"]>;

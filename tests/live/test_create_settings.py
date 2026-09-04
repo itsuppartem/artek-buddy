@@ -150,6 +150,7 @@ def test_settings_github_token_stays_on_that_bot(
     create_named_bot(page, bravo, private=True)
     open_settings(page, alpha)
     expect(page.get_by_test_id("bot-credentials")).to_be_visible()
+    expect(page.get_by_test_id("bot-credentials")).to_contain_text("host credential broker")
     page.get_by_test_id("bot-credential-github-secret").fill(secret)
     expect(page.get_by_test_id("bot-credential-github-save")).to_have_text("Store")
     page.get_by_test_id("bot-credential-github-save").click()
@@ -217,3 +218,35 @@ def test_composer_saves_a_chat_token_off_the_thread(
     ).to_have_count(0)
     open_settings(page, name)
     expect(page.get_by_test_id("bot-credential-registry-token-status")).to_contain_text("••••ZZZZ")
+
+
+def test_installed_client_runs_scripted_credential_worker_without_leaking(
+    page: Page,
+    client_url: str,
+    host_url: str,
+) -> None:
+    from tests.support import mask_secret
+
+    name = unique_bot("TokRun")
+    secret = "reg_" + ("Z" * 24)
+    mask_secret(secret)
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name, private=True)
+    box = composer(page)
+    box.fill(f"REGISTRY_TOKEN={secret}")
+    box.press("Enter")
+    expect(page.get_by_text("••••ZZZZ")).to_be_visible(timeout=8_000)
+    box.fill("please e2e-credential-command")
+    box.press("Enter")
+    expect(page.get_by_text("Working in the background.")).to_be_visible(timeout=8_000)
+    card = page.get_by_test_id("consent-card")
+    expect(card).to_be_visible(timeout=20_000)
+    page.get_by_test_id("ask-option").filter(has_text="Allow once").click()
+    expect(card).to_have_attribute("data-status", "answered", timeout=20_000)
+    expect(page.get_by_test_id("thread")).to_contain_text(
+        "The background job is done.",
+        timeout=20_000,
+    )
+    transcript = page.get_by_test_id("thread")
+    expect(transcript).not_to_contain_text(secret)
+    expect(transcript).not_to_contain_text("env.sh")

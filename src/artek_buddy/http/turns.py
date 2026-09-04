@@ -469,8 +469,10 @@ async def _accept_turn(
 ) -> ThreadSendResult:
     from artek_buddy.bot_credentials import apply_chat_credentials
 
-    data_dir = getattr(getattr(rt, "settings", None), "agent_data_dir", None) or "/data"
-    text = apply_chat_credentials(data_dir, bot.id, text)
+    credential_store = getattr(rt, "credential_store", None)
+    if credential_store is None:
+        raise HTTPException(status_code=503, detail="credential broker unavailable")
+    text = apply_chat_credentials(credential_store, bot.id, text)
     try:
         if history.get_default_model() is None:
             return _needs_model_send(history, events, bot, text)

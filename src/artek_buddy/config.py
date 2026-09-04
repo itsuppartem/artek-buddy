@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     computer_takeover_idle_seconds: int = 120
     computer_takeover_ttl_seconds: int = 900
     memory_gateway_url: str = "http://127.0.0.1:8420"
+    credential_broker_url: str = "http://127.0.0.1:8431"
+    credential_broker_token: str = ""
     consent_auto: str = ""
     log_format: str = ""
 

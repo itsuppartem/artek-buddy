@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -14,3 +15,47 @@ def test_compose_healthchecks_use_readyz() -> None:
         text = (ROOT / name).read_text(encoding="utf-8")
         assert "8080/readyz" in text, name
         assert "8080/health')" not in text, name
+
+
+def _service(text: str, name: str) -> str:
+    match = re.search(
+        rf"(?ms)^  {re.escape(name)}:\n(.*?)(?=^  [a-zA-Z0-9_-]+:\n|^volumes:\n)", text
+    )
+    assert match is not None, name
+    return match.group(0)
+
+
+def test_compose_isolates_credential_volume_and_migration() -> None:
+    for name in ("docker-compose.yml", "docker-compose.release.yml"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        broker = _service(text, "credential-broker")
+        supervisor = _service(text, "supervisor")
+        migrator = _service(text, "credential-migrator")
+        assert "\n  credential-executor:\n" not in text
+        assert "127.0.0.1" in broker
+        assert "credential-data:/var/lib/artek-buddy/credentials" in broker
+        assert "./data/homes:/homes" not in broker
+        assert "./data:/data" not in broker
+        assert "env_file:" not in broker
+        assert "AGENT_HTTP_TOKEN:" in broker
+        assert "CREDENTIAL_EXECUTOR_URL: http://127.0.0.1:7091" in broker
+        assert "CREDENTIAL_EXECUTOR_TOKEN:" in supervisor
+        assert "CREDENTIAL_RUNNER_IMAGE:" in supervisor
+        assert "AGENT_DATA_DIR: ${PWD}/data" in supervisor
+        assert "${PWD}/data:${PWD}/data" in supervisor
+        assert "credential-data:" not in supervisor
+        assert "network_mode: none" in migrator
+        assert 'restart: "on-failure:3"' in migrator
+        assert "./data/credentials:/legacy-credentials" in migrator
+        assert "credential-data:/var/lib/artek-buddy/credentials" in migrator
+        for service in ("artek-buddy", "worker", "supervisor", "memory-gateway"):
+            assert "credential-data:" not in _service(text, service)
+        assert "credential-data:" in text.partition("volumes:")[-1]
+    ci = (ROOT / "docker-compose.ci.yml").read_text(encoding="utf-8")
+    assert "\n  credential-executor:\n" not in ci
+    assert "ci-credential:/var/lib/artek-buddy/credentials" in _service(ci, "credential-broker")
+    assert "ci-credential:" not in _service(ci, "artek-buddy")
+    assert "ci-credential:" not in _service(ci, "supervisor")
+    assert "CREDENTIAL_RUNNER_IMAGE: artek-buddy:ci" in _service(ci, "supervisor")
+    assert "AGENT_DATA_DIR: ${ARTEK_CI_DATA}" in _service(ci, "supervisor")
+    assert "${ARTEK_CI_DATA}:${ARTEK_CI_DATA}" in _service(ci, "supervisor")

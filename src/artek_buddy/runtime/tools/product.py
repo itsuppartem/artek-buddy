@@ -37,6 +37,7 @@ WORKER_ONLY_TOOLS = frozenset(
         "computer_observe",
         "computer_act",
         "browser_act",
+        "run_credential_scoped_command",
         "report_progress",
     }
 )
@@ -258,6 +259,14 @@ class ProductToolsCore:
                 if ctx.role == "subagent":
                     return {"ok": False, "error": "worker was cancelled"}
                 return {"ok": False, "error": "turn was cancelled"}
+            if ctx.role != "subagent" and name == "run_credential_scoped_command":
+                return {
+                    "ok": False,
+                    "error": (
+                        "lead cannot use run_credential_scoped_command; "
+                        "spawn_subagent for credential-scoped work"
+                    ),
+                }
             if ctx.role != "subagent" and name == "report_progress":
                 return {"ok": False, "error": "lead cannot use report_progress"}
             if ctx.role != "subagent" and name in LEAD_FORBIDDEN_OWNER_TOOLS:
