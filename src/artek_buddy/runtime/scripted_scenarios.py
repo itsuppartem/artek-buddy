@@ -69,6 +69,8 @@ E2E_TAKEOVER_REASON = "Pass the site check, then Release."
 E2E_GENERATE_ERROR = "could not generate that image"
 E2E_SEND_TEASER = "Working on the spec."
 E2E_SEND_ANSWER = "The specification is ready."
+E2E_SEND_TERMINAL = "The migration plan is complete and ready to review."
+E2E_SEND_PARAPHRASE = "You can now review the completed migration plan."
 E2E_AUTH_ERROR = "Authentication error If you are logged in, try logging out and back in."
 E2E_PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
@@ -209,7 +211,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     hay = user.lower()
     if ASKED_YOU_MARK in hay:
         return [
-            scripted_tool("send_message", text=E2E_ASK_READY),
+            scripted_tool("send_message", text=E2E_ASK_READY, terminal=True),
             scripted_finish(""),
         ]
     if ASK_REPLY_MARK in hay:
@@ -275,7 +277,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "e2e-close-browser" in hay:
         return [
-            scripted_tool("send_message", text=E2E_CLOSE_STATUS),
+            scripted_tool("send_message", text=E2E_CLOSE_STATUS, terminal=False),
             scripted_tool("close_app", application="chromium"),
             scripted_finish("browser closed"),
         ]
@@ -522,7 +524,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "e2e-worker-status" in hay:
         return [
-            scripted_tool("send_message", text=E2E_WORKER_STATUS),
+            scripted_tool("send_message", text=E2E_WORKER_STATUS, terminal=False),
             scripted_tool("inspect_subagent", ref=E2E_SUBAGENT_NAME),
             scripted_finish(E2E_WORKER_STATUS),
         ]
@@ -626,12 +628,17 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         return [
             scripted_progress("launching Chromium"),
             scripted_delay(1.2),
-            scripted_tool("send_message", text="Opening Chromium on the Pi desktop."),
+            scripted_tool(
+                "send_message",
+                text="Opening Chromium on the Pi desktop.",
+                terminal=False,
+            ),
             scripted_tool("open_path", path="https://en.wikipedia.org/wiki/Belgrade"),
             scripted_delay(2.8),
             scripted_tool(
                 "send_message",
                 text="Wikipedia is on this computer. Open the screen to watch or take control.",
+                terminal=True,
             ),
             scripted_finish(
                 "Wikipedia is on this computer. Open the screen to watch or take control."
@@ -644,16 +651,19 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             scripted_tool(
                 "send_message",
                 text="Attractions: Kalemegdan, Skadarlija, and the Temple of Saint Sava.",
+                terminal=False,
             ),
             scripted_delay(1.8),
             scripted_tool(
                 "send_message",
                 text="Weather: clear, about 22°C, light wind off the river.",
+                terminal=False,
             ),
             scripted_delay(1.8),
             scripted_tool(
                 "send_message",
                 text="Cafes: start by the water at Beton Hala, then walk up to Skadarlija.",
+                terminal=True,
             ),
             scripted_finish(""),
         ]
@@ -763,23 +773,28 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "e2e-send-then-repeat" in hay:
         return [
-            scripted_tool("send_message", text=E2E_SEND_TEASER),
+            scripted_tool("send_message", text=E2E_SEND_TEASER, terminal=False),
             scripted_finish(E2E_SEND_TEASER),
         ]
     if "e2e-send-then-answer" in hay:
         return [
-            scripted_tool("send_message", text=E2E_SEND_TEASER),
+            scripted_tool("send_message", text=E2E_SEND_TEASER, terminal=False),
             scripted_finish(E2E_SEND_ANSWER),
+        ]
+    if "e2e-send-terminal" in hay:
+        return [
+            scripted_tool("send_message", text=E2E_SEND_TERMINAL, terminal=True),
+            scripted_finish(E2E_SEND_PARAPHRASE),
         ]
     if "e2e-generate-image-fail" in hay:
         return [
-            scripted_tool("send_message", text="Generating…"),
+            scripted_tool("send_message", text="Generating…", terminal=False),
             scripted_delay(0.2),
             scripted_finish(E2E_GENERATE_ERROR, status="failed", error=E2E_GENERATE_ERROR),
         ]
     if "e2e-generate-image" in hay:
         return [
-            scripted_tool("send_message", text="Generating…"),
+            scripted_tool("send_message", text="Generating…", terminal=False),
             scripted_delay(2.5),
             ScriptedStep(write_home=("fox.png", E2E_PNG)),
             scripted_tool("send_file", path="fox.png", name="fox.png"),

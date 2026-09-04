@@ -19,6 +19,10 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             "Post a message to the user in this chat immediately. "
             "Use this whenever you have an update, explanation, intermediate result, "
             "or decision point as soon as it is ready. "
+            "You must explicitly set terminal to true or false on every call. "
+            "Set terminal=true only when this text is the complete reply for the turn; "
+            "after it posts, end the turn without repeating or paraphrasing it. "
+            "Leave terminal=false for an interim update when a distinct final answer should follow. "
             "On a status-only ping, call this first with a short truthful acknowledgement "
             "before inspect_subagent or other tools. "
             "Do not tell the user to press Allow — the consent card in the thread is that UI."
@@ -30,8 +34,14 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                     "type": "string",
                     "description": "Message text to send to the user (supports markdown).",
                 },
+                "terminal": {
+                    "type": "boolean",
+                    "description": (
+                        "True only when text fully answers this turn; false for an interim update."
+                    ),
+                },
             },
-            "required": ["text"],
+            "required": ["text", "terminal"],
         },
         lead_only=True,
     ),

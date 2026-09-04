@@ -881,6 +881,33 @@ def test_distinct_finish_after_send_message_is_kept(client, auth_header) -> None
     assert again.index(E2E_SEND_TEASER) < again.index(E2E_SEND_ANSWER)
 
 
+def test_terminal_send_message_suppresses_paraphrased_finish(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_SEND_PARAPHRASE, E2E_SEND_TERMINAL
+
+    bot_id = create_bot(client, auth_header, "SendTerminal")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-send-terminal"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    assert not snap["run"].get("error")
+    bot_messages = [message for message in snap["messages"] if message["role"] == "bot"]
+    assert len(bot_messages) == 1
+    assert message_texts({"messages": bot_messages}) == [E2E_SEND_TERMINAL]
+    assert E2E_SEND_PARAPHRASE not in message_texts(snap)
+
+    reloaded = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert reloaded.status_code == 200
+    persisted = reloaded.json()
+    bot_messages = [message for message in persisted["messages"] if message["role"] == "bot"]
+    assert len(bot_messages) == 1
+    assert message_texts({"messages": bot_messages}) == [E2E_SEND_TERMINAL]
+    assert E2E_SEND_PARAPHRASE not in message_texts(persisted)
+
+
 def test_identical_finish_after_send_message_is_not_duplicated(client, auth_header) -> None:
     from artek_buddy.runtime.scripted import E2E_SEND_TEASER
 
