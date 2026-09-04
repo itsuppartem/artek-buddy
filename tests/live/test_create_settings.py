@@ -243,7 +243,10 @@ def test_installed_client_runs_scripted_credential_worker_without_leaking(
     expect(card).to_be_visible(timeout=20_000)
     page.get_by_test_id("ask-option").filter(has_text="Allow once").click()
     expect(card).to_have_attribute("data-status", "answered", timeout=20_000)
-    expect(page.get_by_text("The background job is done.")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("thread")).to_contain_text(
+        "The background job is done.",
+        timeout=20_000,
+    )
     transcript = page.get_by_test_id("thread")
     expect(transcript).not_to_contain_text(secret)
     expect(transcript).not_to_contain_text("env.sh")

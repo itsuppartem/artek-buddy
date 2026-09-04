@@ -161,8 +161,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 self._credential_execute(self._read())
-            except (TypeError, ValueError) as err:
-                self._json(400, {"error": str(err)})
+            except (TypeError, ValueError):
+                self._json(400, {"error": "invalid credential execution"})
             except Exception:
                 log.exception("credential runner error")
                 self._json(500, {"error": "credential runner error"})
