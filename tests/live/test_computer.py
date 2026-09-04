@@ -552,8 +552,9 @@ def test_controlled_desktop_forwards_host_clipboard(
     expect(guest).to_be_visible(timeout=15_000)
 
     with page.expect_request(
-        lambda request: request.url.endswith("/input")
-        and request.post_data_json.get("kind") == "clipboard"
+        lambda request: (
+            request.url.endswith("/input") and request.post_data_json.get("kind") == "clipboard"
+        )
     ) as forwarded:
         guest.evaluate(
             """element => {

@@ -47,12 +47,12 @@ from artek_buddy.http.page import router as page_router
 from artek_buddy.http.routines import router as routines_router
 from artek_buddy.http.session import router as session_router
 from artek_buddy.http.threads import router as threads_router
-from artek_buddy.http.workspace import router as workspace_router
 from artek_buddy.http.turns import (
     _handle_takeover_request,
     _kick_inbox,
     _shutdown_work,
 )
+from artek_buddy.http.workspace import router as workspace_router
 
 
 @asynccontextmanager
