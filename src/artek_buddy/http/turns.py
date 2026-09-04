@@ -273,22 +273,23 @@ def _ingest_thread_files(
 async def _ensure_agent(history: HistoryStore, rt: AgentRuntime, bot: Bot) -> Bot:
     stamp = history.model_fingerprint()
     live = history.has_active_run(bot.id)
-    want_new = bool(stamp) and history.applied_model(bot.id) != stamp and not live
-    if want_new:
+    mismatch = bool(stamp) and history.applied_model(bot.id) != stamp
+    if mismatch and not live:
         live_id = await rt.create_session(
             name=bot.name or DEFAULT_BOT_NAME,
             persist_default=False,
             bot_id=bot.id,
         )
+        history.mark_applied_model(bot.id, stamp)
     else:
         live_id = await rt.ensure_session(
             bot.cursor_agent_id,
             name=bot.name or DEFAULT_BOT_NAME,
             bot_id=bot.id,
         )
+        if stamp and not (mismatch and live):
+            history.mark_applied_model(bot.id, stamp)
     rt.bind_agent_bot(live_id, bot.id)
-    if stamp:
-        history.mark_applied_model(bot.id, stamp)
     if bot.cursor_agent_id != live_id:
         return history.attach_agent(bot.id, live_id)
     return bot
@@ -806,6 +807,7 @@ async def _kick_inbox(
 ) -> None:
     try:
         live = history.get_bot(bot.id) or bot
+        live = await _ensure_agent(history, rt, live)
         claimed = history.claim_inbox_follow_up(
             live,
             model_provider=runtime_kind(rt.settings),

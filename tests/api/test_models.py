@@ -3,7 +3,14 @@ from __future__ import annotations
 import json
 
 import pytest
-from tests.api.helpers import create_bot, message_metas, message_texts, wait_run_status
+from tests.api.helpers import (
+    create_bot,
+    message_metas,
+    message_texts,
+    wait_run,
+    wait_run_status,
+    wait_thread_has,
+)
 
 from artek_buddy.model_catalog import NEEDS_MODEL_TEXT
 
@@ -217,6 +224,89 @@ def test_set_default_writes_meta_and_does_not_cancel_a_live_run(client, auth_hea
     assert body["run"]["status"] == "running"
     assert body["run"]["id"] == sent.json()["run_id"]
     assert default_model_line("scripted", "low", True, live=True) in message_metas(body)
+
+
+def _agent_id(client, auth_header: dict[str, str], bot_id: str) -> str:
+    row = client.get(f"/v1/bots/{bot_id}", headers=auth_header)
+    assert row.status_code == 200, row.text
+    value = row.json().get("cursor_agent_id") or row.json().get("cursorAgentId")
+    assert value
+    return str(value)
+
+
+def _connect_cursor(client, auth_header: dict[str, str]) -> None:
+    connected = client.post(
+        "/v1/models/credentials",
+        headers=auth_header,
+        json={"provider": "cursor", "api_key": SECRET},
+    )
+    assert connected.status_code == 200
+
+
+def test_unchecking_fast_on_an_idle_chat_starts_a_new_session(client, auth_header) -> None:
+    _connect_cursor(client, auth_header)
+    bot_id = create_bot(client, auth_header, "FastIdle")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "hello"},
+    )
+    assert sent.status_code == 200
+    wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    before = _agent_id(client, auth_header, bot_id)
+    chosen = client.post(
+        "/v1/models/default",
+        headers=auth_header,
+        json={
+            "provider": "cursor",
+            "model": "scripted",
+            "effort": "xhigh",
+            "fast": False,
+            "bot_id": bot_id,
+        },
+    )
+    assert chosen.status_code == 200
+    listed = client.get("/v1/models/credentials", headers=auth_header)
+    assert listed.json()["default_fast"] is False
+    assert _agent_id(client, auth_header, bot_id) != before
+
+
+def test_unchecking_fast_during_a_live_turn_starts_a_new_session_on_the_follow_up(
+    client, auth_header
+) -> None:
+    _connect_cursor(client, auth_header)
+    bot_id = create_bot(client, auth_header, "FastLive")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now"},
+    )
+    assert sent.status_code == 200
+    wait_run_status(client, auth_header, bot_id, sent.json()["run_id"], "running")
+    before = _agent_id(client, auth_header, bot_id)
+    chosen = client.post(
+        "/v1/models/default",
+        headers=auth_header,
+        json={
+            "provider": "cursor",
+            "model": "scripted",
+            "effort": "xhigh",
+            "fast": False,
+            "bot_id": bot_id,
+        },
+    )
+    assert chosen.status_code == 200
+    queued = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "hello after fast off"},
+    )
+    assert queued.status_code == 200
+    assert queued.json().get("queued") is True
+    assert _agent_id(client, auth_header, bot_id) == before
+    wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    wait_thread_has(client, auth_header, bot_id, "ok")
+    assert _agent_id(client, auth_header, bot_id) != before
 
 
 def test_send_without_default_does_not_start_a_turn(client, auth_header) -> None:

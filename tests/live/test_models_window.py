@@ -106,6 +106,38 @@ def test_models_cursor_save_sets_effort_fast_and_keeps_using(
     expect(page.get_by_label("Cursor API key")).to_be_visible(timeout=8_000)
 
 
+def test_models_uncheck_fast_drops_fast_from_using(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, unique_bot("NoFast"))
+    open_models(page)
+    leftover = page.get_by_test_id("models-forget-cursor")
+    if leftover.count() and leftover.first.is_visible(timeout=0):
+        leftover.click()
+        expect(page.get_by_label("Cursor API key")).to_be_visible()
+    page.get_by_label("Cursor API key").fill("test-secret-cursor")
+    expect(page.get_by_label("Cursor API key")).to_have_value("test-secret-cursor")
+    page.get_by_test_id("models-save-cursor").click()
+    expect(page.get_by_test_id("models-status-cursor")).to_contain_text("Connected", timeout=8_000)
+    expect(page.get_by_test_id("models-fast-cursor")).to_be_checked()
+    with page.expect_request(
+        lambda request: request.method == "POST" and "/v1/models/default" in request.url,
+        timeout=8_000,
+    ) as posted:
+        page.get_by_test_id("models-fast-cursor").uncheck()
+    body = posted.value.post_data or ""
+    assert '"fast": false' in body or '"fast":false' in body
+    expect(page.get_by_test_id("models-fast-cursor")).not_to_be_checked()
+    expect(page.get_by_test_id("models-using")).not_to_contain_text("Fast", timeout=8_000)
+    page.get_by_role("button", name="Close Models").click()
+    expect(page.get_by_test_id("meta-block")).to_contain_text("Using scripted", timeout=8_000)
+    expect(page.get_by_test_id("meta-block")).not_to_contain_text("Fast")
+    open_models(page)
+    expect(page.get_by_test_id("models-fast-cursor")).not_to_be_checked()
+    expect(page.get_by_test_id("models-using")).not_to_contain_text("Fast")
+
+
 def test_models_save_reasoning_writes_meta_and_keeps_a_live_turn(
     page: Page, client_url: str, host_url: str
 ) -> None:

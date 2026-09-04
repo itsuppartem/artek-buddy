@@ -15,3 +15,9 @@ def test_model_fingerprint_changes_when_effort_changes() -> None:
     second = model_fingerprint(("cursor", "scripted"), "low", True)
     assert first != second
     assert first.startswith("cursor:scripted:")
+
+
+def test_model_fingerprint_changes_when_fast_changes() -> None:
+    on = model_fingerprint(("cursor", "scripted"), "xhigh", True)
+    off = model_fingerprint(("cursor", "scripted"), "xhigh", False)
+    assert on != off

@@ -124,6 +124,7 @@ async def set_default_model(
     body: SetDefaultModelInput,
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
+    rt: AgentRuntime = Depends(runtime),
 ) -> OkResponse:
     if unknown_provider(body.provider):
         raise HTTPException(status_code=400, detail="unknown provider")
@@ -135,6 +136,11 @@ async def set_default_model(
         after = (history.get_default_model(), history.get_model_params())
         if body.bot_id and after != before:
             _write_default_meta(history, events, body.bot_id, body.model)
+            bot = history.get_bot(body.bot_id)
+            if bot is not None and not history.has_active_run(bot.id):
+                from artek_buddy.http.turns import _ensure_agent
+
+                await _ensure_agent(history, rt, bot)
         return OkResponse(ok=True)
     except HTTPException:
         raise
