@@ -44,6 +44,14 @@ def test_x11vnc_skips_viewer_lock_keys() -> None:
     assert "-xkb" in cmd
 
 
+def test_x11vnc_refreshes_interactive_desktop_without_100ms_delays() -> None:
+    for cmd in (x11vnc_command(5900, view_only=True), x11vnc_command(5901)):
+        assert "-wait 30" in cmd
+        assert "-defer 20" in cmd
+        assert "-wait 100" not in cmd
+        assert "-defer 100" not in cmd
+
+
 def test_published_port_reads_host_binding() -> None:
     inspect = {"NetworkSettings": {"Ports": {"6080/tcp": [{"HostPort": "33100"}]}}}
     assert published_port(inspect, "6080") == 33100
@@ -147,7 +155,7 @@ def test_desktop_create_spec_capdrop_all_and_pi5_limits() -> None:
     assert hc["CapDrop"] == ["ALL"]
     assert hc["SecurityOpt"] == ["no-new-privileges:true"]
     assert hc["Memory"] == 1536 * 1024 * 1024
-    assert hc["NanoCpus"] == 1_000_000_000
+    assert hc["NanoCpus"] == 1_500_000_000
     assert hc["PidsLimit"] == 512
     assert hc["ShmSize"] == 256 * 1024 * 1024
     assert hc["Tmpfs"]["/tmp"] == "rw,noexec,nosuid,nodev,size=256m,mode=1777"
@@ -390,6 +398,9 @@ def test_inspect_is_hardened_rejects_unlimited_box() -> None:
     )
     inspect = {"Config": {}, "HostConfig": spec["HostConfig"]}
     assert inspect_is_hardened(inspect) is True
+    old_cpu_limit = dict(spec["HostConfig"])
+    old_cpu_limit["NanoCpus"] = 1_000_000_000
+    assert inspect_is_hardened({"Config": {}, "HostConfig": old_cpu_limit}) is False
     unlimited = dict(spec["HostConfig"])
     unlimited["CapDrop"] = []
     assert inspect_is_hardened({"Config": {}, "HostConfig": unlimited}) is False

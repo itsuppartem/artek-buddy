@@ -21,6 +21,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Changed
+- The bot desktop polls the guest below one video frame, briefly coalesces redraw bursts, uses lower-overhead screen encoding, and can use 1.5 CPU. Chromium, Files, Terminal, view-only preview, and lease-bound Take control stay unchanged.
 - Desktop inbox and context panes now have pointer- and keyboard-resizable dividers with persisted widths. Work log collapses long worker briefs into scannable rows, and its run summary is the only trigger.
 - Bot profile & access is the single visible Settings route. Desktop contains only desktop controls, and Connections / Models no longer repeat under the inbox.
 - Scripted E2E prompts live in `runtime/scripted_scenarios.py`. `ScriptedRuntime` still runs them.
