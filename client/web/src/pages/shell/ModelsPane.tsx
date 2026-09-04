@@ -30,11 +30,13 @@ export function ModelsPane({
   credentials,
   onChange,
   onClose,
+  onApplied,
 }: {
   botId?: string;
   credentials: ModelCredentialList | null;
   onChange: (next: ModelCredentialList) => void;
   onClose: () => void;
+  onApplied?: () => void;
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, string>>({});
@@ -162,6 +164,7 @@ export function ModelsPane({
     try {
       await api.models.setDefault(provider, model, nextEffort, nextFast, botId);
       await refresh();
+      onApplied?.();
     } catch (err) {
       setErrors((current) => ({
         ...current,

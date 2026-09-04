@@ -186,7 +186,7 @@ export function reduceThreadSnapshot(
     };
     const without = prev.messages.filter((message) => {
       if (message.id === next.id) return false;
-      if (next.role === "user") return true;
+      if (next.role === "user" || !next.runId) return true;
       return !isLiveForRun(message, next.runId);
     });
     return { ...prev, cursor: event.seq, messages: [...without, next] };

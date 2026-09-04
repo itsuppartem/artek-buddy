@@ -224,6 +224,56 @@ describe("reduceThreadSnapshot", () => {
     expect(next?.messages.map((message) => message.id)).toEqual(["stream:run1"]);
   });
 
+  it("keeps Working when a model meta arrives without a run id", () => {
+    const prev = snap({
+      run: run({ status: "running" }),
+      messages: [
+        {
+          id: "meta-old",
+          threadId: "t",
+          seq: 1,
+          role: "bot",
+          blocks: [{ kind: "meta", text: "Using scripted · Low · Fast." }],
+          createdAt: "2026-01-01T00:00:00Z",
+        },
+        {
+          id: "progress:run1",
+          threadId: "t",
+          seq: 2,
+          role: "bot",
+          blocks: [{ kind: "progress", text: "…" }],
+          runId: "run1",
+          createdAt: "2026-01-01T00:00:01Z",
+        },
+      ],
+    });
+    const next = reduceThreadSnapshot(
+      prev,
+      event({
+        type: "thread.message.created",
+        runId: "",
+        payload: {
+          message: {
+            id: "meta-new",
+            role: "bot",
+            seq: 3,
+            blocks: [
+              {
+                kind: "meta",
+                text: "Using scripted · High · Fast. This turn keeps going.",
+              },
+            ],
+          },
+        },
+      }),
+    );
+    expect(next?.messages.map((message) => message.id)).toEqual([
+      "meta-old",
+      "progress:run1",
+      "meta-new",
+    ]);
+  });
+
   it("drops a late stream token after Stop", () => {
     const prev = snap({
       run: run({ status: "cancelled", error: "Stopped." }),
