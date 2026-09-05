@@ -57,7 +57,12 @@ def parse_observe_output(output: str) -> dict[str, Any]:
 
 def is_browser_window(title: str | None) -> bool:
     t = (title or "").strip().lower()
-    return t.endswith("- chromium") or t.endswith("- google chrome") or " - chromium" in t or " - chrome" in t
+    return (
+        t.endswith("- chromium")
+        or t.endswith("- google chrome")
+        or " - chromium" in t
+        or " - chrome" in t
+    )
 
 
 def is_generic_title(title: str | None) -> bool:
