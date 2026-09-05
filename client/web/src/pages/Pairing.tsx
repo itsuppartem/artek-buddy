@@ -154,7 +154,7 @@ export function PairingPage({
                 data-testid="pairing-host-command"
                 className="mt-4 text-[10.5px] leading-5 text-mute"
               >
-                Create a code on the Pi:{" "}
+                Create a code on the host:{" "}
                 <span className="font-mono text-paper/70">{PAIRING_HOST_COMMAND}</span>
               </p>
             )}

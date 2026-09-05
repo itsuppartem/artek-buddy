@@ -45,7 +45,7 @@ The packaged launcher is **Artek Buddy** (`artek-buddy.desktop`, icon `artek-bud
 | Screen | When | Controls |
 | --- | --- | --- |
 | Proxy error | loopback `status` failed | Retry (reload) |
-| Pairing | not paired | New navy / sky / cream Cavalier hero, code `XXXX-XXXX`, and one primary **Pair** action. Host URL and device name are under **Pairing options**; Host URL is absent on the host page. Pair stays disabled until the code is non-empty. Copy says to create a one-use code on the Pi, with no token or module jargon. `.deb` keeps the Compose command; the phone does not. |
+| Pairing | not paired | New navy / sky / cream Cavalier hero, code `XXXX-XXXX`, and one primary **Pair** action. Host URL and device name are under **Pairing options**; Host URL is absent on the host page. Pair stays disabled until the code is non-empty. Copy says to create a one-use code on the host, with no token or module jargon. `.deb` keeps the Compose command; the phone does not. Pair on the Funnel / tailnet URL uses that public origin (forwarded host/proto), not loopback. |
 | Today | paired, no selected chat required | Outcome field, workspace dispatch, Needs your decision, In progress, Ready for you, and a route to recurring work. |
 | Chats | paired | Rail + resizable inbox + thread; optional Work log / Desktop / Library / Create. New bot focuses the created chat. |
 | Library | paired | Appearance, Connections, and Models at workspace scope; Memory and profile/access for the selected bot. Phone More also lists Routines. |

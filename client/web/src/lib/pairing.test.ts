@@ -21,6 +21,8 @@ describe("pairing copy", () => {
     expect(PAIRING_BODY.toLowerCase()).not.toContain("mint");
     expect(PAIRING_BODY).toContain("pairing code");
     expect(PAIRING_BODY).toContain("Pair");
+    expect(PAIRING_BODY).toContain("host");
+    expect(PAIRING_BODY).not.toContain("Pi");
   });
 
   it("uses the README Compose exec, not a bare module", () => {

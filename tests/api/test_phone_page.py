@@ -57,6 +57,7 @@ def test_host_page_and_pairing_use_a_cookie_not_a_token_in_json(
     body = empty.json()
     assert body["paired"] is False
     assert body["surface"] == "host"
+    assert body["url"] == "http://testserver"
     assert "token" not in body
 
     missing = client.post(
@@ -153,6 +154,33 @@ def test_host_local_rejects_scheme_and_port_mismatch(client) -> None:
         headers={**_origin(), "X-Artek-Local-Nonce": nonce},
     )
     assert matching.status_code == 200
+
+
+def test_host_local_pair_accepts_funnel_forwarded_host(client) -> None:
+    nonce = _nonce(client)
+    public = "https://buddy.example"
+    allowed = client.post(
+        "/local/unpair",
+        headers={
+            "Origin": public,
+            "Host": "127.0.0.1:8080",
+            "X-Forwarded-Proto": "https",
+            "X-Forwarded-Host": "buddy.example",
+            "X-Artek-Local-Nonce": nonce,
+        },
+    )
+    assert allowed.status_code == 200
+    status = client.get(
+        "/local/status",
+        headers={
+            "Origin": public,
+            "Host": "127.0.0.1:8080",
+            "X-Forwarded-Proto": "https",
+            "X-Forwarded-Host": "buddy.example",
+        },
+    )
+    assert status.status_code == 200
+    assert status.json()["url"] == public
 
 
 def test_novnc_websocket_accepts_pairing_cookie(client, auth_header) -> None:

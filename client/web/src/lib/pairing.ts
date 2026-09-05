@@ -11,7 +11,7 @@ export function formatPairingCode(value: string): string {
 export const PAIRING_HOST_COMMAND = "docker exec artek-buddy python -m artek_buddy pair";
 
 export const PAIRING_BODY =
-  "Create a one-use pairing code on the Pi. Enter it here, then choose Pair.";
+  "Create a one-use pairing code on the host. Enter it here, then choose Pair.";
 
 export type LocalStatus = {
   paired: boolean;
