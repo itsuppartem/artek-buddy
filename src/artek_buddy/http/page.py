@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import ipaddress
 import logging
 import secrets
 from urllib.parse import urlparse
@@ -51,11 +52,20 @@ def _page_nonce() -> str:
     return str(nonce)
 
 
+def _client_is_loopback(request: Request) -> bool:
+    host = (request.client.host if request.client else "") or ""
+    if host in {"localhost", "testclient"}:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def _cookie_secure(request: Request) -> bool:
     if request.url.scheme == "https":
         return True
-    forwarded = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
-    return forwarded == "https"
+    return _forwarded_proto(request) == "https"
 
 
 def _default_port(scheme: str) -> int:
@@ -90,6 +100,30 @@ def _host_header_parts(host_header: str, *, scheme: str) -> tuple[str, int] | No
     return host, port
 
 
+def _forwarded_proto(request: Request) -> str:
+    if not _client_is_loopback(request):
+        return ""
+    return (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
+
+
+def _forwarded_host(request: Request) -> str:
+    if not _client_is_loopback(request):
+        return ""
+    return (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
+
+
+def _public_origin(request: Request) -> str:
+    scheme = _request_scheme(request)
+    host = _forwarded_host(request) or (request.headers.get("host") or "").strip()
+    header = _host_header_parts(host, scheme=scheme)
+    if header is None:
+        return ""
+    hostname, port = header
+    if port == _default_port(scheme):
+        return f"{scheme}://{hostname}"
+    return f"{scheme}://{hostname}:{port}"
+
+
 def _same_origin(request: Request, *, mutating: bool) -> bool:
     origin = (request.headers.get("origin") or "").strip()
     if not origin:
@@ -99,7 +133,10 @@ def _same_origin(request: Request, *, mutating: bool) -> bool:
         return False
     scheme, host, port = parts
     req_scheme = _request_scheme(request)
-    header = _host_header_parts(request.headers.get("host") or "", scheme=req_scheme)
+    header = _host_header_parts(
+        _forwarded_host(request) or (request.headers.get("host") or ""),
+        scheme=req_scheme,
+    )
     if header is None:
         return False
     header_host, header_port = header
@@ -147,7 +184,7 @@ async def page_status(request: Request) -> JSONResponse:
     return JSONResponse(
         {
             "paired": paired,
-            "url": "",
+            "url": _public_origin(request),
             "nonce": _page_nonce(),
             "surface": "host",
         },

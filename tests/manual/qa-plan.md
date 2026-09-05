@@ -318,7 +318,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Fresh pair with a 15-minute one-use code works. A second use of the same code fails under the form | [ ] | [ ] |
-| Pairing body says to create a one-use code on the Pi and choose Pair. **Pairing options** reveals Host URL only on Deb and device name on both surfaces. Phone has no token / mint / `python -m`; Deb shows `docker exec artek-buddy python -m artek_buddy pair` | [ ] | [ ] |
+| Pairing body says to create a one-use code on the host and choose Pair. **Pairing options** reveals Host URL only on Deb and device name on both surfaces. Phone has no token / mint / `python -m`; Deb shows `docker exec artek-buddy python -m artek_buddy pair`. Funnel / tailnet Pair on that same HTTPS URL succeeds (not `forbidden`) | [ ] | [ ] |
 | After pair, the credential is not visible in the page (Deb: `~/.config/artek-buddy/token` mode 600; Phone: httpOnly cookie) | [ ] | [ ] |
 | Auth error: **Pair this computer again** (Deb) / **Pair this phone again** (Phone). Click unpairs to the matching pair screen. Does not queue as an offline send | [ ] | [ ] |
 | Workspace `/v1/events` 401/403 (inbox still loads) still shows Pair again, not a quiet shell | [ ] | [ ] |
@@ -622,7 +622,7 @@ If time is short, in this order:
 5. **§5 Bot asks bot**
 6. **§6 Connections** (pane Connect or chat attach; no chip; the bot uses the app). `please e2e-connect-mail` / GitHub **Open to connect** opens the owner browser
 7. **§7 Desktop** + **§7a Hands on the guest** (drag/type/scroll respond promptly; Release keeps the picture; Sleeping → Take control shows Waking the desktop…)
-8. **§11 Phone chrome** + **§29 meaningful context return**
+8. **§11 Phone chrome** + **§13 Pairing** (Funnel / tailnet Pair is not `forbidden`) + **§29 meaningful context return**
 9. **§12 Pad and Cyrillic**
 10. **§25 File + §26 Picture + §27 Ctrl+V**
 11. **§28 Save feedback**

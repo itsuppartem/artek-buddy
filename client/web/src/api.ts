@@ -157,10 +157,12 @@ export const api = {
       });
     },
     pair(input: { url?: string; pairingCode: string; name: string; platform?: string }) {
-      return request<{ ok: boolean; device: PairedDevice; error?: string }>(
-        "POST",
-        "/local/pair",
-        input,
+      return api.local.status().then(() =>
+        request<{ ok: boolean; device: PairedDevice; error?: string }>(
+          "POST",
+          "/local/pair",
+          input,
+        ),
       );
     },
     unpair() {

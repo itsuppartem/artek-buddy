@@ -40,7 +40,7 @@ def test_pairing_form_fields_and_rejected_url(page: Page, client_url: str) -> No
     expect(page.get_by_role("button", name="Pair")).to_be_disabled()
     expect(form.get_by_text("Pair this computer")).to_be_visible()
     expect(form).to_contain_text(
-        "Create a one-use pairing code on the Pi. Enter it here, then choose Pair."
+        "Create a one-use pairing code on the host. Enter it here, then choose Pair."
     )
     expect(form).not_to_contain_text("token")
     expect(form).not_to_contain_text("mint")
