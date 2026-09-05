@@ -192,6 +192,7 @@ Optional evening:
 | Check | Deb | Phone |
 | --- | --- | --- |
 | Quiet box **15 minutes** with no input → **Sleeping** (sage). The pane shows **Sleeping • Click to start**, never a stale preview or Connecting layer. Open pane and pulse do not keep it warm. Click Sleeping wakes view-only; Take control is separate | [ ] | [ ] |
+| After Sleep then start (or Stop then Browser): Chromium has **no Restore tabs** bar. A site location / camera / notification request does not sit on the page as Allow/Block chrome. File picker and login still need Take control | [ ] | [ ] |
 
 Team:
 
@@ -621,7 +622,7 @@ If time is short, in this order:
 4. **§4 Skill from the web**
 5. **§5 Bot asks bot**
 6. **§6 Connections** (pane Connect or chat attach; no chip; the bot uses the app). `please e2e-connect-mail` / GitHub **Open to connect** opens the owner browser
-7. **§7 Desktop** + **§7a Hands on the guest** (drag/type/scroll respond promptly; Release keeps the picture; Sleeping → Take control shows Waking the desktop…)
+7. **§7 Desktop** + **§7a Hands on the guest** (drag/type/scroll respond promptly; Release keeps the picture; Sleeping → Take control shows Waking the desktop…; Sleep then wake has no Chromium Restore tabs bar)
 8. **§11 Phone chrome** + **§13 Pairing** (Funnel / tailnet Pair is not `forbidden`) + **§29 meaningful context return**
 9. **§12 Pad and Cyrillic**
 10. **§25 File + §26 Picture + §27 Ctrl+V**

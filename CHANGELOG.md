@@ -21,6 +21,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Changed
+- Chromium on the bot desktop treats Sleep as a clean exit (no Restore tabs bar) and default-allows geolocation, notifications, and camera/mic chrome so page actions are not blocked by those bubbles. File pickers and login still need Take control.
 - Host-page Pair on a Funnel / tailnet URL uses that public origin (`X-Forwarded-Host` / `X-Forwarded-Proto`) and refreshes the page nonce before consume, so a host restart does not leave Pair on **forbidden**. Status advertises that origin. Pairing copy says the code is created on the host.
 - The bot desktop polls the guest below one video frame, briefly coalesces redraw bursts, uses lower-overhead screen encoding, and can use 1.5 CPU. Chromium, Files, Terminal, view-only preview, and lease-bound Take control stay unchanged.
 - Desktop inbox and context panes now have pointer- and keyboard-resizable dividers with persisted widths. Work log collapses long worker briefs into scannable rows, and its run summary is the only trigger.

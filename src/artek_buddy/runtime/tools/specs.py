@@ -460,7 +460,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         description=(
             "Drive the remote Chromium: open a URL, fill a field, click, type, or submit. "
             "Use this for forms and page actions. The owner must Allow once / Always / Deny first. "
-            "Do not use Playwright or CDP to skip this card."
+            "Do not use Playwright or CDP to skip this card. "
+            "Restore tabs and site permission chrome are already granted on this desktop; "
+            "do not try to click those bubbles. File pickers and login still need request_takeover."
         ),
         input_schema={
             "type": "object",
