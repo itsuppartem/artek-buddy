@@ -190,6 +190,10 @@ def ensure_model(page: Page) -> None:
         return
     open_models(page)
     cursor_status = page.get_by_test_id("models-status-cursor")
+    try:
+        expect(cursor_status).to_be_visible(timeout=3_000)
+    except Exception:
+        pass
     if cursor_status.count() and cursor_status.first.is_visible(timeout=0):
         using = page.get_by_test_id("models-using")
         if using.count() and (using.inner_text() or "").strip():

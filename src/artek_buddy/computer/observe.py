@@ -55,6 +55,11 @@ def parse_observe_output(output: str) -> dict[str, Any]:
     }
 
 
+def is_browser_window(title: str | None) -> bool:
+    t = (title or "").strip().lower()
+    return t.endswith("- chromium") or t.endswith("- google chrome") or " - chromium" in t or " - chrome" in t
+
+
 def is_generic_title(title: str | None) -> bool:
     return (title or "").strip().lower() in GENERIC_TITLES
 
@@ -66,6 +71,8 @@ def image_reason(title: str | None, include_image: bool) -> str:
         return "empty_title"
     if is_generic_title(title):
         return "generic_title"
+    if is_browser_window(title):
+        return "browser_window"
     return "none"
 
 

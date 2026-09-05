@@ -176,7 +176,7 @@ def test_desktop_create_spec_capdrop_all_and_pi5_limits() -> None:
     assert hc["Memory"] == 1536 * 1024 * 1024
     assert hc["NanoCpus"] == 1_500_000_000
     assert hc["PidsLimit"] == 512
-    assert hc["ShmSize"] == 256 * 1024 * 1024
+    assert hc["ShmSize"] == 512 * 1024 * 1024
     assert hc["Tmpfs"]["/tmp"] == "rw,noexec,nosuid,nodev,size=256m,mode=1777"
     assert "noexec" in hc["Tmpfs"]["/tmp"].split(",")
     assert hc.get("ReadonlyRootfs") in (None, False)

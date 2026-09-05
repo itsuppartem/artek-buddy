@@ -42,6 +42,9 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+- Browser actions in `browser_act` select and foreground the active tab or requested URL with bounded CDP connect and step timeouts, preventing wrong-tab interactions and multi-minute supervisor hangs.
+- `computer_observe` attaches screenshots whenever a browser window is active (e.g. Chromium / Google Chrome), preventing visual blindness during desktop mouse and keyboard automation.
+- Bot desktop container allocates 512 MB shared memory (`ShmSize`) and the Chromium launcher uses POSIX shm directly, eliminating `/tmp` tmpfs starvation and renderer Aw Snap crashes on heavy web applications.
 - Remote bot desktop clipboard paste (Ctrl+V) populates guest clipboard and primary selections via xclip and sends clean ctrl+v with cleared modifiers, preventing accidental shortcut triggers (such as opening the GTK file chooser) and keeping right-click Paste active in Chromium.
 - Russian keyboard layout edit shortcuts in the Linux .deb client and web composer: Ctrl+Z undoes and Ctrl+Shift+Z / Ctrl+Y redoes, correctly mapping X11 Cyrillic keysyms and physical KeyZ/KeyY.
 - A takeover request now parks the open run immediately, so the computer card no longer races with stale Working dots and Stop controls.

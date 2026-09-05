@@ -134,6 +134,14 @@ class ComputerToolsMixin:
             try:
                 result = exec_fn(bot, _playwright_browser_command(actions))
                 self._publish_computer(bot)
+                if isinstance(result, dict) and "output" in result:
+                    raw = str(result.get("output") or "").strip()
+                    try:
+                        parsed = json.loads(raw)
+                        if isinstance(parsed, dict):
+                            return parsed
+                    except Exception:
+                        pass
                 return result
             except Exception as exc:
                 log.exception("browser_act exec failed")
