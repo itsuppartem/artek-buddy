@@ -218,7 +218,7 @@ On **Phone**: Desktop overlay, finger is a trackpad (drag moves the beige dot; t
 | Host URL in a desktop browser: Take control has no pad and no Keyboard button; the pointer goes into the screen like Deb | [ ] | — |
 | Phone: drag on the pad moves the beige dot across the 1280×800 picture; it does not jump under the finger. After a drag or tap the overlay still shows **Release**, not Take control | — | [ ] |
 | Type `hello` into a guest field (address bar or input). The letters appear **in the guest**, not only in our Message box | [ ] | [ ] |
-| Deb and the host URL in a desktop browser: copy `host clipboard текст`, focus a guest field, then Ctrl+V. The full text appears once in the guest and never in the hidden Message composer | [ ] | — |
+| Deb and the host URL in a desktop browser: copy `host clipboard текст` (and ASCII URLs), focus a guest field, then Ctrl+V. The full text appears once in the guest (no file picker dialog) and populates the guest clipboard; right-click in Chromium shows Paste active | [ ] | — |
 | After pad or keyboard input, the guest picture updates within a couple of seconds. A freeze over ~5s is a fail | [ ] | [ ] |
 | Phone Keyboard: Esc / Tab / Enter / Bksp work in the guest. Russian layout types Cyrillic into that same field | — | [ ] |
 | Scroll (wheel on Deb, two-finger on Phone) moves the guest page | [ ] | [ ] |

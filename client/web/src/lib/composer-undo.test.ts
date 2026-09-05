@@ -18,6 +18,27 @@ describe("composerUndoKind", () => {
       composerUndoKind({ key: "v", ctrlKey: true, metaKey: false, shiftKey: false }),
     ).toBeNull();
   });
+
+  it("maps Russian layout Cyrillic keys and physical KeyZ/KeyY to undo/redo", () => {
+    expect(composerUndoKind({ key: "я", ctrlKey: true, metaKey: false, shiftKey: false })).toBe(
+      "undo",
+    );
+    expect(composerUndoKind({ key: "Я", ctrlKey: true, metaKey: false, shiftKey: false })).toBe(
+      "undo",
+    );
+    expect(composerUndoKind({ key: "я", ctrlKey: true, metaKey: false, shiftKey: true })).toBe(
+      "redo",
+    );
+    expect(composerUndoKind({ key: "н", ctrlKey: true, metaKey: false, shiftKey: false })).toBe(
+      "redo",
+    );
+    expect(
+      composerUndoKind({ key: "я", code: "KeyZ", ctrlKey: true, metaKey: false, shiftKey: false }),
+    ).toBe("undo");
+    expect(
+      composerUndoKind({ key: "н", code: "KeyY", ctrlKey: true, metaKey: false, shiftKey: false }),
+    ).toBe("redo");
+  });
 });
 
 describe("composerUndo", () => {

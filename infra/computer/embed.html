@@ -50,6 +50,12 @@
           event.preventDefault();
           if (typeof rfb.sendKey === "function") rfb.sendKey(CAPS, "CapsLock", false);
         });
+        window.addEventListener("paste", (event) => {
+          const text = event.clipboardData?.getData("text/plain");
+          if (text && typeof rfb.clipboardPasteFrom === "function") {
+            rfb.clipboardPasteFrom(text);
+          }
+        });
       }
     </script>
   </head>

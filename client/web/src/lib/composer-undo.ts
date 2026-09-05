@@ -10,6 +10,7 @@ export type ComposerKey = {
   shiftKey: boolean;
   altKey?: boolean;
   isComposing?: boolean;
+  code?: string;
 };
 
 const COALESCE_MS = 400;
@@ -68,10 +69,14 @@ export function composerRedo(
 export function composerUndoKind(event: ComposerKey): "undo" | "redo" | null {
   if (event.isComposing || event.altKey) return null;
   const key = event.key.toLowerCase();
+  const code = event.code;
   const mod = event.ctrlKey || event.metaKey;
-  if (!mod || (key !== "z" && key !== "y")) return null;
-  if (key === "y" && event.ctrlKey && !event.metaKey) return "redo";
-  if (key === "z" && event.shiftKey) return "redo";
-  if (key === "z") return "undo";
+  if (!mod) return null;
+  const isZ = key === "z" || key === "я" || code === "KeyZ";
+  const isY = key === "y" || key === "н" || code === "KeyY";
+  if (!isZ && !isY) return null;
+  if (isY && event.ctrlKey && !event.metaKey) return "redo";
+  if (isZ && event.shiftKey) return "redo";
+  if (isZ) return "undo";
   return null;
 }
