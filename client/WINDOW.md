@@ -154,7 +154,7 @@ Credential-scoped worker commands ask **Allow once / Always / Deny** before they
 
 ## Desktop context
 
-The remote frame polls every 30 ms, coalesces redraw bursts for 20 ms, and uses low-overhead encoding. One active box has a 1.5 CPU ceiling; the 1536 MiB memory, 512 PID, tmpfs, loopback-port, view-only, and Take control boundaries stay in force.
+The remote frame polls every 30 ms, coalesces redraw bursts for 20 ms, and uses low-overhead encoding. One active box has a 1.5 CPU ceiling; the 1536 MiB memory, 512 PID, tmpfs, loopback-port, view-only, and Take control boundaries stay in force. Chromium on that desktop does not show Restore tabs after Sleep, and it default-allows geolocation, notifications, and camera/mic chrome so page actions are not blocked by those bubbles. Native file pickers and login still need Take control.
 
 While Take control is active, a host clipboard paste inside the guest frame is sent as `kind=clipboard` through the held control lease, populating the guest clipboard and primary selections via `xclip` and triggering a clean paste without modifier interference. Right-click Paste in Chromium stays enabled and pastes that text. The text lands in the focused guest field; it does not paste into the hidden Message composer. The `.deb` client and composer map Russian layout keys (including X11 Cyrillic keysyms and `code: KeyZ/KeyY`) to Undo and Redo. A takeover request parks the live run as soon as its event arrives, so typing dots and Stop do not linger beside the computer card while the bot is waiting for the owner.
 

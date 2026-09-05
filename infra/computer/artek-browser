@@ -18,6 +18,9 @@ if [ -z "$BIN" ]; then
   echo "chromium is not installed" >&2
   exit 1
 fi
+if ! pgrep -x chromium >/dev/null 2>&1 && ! pgrep -x chromium-browser >/dev/null 2>&1; then
+  python3 /usr/local/lib/artek/prepare_chromium_profile.py "$PROFILE" || true
+fi
 exec "$BIN" \
   --no-sandbox \
   --disable-setuid-sandbox \
@@ -27,6 +30,9 @@ exec "$BIN" \
   --no-first-run \
   --no-default-browser-check \
   --disable-session-crashed-bubble \
+  --hide-crash-restore-bubble \
+  --use-fake-ui-for-media-stream \
+  --use-fake-device-for-media-stream \
   --password-store=basic \
   --remote-debugging-address=127.0.0.1 \
   --remote-debugging-port=9222 \
