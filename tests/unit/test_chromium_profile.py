@@ -19,6 +19,17 @@ def test_launcher_hides_restore_bubble_and_prepares_profile() -> None:
     assert "COPY prepare_chromium_profile.py" in DOCKERFILE.read_text(encoding="utf-8")
 
 
+def test_launcher_uses_shm_and_software_rasterizer() -> None:
+    text = LAUNCHER.read_text(encoding="utf-8")
+    assert "--disable-dev-shm-usage" not in text
+    assert "--disable-software-rasterizer" not in text
+
+
+def test_dockerfile_installs_emoji_fonts() -> None:
+    text = DOCKERFILE.read_text(encoding="utf-8")
+    assert "fonts-noto-color-emoji" in text
+
+
 def test_prepare_chromium_profile_clears_crash_and_allows_site_chrome(
     tmp_path: Path,
 ) -> None:
