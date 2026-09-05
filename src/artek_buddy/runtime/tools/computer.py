@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import json
 from typing import Any
 
 from artek_buddy.consent import (
@@ -134,6 +136,12 @@ class ComputerToolsMixin:
             try:
                 result = exec_fn(bot, _playwright_browser_command(actions))
                 self._publish_computer(bot)
+                if isinstance(result, dict) and "output" in result:
+                    raw = str(result.get("output") or "").strip()
+                    with contextlib.suppress(ValueError, TypeError):
+                        parsed = json.loads(raw)
+                        if isinstance(parsed, dict):
+                            return parsed
                 return result
             except Exception as exc:
                 log.exception("browser_act exec failed")

@@ -42,3 +42,19 @@ def test_include_image_attaches_even_with_good_title() -> None:
     )
     assert shaped["content"][0]["type"] == "image"
     assert "image_png_base64" not in shaped
+
+
+def test_browser_window_title_attaches_image() -> None:
+    assert image_reason("Feed | LinkedIn - Chromium", False) == "browser_window"
+    assert should_attach_image("Feed | LinkedIn - Chromium", False) is True
+    assert image_reason("Example Domain - Chromium", False) == "browser_window"
+    assert should_attach_image("Example Domain - Chromium", False) is True
+    assert image_reason("Google Search - Google Chrome", False) == "browser_window"
+    assert should_attach_image("Google Search - Google Chrome", False) is True
+    shaped = shape_observe(
+        {"ok": True, "output": "TITLE Feed | LinkedIn - Chromium"},
+        image_b64="feed_img",
+        reason="browser_window",
+    )
+    assert shaped["image_reason"] == "browser_window"
+    assert shaped["content"][0]["data"] == "feed_img"
