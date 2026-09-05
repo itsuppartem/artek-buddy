@@ -17,15 +17,59 @@ _RU_PHYSICAL_KEYS = {
     "я": "z",
 }
 
+_KEYVAL_MAP: dict[int, str] = {
+    # X11 Cyrillic keysyms -> physical Latin equivalent
+    0x06C6: "a",  # Cyrillic_ef
+    0x06E6: "a",  # Cyrillic_EF
+    0x06D3: "c",  # Cyrillic_es
+    0x06F3: "c",  # Cyrillic_ES
+    0x06CD: "v",  # Cyrillic_em
+    0x06ED: "v",  # Cyrillic_EM
+    0x06DE: "x",  # Cyrillic_che
+    0x06FE: "x",  # Cyrillic_CHE
+    0x06CE: "y",  # Cyrillic_en
+    0x06EE: "y",  # Cyrillic_EN
+    0x06D1: "z",  # Cyrillic_ya
+    0x06F1: "z",  # Cyrillic_YA
+    # Standard Latin keysyms / ASCII
+    ord("a"): "a",
+    ord("A"): "a",
+    ord("c"): "c",
+    ord("C"): "c",
+    ord("v"): "v",
+    ord("V"): "v",
+    ord("x"): "x",
+    ord("X"): "x",
+    ord("y"): "y",
+    ord("Y"): "y",
+    ord("z"): "z",
+    ord("Z"): "z",
+    # Unicode Cyrillic codepoints
+    ord("ф"): "a",
+    ord("Ф"): "a",
+    ord("с"): "c",
+    ord("С"): "c",
+    ord("м"): "v",
+    ord("М"): "v",
+    ord("ч"): "x",
+    ord("Ч"): "x",
+    ord("н"): "y",
+    ord("Н"): "y",
+    ord("я"): "z",
+    ord("Я"): "z",
+}
+
 
 def ctrl_edit_action(keyval: int, ctrl: bool, shift: bool) -> str | None:
     if not ctrl:
         return None
-    try:
-        key = chr(int(keyval)).lower()
-    except (OverflowError, ValueError):
-        return None
-    key = _RU_PHYSICAL_KEYS.get(key, key)
+    key = _KEYVAL_MAP.get(int(keyval))
+    if not key:
+        try:
+            ch = chr(int(keyval)).lower()
+            key = _RU_PHYSICAL_KEYS.get(ch, ch)
+        except (OverflowError, ValueError):
+            return None
     actions = {"a": "SelectAll", "c": "Copy", "v": "Paste", "x": "Cut"}
     if key == "z":
         return "Redo" if shift else "Undo"

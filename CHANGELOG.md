@@ -41,6 +41,8 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+- Remote bot desktop clipboard paste (Ctrl+V) populates guest clipboard and primary selections via xclip and sends clean ctrl+v with cleared modifiers, preventing accidental shortcut triggers (such as opening the GTK file chooser) and keeping right-click Paste active in Chromium.
+- Russian keyboard layout edit shortcuts in the Linux .deb client and web composer: Ctrl+Z undoes and Ctrl+Shift+Z / Ctrl+Y redoes, correctly mapping X11 Cyrillic keysyms and physical KeyZ/KeyY.
 - A takeover request now parks the open run immediately, so the computer card no longer races with stale Working dots and Stop controls.
 - Ctrl+V while controlling the remote desktop now forwards host clipboard text through the active control lease into the focused guest field instead of dropping it at the noVNC frame.
 - The `.deb` now maps physical Ctrl+A/C/X/V/Z/Y editing shortcuts on the Russian Ubuntu layout; text and screenshot paste, selection, copy/cut, undo, and redo no longer depend on Latin key values.

@@ -76,11 +76,26 @@ def type_text_command(text: str) -> str:
     if not text:
         return "true"
     if _ascii_typeable(text):
-        return f"xdotool type --delay 12 -- {shell_quote(text)}"
+        return f"xdotool type --clearmodifiers --delay 12 -- {shell_quote(text)}"
+    quoted = shell_quote(text)
     return (
-        f"printf '%s' {shell_quote(text)} | xclip -selection clipboard -i"
-        "; xdotool key --clearmodifiers ctrl+v"
+        f"printf '%s' {quoted} | xclip -selection clipboard -i; "
+        f"printf '%s' {quoted} | xclip -selection primary -i; "
+        "xdotool key --clearmodifiers ctrl+v"
     )
+
+
+def clipboard_command(text: str, *, paste: bool = True) -> str:
+    if not text:
+        return "true"
+    quoted = shell_quote(text)
+    parts = [
+        f"printf '%s' {quoted} | xclip -selection clipboard -i",
+        f"printf '%s' {quoted} | xclip -selection primary -i",
+    ]
+    if paste:
+        parts.append("xdotool key --clearmodifiers ctrl+v")
+    return "; ".join(parts)
 
 
 def _close_app_command(raw_app: str) -> str:
@@ -286,7 +301,9 @@ def input_command(kind: str, payload: dict) -> str:
         key = payload.get("key") or payload.get("text")
         return action_command([{"kind": "key", "key": key}])
     if kind == "clipboard":
-        return action_command([{"kind": "type", "text": payload.get("text")}])
+        text = str(payload.get("text") or "")
+        paste = bool(payload.get("paste", True))
+        return clipboard_command(text, paste=paste)
     return action_command(
         [
             {

@@ -97,12 +97,31 @@ def test_clipboard_cyrillic_pastes_utf8_instead_of_us_keys() -> None:
     assert "привет" in cmd
     assert "xclip" in cmd
     assert "ctrl+v" in cmd
+    assert "--clearmodifiers" in cmd
     assert "xdotool type" not in cmd
 
 
+def test_clipboard_ascii_uses_xclip_and_ctrl_v() -> None:
+    cmd = input_command("clipboard", {"text": "https://example.com/login"})
+    assert "https://example.com/login" in cmd
+    assert "xclip -selection clipboard" in cmd
+    assert "xclip -selection primary" in cmd
+    assert "ctrl+v" in cmd
+    assert "--clearmodifiers" in cmd
+    assert "xdotool type" not in cmd
+
+
+def test_clipboard_without_paste_only_sets_selections() -> None:
+    cmd = input_command("clipboard", {"text": "token123", "paste": False})
+    assert "token123" in cmd
+    assert "xclip" in cmd
+    assert "ctrl+v" not in cmd
+
+
 def test_ascii_type_still_uses_keystrokes() -> None:
-    cmd = input_command("clipboard", {"text": "hello"})
+    cmd = action_command([{"kind": "type", "text": "hello"}])
     assert "xdotool type" in cmd
+    assert "--clearmodifiers" in cmd
     assert "xclip" not in cmd
 
 
