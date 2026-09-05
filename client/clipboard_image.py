@@ -19,18 +19,18 @@ _RU_PHYSICAL_KEYS = {
 
 _KEYVAL_MAP: dict[int, str] = {
     # X11 Cyrillic keysyms -> physical Latin equivalent
-    0x06c6: "a",  # Cyrillic_ef
-    0x06e6: "a",  # Cyrillic_EF
-    0x06d3: "c",  # Cyrillic_es
-    0x06f3: "c",  # Cyrillic_ES
-    0x06cd: "v",  # Cyrillic_em
-    0x06ed: "v",  # Cyrillic_EM
-    0x06de: "x",  # Cyrillic_che
-    0x06fe: "x",  # Cyrillic_CHE
-    0x06ce: "y",  # Cyrillic_en
-    0x06ee: "y",  # Cyrillic_EN
-    0x06d1: "z",  # Cyrillic_ya
-    0x06f1: "z",  # Cyrillic_YA
+    0x06C6: "a",  # Cyrillic_ef
+    0x06E6: "a",  # Cyrillic_EF
+    0x06D3: "c",  # Cyrillic_es
+    0x06F3: "c",  # Cyrillic_ES
+    0x06CD: "v",  # Cyrillic_em
+    0x06ED: "v",  # Cyrillic_EM
+    0x06DE: "x",  # Cyrillic_che
+    0x06FE: "x",  # Cyrillic_CHE
+    0x06CE: "y",  # Cyrillic_en
+    0x06EE: "y",  # Cyrillic_EN
+    0x06D1: "z",  # Cyrillic_ya
+    0x06F1: "z",  # Cyrillic_YA
     # Standard Latin keysyms / ASCII
     ord("a"): "a",
     ord("A"): "a",
