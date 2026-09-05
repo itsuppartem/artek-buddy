@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     fonts-liberation \
     fonts-dejavu-core \
+    fonts-noto-color-emoji \
     dbus-x11 \
     xdg-utils \
     python3-pip \

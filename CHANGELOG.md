@@ -42,6 +42,7 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+- Desktop container includes color emoji fonts (`fonts-noto-color-emoji`) so emoji glyphs and rich text render predictably without missing characters.
 - Browser actions in `browser_act` select and foreground the active tab or requested URL with bounded CDP connect and step timeouts, preventing wrong-tab interactions and multi-minute supervisor hangs.
 - `computer_observe` attaches screenshots whenever a browser window is active (e.g. Chromium / Google Chrome), preventing visual blindness during desktop mouse and keyboard automation.
 - Bot desktop container allocates 512 MB shared memory (`ShmSize`) and the Chromium launcher uses POSIX shm directly, eliminating `/tmp` tmpfs starvation and renderer Aw Snap crashes on heavy web applications.

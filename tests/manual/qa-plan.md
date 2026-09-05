@@ -194,6 +194,7 @@ Optional evening:
 | Quiet box **15 minutes** with no input → **Sleeping** (sage). The pane shows **Sleeping • Click to start**, never a stale preview or Connecting layer. Open pane and pulse do not keep it warm. Click Sleeping wakes view-only; Take control is separate | [ ] | [ ] |
 | After Sleep then start (or Stop then Browser): Chromium has **no Restore tabs** bar. A site location / camera / notification request does not sit on the page as Allow/Block chrome. File picker and login still need Take control | [ ] | [ ] |
 | browser_act targets the active or requested tab instead of background index 0; computer_observe attaches a screenshot for browser windows (no visual blindness) | [ ] | [ ] |
+| Chromium renders emoji glyphs cleanly without tofu boxes (`fonts-noto-color-emoji`) | [ ] | [ ] |
 
 Team:
 
