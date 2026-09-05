@@ -16,6 +16,8 @@ from cursor_sdk import (
     LocalAgentOptions,
     ModelParameterValue,
     ModelSelection,
+    NotFoundError,
+    UnsupportedRunOperationError,
 )
 
 from artek_buddy.config import Settings
@@ -77,6 +79,24 @@ def build_model(
     if use_fast:
         params.append(ModelParameterValue(id="fast", value="true"))
     return ModelSelection(id=model_id or settings.cursor_model, params=params)
+
+
+def _is_unsupported_list_runs(exc: BaseException) -> bool:
+    if isinstance(exc, (NotFoundError, UnsupportedRunOperationError)):
+        return True
+    status = getattr(exc, "status", None) or getattr(exc, "status_code", None)
+    if status == 404:
+        return True
+    resp = getattr(exc, "response", None)
+    if resp is not None and getattr(resp, "status_code", None) == 404:
+        return True
+    code = str(getattr(exc, "code", "") or "").lower()
+    if code in {"not_found", "unsupported_run_operation", "unimplemented", "not_implemented"}:
+        return True
+    msg = str(exc).lower()
+    return "404" in msg and (
+        "not found" in msg or "route" in msg or "endpoint" in msg or "unsupported" in msg
+    )
 
 
 class CursorRuntime(RuntimeBase):
@@ -409,7 +429,10 @@ class CursorRuntime(RuntimeBase):
             return
         try:
             listed = await list_runs(agent_id, limit=8)
-        except Exception:
+        except Exception as exc:
+            if _is_unsupported_list_runs(exc):
+                log.debug("cursor bridge does not support list_runs for %s", agent_id)
+                return
             log.exception("failed to list cursor runs for %s", agent_id)
             return
         items = getattr(listed, "items", None)
