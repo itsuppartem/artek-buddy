@@ -42,6 +42,7 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+- Symlinks under the owner home that point outside are now denied by `inspect_owner_path`, closing path escape via symlinks on This-PC tools.
 - An unsupported or 404 ListRuns route during Cursor stale-run cleanup is treated as an unavailable capability without logging an ERROR traceback, while other list/cancel failures remain visible.
 - Desktop container includes color emoji fonts (`fonts-noto-color-emoji`) so emoji glyphs and rich text render predictably without missing characters.
 - Browser actions in `browser_act` select and foreground the active tab or requested URL with bounded CDP connect and step timeouts, preventing wrong-tab interactions and multi-minute supervisor hangs.

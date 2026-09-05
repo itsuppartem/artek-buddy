@@ -94,8 +94,26 @@ def test_inspect_never_raises_and_never_escapes(raw: str) -> None:
         assert isinstance(err, str)
         if path is not None:
             assert owner_paths._logical_under(path, home.resolve())
+            assert owner_paths._logical_under(path.resolve(), home.resolve())
     finally:
         shutil.rmtree(home, ignore_errors=True)
+
+
+def test_symlink_escape_is_denied(tmp_path: Path) -> None:
+    outside = tmp_path.parent / "secret.txt"
+    outside.write_text("secret", encoding="utf-8")
+    escape_link = tmp_path / "escape.txt"
+    escape_link.symlink_to(outside)
+
+    path, err = owner_paths.inspect_owner_path("escape.txt", tmp_path, must_exist=True)
+    assert path is None
+    assert "outside" in err
+
+    path_nomust, err_nomust = owner_paths.inspect_owner_path(
+        "escape.txt", tmp_path, must_exist=False
+    )
+    assert path_nomust is None
+    assert "outside" in err_nomust
 
 
 @bounded

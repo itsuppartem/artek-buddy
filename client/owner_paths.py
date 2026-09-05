@@ -93,7 +93,7 @@ def inspect_owner_path(
     must_exist: bool = True,
     as_dir: bool = False,
 ) -> tuple[Path | None, str]:
-    """Resolve a path under the owner home. Jail is the logical path, not the symlink target."""
+    """Resolve a path under the owner home. Path and symlink target must stay under the home."""
     text = (raw or "").strip() or ("." if as_dir else "")
     if not text:
         return None, "path required"
@@ -110,6 +110,9 @@ def inspect_owner_path(
             resolved = candidate.resolve()
         except (OSError, ValueError):
             last = "folder not found" if as_dir else "file not found"
+            continue
+        if not _logical_under(resolved, root):
+            last = "path is outside the home"
             continue
         if must_exist:
             if as_dir:
