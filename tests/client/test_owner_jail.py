@@ -33,6 +33,36 @@ def test_owner_path_rejects_escape(client_mod, tmp_path: Path) -> None:
     assert client_mod._owner_path_status(err) == 403
 
 
+def test_owner_symlink_escape_is_denied(client_mod, tmp_path: Path) -> None:
+    outside = tmp_path.parent / "secret.txt"
+    outside.write_text("secret")
+    symlink = tmp_path / "link_outside.txt"
+    symlink.symlink_to(outside)
+
+    path, err = client_mod.inspect_owner_path("link_outside.txt", tmp_path, must_exist=True)
+    assert path is None
+    assert "outside" in err
+    assert client_mod._owner_path_status(err) == 403
+
+    path_nomust, err_nomust = client_mod.inspect_owner_path(
+        "link_outside.txt", tmp_path, must_exist=False
+    )
+    assert path_nomust is None
+    assert "outside" in err_nomust
+    assert client_mod._owner_path_status(err_nomust) == 403
+
+
+def test_owner_symlink_inside_home_is_allowed(client_mod, tmp_path: Path) -> None:
+    target = tmp_path / "target.txt"
+    target.write_text("content")
+    symlink = tmp_path / "link_inside.txt"
+    symlink.symlink_to(target)
+
+    path, err = client_mod.inspect_owner_path("link_inside.txt", tmp_path, must_exist=True)
+    assert path == target.resolve()
+    assert err == ""
+
+
 def test_owner_path_missing(client_mod, tmp_path: Path) -> None:
     path, err = client_mod.inspect_owner_path("missing.txt", tmp_path, must_exist=True)
     assert path is None
