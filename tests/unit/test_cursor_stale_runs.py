@@ -86,7 +86,10 @@ def test_is_unsupported_list_runs() -> None:
     assert _is_unsupported_list_runs(NotFoundError("not found")) is True
     assert _is_unsupported_list_runs(UnsupportedRunOperationError("list_runs")) is True
     assert _is_unsupported_list_runs(CursorAgentError("404", status=404)) is True
-    assert _is_unsupported_list_runs(Exception("Bridge request failed with HTTP 404: Not Found")) is True
+    assert (
+        _is_unsupported_list_runs(Exception("Bridge request failed with HTTP 404: Not Found"))
+        is True
+    )
 
     fake_resp = SimpleNamespace(response=SimpleNamespace(status_code=404))
     assert _is_unsupported_list_runs(fake_resp) is True  # type: ignore[arg-type]
@@ -134,7 +137,9 @@ async def test_fake_404_capability_miss_is_quiet_and_stream_starts(tmp_path, cap
     assert terminal.result == "done"
 
     # Confirm NO error logs emitted for 404
-    error_logs = [r for r in caplog.records if r.levelno >= logging.ERROR and r.name == "artek_buddy"]
+    error_logs = [
+        r for r in caplog.records if r.levelno >= logging.ERROR and r.name == "artek_buddy"
+    ]
     assert not error_logs
 
 
