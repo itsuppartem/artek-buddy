@@ -1,6 +1,6 @@
 # Contributing
 
-Artek Buddy is a personal, self-hosted Raspberry Pi agent. The HTTP API is
+Artek Buddy is a personal, self-hosted Linux agent (PC, server, or Raspberry Pi). The HTTP API is
 the product. The first client is a Linux `.deb`.
 
 ## License

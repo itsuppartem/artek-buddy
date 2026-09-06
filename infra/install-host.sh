@@ -94,7 +94,7 @@ fi
 if docker pull "$COMPUTER_IMAGE"; then
   :
 else
-  echo "computer image missing on GHCR; building it on this Pi"
+  echo "computer image missing on GHCR; building it on this host"
   docker compose --profile build build computer
   export COMPUTER_IMAGE=artek-buddy-computer:local
 fi
