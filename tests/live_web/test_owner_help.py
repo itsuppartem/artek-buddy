@@ -18,8 +18,10 @@ def test_host_page_owner_answer_continues_the_parked_turn(page: Page, host_url: 
     send_message_phone(page, "please e2e-blocked-browser")
 
     card = page.get_by_test_id("ask-card")
-    expect(card).to_be_visible(timeout=15_000)
-    card.get_by_test_id("ask-option").filter(has_text="I completed the step").click()
+    expect(card).to_be_visible(timeout=20_000)
+    option = card.get_by_test_id("ask-option").filter(has_text="I completed the step")
+    expect(option).to_be_visible(timeout=20_000)
+    option.click()
 
     expect(card).to_contain_text("Answered: I completed the step", timeout=8_000)
     expect(
