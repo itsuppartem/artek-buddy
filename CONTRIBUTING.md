@@ -98,6 +98,21 @@ Build on a machine with Node 22. Install on Debian/Ubuntu. Do not commit `*.deb`
 Daily work is a pull request **into `develop`**. `main` is release-only:
 open `develop` → `main` when shipping. Never push `main` directly.
 New issues can use the GitHub forms (bug, feature, engineering).
+
+### PR titles and conventional commits
+
+PR titles must follow Conventional Commits formatting:
+`<type>(<scope>): <description>` or `<type>: <description>`.
+Valid types: `fix`, `feat`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+The `quality` workflow validates PR titles automatically via `infra/check_pr_title.py`.
+
+### Issue labels and triage
+
+- **Types:** `bug`, `enhancement` (features), `engineering` (quality, CI, security, docs).
+- **Priority:** `P0` (do first, host vulnerabilities), `P1` (high ROI), `P2` (standard milestone work), `P3` (later/polish).
+- **Areas:** `area:host` (FastAPI / supervisor / runtime), `area:client` (Linux `.deb` & web), `area:ci` (Actions, packaging), `area:docs` (documentation), `area:security` (threat model & sandboxing).
+- **Risk tags:** `security` (trust boundary / auth changes), `migration` (database migrations), `api-break` (wire API changes).
+
 PRs into `develop` or `main` cannot merge while any of these checks is red:
 `quality`, `backend`, `ui`, `ui_web`, `scan`, `live_gate`, `analyze (python)`,
 `analyze (javascript-typescript)`, and `CodeQL`. That is rulesets

@@ -7,7 +7,7 @@ body:
     id: problem
     attributes:
       label: Problem
-      description: What evidence or gate is missing. Do not add a tool unless this Pi product needs it.
+      description: What evidence or gate is missing. Do not add a tool unless this product needs it.
     validations:
       required: true
   - type: textarea
@@ -23,6 +23,27 @@ body:
       label: Expected
     validations:
       required: true
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Invariants and architecture alignment
+      description: How does this maintain or strengthen product boundaries? Reference ARCHITECTURE.md or THREAT-MODEL.md.
+    validations:
+      required: false
+  - type: textarea
+    id: migration_upgrade
+    attributes:
+      label: Upgrade, rollback, and data compatibility
+      description: Backfill requirements, migration risks, or rollback steps.
+    validations:
+      required: false
+  - type: textarea
+    id: observability
+    attributes:
+      label: Observability and redaction
+      description: Does this introduce new logs, metrics, or traces? Are secrets properly masked?
+    validations:
+      required: false
   - type: textarea
     id: constraints
     attributes:
@@ -48,7 +69,11 @@ body:
       options:
         - backend
         - ui
+        - ui_web
         - live
+        - live_web
+        - scan
+        - quality
         - none
     validations:
       required: true

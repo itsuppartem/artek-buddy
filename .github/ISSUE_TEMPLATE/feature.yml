@@ -32,6 +32,27 @@ body:
     validations:
       required: false
   - type: textarea
+    id: security_privacy
+    attributes:
+      label: Security and privacy
+      description: Does this change trust boundaries, credentials, tokens, or permissions? Link THREAT-MODEL.md if applicable.
+    validations:
+      required: false
+  - type: textarea
+    id: data_migration
+    attributes:
+      label: Data, API, and migration impact
+      description: New SQL migration, event schema changes, or breaking API routes?
+    validations:
+      required: false
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and alternatives
+      description: Does this add a new library or system dependency? Why is it necessary, and what alternatives were rejected?
+    validations:
+      required: false
+  - type: textarea
     id: acceptance
     attributes:
       label: Acceptance
@@ -46,7 +67,10 @@ body:
       options:
         - backend
         - ui
+        - ui_web
         - live
+        - live_web
+        - scan
         - none
     validations:
       required: true
