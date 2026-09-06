@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Committed `ENGINEERING.md` (quality gates, coverage ratchets, Compose rationale, risk pointers) and `OPERATIONS.md` (network policy, readiness healthchecks, backup/restore, release process), and streamlined the README first screen with direct architecture and operational links.
 - GitHub PR and issue templates include risk, security boundaries, migration, compatibility, and evidence prompts; added `SUPPORT.md` and `CODE_OF_CONDUCT.md` community governance files.
 - Pull request titles are validated against Conventional Commits in the `quality` CI job using `infra/check_pr_title.py`.
 - Local check runner `scripts/check.sh` and `make check` run the `quality` and `backend` test suite locally with `--help` and `--dry-run`, mapping directly to CI jobs.
