@@ -256,10 +256,17 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
 
 
 def _computer_http(err: Exception) -> HTTPException:
-    if isinstance(err, ComputerBusy):
-        return HTTPException(status_code=409, detail=f"{err.name} is using the computer")
-    if isinstance(err, ComputerUnavailable):
-        return HTTPException(status_code=502, detail=str(err) or "screen unavailable")
+    safe = getattr(err, "safe_message", None) or str(err)
+    cat = getattr(err, "category", None)
+    if isinstance(err, ComputerBusy) or cat == "exhausted":
+        name = getattr(err, "name", "Another bot")
+        return HTTPException(status_code=409, detail=f"{name} is using the computer")
+    if isinstance(err, ComputerUnavailable) or cat == "unavailable":
+        return HTTPException(status_code=502, detail=safe or "screen unavailable")
+    if cat == "timeout":
+        return HTTPException(status_code=504, detail=safe)
+    if cat == "cancelled":
+        return HTTPException(status_code=499, detail=safe)
     if isinstance(err, ComputerError):
-        return HTTPException(status_code=400, detail=str(err))
-    return HTTPException(status_code=500, detail=str(err))
+        return HTTPException(status_code=400, detail=safe)
+    return HTTPException(status_code=500, detail=safe)

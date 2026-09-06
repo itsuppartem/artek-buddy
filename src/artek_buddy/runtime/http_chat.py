@@ -6,12 +6,29 @@ from collections.abc import AsyncIterator
 from artek_buddy.db.shaping import new_id
 from artek_buddy.model_catalog import complete_chat
 from artek_buddy.runtime.base import RuntimeBase
+from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.types import ProductStreamEvent, RunRecord
 
 log = logging.getLogger("artek_buddy")
 
 
 class HttpChatRuntime(RuntimeBase):
+    def __init__(
+        self,
+        settings: Any,
+        store: Any | None = None,
+        computers: Any | None = None,
+    ) -> None:
+        super().__init__(settings, store=store, computers=computers)
+        self.capabilities = RuntimeCapabilities(
+            streaming=True,
+            cancellation=True,
+            subagents=False,
+            computer=False,
+            memory=True,
+            models_catalog=False,
+        )
+
     async def start(self) -> None:
         self._ensure_dirs()
         live = await self.ensure_session(None, name="artek-buddy")

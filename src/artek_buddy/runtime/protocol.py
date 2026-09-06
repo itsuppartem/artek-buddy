@@ -4,11 +4,13 @@ from collections.abc import AsyncIterator
 from typing import Any, Protocol, runtime_checkable
 
 from artek_buddy.config import Settings
+from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.types import ProductStreamEvent, RunRecord
 
 
 @runtime_checkable
 class AgentRuntime(Protocol):
+    capabilities: RuntimeCapabilities
     settings: Settings
     store: Any
     computers: Any
@@ -84,3 +86,10 @@ class AgentRuntime(Protocol):
     async def send(self, prompt: str, session_id: str | None = None) -> RunRecord: ...
 
     async def list_models(self) -> list[dict[str, Any]]: ...
+
+    def cancel_run(self, run_id: str) -> None: ...
+
+    def is_run_cancelled(self, run_id: str | None) -> bool: ...
+
+    def health(self) -> bool: ...
+

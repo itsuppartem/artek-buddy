@@ -40,6 +40,14 @@ class ScriptedRuntime(RuntimeBase):
         computers: Any | None = None,
     ) -> None:
         super().__init__(settings, store=store, computers=computers)
+        self.capabilities = RuntimeCapabilities(
+            streaming=True,
+            cancellation=True,
+            subagents=True,
+            computer=True,
+            memory=True,
+            models_catalog=False,
+        )
         self._queue: list[list[ScriptedStep]] = []
         self._seq = 0
         self.last_tool_results: list[tuple[str, dict[str, Any]]] = []
