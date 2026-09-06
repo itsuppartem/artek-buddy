@@ -279,8 +279,8 @@ def build_report(
         try:
             from artek_buddy.runtime.scripted import ScriptedStep
 
-            step = ScriptedStep(text="hello", status="completed")
-            _ = json.dumps({"type": "message", "step": step.text})
+            step = ScriptedStep(result="hello", status="completed")
+            _ = json.dumps({"type": "message", "step": step.result})
         except ImportError:
             _ = json.dumps({"type": "message", "step": "hello"})
 
