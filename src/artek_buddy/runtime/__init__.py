@@ -1,6 +1,6 @@
+from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.cursor import CursorRuntime
 from artek_buddy.runtime.factory import open_runtime, runtime_kind
-from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.protocol import AgentRuntime
 from artek_buddy.runtime.scripted import (
     ScriptedRuntime,

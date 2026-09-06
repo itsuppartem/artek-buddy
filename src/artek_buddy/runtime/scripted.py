@@ -9,6 +9,7 @@ from typing import Any
 from artek_buddy.config import Settings
 from artek_buddy.db.shaping import TURN_FAILED, new_id
 from artek_buddy.runtime.base import RuntimeBase
+from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.cursor_wait import dead_wait_owner_error, note_auth_failures
 from artek_buddy.runtime.scripted_scenarios import (
     E2E_AUTH_ERROR,

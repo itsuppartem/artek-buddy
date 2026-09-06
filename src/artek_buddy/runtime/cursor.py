@@ -22,6 +22,7 @@ from cursor_sdk import (
 
 from artek_buddy.config import Settings
 from artek_buddy.runtime.base import RuntimeBase
+from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.cursor_wait import (
     dead_wait_owner_error,
     describe_cursor_wait,

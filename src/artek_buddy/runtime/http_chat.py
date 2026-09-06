@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
+from typing import Any
 
+from artek_buddy.config import Settings
 from artek_buddy.db.shaping import new_id
 from artek_buddy.model_catalog import complete_chat
 from artek_buddy.runtime.base import RuntimeBase
@@ -15,7 +17,7 @@ log = logging.getLogger("artek_buddy")
 class HttpChatRuntime(RuntimeBase):
     def __init__(
         self,
-        settings: Any,
+        settings: Settings,
         store: Any | None = None,
         computers: Any | None = None,
     ) -> None:
