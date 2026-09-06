@@ -76,11 +76,15 @@ def test_pair_second_device_and_owner_revokes_first(client, host_token) -> None:
     assert client.get("/v1/me", headers={"Authorization": f"Bearer {token_b}"}).status_code == 200
 
     # 3. Device B cannot revoke Device A (device tokens cannot revoke other devices)
-    stolen = client.delete(f"/v1/devices/{id_a}", headers={"Authorization": f"Bearer {token_b}"})
+    stolen = client.delete(
+        f"/v1/devices/{id_a}", headers={"Authorization": f"Bearer {token_b}"}
+    )
     assert stolen.status_code == 403
 
     # 4. Owner revokes Device A via host token
-    del_res = client.delete(f"/v1/devices/{id_a}", headers={"Authorization": f"Bearer {host_token}"})
+    del_res = client.delete(
+        f"/v1/devices/{id_a}", headers={"Authorization": f"Bearer {host_token}"}
+    )
     assert del_res.status_code == 200
     assert del_res.json()["revoked_at"] is not None
 
