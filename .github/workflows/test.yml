@@ -36,6 +36,15 @@ jobs:
             pyproject.toml
             requirements-dev.txt
 
+      - name: PR title check
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_USER: ${{ github.event.pull_request.user.login }}
+        run: |
+          set +x
+          python infra/check_pr_title.py
+
       - name: Ruff, mypy, pip-audit
         run: |
           set +x

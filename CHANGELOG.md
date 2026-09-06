@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- GitHub PR and issue templates include risk, security boundaries, migration, compatibility, and evidence prompts; added `SUPPORT.md` and `CODE_OF_CONDUCT.md` community governance files.
+- Pull request titles are validated against Conventional Commits in the `quality` CI job using `infra/check_pr_title.py`.
 - Local check runner `scripts/check.sh` and `make check` run the `quality` and `backend` test suite locally with `--help` and `--dry-run`, mapping directly to CI jobs.
 - Library / phone More now has one Appearance control: System follows the OS color scheme, while Light and Dark persist as a device-local override.
 - The paired window now opens on Today: describe an outcome and a hidden workspace routing layer reads every existing bot's profile, activity, and bounded recent context before choosing the bot that owns it. The router is not a pinned bot or a chat. A workspace rail separates Today, Chats, Routines, and Library; Work log keeps worker/tool detail out of the durable conversation.
