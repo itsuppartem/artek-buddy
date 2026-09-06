@@ -92,15 +92,8 @@ async def revoke_device(
     principal: Principal = Depends(require_principal),
     history: HistoryStore = Depends(store),
 ) -> Device:
-    try:
-        target = history.get_device(device_id)
-    except DatabaseUnavailable as err:
-        raise _db_error(err) from err
-    if target is None:
-        raise HTTPException(status_code=404, detail="device not found")
     if principal.device_id != "host" and principal.device_id != device_id:
-        if principal.role != "owner" or target.member_id != principal.member_id:
-            raise HTTPException(status_code=403, detail="cannot revoke another device")
+        raise HTTPException(status_code=403, detail="cannot revoke another device")
     try:
         device = history.revoke_device(device_id)
     except DatabaseUnavailable as err:

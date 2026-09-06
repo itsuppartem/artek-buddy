@@ -75,15 +75,19 @@ def test_pair_second_device_and_owner_revokes_first(client, host_token) -> None:
     assert client.get("/v1/me", headers={"Authorization": f"Bearer {token_a}"}).status_code == 200
     assert client.get("/v1/me", headers={"Authorization": f"Bearer {token_b}"}).status_code == 200
 
-    # 3. Device B revokes Device A (permitted because both belong to owner)
-    del_res = client.delete(f"/v1/devices/{id_a}", headers={"Authorization": f"Bearer {token_b}"})
+    # 3. Device B cannot revoke Device A (device tokens cannot revoke other devices)
+    stolen = client.delete(f"/v1/devices/{id_a}", headers={"Authorization": f"Bearer {token_b}"})
+    assert stolen.status_code == 403
+
+    # 4. Owner revokes Device A via host token
+    del_res = client.delete(f"/v1/devices/{id_a}", headers={"Authorization": f"Bearer {host_token}"})
     assert del_res.status_code == 200
     assert del_res.json()["revoked_at"] is not None
 
-    # 4. Device A is now revoked and fails auth
+    # 5. Device A is now revoked and fails auth
     assert client.get("/v1/me", headers={"Authorization": f"Bearer {token_a}"}).status_code == 403
 
-    # 5. Device B remains active and authenticated
+    # 6. Device B remains active and authenticated
     me_b = client.get("/v1/me", headers={"Authorization": f"Bearer {token_b}"})
     assert me_b.status_code == 200
     # Revoked device is omitted from active devices list in /v1/me
