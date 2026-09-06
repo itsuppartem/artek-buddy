@@ -96,25 +96,66 @@ jobs:
           cache: npm
           cache-dependency-path: client/web/package-lock.json
 
-      - name: Install and test
+      - name: Code quality, types, and openapi
         run: |
           set +x
           python -m pip install -r requirements-dev.txt
           python -m ruff format --check src tests client
           python -m ruff check src tests client
           python -m mypy
-          python -m pytest tests/unit tests/api tests/client \
-            --cov=artek_buddy --cov-branch \
-            --cov-report=term --cov-report=xml \
-            --cov-fail-under=71
-          python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
-          python tests/coverage_floors_gate.py
           PYTHONPATH=src python -m artek_buddy.openapi_export
           (cd client/web && npm ci && npm run generate:openapi)
           git diff --exit-code -- client/web/openapi.json client/web/src/generated/openapi.d.ts
           # Node 22's bundled npm still posts /security/audits/quick; that
           # registry route is retired. npm 11 uses advisories/bulk.
           (cd client/web && npx --yes npm@11 audit --audit-level=high && npm run lint && npm test && npm run check)
+
+      - name: Run backend tests
+        id: pytest
+        run: |
+          set +x
+          python -m pytest tests/unit tests/api tests/client \
+            --cov=artek_buddy --cov-branch \
+            --cov-report=term --cov-report=xml \
+            --cov-fail-under=71 \
+            --junitxml=junit-backend.xml
+        continue-on-error: true
+
+      - name: Coverage floors gate
+        if: steps.pytest.outcome == 'success'
+        run: |
+          set +x
+          python tests/coverage_floors_gate.py
+
+      - name: Publish test and coverage summaries
+        if: always()
+        run: |
+          set +x
+          if [ -f .coverage ]; then
+            python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+          if [ -f junit-backend.xml ]; then
+            python infra/junit_summary.py junit-backend.xml >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Check test outcome
+        if: always()
+        run: |
+          set +x
+          if [ "${{ steps.pytest.outcome }}" != "success" ]; then
+            echo "backend pytest failed" >&2
+            exit 1
+          fi
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: backend-test-results
+          path: |
+            junit-backend.xml
+            coverage.xml
+          if-no-files-found: ignore
 
   scan:
     runs-on: ubuntu-latest
@@ -282,7 +323,24 @@ jobs:
         run: |
           set +x
           export HOME="$ARTEK_CLIENT_HOME"
-          python -u -m pytest tests/live -m "live and not model" --browser chromium -vv --tb=short --timeout-method=thread
+          python -u -m pytest tests/live -m "live and not model" --browser chromium -vv --tb=short --timeout-method=thread \
+            --junitxml=junit-ui.xml
+
+      - name: Publish UI test summary
+        if: always()
+        run: |
+          set +x
+          if [ -f junit-ui.xml ]; then
+            python infra/junit_summary.py junit-ui.xml >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: ui-test-results
+          path: junit-ui.xml
+          if-no-files-found: ignore
 
       - name: Redacted logs on failure
         if: failure()
@@ -413,7 +471,24 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           set +x
-          python -u -m pytest tests/live_web -m "live and not model" --browser chromium -vv --tb=short --timeout-method=thread
+          python -u -m pytest tests/live_web -m "live and not model" --browser chromium -vv --tb=short --timeout-method=thread \
+            --junitxml=junit-ui-web.xml
+
+      - name: Publish UI web test summary
+        if: always()
+        run: |
+          set +x
+          if [ -f junit-ui-web.xml ]; then
+            python infra/junit_summary.py junit-ui-web.xml >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Upload UI web test results
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: ui-web-test-results
+          path: junit-ui-web.xml
+          if-no-files-found: ignore
 
       - name: Redacted logs on failure
         if: failure()
@@ -598,7 +673,24 @@ jobs:
         run: |
           set +x
           export HOME="$ARTEK_CLIENT_HOME"
-          python -m pytest tests/live -m model --browser chromium -q
+          python -m pytest tests/live -m model --browser chromium -q \
+            --junitxml=junit-live.xml
+
+      - name: Publish live test summary
+        if: always()
+        run: |
+          set +x
+          if [ -f junit-live.xml ]; then
+            python infra/junit_summary.py junit-live.xml >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Upload live test results
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: live-test-results
+          path: junit-live.xml
+          if-no-files-found: ignore
 
       - name: Redacted logs on failure
         if: failure()
@@ -734,7 +826,24 @@ jobs:
           ARTEK_LIVE: "1"
         run: |
           set +x
-          python -m pytest tests/live_web -m model --browser chromium -q
+          python -m pytest tests/live_web -m model --browser chromium -q \
+            --junitxml=junit-live-web.xml
+
+      - name: Publish live web test summary
+        if: always()
+        run: |
+          set +x
+          if [ -f junit-live-web.xml ]; then
+            python infra/junit_summary.py junit-live-web.xml >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Upload live web test results
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: live-web-test-results
+          path: junit-live-web.xml
+          if-no-files-found: ignore
 
       - name: Redacted logs on failure
         if: failure()
