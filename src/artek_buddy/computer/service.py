@@ -510,6 +510,9 @@ class ComputerService:
         record = self.ensure_running(bot)
         return self.client.execute(record.provider_ref, command)
 
+    execute = exec_command
+    start = boot
+
     def open_path(self, bot: Bot, path: str) -> dict[str, Any]:
         record = self.ensure_running(bot)
         return self.client.act(record.provider_ref, [{"kind": "open", "path": path}])
