@@ -172,3 +172,117 @@ def test_host_page_unsent_draft_stays_on_the_chat_it_was_typed_in(
     expect(thread_header(page)).to_contain_text(first, timeout=8_000)
     open_phone_tab(page, "chat")
     expect(composer(page)).to_have_value("keep on A")
+
+
+def test_host_page_got_it_dismisses_home_screen_hint(page: Page, host_url: str) -> None:
+    pair_host_page(page, host_url)
+    hint = page.get_by_test_id("home-screen-hint")
+    expect(hint).to_be_visible()
+    page.get_by_role("button", name="Got it").click()
+    expect(page.get_by_test_id("home-screen-hint")).to_have_count(0)
+    page.reload()
+    expect(page.get_by_test_id("home-screen-hint")).to_have_count(0)
+
+
+def test_host_page_turn_on_alerts_offered_in_standalone_app(page: Page, host_url: str) -> None:
+    page.add_init_script(
+        """
+        Object.defineProperty(navigator, 'standalone', { value: true, configurable: true });
+        window.__mockNotificationPermission = 'default';
+        window.Notification = {
+            get permission() { return window.__mockNotificationPermission; },
+            requestPermission: () => {
+                window.__mockNotificationPermission = 'granted';
+                return Promise.resolve('granted');
+            }
+        };
+        """
+    )
+    pair_host_page(page, host_url, expect_hint=False)
+    expect(page.get_by_test_id("home-screen-hint")).to_have_count(0)
+    alerts_btn = page.get_by_test_id("turn-on-alerts")
+    expect(alerts_btn).to_be_visible()
+    expect(alerts_btn).to_contain_text("Turn on alerts — only while this app is open")
+    alerts_btn.click()
+    expect(page.get_by_test_id("turn-on-alerts")).to_have_count(0)
+
+
+def test_host_page_turn_on_alerts_denied_hides_offer(page: Page, host_url: str) -> None:
+    page.add_init_script(
+        """
+        Object.defineProperty(navigator, 'standalone', { value: true, configurable: true });
+        window.__mockNotificationPermission = 'default';
+        window.Notification = {
+            get permission() { return window.__mockNotificationPermission; },
+            requestPermission: () => {
+                window.__mockNotificationPermission = 'denied';
+                return Promise.resolve('denied');
+            }
+        };
+        """
+    )
+    pair_host_page(page, host_url, expect_hint=False)
+    alerts_btn = page.get_by_test_id("turn-on-alerts")
+    expect(alerts_btn).to_be_visible()
+    alerts_btn.click()
+    expect(page.get_by_test_id("turn-on-alerts")).to_have_count(0)
+
+
+def test_host_page_stacked_shell_at_812x375_landscape(page: Page, host_url: str) -> None:
+    page.set_viewport_size({"width": 812, "height": 375})
+    pair_host_page(page, host_url)
+    expect(page.get_by_test_id("phone-nav")).to_be_visible()
+    today_tab = page.get_by_test_id("phone-tab-today")
+    chats_tab = page.get_by_test_id("phone-tab-chats")
+    desk_tab = page.get_by_test_id("phone-tab-desk")
+    more_tab = page.get_by_test_id("phone-tab-more")
+    expect(today_tab).to_be_visible()
+    expect(chats_tab).to_be_visible()
+    expect(desk_tab).to_be_visible()
+    expect(more_tab).to_be_visible()
+    expect(today_tab).to_have_attribute("aria-current", "page")
+
+    name = unique_bot("LandBot")
+    create_named_bot_phone(page, name)
+    expect(page.get_by_test_id("thread-header")).to_contain_text(name, timeout=8_000)
+    expect(chats_tab).to_have_attribute("aria-current", "page")
+
+    open_phone_tab(page, "more")
+    expect(page.get_by_test_id("library-pane")).to_be_visible(timeout=8_000)
+    expect(more_tab).to_have_attribute("aria-current", "page")
+
+
+def test_host_page_pairing_invalid_code_shows_error(page: Page, host_url: str) -> None:
+    arm_page(page)
+    page.goto(host_url, timeout=20_000, wait_until="domcontentloaded")
+    form = page.get_by_test_id("pairing")
+    expect(form).to_be_visible(timeout=20_000)
+    page.get_by_placeholder("XXXX-XXXX").fill("0000-0000")
+    pair_btn = page.get_by_role("button", name="Pair")
+    expect(pair_btn).to_be_enabled()
+    pair_btn.click()
+    error = page.get_by_test_id("pairing-error")
+    expect(error).to_be_visible(timeout=10_000)
+    expect(page.get_by_test_id("phone-nav")).to_have_count(0)
+
+
+def test_phone_create_cancel_returns_to_previous_context(page: Page, host_url: str) -> None:
+    pair_host_page(page, host_url)
+    open_phone_tab(page, "chats")
+    page.get_by_role("button", name="New bot").click()
+    expect(page.get_by_placeholder("Name this bot")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("create-cancel").click()
+    expect(page.get_by_placeholder("Name this bot")).to_have_count(0)
+    expect(page.get_by_test_id("phone-tab-chats")).to_have_attribute("aria-current", "page")
+
+    name = unique_bot("CancelBot")
+    create_named_bot_phone(page, name)
+    expect(page.get_by_test_id("thread-header")).to_contain_text(name, timeout=8_000)
+    open_phone_tab(page, "chats")
+    page.get_by_role("button", name="New bot").click()
+    expect(page.get_by_placeholder("Name this bot")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("create-cancel").click()
+    expect(page.get_by_placeholder("Name this bot")).to_have_count(0)
+    open_phone_tab(page, "chat")
+    expect(page.get_by_test_id("thread-header")).to_contain_text(name)
+

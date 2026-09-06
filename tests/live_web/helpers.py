@@ -10,13 +10,20 @@ from tests.live.helpers import (
 )
 
 
-def pair_host_page(page: Page, host_url: str, device_name: str | None = None) -> None:
+def pair_host_page(
+    page: Page,
+    host_url: str,
+    device_name: str | None = None,
+    *,
+    expect_hint: bool = True,
+) -> None:
     arm_page(page)
     page.goto(host_url, timeout=20_000, wait_until="domcontentloaded")
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
     expect(page.get_by_placeholder("https://host.example")).to_have_count(0)
-    expect(page.get_by_test_id("home-screen-hint")).to_be_visible()
+    if expect_hint:
+        expect(page.get_by_test_id("home-screen-hint")).to_be_visible()
     page.get_by_placeholder("XXXX-XXXX").fill(mint_pairing_code())
     if device_name is not None:
         form.get_by_text("Pairing options", exact=True).click()

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Covered remaining host-page phone click flows in `ui_web` (`tests/live_web`): Got it dismisses the Home Screen hint (persisting across reloads), standalone mode offers Turn on alerts with permission grant/denial handling, pairing with an invalid code shows a visible error card, New bot cancel returns to the previous context, and the stacked phone navigation shell remains functional in 812×375 landscape orientation.
 - Committed `ENGINEERING.md` (quality gates, coverage ratchets, Compose rationale, risk pointers) and `OPERATIONS.md` (network policy, readiness healthchecks, backup/restore, release process), and streamlined the README first screen with direct architecture and operational links.
 - GitHub PR and issue templates include risk, security boundaries, migration, compatibility, and evidence prompts; added `SUPPORT.md` and `CODE_OF_CONDUCT.md` community governance files.
 - Pull request titles are validated against Conventional Commits in the `quality` CI job using `infra/check_pr_title.py`.

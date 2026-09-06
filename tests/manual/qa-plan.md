@@ -294,6 +294,8 @@ Home Screen, phone width (375×812). Also confirm the wide Deb window does **not
 | Turn on alerts — only from the home-screen icon, and only while the app is open. No background | — | [ ] |
 | Wide window (Deb 1280×720) keeps the workspace rail and desktop layout, not «phone» | [ ] | — |
 
+Scripted: `test_host_page_got_it_dismisses_home_screen_hint`, `test_host_page_turn_on_alerts_offered_in_standalone_app`, `test_host_page_pairing_invalid_code_shows_error`, and `test_host_page_stacked_shell_at_812x375_landscape`.
+
 ---
 
 ## 12. Pad and Cyrillic
@@ -587,7 +589,7 @@ From **inside a chat** on Phone:
 | New bot Save opens the new chat. Cancel returns to the previous meaningful context | — | [ ] |
 | Open Desktop, Close, open again — pane comes back, no stuck empty shell | — | [ ] |
 
-Scripted: `test_phone_computer_open_close_returns_to_chat` and `test_phone_models_plugins_close_returns_to_more`.
+Scripted: `test_phone_computer_open_close_returns_to_chat`, `test_phone_models_plugins_close_returns_to_more`, and `test_phone_create_cancel_returns_to_previous_context`.
 
 ---
 
