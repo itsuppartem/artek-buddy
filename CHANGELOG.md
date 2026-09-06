@@ -21,6 +21,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Changed
+- CI test workflows publish JUnit XML and coverage reports to GitHub Step Summary with secret redaction, and upload test/coverage XML artifacts without traces.
 - `SECURITY.md` clarifies that token disclosure by the product is in scope, whereas abuse of an already-compromised credential across the normal API is an operator compromise.
 - Chromium on the bot desktop treats Sleep as a clean exit (no Restore tabs bar) and default-allows geolocation, notifications, and camera/mic chrome so page actions are not blocked by those bubbles. File pickers and login still need Take control.
 - Host-page Pair on a Funnel / tailnet URL uses that public origin (`X-Forwarded-Host` / `X-Forwarded-Proto`) and refreshes the page nonce before consume, so a host restart does not leave Pair on **forbidden**. Status advertises that origin. Pairing copy says the code is created on the host.
