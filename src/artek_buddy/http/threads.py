@@ -14,6 +14,7 @@ from artek_buddy.contracts import (
     AttachmentUploadInput,
     HostedAttachment,
     OkResponse,
+    Principal,
     ProductEvent,
     ProductEventType,
     Run,
@@ -50,6 +51,7 @@ from artek_buddy.http.deps import (
     current_app,
     hub,
     require_auth,
+    require_principal,
     runtime,
     store,
 )
@@ -290,12 +292,18 @@ async def mark_thread_unread(bot_id: str, history: HistoryStore = Depends(store)
         raise _db_error(err) from err
 
 
-@router.get("/v1/events", dependencies=[Depends(require_auth)])
+@router.get("/v1/events")
 async def subscribe_workspace_events(
+    principal: Principal = Depends(require_principal),
+    history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> StreamingResponse:
     async def gen():
         async for item in events.subscribe_workspace():
+            if principal.device_id != "host":
+                mem = history.get_member(principal.member_id)
+                if mem is None or mem.state != "active":
+                    break
             if item is HEARTBEAT:
                 yield ": keepalive\n\n"
                 continue
@@ -313,10 +321,11 @@ async def subscribe_workspace_events(
     )
 
 
-@router.get("/v1/threads/{bot_id}/events", dependencies=[Depends(require_auth)])
+@router.get("/v1/threads/{bot_id}/events")
 async def subscribe_thread_events(
     bot_id: str,
     after: str | None = Query(default=None),
+    principal: Principal = Depends(require_principal),
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> StreamingResponse:
@@ -327,6 +336,10 @@ async def subscribe_thread_events(
 
     async def gen():
         async for item in events.subscribe(bot_id, after=after):
+            if principal.device_id != "host":
+                mem = history.get_member(principal.member_id)
+                if mem is None or mem.state != "active":
+                    break
             if item is HEARTBEAT:
                 yield ": keepalive\n\n"
                 continue

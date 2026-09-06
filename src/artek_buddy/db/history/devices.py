@@ -60,17 +60,30 @@ class DevicesMixin:
             conn.commit()
         return row is not None
 
-    def create_device(self, name: str, platform: str = "linux") -> DeviceCreated:
+    def create_device(
+        self,
+        name: str,
+        platform: str = "linux",
+        member_id: str | None = None,
+    ) -> DeviceCreated:
         token = new_device_token()
         now = isoformat_utc()
         device_id = new_id("dev")
+        target_member_id = member_id or "mem_owner"
         with self._conn() as conn:
             conn.execute(
                 """
-                INSERT INTO devices (id, name, platform, token_hash, created_at)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO devices (id, name, platform, token_hash, created_at, member_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """,
-                (device_id, name.strip(), platform.strip() or "linux", hash_secret(token), now),
+                (
+                    device_id,
+                    name.strip(),
+                    platform.strip() or "linux",
+                    hash_secret(token),
+                    now,
+                    target_member_id,
+                ),
             )
             conn.commit()
         return DeviceCreated(
@@ -79,17 +92,29 @@ class DevicesMixin:
             platform=platform.strip() or "linux",
             created_at=now,
             token=token,
+            member_id=target_member_id,
         )
 
-    def list_devices(self) -> list[Device]:
+    def list_devices(self, member_id: str | None = None) -> list[Device]:
         with self._conn() as conn:
-            rows = conn.execute(
-                """
-                SELECT id, name, platform, created_at, last_seen_at, revoked_at
-                FROM devices
-                ORDER BY created_at DESC
-                """
-            ).fetchall()
+            if member_id:
+                rows = conn.execute(
+                    """
+                    SELECT id, name, platform, created_at, last_seen_at, revoked_at, member_id
+                    FROM devices
+                    WHERE member_id = %s
+                    ORDER BY created_at DESC
+                    """,
+                    (member_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT id, name, platform, created_at, last_seen_at, revoked_at, member_id
+                    FROM devices
+                    ORDER BY created_at DESC
+                    """
+                ).fetchall()
             conn.commit()
         return [self._device_from_row(row) for row in rows]
 
@@ -97,7 +122,7 @@ class DevicesMixin:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                SELECT id, name, platform, created_at, last_seen_at, revoked_at
+                SELECT id, name, platform, created_at, last_seen_at, revoked_at, member_id
                 FROM devices WHERE id = %s
                 """,
                 (device_id,),
@@ -111,9 +136,12 @@ class DevicesMixin:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                SELECT id, name, platform, created_at, last_seen_at, revoked_at
-                FROM devices
-                WHERE token_hash = %s AND revoked_at IS NULL
+                SELECT d.id, d.name, d.platform, d.created_at, d.last_seen_at, d.revoked_at, d.member_id
+                FROM devices d
+                LEFT JOIN members m ON d.member_id = m.id
+                WHERE d.token_hash = %s
+                  AND d.revoked_at IS NULL
+                  AND (m.state IS NULL OR m.state = 'active')
                 """,
                 (hash_secret(token),),
             ).fetchone()
@@ -164,6 +192,7 @@ class DevicesMixin:
             name=row["name"],
             platform=row["platform"] or "linux",
             created_at=parse_iso(row["created_at"]),
-            last_seen_at=parse_iso(row["last_seen_at"]) if row["last_seen_at"] else None,
-            revoked_at=parse_iso(row["revoked_at"]) if row["revoked_at"] else None,
+            last_seen_at=parse_iso(row["last_seen_at"]) if row.get("last_seen_at") else None,
+            revoked_at=parse_iso(row["revoked_at"]) if row.get("revoked_at") else None,
+            member_id=row.get("member_id"),
         )

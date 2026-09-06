@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Bound paired devices to a member actor (`0027_members.sql`), bootstrapping an immutable owner member, migrating unrevoked/existing devices to the owner, updating `GET /v1/me` with member and active devices list, allowing owners to revoke individual devices without deleting the member, and immediately denying authentication and terminating open SSE connections if a member is suspended.
 - Added in-tree performance budget measurement tool `infra/perf_budget.py` and `make perf` recording .deb install, cold window first paint, pairing/resume, large thread fixture load, first scripted SSE event latency, replay of N events, and process RSS in observation mode with secret redaction and sleep calibration.
 - Formalized runtime and computer protocol interfaces (`AgentRuntime`, `ComputerGateway`, `SupervisorGateway`) with explicit capability flags (`RuntimeCapabilities`, `ComputerCapabilities`), error categories (`unavailable`, `timeout`, `cancelled`, `exhausted`, `transient`, `permanent`), secret redaction before API/log surfaces, and conformance tests.
 - Added `VISION.md` (defining core invariants: one trusted host, durable bots, human consent, Team vs Private desktops, small invited group, and explicit non-goals like Kubernetes/Redis/multi-tenant SaaS) and repo-root `AGENTS.md` (read order, architecture map, CI command reference).

@@ -18,6 +18,7 @@ from artek_buddy.config import Settings
 from artek_buddy.consent import ConsentHub
 from artek_buddy.contracts import (
     Bot,
+    Principal,
     ThreadMessagePage,
     ThreadSnapshot,
 )
@@ -136,6 +137,27 @@ async def require_auth(
     if device is None:
         raise HTTPException(status_code=403, detail="invalid token")
     return device.id
+
+
+async def require_principal(
+    authorization: str | None = Header(default=None),
+    device_cookie: str | None = Cookie(default=None, alias=COOKIE_NAME),
+    cfg: Settings = Depends(settings),
+    history: HistoryStore = Depends(store),
+) -> Principal:
+    kind, token = _actor_token(authorization, device_cookie, cfg.agent_http_token)
+    if kind == "host":
+        owner = history.get_owner_member()
+        return Principal(member_id=owner.id, device_id="host", role=owner.role)
+    if token is None:
+        raise HTTPException(status_code=401, detail="missing bearer token")
+    try:
+        principal = history.lookup_principal(token)
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    if principal is None:
+        raise HTTPException(status_code=403, detail="invalid token")
+    return principal
 
 
 async def require_host(
