@@ -40,7 +40,9 @@ def test_perf_budget_report_schema_and_keys() -> None:
         "first_scripted_sse_event",
         "replay_n_events",
     }
-    assert expected_metrics.issubset(metric_names), f"Missing metrics: {expected_metrics - metric_names}"
+    assert expected_metrics.issubset(metric_names), (
+        f"Missing metrics: {expected_metrics - metric_names}"
+    )
 
     assert len(report.memory) >= 1
     assert report.memory[0].process_name

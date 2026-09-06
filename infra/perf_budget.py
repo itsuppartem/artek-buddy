@@ -340,7 +340,11 @@ def generate_markdown(report: PerfBudgetReport) -> str:
         "",
         f"- **Timestamp:** `{report.timestamp}`",
         f"- **Version / Commit:** `{report.version}` (`{report.git_commit[:8]}`)",
-        f"- **Hardware:** {report.hardware.machine} ({report.hardware.cpu_count} CPUs, {report.hardware.total_memory_mb} MB RAM) on `{report.hardware.system} {report.hardware.release}`",
+        (
+            f"- **Hardware:** {report.hardware.machine} "
+            f"({report.hardware.cpu_count} CPUs, {report.hardware.total_memory_mb} MB RAM) "
+            f"on `{report.hardware.system} {report.hardware.release}`"
+        ),
         f"- **Mode:** `{report.mode}` (Observation Policy)",
         "",
         "## Measured Latency and Durations",
@@ -372,7 +376,10 @@ def generate_markdown(report: PerfBudgetReport) -> str:
             "",
             "## Observation Policy",
             "",
-            "Metrics are recorded in **observe** mode to build a reliable median baseline on target hardware (Raspberry Pi / Linux host).",
+            (
+                "Metrics are recorded in **observe** mode to build a reliable median baseline "
+                "on target hardware (Raspberry Pi / Linux host)."
+            ),
             "Hard failure budgets are enacted only after representative sample medians are established.",
         ]
     )
