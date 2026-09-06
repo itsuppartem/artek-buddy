@@ -23,6 +23,7 @@ Closes #
 
 ## Checklist
 
+- [ ] Reviewed [VISION.md](VISION.md) and [AGENTS.md](AGENTS.md) for invariants and commands
 - [ ] No secrets, tokens, Funnel hostnames, or gitignored `docs/`
 - [ ] Target is `develop` (do not push `main`)
 - [ ] Conventional commit title (`fix:`, `feat:`, `docs:`, `ci:`, etc.)

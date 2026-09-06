@@ -10,7 +10,7 @@ the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 ## How to work
 
-1. Read [README.md](README.md), [CHANGELOG.md](CHANGELOG.md), [SECURITY.md](SECURITY.md), and [THREAT-MODEL.md](THREAT-MODEL.md).
+1. Read [VISION.md](VISION.md) for product invariants and non-goals, [AGENTS.md](AGENTS.md) for repo architecture and CI commands, and review [README.md](README.md), [CHANGELOG.md](CHANGELOG.md), [SECURITY.md](SECURITY.md), and [THREAT-MODEL.md](THREAT-MODEL.md).
 2. Branch from `develop`. Do not commit or push `main`.
 3. Keep JSON on the wire `snake_case`.
 4. Do not add a second model provider. Cursor Cloud is the live runtime.
