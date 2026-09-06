@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "infra" / "junit_summary.py"
 
 sys.path.insert(0, str(ROOT / "infra"))
-from junit_summary import format_junit_summary, main, redact  # type: ignore[import-not-found]
+from junit_summary import format_junit_summary, redact  # type: ignore[import-not-found]
 
 
 def test_redact_masks_secrets() -> None:
