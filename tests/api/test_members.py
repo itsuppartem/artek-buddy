@@ -71,28 +71,28 @@ def test_pair_second_device_and_owner_revokes_first(client, host_token) -> None:
     token_b = dev_b["token"]
     id_b = dev_b["id"]
 
+    auth_a = {"Authorization": f"Bearer {token_a}"}
+    auth_b = {"Authorization": f"Bearer {token_b}"}
+    auth_host = {"Authorization": f"Bearer {host_token}"}
+
     # Both devices initially work
-    assert client.get("/v1/me", headers={"Authorization": f"Bearer {token_a}"}).status_code == 200
-    assert client.get("/v1/me", headers={"Authorization": f"Bearer {token_b}"}).status_code == 200
+    assert client.get("/v1/me", headers=auth_a).status_code == 200
+    assert client.get("/v1/me", headers=auth_b).status_code == 200
 
     # 3. Device B cannot revoke Device A (device tokens cannot revoke other devices)
-    stolen = client.delete(
-        f"/v1/devices/{id_a}", headers={"Authorization": f"Bearer {token_b}"}
-    )
+    stolen = client.delete(f"/v1/devices/{id_a}", headers=auth_b)
     assert stolen.status_code == 403
 
     # 4. Owner revokes Device A via host token
-    del_res = client.delete(
-        f"/v1/devices/{id_a}", headers={"Authorization": f"Bearer {host_token}"}
-    )
+    del_res = client.delete(f"/v1/devices/{id_a}", headers=auth_host)
     assert del_res.status_code == 200
     assert del_res.json()["revoked_at"] is not None
 
     # 5. Device A is now revoked and fails auth
-    assert client.get("/v1/me", headers={"Authorization": f"Bearer {token_a}"}).status_code == 403
+    assert client.get("/v1/me", headers=auth_a).status_code == 403
 
     # 6. Device B remains active and authenticated
-    me_b = client.get("/v1/me", headers={"Authorization": f"Bearer {token_b}"})
+    me_b = client.get("/v1/me", headers=auth_b)
     assert me_b.status_code == 200
     # Revoked device is omitted from active devices list in /v1/me
     active_ids = {d["id"] for d in me_b.json()["devices"]}
@@ -112,19 +112,20 @@ def test_suspended_member_disallows_all_devices(client, host_token) -> None:
         json={"name": "TabletDevice", "platform": "web", "pairing_code": code},
     ).json()
     token = dev["token"]
+    auth_dev = {"Authorization": f"Bearer {token}"}
 
     # Device works
-    assert client.get("/v1/me", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    assert client.get("/v1/me", headers=auth_dev).status_code == 200
 
     # Suspend owner member
     store.suspend_member("mem_owner")
     try:
         # Auth fails for device
-        res = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
+        res = client.get("/v1/me", headers=auth_dev)
         assert res.status_code == 403
     finally:
         # Reactivate owner
         store.activate_member("mem_owner")
 
     # Works again after reactivation
-    assert client.get("/v1/me", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    assert client.get("/v1/me", headers=auth_dev).status_code == 200
