@@ -26,7 +26,8 @@ client/url
 .cursor/rules/
 
 # local-only tooling — never commit
-scripts/
+scripts/*
+!scripts/check.sh
 test-results/
 docs/
 docker-compose.local.yml

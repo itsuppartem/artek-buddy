@@ -27,6 +27,20 @@ Do not ignore them as scanner noise. Do not point a runner at the live `:8080` s
 Postgres. Do not print `CURSOR_API_KEY`, host tokens, or
 `docker compose config` in Actions — the repo is public.
 
+## Local check command
+
+Run the same quality, backend, and client/web suite locally:
+
+```bash
+make check
+# or directly:
+./scripts/check.sh
+# dry-run to preview commands:
+./scripts/check.sh -n
+```
+
+This command covers the `quality` (Ruff, mypy, pip-audit) and `backend` (pytest, coverage >= 71%, coverage floors, OpenAPI export) checks, as well as `client/web` checks if Node is installed. UI (`ui`, `ui_web`), live model tests (`live`, `live_web`), filesystem scan (`scan`), and `CodeQL` remain CI-only.
+
 Python tool config lives in `pyproject.toml`. Same checks as the `quality` job:
 
 ```bash
