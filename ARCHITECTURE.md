@@ -144,6 +144,14 @@ schema in `client/web/src/generated/openapi.d.ts` (dumped at build/CI from
 `src/artek_buddy/contracts/rpc.py`. OpenAPI is off at runtime
 (`docs_url=None`, `openapi_url=None`).
 
+## Protocols and Seams
+
+The host enforces formalized Python `Protocol` interfaces around execution and sandbox boundaries rather than concrete vendor types:
+
+- **Agent Runtime (`AgentRuntime` in `src/artek_buddy/runtime/protocol.py`)**: Defines session lifecycle (`start`, `build_session_resume`), streaming (`stream`), cancellation (`cancel_run`, `is_run_cancelled`), and readiness (`health`). Handlers check capability flags (`RuntimeCapabilities`) rather than `isinstance` checks.
+- **Computer and Supervisor (`ComputerGateway` and `SupervisorGateway` in `src/artek_buddy/computer/protocol.py`)**: Defines sandbox lifecycle (`status`, `boot`, `stop`, `restart`, `reset`), command execution (`execute`), and inspect through the supervisor loopback boundary. Handlers check `ComputerCapabilities` (e.g. `team_desktop`, `private_desktop`, `screen_preview`).
+- **Error Categories and Redaction**: `AgentRuntimeError` and `ComputerError` classify failures into explicit categories (`unavailable`, `timeout`, `cancelled`, `exhausted`, `transient`, `permanent`) with `is_transient` retry hints and scrub sensitive tokens via `safe_message` before logging or returning over HTTP.
+
 ## Test pyramid
 
 | Layer | Job | What it is |

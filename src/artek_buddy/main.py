@@ -171,7 +171,13 @@ def _health_bits() -> tuple[bool, bool]:
             db_ok = bool(history.available())
         except Exception:
             db_ok = False
-    return current is not None, db_ok
+    runtime_ok = False
+    if current is not None:
+        try:
+            runtime_ok = bool(current.health()) if hasattr(current, "health") else True
+        except Exception:
+            runtime_ok = False
+    return runtime_ok, db_ok
 
 
 @app.get("/health")

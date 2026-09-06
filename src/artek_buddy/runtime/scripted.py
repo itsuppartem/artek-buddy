@@ -9,6 +9,7 @@ from typing import Any
 from artek_buddy.config import Settings
 from artek_buddy.db.shaping import TURN_FAILED, new_id
 from artek_buddy.runtime.base import RuntimeBase
+from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.cursor_wait import dead_wait_owner_error, note_auth_failures
 from artek_buddy.runtime.scripted_scenarios import (
     E2E_AUTH_ERROR,
@@ -40,6 +41,14 @@ class ScriptedRuntime(RuntimeBase):
         computers: Any | None = None,
     ) -> None:
         super().__init__(settings, store=store, computers=computers)
+        self.capabilities = RuntimeCapabilities(
+            streaming=True,
+            cancellation=True,
+            subagents=True,
+            computer=True,
+            memory=True,
+            models_catalog=False,
+        )
         self._queue: list[list[ScriptedStep]] = []
         self._seq = 0
         self.last_tool_results: list[tuple[str, dict[str, Any]]] = []

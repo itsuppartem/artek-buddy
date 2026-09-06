@@ -76,6 +76,13 @@ route. Both internal HTTP listeners bind loopback only. A trusted process that
 has `AGENT_HTTP_TOKEN` can derive these internal tokens; blank `CREDENTIAL_*`
 overrides are not a security boundary.
 
+## Protocol and Seam Boundaries
+
+The host communicates with runtimes and sandbox supervisor processes via strict interfaces (`AgentRuntime` and `ComputerGateway` / `SupervisorGateway`):
+- Untrusted desktop containers and one-command runners never receive the Docker socket or supervisor credentials. All control flows through `SupervisorGateway`.
+- Handlers check capability flags (`RuntimeCapabilities`, `ComputerCapabilities`) rather than `isinstance` checks, preventing type-sniffing or unintended privilege creep across different runtime environments.
+- Error reporting enforces explicit categorization (`unavailable`, `timeout`, `cancelled`, `exhausted`, `transient`, `permanent`) and guarantees secret redaction via `safe_message` before exceptions reach HTTP responses, structured logs, or the owner window.
+
 ## Bind story (`:8080`)
 
 Today the API listens on **every interface the kernel has**:

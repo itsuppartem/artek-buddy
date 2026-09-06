@@ -22,6 +22,7 @@ from cursor_sdk import (
 
 from artek_buddy.config import Settings
 from artek_buddy.runtime.base import RuntimeBase
+from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.cursor_wait import (
     dead_wait_owner_error,
     describe_cursor_wait,
@@ -110,6 +111,14 @@ class CursorRuntime(RuntimeBase):
         bridge_launcher: Callable[[], Awaitable[AsyncClient]] | None = None,
     ) -> None:
         super().__init__(settings, store=store, computers=computers)
+        self.capabilities = RuntimeCapabilities(
+            streaming=True,
+            cancellation=True,
+            subagents=True,
+            computer=True,
+            memory=True,
+            models_catalog=True,
+        )
         self.client = client
         self._bridge_launcher = bridge_launcher
         self._bridge_condition = asyncio.Condition()
@@ -120,6 +129,9 @@ class CursorRuntime(RuntimeBase):
         self._stream_locks: dict[str, asyncio.Lock] = {}
         self._auth_fails = 0
         self.bridge_recycles = 0
+
+    def health(self) -> bool:
+        return self.client is not None
 
     def model_selection(self) -> ModelSelection:
         model_id = self.settings.cursor_model

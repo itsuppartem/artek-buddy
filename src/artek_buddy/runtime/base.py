@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from artek_buddy.config import Settings
+from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.types import AgentRuntimeError, RunRecord, ToolTurnBox, TurnContext
 
 log = logging.getLogger("artek_buddy")
@@ -45,6 +46,7 @@ class RuntimeBase:
         self.owner_dir_lister: Any | None = None
         self.owner_command_runner: Any | None = None
         self.book_fixture_url: str = ""
+        self.capabilities: RuntimeCapabilities = RuntimeCapabilities()
         self._agents: dict[str, Any] = {}
         self._state_path = Path(settings.agent_data_dir) / "session.json"
         self._turn_lock = threading.Lock()
@@ -120,6 +122,13 @@ class RuntimeBase:
             return
         with self._turn_lock:
             self._cancelled_runs.update(ids)
+
+    def cancel_run(self, run_id: str) -> None:
+        if run_id:
+            self.mark_runs_cancelled([run_id])
+
+    def health(self) -> bool:
+        return True
 
     def is_run_cancelled(self, run_id: str | None) -> bool:
         if not run_id:

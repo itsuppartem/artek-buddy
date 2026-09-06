@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from artek_buddy.auth import supervisor_token
+from artek_buddy.computer.capabilities import ComputerCapabilities
 from artek_buddy.computer.client import FakeSupervisorClient, SupervisorClient
 from artek_buddy.computer.models import ComputerRecord
 from artek_buddy.computer.screen import mint_novnc_url
@@ -47,18 +48,51 @@ def wipe_computer_home(data_dir: Path, home_key: str) -> Path:
     return path
 
 
-class ComputerBusy(Exception):
-    def __init__(self, name: str) -> None:
-        super().__init__(name)
-        self.name = name
-
-
 class ComputerError(Exception):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        category: str = "permanent",
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.category = category
+        self.retryable = retryable or category in {"unavailable", "timeout", "transient"}
+
+    @property
+    def is_transient(self) -> bool:
+        return self.category in {"unavailable", "timeout", "transient"}
+
+    @property
+    def safe_message(self) -> str:
+        from artek_buddy.observe import redact_text
+
+        return redact_text(self.message)
+
+
+class ComputerBusy(ComputerError):
+    def __init__(self, name: str) -> None:
+        super().__init__(name, category="exhausted", retryable=True)
+        self.name = name
 
 
 class ComputerUnavailable(ComputerError):
     """The desktop is supposed to be reachable but the screen proxy cannot mint a URL."""
+
+    def __init__(self, message: str = "computer unavailable") -> None:
+        super().__init__(message, category="unavailable", retryable=True)
+
+
+class ComputerTimeout(ComputerError):
+    def __init__(self, message: str = "computer operation timed out") -> None:
+        super().__init__(message, category="timeout", retryable=True)
+
+
+class ComputerCancelled(ComputerError):
+    def __init__(self, message: str = "computer operation cancelled") -> None:
+        super().__init__(message, category="cancelled", retryable=False)
 
 
 class ComputerService:
@@ -72,6 +106,13 @@ class ComputerService:
         else:
             token = supervisor_token(settings.agent_http_token, settings.sandbox_supervisor_token)
             self.client = SupervisorClient(settings.sandbox_supervisor_url, token)
+        self.capabilities = getattr(self.client, "capabilities", ComputerCapabilities())
+
+    def health(self) -> bool:
+        checker = getattr(self.client, "health", None)
+        if callable(checker):
+            return bool(checker())
+        return True
 
     def home_path(self, record: ComputerRecord) -> Path:
         path = Path(self.settings.agent_data_dir) / "homes" / record.home_key
@@ -468,6 +509,9 @@ class ComputerService:
     def exec_command(self, bot: Bot, command: str) -> dict[str, Any]:
         record = self.ensure_running(bot)
         return self.client.execute(record.provider_ref, command)
+
+    execute = exec_command
+    start = boot
 
     def open_path(self, bot: Bot, path: str) -> dict[str, Any]:
         record = self.ensure_running(bot)
