@@ -86,11 +86,12 @@ class AgentRuntimeTimeout(AgentRuntimeError):
 
 
 class AgentRuntimeCancelled(AgentRuntimeError):
-    def __init__(self, message: str = "run was cancelled", *, request_id: str | None = None) -> None:
+    def __init__(
+        self, message: str = "run was cancelled", *, request_id: str | None = None
+    ) -> None:
         super().__init__(message, category="cancelled", retryable=False, request_id=request_id)
 
 
 class AgentRuntimeExhausted(AgentRuntimeError):
     def __init__(self, message: str, *, request_id: str | None = None) -> None:
         super().__init__(message, category="exhausted", retryable=True, request_id=request_id)
-

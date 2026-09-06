@@ -297,7 +297,8 @@ def test_error_safe_message_redacts_secrets() -> None:
     bearer_token = "Bearer test_secret_bearer_value_12345"
     pairing_code = "ABCD-EFGH"
     raw_message = (
-        f"Failed call with {bearer_token} to postgresql://user:password@127.0.0.1:5432/db "
+        f"Failed call with {bearer_token} and token={secret_token} "
+        f"to postgresql://user:password@127.0.0.1:5432/db "
         f"using code {pairing_code} and /novnc/sensitive_token_abc"
     )
 
@@ -307,6 +308,7 @@ def test_error_safe_message_redacts_secrets() -> None:
     for err in (agent_err, comp_err):
         safe = err.safe_message
         assert "test_secret_bearer_value_12345" not in safe
+        assert secret_token not in safe
         assert "password" not in safe
         assert pairing_code not in safe
         assert "sensitive_token_abc" not in safe
