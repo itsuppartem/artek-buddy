@@ -22,6 +22,7 @@ from artek_buddy.runtime.tools.product import ProductTools, ProductToolsCore
 
 def test_decision_from_label_happy_and_fail() -> None:
     assert decision_from_label("Allow once") == "once"
+    assert decision_from_label("allow") == "once"
     assert decision_from_label("Always") == "always"
     assert decision_from_label("Deny") == "deny"
     assert decision_from_label("maybe later") is None

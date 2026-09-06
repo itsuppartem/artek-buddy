@@ -254,10 +254,16 @@ class ScriptedRuntime(RuntimeBase):
                 hub = getattr(self, "consent", None)
                 if hub is not None:
                     ctx_bot, ctx_run, _thread = self.resolve_turn_context(bot_id)
+                    action_class = str(step.consent.get("action_class") or "")
+                    scope_key = str(step.consent.get("scope_key") or "*")
+                    target_bot = ctx_bot or bot_id or ""
+                    device_id = self.resolve_turn_device(target_bot)
+                    if hub.has_grant(target_bot, action_class, scope_key, device_id):
+                        continue
                     request_id = hub.offer(
-                        bot_id=ctx_bot or bot_id or "",
-                        action_class=str(step.consent.get("action_class") or ""),
-                        scope_key=str(step.consent.get("scope_key") or "*"),
+                        bot_id=target_bot,
+                        action_class=action_class,
+                        scope_key=scope_key,
                         summary=str(step.consent.get("summary") or "Allow this?"),
                         run_id=ctx_run,
                         detail=step.consent.get("detail"),

@@ -83,7 +83,7 @@ async def upload_consent_file(
     data = b""
     if body.content_base64:
         try:
-            data = base64.b64decode(body.content_base64)
+            data = base64.b64decode(body.content_base64, validate=True)
         except Exception as exc:
             raise HTTPException(status_code=400, detail="invalid content_base64") from exc
     elif body.text is not None:
@@ -123,7 +123,7 @@ async def upload_consent_result(
     claim = payload.pop("claim", None)
     if body.content_base64:
         try:
-            payload["_data"] = base64.b64decode(body.content_base64)
+            payload["_data"] = base64.b64decode(body.content_base64, validate=True)
         except Exception as exc:
             raise HTTPException(status_code=400, detail="invalid content_base64") from exc
     elif body.text is not None and "_data" not in payload:

@@ -217,7 +217,7 @@ def decision_from_label(value: str) -> str | None:
     raw = (value or "").strip().lower()
     if raw in DECISIONS:
         return raw
-    if raw in {"allow once", "once", "this time"}:
+    if raw in {"allow once", "once", "this time", "allow"}:
         return "once"
     if raw in {"always", "allow always"}:
         return "always"
