@@ -22,7 +22,6 @@ class MembersMixin:
         )
 
     def ensure_owner_member(self) -> Member:
-        now = isoformat_utc()
         with self._conn() as conn:
             row = conn.execute(
                 """

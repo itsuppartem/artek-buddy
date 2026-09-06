@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 
 def test_fresh_db_has_owner_member(client, auth_header) -> None:
     response = client.get("/v1/me", headers=auth_header)
