@@ -116,7 +116,17 @@ class ComputerToolsMixin:
                 )
                 if denied:
                     return denied
-            if kind in {"fill", "type", "click", "press", "submit", "key", "scroll", "evaluate", "eval"}:
+            if kind in {
+                "fill",
+                "type",
+                "click",
+                "press",
+                "submit",
+                "key",
+                "scroll",
+                "evaluate",
+                "eval",
+            }:
                 needs_page = True
         if needs_page:
             denied = self._deny_page(_bot_id, origin)

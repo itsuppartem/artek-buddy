@@ -39,4 +39,3 @@ def test_playwright_browser_command_scroll_up_direction() -> None:
     cmd = _playwright_browser_command([{"kind": "scroll", "direction": "up", "clicks": 4}])
     assert "mouse.wheel" in cmd
     assert "-400" in cmd
-

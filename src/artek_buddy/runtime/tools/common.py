@@ -93,7 +93,9 @@ def _playwright_browser_command(actions: list[Any]) -> str:
                     "delta_y": dy,
                     "direction": direction,
                     "force": bool(item.get("force", False)),
-                    "expression": str(item.get("expression") or item.get("script") or item.get("js") or ""),
+                    "expression": str(
+                        item.get("expression") or item.get("script") or item.get("js") or ""
+                    ),
                 }
             )
     payload = json.dumps(steps)
