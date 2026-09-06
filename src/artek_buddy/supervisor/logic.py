@@ -254,6 +254,10 @@ def action_command(actions: list[dict]) -> str:
         elif kind == "scroll":
             clicks = int(item.get("clicks") or 3)
             button = 4 if str(item.get("direction") or "up") == "up" else 5
+            if item.get("x") is not None and item.get("y") is not None:
+                x = int(item.get("x") or 0)
+                y = int(item.get("y") or 0)
+                parts.append(f"xdotool mousemove {x} {y}")
             parts.append(f"xdotool click --repeat {max(1, clicks)} {button}")
         elif kind == "wait":
             ms = int(item.get("ms") or 350)
