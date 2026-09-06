@@ -6,7 +6,15 @@
 
 Self-hosted **AI agent host** for a Raspberry Pi: isolated Linux computer-use sandboxes, a Debian `.deb` client, FastAPI + Postgres, and **your** Cursor quota (`cursor-sdk` → Grok / Composer). Not a hosted Grok bot and not a vendor cloud VM.
 
+Quickstart: [Install & Pair](#bring-it-up) · [Architecture](ARCHITECTURE.md) · [Threat Model](THREAT-MODEL.md) · [Engineering](ENGINEERING.md) · [Operations](OPERATIONS.md) · [Changelog](CHANGELOG.md)
+
 Python 3.13 · FastAPI · PostgreSQL 16 · Docker · Xvfb / Chromium / noVNC · React / TypeScript · Playwright · GitHub Actions · Tailscale · Apache-2.0
+
+## Demo
+
+Pair the Linux window, ask a question, answer the bot’s card, reply in the thread, and watch Chromium open Wikipedia on the Pi desktop.
+
+![Artek Buddy demo](media/demo.gif)
 
 **What this repo actually builds**
 
@@ -16,14 +24,6 @@ Python 3.13 · FastAPI · PostgreSQL 16 · Docker · Xvfb / Chromium / noVNC · 
 - CI installs the same packaged `.deb` the owner installs — not a Vite dev server
 - Multi-arch host images on GHCR (`linux/amd64`, `linux/arm64`); GitHub Releases attach the client `.deb`, `SHA256SUMS`, CycloneDX SBOMs, and provenance after `test` on that `main` SHA is green
 - Pairing issues a **device token**; `AGENT_HTTP_TOKEN` and the Docker socket stay on the Pi
-
-Shipped versions: [CHANGELOG.md](CHANGELOG.md).
-
-## Demo
-
-Pair the Linux window, ask a question, answer the bot’s card, reply in the thread, and watch Chromium open Wikipedia on the Pi desktop.
-
-![Artek Buddy demo](media/demo.gif)
 
 ## Architecture
 
