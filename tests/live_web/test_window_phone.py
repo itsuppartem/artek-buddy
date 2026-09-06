@@ -285,4 +285,3 @@ def test_phone_create_cancel_returns_to_previous_context(page: Page, host_url: s
     expect(page.get_by_placeholder("Name this bot")).to_have_count(0)
     open_phone_tab(page, "chat")
     expect(page.get_by_test_id("thread-header")).to_contain_text(name)
-
