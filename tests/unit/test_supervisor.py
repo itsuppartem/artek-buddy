@@ -125,6 +125,18 @@ def test_ascii_type_still_uses_keystrokes() -> None:
     assert "xclip" not in cmd
 
 
+def test_scroll_with_coordinates_moves_mouse_first() -> None:
+    cmd = action_command([{"kind": "scroll", "x": 600, "y": 400, "direction": "down", "clicks": 5}])
+    assert "xdotool mousemove 600 400" in cmd
+    assert "xdotool click --repeat 5 5" in cmd
+
+
+def test_scroll_without_coordinates_only_clicks_wheel() -> None:
+    cmd = action_command([{"kind": "scroll", "direction": "up", "clicks": 2}])
+    assert "xdotool mousemove" not in cmd
+    assert "xdotool click --repeat 2 4" in cmd
+
+
 def test_open_https_uses_browser_not_file_manager() -> None:
     for path in (
         "https://example.com/x",
