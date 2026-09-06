@@ -1,6 +1,6 @@
 # Architecture
 
-This is the running Compose stack on one Raspberry Pi, not a target diagram.
+This is the running Compose stack on one Linux host (PC, server, or Raspberry Pi), not a target diagram.
 Trade-offs: [adr/](adr/). Trust and residual risk: [THREAT-MODEL.md](THREAT-MODEL.md).
 
 The HTTP API is the product. The `.deb` is the first client. Cursor Cloud is
@@ -22,7 +22,7 @@ flowchart TB
     Token["~/.config/artek-buddy/"]
     Home["$HOME jail"]
   end
-  subgraph pi [Raspberry Pi]
+  subgraph host [Linux Host]
     API["artek-buddy :8080"]
     Worker["worker"]
     Super["supervisor :7091"]
@@ -82,7 +82,7 @@ no-new-privileges, uses a read-only root, bounded tmpfs, memory, CPU, PID,
 timeout, and output, runs `/bin/sh -c` without a login profile, and is forcibly
 removed after success, timeout, or failure. The Docker request asks for a
 256 MiB memory cgroup; a hard 2 GiB process address-space ceiling keeps the
-runner bounded on Pi kernels where Docker reports no memory-controller support
+runner bounded on kernels where Docker reports no memory-controller support
 while still allowing the Go-based `gh` CLI to reserve its virtual arena. `gh`
 and `uv` are pinned in the host image used by the runner.
 Postgres is published `127.0.0.1:5432`. Supervisor listens `127.0.0.1:7091`.
@@ -93,12 +93,12 @@ Desktop noVNC ports bind `127.0.0.1`. The API default is `HTTP_HOST=0.0.0.0`.
 | State | Where |
 | --- | --- |
 | Threads, bots, devices, pairing hashes, memory book, routines, consent, artifacts | Postgres (`HistoryStore`, 26 SQL files under `src/artek_buddy/db/migrations/`). Host API and worker both call `apply_migrations` on boot; a session `pg_advisory_lock` serializes them. Each applied file stores a sha256; a rewritten historical file fails the run. |
-| Chromium profile, downloads, sandbox home | `data/homes/{home_key}` on the Pi |
+| Chromium profile, downloads, sandbox home | `data/homes/{home_key}` on the host |
 | Per-bot GitHub, PyPI, and named tokens | Broker-owned SQLite in Docker named volume `credential-data`; the API, worker, supervisor, Postgres, desktop boxes, and credential runners do not mount it |
 | Optional memory index files | `data/agent-memory` via the loopback gateway |
-| Host token, DB password, Cursor key | Pi `.env` (never in the page) |
+| Host token, DB password, Cursor key | Host `.env` (never in the page) |
 | Device token, remembered URL | Owner PC `~/.config/artek-buddy/` |
-| Model weights / turn execution | Cursor Cloud; prompts leave the Pi |
+| Model weights / turn execution | Cursor Cloud; prompts leave the host |
 
 Idle desktops sleep; `RestartPolicy: no`. Reset deletes that home. Team reset
 wipes the shared home for every Team bot.

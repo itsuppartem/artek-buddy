@@ -250,7 +250,7 @@ gh attestation verify artek-buddy-client_0.10.27_all.deb --repo itsuppartem/arte
 gh attestation verify oci://ghcr.io/itsuppartem/artek-buddy:0.10.27 --repo itsuppartem/artek-buddy
 ```
 
-Attestations exist on Releases published after this landed. Older tags have checksums only. The computer image is **not** built in Actions (QEMU Chromium hangs); `install-host.sh` builds it on the Pi when GHCR has no tag.
+Attestations exist on Releases published after this landed. Older tags have checksums only. The computer image is **not** built in Actions (QEMU Chromium hangs); `install-host.sh` builds it on the host when GHCR has no tag.
 
 The `test` workflow **builds and installs** a `.deb` to run Playwright; it does **not** upload that artifact. Do not commit `*.deb`.
 
@@ -258,14 +258,14 @@ Download the package from the [latest Release](https://github.com/itsuppartem/ar
 
 | Step | Where | What you need |
 | --- | --- | --- |
-| Mint a pairing code | **Pi** (running stack) | `docker exec artek-buddy python -m artek_buddy pair` — 15 minutes, one use |
+| Mint a pairing code | **Host** (running stack) | `docker exec artek-buddy python -m artek_buddy pair` — 15 minutes, one use |
 | Get the package | GitHub Release, or a local build | Release: a browser. Local: Node 22, `git`, `npm`, `dpkg-deb` |
 | Install the package | **Debian / Ubuntu owner PC** | `python3`, GTK, WebKit (pulled by `apt`) |
 
 Local build (unreleased tree, or a baked host URL):
 
 ```bash
-# Node 22+ on PATH (this Pi keeps a local install under ~/.local/node)
+# Node 22+ on PATH
 client/build-deb.sh
 ```
 
@@ -290,8 +290,8 @@ Open **Artek Buddy** from the app menu (or `artek-buddy`).
 
 The installed client stays available through its **Artek Buddy** tray indicator after the window is closed. Use **Open Artek Buddy** to present it again or **Quit** to stop it. On GNOME, the shell must have StatusNotifier/AppIndicator support enabled; if the indicator is not connected, closing the window exits instead of hiding it invisibly. Background replies, questions, and takeover also stay in the Ubuntu notification list as **Artek Buddy** while the client is running.
 
-1. Host URL — `http://<pi-tailscale-ip>:8080` from the owner PC (step 4). Use `http://127.0.0.1:8080` only if the window runs on the Pi itself.
-2. Pairing code from the `pair` command on the Pi.
+1. Host URL — `http://<host-tailscale-ip>:8080` from the owner PC (step 4). Use `http://127.0.0.1:8080` only if the window runs on the host itself.
+2. Pairing code from the `pair` command on the host.
 3. Device name (this computer).
 4. **Pair**.
 
@@ -342,7 +342,7 @@ Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel host
 
 **CI tests the packaged `.deb` and the host web page separately.** The `ui` job builds the Debian package, installs it, and drives `--serve`. The `ui_web` job opens the host `:8080` page at iPhone 11 Pro size (375×812) and does not install a `.deb`.
 
-Tests run in Actions on pull requests into `develop` and `main`, and on pushes to those branches (`workflow_dispatch` still works). They do **not** run on this Pi and must not use the live `:8080` stack or owner Postgres.
+Tests run in Actions on pull requests into `develop` and `main`, and on pushes to those branches (`workflow_dispatch` still works). They do **not** run on this host and must not use the live `:8080` stack or owner Postgres.
 
 | Job | What |
 | --- | --- |
@@ -358,7 +358,7 @@ Tests run in Actions on pull requests into `develop` and `main`, and on pushes t
 
 The repository is public. Workflows never `echo` secrets, never dump `env`, never run `docker compose config`, and never upload `.env`, client logs, or Playwright traces. Generated host/DB tokens are `::add-mask::`’d. Failure logs pass through `infra/ci-redact-logs.sh`.
 
-Add one repository secret: **`CURSOR_API_KEY`** (Settings → Secrets and variables → Actions). Same key/model as the Pi. Do not put the key in the workflow file, in `GITHUB_OUTPUT`, or in a commit.
+Add one repository secret: **`CURSOR_API_KEY`** (Settings → Secrets and variables → Actions). Same key/model as the host. Do not put the key in the workflow file, in `GITHUB_OUTPUT`, or in a commit.
 
 ## License
 
@@ -366,4 +366,4 @@ Artek Buddy is licensed under the [Apache License 2.0](LICENSE).
 
 The HTTP contract surface — nouns (`bots`, `threads`, `runs`, `memory`, `routines`, `computers`), procedure names, and run/event status vocabulary — was **adapted from** [elie222/rakazo](https://github.com/elie222/rakazo) (Apache License 2.0). See [NOTICE](NOTICE).
 
-Artek Buddy is not a port of that TypeScript monorepo. The host (Python / FastAPI / Cursor runtime), the Linux `.deb` client, bot colors, and the bandicoot mascot (desktop icon and bot avatars) are original. The wire uses `snake_case`. Sandboxes run only on this Raspberry Pi.
+Artek Buddy is not a port of that TypeScript monorepo. The host (Python / FastAPI / Cursor runtime), the Linux `.deb` client, bot colors, and the bandicoot mascot (desktop icon and bot avatars) are original. The wire uses `snake_case`. Sandboxes run only on this host.
