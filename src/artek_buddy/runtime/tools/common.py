@@ -10,7 +10,20 @@ from artek_buddy.status_ping import STATUS_PING_GUIDE
 
 log = logging.getLogger("artek_buddy")
 
-PAGE_KINDS = {"click", "type", "key", "down", "up", "scroll", "download", "fill", "submit", "press", "evaluate", "eval"}
+PAGE_KINDS = {
+    "click",
+    "type",
+    "key",
+    "down",
+    "up",
+    "scroll",
+    "download",
+    "fill",
+    "submit",
+    "press",
+    "evaluate",
+    "eval",
+}
 
 MAX_SEND_FILE_BYTES = 25 * 1024 * 1024
 
