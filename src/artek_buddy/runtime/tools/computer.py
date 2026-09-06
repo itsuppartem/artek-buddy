@@ -116,7 +116,7 @@ class ComputerToolsMixin:
                 )
                 if denied:
                     return denied
-            if kind in {"fill", "type", "click", "press", "submit", "key"}:
+            if kind in {"fill", "type", "click", "press", "submit", "key", "scroll", "evaluate", "eval"}:
                 needs_page = True
         if needs_page:
             denied = self._deny_page(_bot_id, origin)
@@ -159,6 +159,8 @@ class ComputerToolsMixin:
                 mapped.append({"kind": "type", "text": str(item.get("text") or "")})
             elif kind == "press":
                 mapped.append({"kind": "key", "key": str(item.get("key") or "Return")})
+            elif kind == "scroll":
+                mapped.append(item)
             elif kind in {"click", "submit"}:
                 mapped.append({"kind": "key", "key": "Return"} if kind == "submit" else item)
         try:

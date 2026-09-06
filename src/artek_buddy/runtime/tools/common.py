@@ -10,7 +10,7 @@ from artek_buddy.status_ping import STATUS_PING_GUIDE
 
 log = logging.getLogger("artek_buddy")
 
-PAGE_KINDS = {"click", "type", "key", "down", "up", "scroll", "download", "fill", "submit", "press"}
+PAGE_KINDS = {"click", "type", "key", "down", "up", "scroll", "download", "fill", "submit", "press", "evaluate", "eval"}
 
 MAX_SEND_FILE_BYTES = 25 * 1024 * 1024
 
@@ -68,6 +68,20 @@ def _playwright_browser_command(actions: list[Any]) -> str:
     steps = []
     for item in actions:
         if isinstance(item, dict):
+            direction = str(item.get("direction") or "").lower()
+            clicks = int(item.get("clicks") or 3)
+            delta_y = item.get("delta_y")
+            if delta_y is None:
+                delta_y = item.get("dy")
+            if delta_y is not None:
+                dy = int(delta_y)
+            elif direction == "up":
+                dy = -int(item.get("distance") or clicks * 100)
+            elif direction == "down":
+                dy = int(item.get("distance") or clicks * 100)
+            else:
+                dy = 0
+
             steps.append(
                 {
                     "kind": str(item.get("kind") or ""),
@@ -75,6 +89,11 @@ def _playwright_browser_command(actions: list[Any]) -> str:
                     "selector": str(item.get("selector") or ""),
                     "text": str(item.get("text") or ""),
                     "key": str(item.get("key") or ""),
+                    "delta_x": int(item.get("delta_x") or item.get("dx") or 0),
+                    "delta_y": dy,
+                    "direction": direction,
+                    "force": bool(item.get("force", False)),
+                    "expression": str(item.get("expression") or item.get("script") or item.get("js") or ""),
                 }
             )
     payload = json.dumps(steps)
@@ -133,7 +152,29 @@ def _playwright_browser_command(actions: list[Any]) -> str:
         "            elif kind == 'fill' and step.get('selector'):\n"
         "                page.fill(step['selector'], step.get('text') or '', timeout=15000)\n"
         "            elif kind == 'click' and step.get('selector'):\n"
-        "                page.click(step['selector'], timeout=15000)\n"
+        "                sel = step['selector']\n"
+        "                force = bool(step.get('force'))\n"
+        "                try:\n"
+        "                    page.click(sel, timeout=15000, force=force)\n"
+        "                except Exception:\n"
+        "                    page.locator(sel).first.evaluate('el => el.click()')\n"
+        "            elif kind == 'scroll':\n"
+        "                dx = int(step.get('delta_x') or 0)\n"
+        "                dy = int(step.get('delta_y') or 0)\n"
+        "                if not dy and not dx:\n"
+        "                    direction = str(step.get('direction') or 'down').lower()\n"
+        "                    dy = -500 if direction == 'up' else 500\n"
+        "                sel = step.get('selector')\n"
+        "                if sel:\n"
+        "                    loc = page.locator(sel).first\n"
+        "                    loc.scroll_into_view_if_needed(timeout=15000)\n"
+        "                    if dx or dy:\n"
+        "                        loc.evaluate('(el, [x, y]) => el.scrollBy(x, y)', [dx, dy])\n"
+        "                else:\n"
+        "                    page.mouse.wheel(dx, dy)\n"
+        "                    page.evaluate('([x, y]) => window.scrollBy(x, y)', [dx, dy])\n"
+        "            elif kind in ('evaluate', 'eval') and step.get('expression'):\n"
+        "                page.evaluate(step['expression'])\n"
         "            elif kind == 'type':\n"
         "                page.keyboard.type(step.get('text') or '')\n"
         "            elif kind == 'press':\n"
