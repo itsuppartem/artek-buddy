@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Added in-tree performance budget measurement tool `infra/perf_budget.py` and `make perf` recording .deb install, cold window first paint, pairing/resume, large thread fixture load, first scripted SSE event latency, replay of N events, and process RSS in observation mode with secret redaction and sleep calibration.
 - Formalized runtime and computer protocol interfaces (`AgentRuntime`, `ComputerGateway`, `SupervisorGateway`) with explicit capability flags (`RuntimeCapabilities`, `ComputerCapabilities`), error categories (`unavailable`, `timeout`, `cancelled`, `exhausted`, `transient`, `permanent`), secret redaction before API/log surfaces, and conformance tests.
 - Added `VISION.md` (defining core invariants: one trusted host, durable bots, human consent, Team vs Private desktops, small invited group, and explicit non-goals like Kubernetes/Redis/multi-tenant SaaS) and repo-root `AGENTS.md` (read order, architecture map, CI command reference).
 - Covered remaining host-page phone click flows in `ui_web` (`tests/live_web`): Got it dismisses the Home Screen hint (persisting across reloads), standalone mode offers Turn on alerts with permission grant/denial handling, pairing with an invalid code shows a visible error card, New bot cancel returns to the previous context, and the stacked phone navigation shell remains functional in 812×375 landscape orientation.

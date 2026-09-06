@@ -1,4 +1,4 @@
-.PHONY: check quality backend help
+.PHONY: check quality backend perf help
 
 check:
 	@./scripts/check.sh
@@ -8,6 +8,9 @@ quality:
 
 backend:
 	@./scripts/check.sh --backend-only
+
+perf:
+	@python3 infra/perf_budget.py --print-summary
 
 help:
 	@./scripts/check.sh --help
