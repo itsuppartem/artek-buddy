@@ -438,6 +438,7 @@ def test_download_and_load_earlier_look_like_controls(
     open_chat(page, name)
     earlier = page.get_by_test_id("load-earlier")
     expect(earlier).to_be_visible(timeout=15_000)
+    expect(earlier).to_be_enabled(timeout=15_000)
     expect(earlier).to_have_accessible_name("Load earlier messages")
     earlier.click()
     expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible(timeout=15_000)
