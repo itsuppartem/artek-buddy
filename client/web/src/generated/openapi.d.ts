@@ -2104,6 +2104,8 @@ export interface components {
             id: string;
             /** Last Seen At */
             last_seen_at?: string | null;
+            /** Member Id */
+            member_id?: string | null;
             /** Name */
             name: string;
             /** Platform */
@@ -2122,6 +2124,8 @@ export interface components {
             id: string;
             /** Last Seen At */
             last_seen_at?: string | null;
+            /** Member Id */
+            member_id?: string | null;
             /** Name */
             name: string;
             /** Platform */
@@ -2201,6 +2205,8 @@ export interface components {
             default_model?: string | null;
             /** Default Provider */
             default_provider?: string | null;
+            /** Devices */
+            devices?: components["schemas"]["Device"][];
             /**
              * Email
              * @default owner@artek.local
@@ -2211,6 +2217,7 @@ export interface components {
              * @default true
              */
             is_deployment_owner: boolean;
+            member?: components["schemas"]["Member"] | null;
             /**
              * Name
              * @default Owner
@@ -2222,6 +2229,11 @@ export interface components {
              */
             needs_model: boolean;
             /**
+             * Role
+             * @default owner
+             */
+            role: string;
+            /**
              * User Id
              * @default usr_owner
              */
@@ -2231,6 +2243,27 @@ export interface components {
              * @default ws_default
              */
             workspace_id: string;
+        };
+        /** Member */
+        Member: {
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @default owner
+             */
+            role: string;
+            /**
+             * State
+             * @default active
+             */
+            state: string;
+            /** Updated At */
+            updated_at: string;
         };
         /** MemoryDocument */
         MemoryDocument: {

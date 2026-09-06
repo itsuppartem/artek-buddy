@@ -1736,6 +1736,18 @@
             ],
             "title": "Last Seen At"
           },
+          "member_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Id"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1787,6 +1799,18 @@
               }
             ],
             "title": "Last Seen At"
+          },
+          "member_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Id"
           },
           "name": {
             "title": "Name",
@@ -2002,6 +2026,13 @@
             ],
             "title": "Default Provider"
           },
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            },
+            "title": "Devices",
+            "type": "array"
+          },
           "email": {
             "default": "owner@artek.local",
             "title": "Email",
@@ -2012,6 +2043,16 @@
             "title": "Is Deployment Owner",
             "type": "boolean"
           },
+          "member": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Member"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "name": {
             "default": "Owner",
             "title": "Name",
@@ -2021,6 +2062,11 @@
             "default": true,
             "title": "Needs Model",
             "type": "boolean"
+          },
+          "role": {
+            "default": "owner",
+            "title": "Role",
+            "type": "string"
           },
           "user_id": {
             "default": "usr_owner",
@@ -2036,6 +2082,45 @@
           }
         },
         "title": "Me",
+        "type": "object"
+      },
+      "Member": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "default": "owner",
+            "title": "Role",
+            "type": "string"
+          },
+          "state": {
+            "default": "active",
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Member",
         "type": "object"
       },
       "MemoryDocument": {
