@@ -12,6 +12,7 @@ from artek_buddy.contracts import (
     DeviceCreated,
     DeviceList,
     PairingCode,
+    Principal,
 )
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
@@ -25,6 +26,7 @@ from artek_buddy.http.deps import (
     _db_error,
     require_auth,
     require_host,
+    require_principal,
     settings,
     store,
 )
@@ -87,10 +89,10 @@ async def list_devices(history: HistoryStore = Depends(store)) -> DeviceList:
 @router.delete("/v1/devices/{device_id}")
 async def revoke_device(
     device_id: str,
-    actor: str = Depends(require_auth),
+    principal: Principal = Depends(require_principal),
     history: HistoryStore = Depends(store),
 ) -> Device:
-    if actor != "host" and actor != device_id:
+    if principal.device_id != "host" and principal.device_id != device_id:
         raise HTTPException(status_code=403, detail="cannot revoke another device")
     try:
         device = history.revoke_device(device_id)

@@ -576,12 +576,67 @@ class UpdateDeploymentInput(BaseModel):
     computer_host: Literal["docker", "host"] | None = None
 
 
+class Device(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: Id
+    name: str
+    platform: str
+    created_at: str
+    last_seen_at: str | None = None
+    revoked_at: str | None = None
+    member_id: Id | None = None
+
+
+class Member(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: Id
+    name: str
+    role: str = "owner"
+    state: str = "active"
+    created_at: str
+    updated_at: str
+
+
+class Principal(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    member_id: Id
+    device_id: Id
+    role: str = "owner"
+
+
+class DeviceList(BaseModel):
+    devices: list[Device]
+
+
+class CreateDeviceInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    name: str = Field(min_length=1, max_length=80)
+    platform: str = Field(default="linux", max_length=40)
+    pairing_code: str | None = Field(default=None, max_length=32)
+
+
+class DeviceCreated(Device):
+    """Mint response. `token` is shown once and never stored in plaintext."""
+
+    token: str
+
+
+class PairingCode(BaseModel):
+    code: str
+    expires_at: str
+
+
 class Me(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     user_id: Id = "usr_owner"
     email: str = "owner@artek.local"
     name: str = "Owner"
+    role: str = "owner"
     workspace_id: Id = "ws_default"
     is_deployment_owner: bool = True
     needs_model: bool = True
@@ -589,6 +644,8 @@ class Me(BaseModel):
     default_model: str | None = None
     computer_host: Literal["docker", "host"] | None = "docker"
     can_choose_host_computer: bool = True
+    member: Member | None = None
+    devices: list[Device] = Field(default_factory=list)
 
 
 class ExportMemoryItem(BaseModel):
@@ -818,37 +875,3 @@ class RunRequest(BaseModel):
 
     text: str = Field(min_length=1)
     bot_id: str | None = None
-
-
-class Device(BaseModel):
-    model_config = ConfigDict(extra="ignore", populate_by_name=True)
-
-    id: Id
-    name: str
-    platform: str
-    created_at: str
-    last_seen_at: str | None = None
-    revoked_at: str | None = None
-
-
-class DeviceList(BaseModel):
-    devices: list[Device]
-
-
-class CreateDeviceInput(BaseModel):
-    model_config = ConfigDict(extra="ignore", populate_by_name=True)
-
-    name: str = Field(min_length=1, max_length=80)
-    platform: str = Field(default="linux", max_length=40)
-    pairing_code: str | None = Field(default=None, max_length=32)
-
-
-class DeviceCreated(Device):
-    """Mint response. `token` is shown once and never stored in plaintext."""
-
-    token: str
-
-
-class PairingCode(BaseModel):
-    code: str
-    expires_at: str

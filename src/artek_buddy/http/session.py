@@ -7,6 +7,7 @@ from fastapi import Depends
 from artek_buddy.contracts import (
     DeploymentSettings,
     Me,
+    Principal,
     SessionRequest,
     SessionResponse,
     UpdateDeploymentInput,
@@ -27,6 +28,7 @@ from fastapi import APIRouter
 from artek_buddy.http.deps import (
     _db_error,
     require_auth,
+    require_principal,
     runtime,
     store,
 )
@@ -64,16 +66,27 @@ async def create_session(
     return SessionResponse(agent_id=agent_id, bot_id=bot.id, thread_id=bot.thread_id)
 
 
-@router.get("/v1/me", dependencies=[Depends(require_auth)])
-async def get_me(history: HistoryStore = Depends(store)) -> Me:
+@router.get("/v1/me")
+async def get_me(
+    principal: Principal = Depends(require_principal),
+    history: HistoryStore = Depends(store),
+) -> Me:
     try:
+        member = history.get_member(principal.member_id) or history.get_owner_member()
+        devices = history.list_devices(member_id=member.id)
         default = history.get_default_model()
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
     return Me(
+        user_id="usr_owner",
+        name=member.name,
+        role=member.role,
+        is_deployment_owner=(member.role == "owner"),
         needs_model=default is None,
         default_provider=default[0] if default else None,
         default_model=default[1] if default else None,
+        member=member,
+        devices=[d for d in devices if d.revoked_at is None],
     )
 
 
