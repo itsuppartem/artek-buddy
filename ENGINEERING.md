@@ -80,3 +80,22 @@ principles include:
   consent cards in the chat thread.
 - Public network binding relies on a private Tailscale tailnet rather than open
   internet port forwards.
+
+## Performance budgets and Pi measurement (`infra/perf_budget.py`)
+
+To prevent memory or latency regressions on real hardware (Raspberry Pi or mini PC) without requiring physical hardware runners in GitHub Actions, the repo provides an in-tree benchmark tool:
+
+```bash
+# Run performance benchmarks and output JSON + Markdown
+python3 infra/perf_budget.py --output-json perf-report.json --output-md perf-report.md --print-summary
+
+# Or via make:
+make perf
+```
+
+### Observation policy
+- Benchmarks operate in **observe** mode to record empirical baselines across package installation, cold window launch, session resume, large thread parsing (500-message fixture), initial SSE event dispatch latency, replay of N events, and process RSS (idle/peak).
+- CI and local gates avoid brittle latency thresholds until a stable median is established across multiple hardware runs.
+- Reports record hardware architecture, CPU count, memory, OS kernel, and git commit.
+- All benchmark artifacts are automatically secret-scanned with token redaction before being written to disk.
+- To calibrate and verify that metric tracking is responsive, pass `--calibrate-sleep <seconds>` (e.g. `--calibrate-sleep 0.1`) which introduces a deterministic delay to assert that metric timers track wall-clock shifts accurately.

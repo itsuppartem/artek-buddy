@@ -99,3 +99,17 @@ Releases are published through GitHub Actions using a strict verification pipeli
    - It builds multi-arch container images (`linux/amd64`, `linux/arm64`), runs Trivy
      vulnerability scans, publishes the images to GHCR, builds Debian `.deb` packages,
      attests GitHub build provenance, and creates a tagged GitHub Release.
+
+## Performance measurement on the host (`infra/perf_budget.py`)
+
+When testing releases or observing performance metrics on physical hardware (such as a Raspberry Pi):
+
+1. Run the benchmark tool to collect structured performance data:
+   ```bash
+   python3 infra/perf_budget.py --output-json perf-report.json --output-md perf-report.md
+   ```
+2. The command outputs:
+   - Comparable machine-readable JSON (`perf-report.json`) tracking latency and RSS medians.
+   - A summary Markdown report (`perf-report.md`) detailing hardware specs, commit SHA, and test outcomes.
+   - All output is automatically scrubbed of sensitive secrets or tokens.
+3. Use `--calibrate-sleep <seconds>` to verify measurement sensitivity when benchmarking timing changes.
