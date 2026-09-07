@@ -1220,19 +1220,27 @@ export function ShellPage() {
       });
       if (abort.signal.aborted) return;
       let after: string | null = null;
+      let afterSequence: number | null = null;
       let retryMs = 250;
       while (!abort.signal.aborted) {
         try {
-          for await (const event of api.threads.subscribe(active.id, after, abort.signal)) {
+          for await (const event of api.threads.subscribe(
+            active.id,
+            after,
+            abort.signal,
+            afterSequence,
+          )) {
             if (abort.signal.aborted) break;
             if (event.type === "thread.replay.gap") {
               after = null;
+              afterSequence = null;
               retryMs = 250;
               void refreshThread(active.id).catch(() => undefined);
               void ensureScreenUrl(active.id, true, true);
               continue;
             }
-            after = event.id;
+            if (/^\d+$/.test(event.id)) afterSequence = Number(event.id);
+            else after = event.id;
             retryMs = 250;
             const leftChat =
               discardedBotIds.current.has(active.id) ||
@@ -1286,9 +1294,11 @@ export function ShellPage() {
     const abort = new AbortController();
     void (async () => {
       let retryMs = 250;
+      let afterSequence: number | null = null;
       while (!abort.signal.aborted) {
         try {
-          for await (const event of api.events.subscribe(abort.signal)) {
+          for await (const event of api.events.subscribe(abort.signal, afterSequence)) {
+            if (/^\d+$/.test(event.id)) afterSequence = Number(event.id);
             if (abort.signal.aborted) break;
             retryMs = 250;
             const bot = botsRef.current.find((item) => item.id === event.botId);

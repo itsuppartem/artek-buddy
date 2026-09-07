@@ -92,7 +92,7 @@ Desktop noVNC ports bind `127.0.0.1`. The API default is `HTTP_HOST=0.0.0.0`.
 
 | State | Where |
 | --- | --- |
-| Threads, bots, devices, pairing hashes, memory book, routines, consent, artifacts, audit chain, durable jobs | Postgres (`HistoryStore`, 29 SQL files under `src/artek_buddy/db/migrations/`). Host API and worker both call `apply_migrations` on boot; a session `pg_advisory_lock` serializes them. Each applied file stores a sha256; a rewritten historical file fails the run. |
+| Threads, bots, devices, pairing hashes, memory book, routines, consent, artifacts, audit chain, durable jobs, activity log | Postgres (`HistoryStore`, 30 SQL files under `src/artek_buddy/db/migrations/`). Host API and worker both call `apply_migrations` on boot; a session `pg_advisory_lock` serializes them. Each applied file stores a sha256; a rewritten historical file fails the run. The `activity` table is a workspace-monotonic sequence for resumable SSE; `EventHub` is live fan-out only and is not durability. |
 | Chromium profile, downloads, sandbox home | `data/homes/{home_key}` on the host |
 | Per-bot GitHub, PyPI, and named tokens | Broker-owned SQLite in Docker named volume `credential-data`; the API, worker, supervisor, Postgres, desktop boxes, and credential runners do not mount it |
 | Optional memory index files | `data/agent-memory` via the loopback gateway |
@@ -151,6 +151,7 @@ The host enforces formalized Python `Protocol` interfaces around execution and s
 - **Agent Runtime (`AgentRuntime` in `src/artek_buddy/runtime/protocol.py`)**: Defines session lifecycle (`start`, `build_session_resume`), streaming (`stream`), cancellation (`cancel_run`, `is_run_cancelled`), and readiness (`health`). Handlers check capability flags (`RuntimeCapabilities`) rather than `isinstance` checks.
 - **Computer and Supervisor (`ComputerGateway` and `SupervisorGateway` in `src/artek_buddy/computer/protocol.py`)**: Defines sandbox lifecycle (`status`, `boot`, `stop`, `restart`, `reset`), command execution (`execute`), and inspect through the supervisor loopback boundary. Handlers check `ComputerCapabilities` (e.g. `team_desktop`, `private_desktop`, `screen_preview`).
 - **Error Categories and Redaction**: `AgentRuntimeError` and `ComputerError` classify failures into explicit categories (`unavailable`, `timeout`, `cancelled`, `exhausted`, `transient`, `permanent`) with `is_transient` retry hints and scrub sensitive tokens via `safe_message` before logging or returning over HTTP.
+- **Activity log and SSE**: Writes that matter (messages, grants, consent decisions, member/device lifecycle, artifact metadata) insert an `activity` row in the **same transaction** as the domain change, then `EventHub` fans out to live clients. Reconnects send `after_sequence` or a numeric `Last-Event-ID`; the host replays authorized rows, then tails the hub. A cursor older than the retained window (10 000 events) yields an explicit `thread.replay.gap` / `activity.resync`. Unknown future `event_type` values must be ignored by clients. Multi-user resource ACL on replay is a later layer.
 
 ## Test pyramid
 

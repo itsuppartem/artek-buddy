@@ -3,15 +3,17 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, Header, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 
+from artek_buddy.activity import ActivityRecord, parse_activity_cursor
 from artek_buddy.bus import HEARTBEAT, REPLAY_GAP, EventHub
 from artek_buddy.consent import ConsentHub
 from artek_buddy.contracts import (
     ArtifactList,
     AttachmentList,
     AttachmentUploadInput,
+    Bot,
     HostedAttachment,
     OkResponse,
     Principal,
@@ -63,6 +65,49 @@ from artek_buddy.http.turns import (
 )
 
 router = APIRouter()
+
+
+def _principal_is_active(history: HistoryStore, principal: Principal) -> bool:
+    if principal.device_id == "host":
+        return True
+    member = history.get_member(principal.member_id)
+    return member is not None and member.state == "active"
+
+
+def _replay_gap_frame(bot: Bot, cursor: str | None) -> str:
+    gap = ProductEvent(
+        id=new_id("evt"),
+        workspace_id=bot.workspace_id,
+        thread_id=bot.thread_id,
+        bot_id=bot.id,
+        seq=0,
+        type=ProductEventType.THREAD_REPLAY_GAP,
+        created_at=isoformat_utc(),
+        payload={"after": cursor, "resync": True},
+    )
+    return f"id: {gap.id}\nevent: {gap.type.value}\ndata: {gap.model_dump_json()}\n\n"
+
+
+def _activity_thread_frame(history: HistoryStore, bot: Bot, record: ActivityRecord) -> str:
+    if record.event_type == "message.created":
+        message_id = record.payload.get("id")
+        message = history._get_message(message_id) if message_id else None
+        if message is not None:
+            event = ProductEvent(
+                id=f"act_{record.seq}",
+                workspace_id=bot.workspace_id,
+                thread_id=bot.thread_id,
+                bot_id=bot.id,
+                seq=record.seq,
+                type=ProductEventType.THREAD_MESSAGE_CREATED,
+                created_at=record.created_at,
+                payload={"message": message.model_dump(mode="json")},
+                run_id=record.payload.get("run_id"),
+            )
+            return (
+                f"id: {record.seq}\nevent: {event.type.value}\ndata: {event.model_dump_json()}\n\n"
+            )
+    return record.to_sse()
 
 
 @router.get("/v1/threads/{bot_id}", dependencies=[Depends(require_auth)])
@@ -294,16 +339,29 @@ async def mark_thread_unread(bot_id: str, history: HistoryStore = Depends(store)
 
 @router.get("/v1/events")
 async def subscribe_workspace_events(
+    after: str | None = Query(default=None),
+    after_sequence: int | None = Query(default=None),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     principal: Principal = Depends(require_principal),
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> StreamingResponse:
+    after_seq = parse_activity_cursor(after, last_event_id, after_sequence)
+
     async def gen():
+        if after_seq is not None:
+            records, has_gap = history.replay_activity(after_seq=after_seq)
+            if has_gap:
+                yield 'id: 0\nevent: activity.resync\ndata: {"gap":true,"resync":true}\n\n'
+            else:
+                for record in records:
+                    if not _principal_is_active(history, principal):
+                        return
+                    yield record.to_sse()
+
         async for item in events.subscribe_workspace():
-            if principal.device_id != "host":
-                mem = history.get_member(principal.member_id)
-                if mem is None or mem.state != "active":
-                    break
+            if not _principal_is_active(history, principal):
+                break
             if item is HEARTBEAT:
                 yield ": keepalive\n\n"
                 continue
@@ -325,6 +383,8 @@ async def subscribe_workspace_events(
 async def subscribe_thread_events(
     bot_id: str,
     after: str | None = Query(default=None),
+    after_sequence: int | None = Query(default=None),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     principal: Principal = Depends(require_principal),
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
@@ -334,28 +394,33 @@ async def subscribe_thread_events(
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
 
+    after_seq = parse_activity_cursor(after, last_event_id, after_sequence)
+    cursor_label = str(after_sequence) if after_sequence is not None else (after or last_event_id)
+
     async def gen():
-        async for item in events.subscribe(bot_id, after=after):
-            if principal.device_id != "host":
-                mem = history.get_member(principal.member_id)
-                if mem is None or mem.state != "active":
-                    break
+        replayed_durable = after_seq is not None
+        if after_seq is not None:
+            records, has_gap = history.replay_activity(after_seq=after_seq, resource=bot_id)
+            if has_gap:
+                yield _replay_gap_frame(bot, cursor_label)
+            else:
+                for record in records:
+                    if not _principal_is_active(history, principal):
+                        return
+                    yield _activity_thread_frame(history, bot, record)
+
+        async for item in events.subscribe(
+            bot_id,
+            after=None if replayed_durable else after,
+            replay=not replayed_durable,
+        ):
+            if not _principal_is_active(history, principal):
+                break
             if item is HEARTBEAT:
                 yield ": keepalive\n\n"
                 continue
             if item is REPLAY_GAP:
-                gap = ProductEvent(
-                    id=new_id("evt"),
-                    workspace_id=bot.workspace_id,
-                    thread_id=bot.thread_id,
-                    bot_id=bot.id,
-                    seq=0,
-                    type=ProductEventType.THREAD_REPLAY_GAP,
-                    created_at=isoformat_utc(),
-                    payload={"after": after},
-                )
-                data = gap.model_dump_json()
-                yield f"id: {gap.id}\nevent: {gap.type.value}\ndata: {data}\n\n"
+                yield _replay_gap_frame(bot, after)
                 continue
             data = item.model_dump_json()
             yield f"id: {item.id}\nevent: {item.type.value}\ndata: {data}\n\n"

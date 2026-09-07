@@ -147,6 +147,15 @@ class MessagesMixin:
                         "UPDATE bots SET preview = %s, unread = TRUE, updated_at = %s WHERE id = %s",
                         (preview_snippet(excerpt), now, bot.id),
                     )
+                self._record_message_created(
+                    conn,
+                    bot_id=bot.id,
+                    thread_id=bot.thread_id,
+                    message_id=msg_id,
+                    role="bot",
+                    seq=seq,
+                    run_id=run_id,
+                )
         message = self._get_message(msg_id)
         if message is None:
             raise RuntimeError("failed to persist bot message")
@@ -175,6 +184,21 @@ class MessagesMixin:
                 """,
                 (artifact_id, bot_id, run_id, name, mime_type, size, storage_path, now),
             )
+            if hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="artifact.created",
+                    actor="bot",
+                    resource=bot_id,
+                    payload={
+                        "id": artifact_id,
+                        "name": name,
+                        "mime_type": mime_type,
+                        "size": size,
+                    },
+                    device_id=None,
+                    event_version=1,
+                )
             conn.commit()
         return Artifact(
             id=artifact_id,
@@ -249,6 +273,14 @@ class MessagesMixin:
                 conn.execute(
                     "UPDATE bots SET preview = %s, unread = FALSE, updated_at = %s WHERE id = %s",
                     (preview_snippet(text), now, bot.id),
+                )
+                self._record_message_created(
+                    conn,
+                    bot_id=bot.id,
+                    thread_id=bot.thread_id,
+                    message_id=msg_id,
+                    role="user",
+                    seq=seq,
                 )
         message = self._get_message(msg_id)
         if message is None:

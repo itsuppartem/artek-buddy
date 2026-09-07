@@ -610,14 +610,26 @@ export const api = {
       botId: string,
       after: string | null,
       signal: AbortSignal,
+      afterSequence?: number | null,
     ): AsyncGenerator<ProductEvent> {
-      const query = after ? `?after=${encodeURIComponent(after)}` : "";
+      const params = new URLSearchParams();
+      if (afterSequence != null && afterSequence > 0) {
+        params.set("after_sequence", String(afterSequence));
+      } else if (after) {
+        params.set("after", after);
+      }
+      const query = params.toString() ? `?${params.toString()}` : "";
       yield* readSse(`/v1/threads/${botId}/events${query}`, signal);
     },
   },
   events: {
-    async *subscribe(signal: AbortSignal): AsyncGenerator<ProductEvent> {
-      yield* readSse("/v1/events", signal);
+    async *subscribe(
+      signal: AbortSignal,
+      afterSequence?: number | null,
+    ): AsyncGenerator<ProductEvent> {
+      const query =
+        afterSequence != null && afterSequence > 0 ? `?after_sequence=${afterSequence}` : "";
+      yield* readSse(`/v1/events${query}`, signal);
     },
   },
 };
@@ -644,6 +656,7 @@ async function* readSse(path: string, signal: AbortSignal): AsyncGenerator<Produ
   const decoder = new TextDecoder();
   let buffer = "";
   let eventName = "message";
+  let eventId = "";
   let dataLines: string[] = [];
   while (!signal.aborted) {
     const { value, done } = await reader.read();
@@ -661,16 +674,19 @@ async function* readSse(path: string, signal: AbortSignal): AsyncGenerator<Produ
           try {
             const parsed = camelize<ProductEvent>(JSON.parse(raw));
             if (eventName && eventName !== "message") parsed.type = eventName;
+            if (eventId) parsed.id = eventId;
             yield parsed;
           } catch {
-            // ignore a broken frame and keep the stream
+            // ignore a broken or future-typed frame and keep the stream
           }
         }
         eventName = "message";
+        eventId = "";
         continue;
       }
       if (line.startsWith(":")) continue;
-      if (line.startsWith("event:")) eventName = line.slice(6).trim();
+      if (line.startsWith("id:")) eventId = line.slice(3).trim();
+      else if (line.startsWith("event:")) eventName = line.slice(6).trim();
       else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
     }
   }
