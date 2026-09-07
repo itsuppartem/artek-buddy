@@ -60,7 +60,7 @@ def test_job_record_to_dict_redaction() -> None:
         state="dead",
         payload={
             "token": "secret_token_123",
-            "prompt": "please test with code WXYZ-1234",
+            "prompt": "please test with code WXYZ-2345",
         },
         result=None,
         last_error="Failed with Bearer secret_bearer_error",
@@ -74,7 +74,7 @@ def test_job_record_to_dict_redaction() -> None:
     )
     data = record.to_dict(redact=True)
     assert "token" not in data["payload"]
-    assert "WXYZ-1234" not in data["payload"]["prompt"]
+    assert "WXYZ-2345" not in data["payload"]["prompt"]
     assert "[redacted]" in data["payload"]["prompt"]
     assert "secret_bearer_error" not in str(data["last_error"])
     assert "[redacted]" in str(data["last_error"])
