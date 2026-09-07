@@ -18,9 +18,11 @@ function runStateLabel(state: string | null | undefined): string | null {
 export function RoutinesPanel({
   botId,
   onLater,
+  onThreadChanged,
 }: {
   botId: string;
   onLater: (text: string) => void;
+  onThreadChanged?: () => Promise<void> | void;
 }) {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [creating, setCreating] = useState(false);
@@ -81,6 +83,7 @@ export function RoutinesPanel({
       const fired = await api.routines.run(routine.id, crypto.randomUUID());
       onLater(fired.state === "waiting_for_approval" ? "Waiting for approval" : "Routine started");
       await refresh();
+      await onThreadChanged?.();
     } catch (err) {
       onLater(err instanceof Error ? err.message : "Routine did not start");
     }
