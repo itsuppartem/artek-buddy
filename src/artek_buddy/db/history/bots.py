@@ -25,6 +25,9 @@ class BotsMixin:
             return False
         with self._conn() as conn:
             with conn.transaction():
+                tombstone = getattr(self, "_tombstone_search_resource_tx", None)
+                if callable(tombstone):
+                    tombstone(conn, bot_id)
                 conn.execute(
                     "DELETE FROM memory_entries WHERE scope = 'bot' AND bot_id = %s",
                     (bot_id,),
@@ -177,6 +180,16 @@ class BotsMixin:
                     bot_id,
                 ),
             ).fetchone()
+            indexer = getattr(self, "_upsert_search_document_tx", None)
+            if callable(indexer) and row is not None:
+                indexer(
+                    conn,
+                    document_kind="bot",
+                    resource_id=bot_id,
+                    source_id=bot_id,
+                    title=new_name,
+                    body=new_title or "",
+                )
             conn.commit()
         updated = self._bot_from_row(row) if row else None
         if updated is not None and computer_mode is not None and new_mode != bot.computer_mode:
@@ -320,6 +333,16 @@ class BotsMixin:
                     """,
                     (thread_id, bot_id, workspace_id, now),
                 )
+                indexer = getattr(self, "_upsert_search_document_tx", None)
+                if callable(indexer):
+                    indexer(
+                        conn,
+                        document_kind="bot",
+                        resource_id=bot_id,
+                        source_id=bot_id,
+                        title=name,
+                        body=title or "",
+                    )
         bot = self.get_bot(bot_id)
         if bot is None:
             raise RuntimeError("failed to create bot")

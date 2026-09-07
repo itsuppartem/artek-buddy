@@ -155,6 +155,7 @@ class MessagesMixin:
                     role="bot",
                     seq=seq,
                     run_id=run_id,
+                    blocks=blocks,
                 )
         message = self._get_message(msg_id)
         if message is None:
@@ -198,6 +199,16 @@ class MessagesMixin:
                     },
                     device_id=None,
                     event_version=1,
+                )
+            indexer = getattr(self, "_upsert_search_document_tx", None)
+            if callable(indexer):
+                indexer(
+                    conn,
+                    document_kind="artifact",
+                    resource_id=bot_id,
+                    source_id=artifact_id,
+                    title=name,
+                    body=mime_type,
                 )
             conn.commit()
         return Artifact(
@@ -281,6 +292,7 @@ class MessagesMixin:
                     message_id=msg_id,
                     role="user",
                     seq=seq,
+                    blocks=text_blocks(text),
                 )
         message = self._get_message(msg_id)
         if message is None:

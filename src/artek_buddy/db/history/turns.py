@@ -217,6 +217,7 @@ class TurnsMixin:
                     role="user",
                     seq=seq,
                     run_id=run_id,
+                    blocks=message_blocks,
                 )
         user = self._get_message(msg_id)
         run = self._get_run(run_id)
@@ -341,6 +342,7 @@ class TurnsMixin:
                     role="user",
                     seq=seq,
                     run_id=run_id,
+                    blocks=blocks,
                 )
         user = self._get_message(msg_id)
         run = self._get_run(run_id)
@@ -402,6 +404,7 @@ class TurnsMixin:
                             role="bot",
                             seq=seq,
                             run_id=run.id,
+                            blocks=blocks,
                         )
                     conn.execute(
                         """

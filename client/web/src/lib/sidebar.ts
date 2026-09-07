@@ -6,8 +6,8 @@ export function inboxEmptyState(inboxCount: number, archivedCount: number): Inbo
   return archivedCount > 0 ? "archived" : "create";
 }
 
-export function inboxSearchEmpty(query: string, matchCount: number): boolean {
-  return query.trim().length > 0 && matchCount === 0;
+export function inboxSearchEmpty(query: string, matchCount: number, hostHitCount = 0): boolean {
+  return query.trim().length > 0 && matchCount === 0 && hostHitCount === 0;
 }
 
 export function sortInboxBots<T extends { id: string; pinned: boolean; createdAt: string }>(

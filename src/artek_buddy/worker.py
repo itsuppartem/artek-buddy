@@ -108,6 +108,11 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
             else:
                 store.fail_job(job.id, error=f"HTTP {status}")
                 log.warning("routine job failed id=%s status=%s", job.id, status)
+        elif job.job_type == "search.rebuild":
+            _run_search_rebuild(store, job, worker_id)
+        else:
+            store.fail_job(job.id, error=f"unknown job type {job.job_type}")
+            log.warning("unknown job type id=%s type=%s", job.id, job.job_type)
 
     # 3. Computer timeouts
     idle_seconds = int(os.environ.get("COMPUTER_TAKEOVER_IDLE_SECONDS", "120") or "120")
@@ -122,6 +127,24 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
         elif status not in {409}:
             log.warning("computer sleep failed bot=%s status=%s", bot_id, status)
     return woke
+
+
+def _run_search_rebuild(store: HistoryStore, job: object, worker_id: str) -> None:
+    payload = dict(getattr(job, "payload", None) or {})
+    job_id = str(getattr(job, "id", "") or "")
+    try:
+        for _ in range(40):
+            store.heartbeat_job(job_id, worker_id)
+            payload, done = store.rebuild_search_chunk(payload)
+            store.update_job_payload(job_id, payload, worker_id=worker_id)
+            if done:
+                store.ack_job(job_id, result={"rebuilt": True, "phase": payload.get("phase")})
+                log.info("search rebuild finished id=%s", job_id)
+                return
+        log.info("search rebuild yielded id=%s phase=%s", job_id, payload.get("phase"))
+    except Exception:
+        log.exception("search rebuild failed id=%s", job_id)
+        store.fail_job(job_id, error="search rebuild failed")
 
 
 def worker(*, once: bool = False) -> int:
@@ -140,6 +163,7 @@ def worker(*, once: bool = False) -> int:
     try:
         store.open()
         store.apply_migrations()
+        store.ensure_search_index()
     except DatabaseUnavailable as err:
         log.error("worker db unavailable: %s", err)
         return 1
