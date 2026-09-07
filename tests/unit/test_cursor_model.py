@@ -103,6 +103,7 @@ async def test_create_and_resume_deny_builtin_task(tmp_path) -> None:
         get_default_model=lambda: ("cursor", "composer-2.5"),
         get_model_params=lambda: ("xhigh", False),
         get_bot=lambda _bot_id: None,
+        raw_connection_key=lambda: None,
     )
     runtime = CursorRuntime(
         client=SimpleNamespace(agents=_Agents()),
