@@ -237,9 +237,7 @@ class CursorRuntime(RuntimeBase):
             ids.append(model.id)
             raw = getattr(model, "parameters", None) or ()
             catalog_params[model.id] = {
-                str(getattr(item, "id", "") or "")
-                for item in raw
-                if getattr(item, "id", None)
+                str(getattr(item, "id", "") or "") for item in raw if getattr(item, "id", None)
             }
         self._catalog_param_ids = catalog_params
         log.info("catalog models: %s", ", ".join(ids))
