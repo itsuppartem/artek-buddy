@@ -325,9 +325,7 @@ def test_worker_ask_user_pauses_then_resumes(client, auth_header) -> None:
     deadline = time.time() + 15
     finished: list[dict] = []
     while time.time() < deadline:
-        finished = [
-            item for item in _workers(client, auth_header, bot_id) if item["id"] == run_id
-        ]
+        finished = [item for item in _workers(client, auth_header, bot_id) if item["id"] == run_id]
         if finished and finished[0]["status"] == "completed":
             break
         time.sleep(0.1)
