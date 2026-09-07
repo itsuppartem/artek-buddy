@@ -122,6 +122,46 @@ describe("MessageView", () => {
     expect(usingHtml).not.toContain("Open in Memory");
     expect(usingHtml).not.toContain("<button");
   });
+
+  it("renders computer card as waiting when runStatus is waiting_takeover", () => {
+    const message: ThreadMessage = {
+      id: "msg-comp",
+      threadId: "thr-comp",
+      runId: "run-comp",
+      role: "bot",
+      seq: 1,
+      createdAt: "2026-09-01T00:00:00Z",
+      blocks: [
+        {
+          kind: "computer",
+          state: "waiting",
+          text: "Take control of this computer, then Release when you are done.",
+        },
+      ],
+    };
+
+    const waitingHtml = renderToStaticMarkup(
+      createElement(MessageView, {
+        canAnswer: false,
+        message,
+        runStatus: "waiting_takeover",
+        onAnswer: async () => undefined,
+      }),
+    );
+    expect(waitingHtml).toContain("waiting");
+    expect(waitingHtml).toContain("Open computer");
+
+    const doneHtml = renderToStaticMarkup(
+      createElement(MessageView, {
+        canAnswer: false,
+        message,
+        runStatus: "completed",
+        onAnswer: async () => undefined,
+      }),
+    );
+    expect(doneHtml).toContain("done");
+    expect(doneHtml).not.toContain("Open computer");
+  });
 });
 
 describe("messageCopyText", () => {

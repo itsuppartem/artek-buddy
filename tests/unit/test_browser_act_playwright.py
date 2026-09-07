@@ -39,3 +39,21 @@ def test_playwright_browser_command_scroll_up_direction() -> None:
     cmd = _playwright_browser_command([{"kind": "scroll", "direction": "up", "clicks": 4}])
     assert "mouse.wheel" in cmd
     assert "-400" in cmd
+
+
+def test_playwright_browser_command_extract_and_click_all() -> None:
+    cmd = _playwright_browser_command(
+        [
+            {"kind": "click_all", "selector": ".see-more"},
+            {"kind": "extract", "selector": "div.post"},
+            {"kind": "text"},
+            {"kind": "wait", "ms": 500},
+            {"kind": "hover", "selector": "#menu"},
+        ]
+    )
+    assert "loc.nth(i).inner_text()" in cmd
+    assert "page.inner_text('body')" in cmd
+    assert "hover(timeout=10000)" in cmd
+    assert "page.wait_for_timeout" in cmd
+    assert "step_data" in cmd
+    assert "clicked" in cmd

@@ -120,12 +120,20 @@ class ComputerToolsMixin:
                 "fill",
                 "type",
                 "click",
+                "click_all",
                 "press",
                 "submit",
                 "key",
                 "scroll",
                 "evaluate",
                 "eval",
+                "text",
+                "extract",
+                "read",
+                "get_text",
+                "hover",
+                "wait",
+                "sleep",
             }:
                 needs_page = True
         if needs_page:
