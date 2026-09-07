@@ -114,6 +114,9 @@ class Routine(BaseModel):
     last_run_at: str | None
     next_run_at: str | None
     created_at: str
+    require_approval: bool = False
+    definition_version: int = 1
+    last_run_state: str | None = None
 
 
 class CreateRoutineInput(BaseModel):
@@ -126,6 +129,7 @@ class CreateRoutineInput(BaseModel):
     timezone: str = "UTC"
     notify: bool = True
     active: bool = False
+    require_approval: bool = False
 
 
 class UpdateRoutineInput(BaseModel):
@@ -137,6 +141,7 @@ class UpdateRoutineInput(BaseModel):
     timezone: str | None = None
     notify: bool | None = None
     active: bool | None = None
+    require_approval: bool | None = None
 
 
 class RoutineList(BaseModel):

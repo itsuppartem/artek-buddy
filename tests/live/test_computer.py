@@ -165,6 +165,31 @@ def test_routine_next_run_has_no_microseconds(page: Page, client_url: str, host_
     expect(nxt).not_to_contain_text(".")
 
 
+def test_routine_approval_asks_before_run(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Gate")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    open_routines(page, name)
+    page.get_by_test_id("new-routine").click()
+    page.get_by_placeholder("Name").fill("Careful")
+    page.get_by_placeholder("Prompt to send").fill("please e2e-ok")
+    page.get_by_test_id("routine-require-approval").check()
+    page.get_by_test_id("routine-save").click()
+    row = page.get_by_test_id("routine-row")
+    expect(row).to_contain_text("Careful", timeout=8_000)
+    row.get_by_role("button", name="Run").click()
+    expect(row.get_by_test_id("routine-run-state")).to_contain_text(
+        "waiting for approval", timeout=8_000
+    )
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Chats").click()
+    open_chat(page, name)
+    card = page.get_by_test_id("ask-card")
+    expect(card).to_be_visible(timeout=8_000)
+    expect(card).to_contain_text("Approve routine Careful")
+    page.get_by_test_id("ask-option").filter(has_text="Deny").click()
+    expect(card).to_have_attribute("data-status", "answered", timeout=8_000)
+
+
 def test_offline_click_to_start_is_view_only(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("Glance")
     pair_fresh(page, client_url, host_url)

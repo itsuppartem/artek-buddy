@@ -160,6 +160,14 @@ async def require_principal(
     return principal
 
 
+async def require_owner(
+    principal: Principal = Depends(require_principal),
+) -> Principal:
+    if principal.role != "owner":
+        raise HTTPException(status_code=403, detail="owner role required")
+    return principal
+
+
 async def require_host(
     authorization: str | None = Header(default=None),
     cfg: Settings = Depends(settings),

@@ -254,6 +254,129 @@
         "title": "AuditVerificationReport",
         "type": "object"
       },
+      "AutomationDryRun": {
+        "properties": {
+          "dangerous_tools": {
+            "default": false,
+            "title": "Dangerous Tools",
+            "type": "boolean"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "title": "Snapshot",
+            "type": "object"
+          }
+        },
+        "required": [
+          "snapshot"
+        ],
+        "title": "AutomationDryRun",
+        "type": "object"
+      },
+      "AutomationRun": {
+        "properties": {
+          "automation_id": {
+            "minLength": 1,
+            "title": "Automation Id",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "definition_version": {
+            "title": "Definition Version",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "routine_id": {
+            "minLength": 1,
+            "title": "Routine Id",
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "title": "Snapshot",
+            "type": "object"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "waiting_for_approval",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "thread_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Run Id"
+          },
+          "trigger_event_id": {
+            "title": "Trigger Event Id",
+            "type": "string"
+          },
+          "trigger_kind": {
+            "title": "Trigger Kind",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "automation_id",
+          "routine_id",
+          "definition_version",
+          "trigger_kind",
+          "trigger_event_id",
+          "state",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AutomationRun",
+        "type": "object"
+      },
+      "AutomationRunList": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/AutomationRun"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "title": "AutomationRunList",
+        "type": "object"
+      },
       "BeginConnectionInput": {
         "properties": {
           "provider": {
@@ -1674,6 +1797,11 @@
             "title": "Prompt",
             "type": "string"
           },
+          "require_approval": {
+            "default": false,
+            "title": "Require Approval",
+            "type": "boolean"
+          },
           "timezone": {
             "default": "UTC",
             "title": "Timezone",
@@ -2045,6 +2173,24 @@
           "size"
         ],
         "title": "FileBlock",
+        "type": "object"
+      },
+      "FireRoutineInput": {
+        "properties": {
+          "trigger_event_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Event Id"
+          }
+        },
+        "title": "FireRoutineInput",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -2665,6 +2811,11 @@
             "title": "Cron",
             "type": "string"
           },
+          "definition_version": {
+            "default": 1,
+            "title": "Definition Version",
+            "type": "integer"
+          },
           "id": {
             "minLength": 1,
             "title": "Id",
@@ -2680,6 +2831,17 @@
               }
             ],
             "title": "Last Run At"
+          },
+          "last_run_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run State"
           },
           "name": {
             "title": "Name",
@@ -2703,6 +2865,11 @@
           "prompt": {
             "title": "Prompt",
             "type": "string"
+          },
+          "require_approval": {
+            "default": false,
+            "title": "Require Approval",
+            "type": "boolean"
           },
           "timezone": {
             "title": "Timezone",
@@ -4288,6 +4455,17 @@
               }
             ],
             "title": "Prompt"
+          },
+          "require_approval": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Require Approval"
           },
           "timezone": {
             "anyOf": [
@@ -10247,6 +10425,248 @@
           }
         },
         "summary": "Update Routine"
+      }
+    },
+    "/v1/routines/{routine_id}/dry-run": {
+      "post": {
+        "operationId": "dry_run_routine_v1_routines__routine_id__dry_run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routine_id",
+            "required": true,
+            "schema": {
+              "title": "Routine Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "artek_device",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Artek Device"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationDryRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dry Run Routine"
+      }
+    },
+    "/v1/routines/{routine_id}/run": {
+      "post": {
+        "operationId": "fire_routine_v1_routines__routine_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routine_id",
+            "required": true,
+            "schema": {
+              "title": "Routine Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "artek_device",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Artek Device"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FireRoutineInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fire Routine"
+      }
+    },
+    "/v1/routines/{routine_id}/runs": {
+      "get": {
+        "operationId": "list_routine_runs_v1_routines__routine_id__runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routine_id",
+            "required": true,
+            "schema": {
+              "title": "Routine Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "artek_device",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Artek Device"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationRunList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Routine Runs"
       }
     },
     "/v1/routines/{routine_id}/test": {

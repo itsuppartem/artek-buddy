@@ -397,6 +397,30 @@ PROCEDURES: list[Procedure] = [
         "TestRunResult",
         True,
     ),
+    _p(
+        "automations.run",
+        "POST",
+        "/v1/routines/{routine_id}/run",
+        "FireRoutineInput",
+        "AutomationRun",
+        True,
+    ),
+    _p(
+        "automations.dry_run",
+        "POST",
+        "/v1/routines/{routine_id}/dry-run",
+        "RoutineIdInput",
+        "AutomationDryRun",
+        True,
+    ),
+    _p(
+        "automations.list_runs",
+        "GET",
+        "/v1/routines/{routine_id}/runs",
+        "RoutineIdInput",
+        "AutomationRunList",
+        True,
+    ),
     # Capabilities / connections
     _p("capabilities.list", "GET", "/v1/capabilities", None, "CapabilityInstallList"),
     _p(

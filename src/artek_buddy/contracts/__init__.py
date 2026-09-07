@@ -1,3 +1,9 @@
+from artek_buddy.contracts.automations import (
+    AutomationDryRun,
+    AutomationRun,
+    AutomationRunList,
+    FireRoutineInput,
+)
 from artek_buddy.contracts.desktop import Desktop, DesktopWindow, WindowState
 from artek_buddy.contracts.domain import (
     Artifact,
@@ -121,6 +127,9 @@ __all__ = [
     "DEFAULT_BOT_COLOR",
     "Actor",
     "Artifact",
+    "AutomationDryRun",
+    "AutomationRun",
+    "AutomationRunList",
     "ArtifactList",
     "AttachmentList",
     "AttachmentUploadInput",
@@ -179,6 +188,7 @@ __all__ = [
     "DesktopWindow",
     "EffectStatus",
     "ExportManifest",
+    "FireRoutineInput",
     "HealthResponse",
     "Id",
     "Me",
