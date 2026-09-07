@@ -33,6 +33,7 @@ configure_logging()
 log = logging.getLogger("artek_buddy")
 
 
+from artek_buddy.http.audit import router as audit_router
 from artek_buddy.http.books import router as books_router
 from artek_buddy.http.bot_ask_delivery import handle_bot_ask as _handle_bot_ask
 from artek_buddy.http.bot_credentials import router as bot_credentials_router
@@ -149,6 +150,7 @@ app.add_middleware(RequestContextMiddleware)
 
 app.include_router(devices_router)
 app.include_router(session_router)
+app.include_router(audit_router)
 app.include_router(models_router)
 app.include_router(bots_router)
 app.include_router(bot_credentials_router)

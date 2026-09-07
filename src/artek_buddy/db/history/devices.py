@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from artek_buddy.audit import AUDIT_DEVICE_CREATE, AUDIT_DEVICE_REVOKE
 from artek_buddy.auth import (
     PAIRING_TTL_SECONDS,
     hash_secret,
@@ -85,6 +86,19 @@ class DevicesMixin:
                     target_member_id,
                 ),
             )
+            if hasattr(self, "_append_audit_event_tx"):
+                self._append_audit_event_tx(
+                    conn,
+                    AUDIT_DEVICE_CREATE,
+                    actor=target_member_id,
+                    resource=device_id,
+                    payload={
+                        "id": device_id,
+                        "name": name.strip(),
+                        "platform": platform.strip() or "linux",
+                        "member_id": target_member_id,
+                    },
+                )
             conn.commit()
         return DeviceCreated(
             id=device_id,
@@ -165,10 +179,19 @@ class DevicesMixin:
                 UPDATE devices
                 SET revoked_at = COALESCE(revoked_at, %s)
                 WHERE id = %s AND revoked_at IS NULL
-                RETURNING id, name, platform, created_at, last_seen_at, revoked_at
+                RETURNING id, name, platform, created_at, last_seen_at, revoked_at, member_id
                 """,
                 (now, device_id),
             ).fetchone()
+            if row is not None and hasattr(self, "_append_audit_event_tx"):
+                actor = str(row.get("member_id") or "mem_owner")
+                self._append_audit_event_tx(
+                    conn,
+                    AUDIT_DEVICE_REVOKE,
+                    actor=actor,
+                    resource=device_id,
+                    payload={"id": device_id, "revoked_at": now},
+                )
             conn.commit()
         return self._device_from_row(row) if row else None
 

@@ -20,7 +20,7 @@ from artek_buddy.db.history.store import MigrationChecksumError
 from artek_buddy.db.sql_split import split_sql_statements
 
 FIXTURE = Path(__file__).resolve().parents[1] / "unit" / "fixtures" / "semicolon_in_function.sql"
-EXPECTED_TABLES = ("bots", "devices", "computers", "consent_grants", "consent_requests")
+EXPECTED_TABLES = ("bots", "devices", "computers", "consent_grants", "consent_requests", "audit")
 
 
 def _with_db(url: str, name: str) -> str:
@@ -52,9 +52,9 @@ def empty_database_url() -> Iterator[str]:
 
 def test_apply_migrations_replays_every_historical_file(empty_database_url: str) -> None:
     files = sorted(path.name for path in MIGRATIONS_DIR.glob("*.sql"))
-    assert len(files) == 27
+    assert len(files) == 28
     assert files[0].startswith("0001_")
-    assert files[-1].startswith("0027_")
+    assert files[-1].startswith("0028_")
 
     store = HistoryStore(empty_database_url)
     try:

@@ -47,6 +47,7 @@ PROCEDURES: list[Procedure] = [
     _p("devices.revoke", "DELETE", "/v1/devices/{device_id}", None, "Device", True),
     # Identity / deployment
     _p("me", "GET", "/v1/me", None, "Me", True),
+    _p("audit.get", "GET", "/v1/audit", None, "AuditVerificationReport", True),
     _p("deployment.get", "GET", "/v1/deployment", None, "DeploymentSettings", True),
     _p(
         "deployment.update",

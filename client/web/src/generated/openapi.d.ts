@@ -293,6 +293,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Audit */
+        get: operations["get_audit_v1_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/bots": {
         parameters: {
             query?: never;
@@ -1527,6 +1544,23 @@ export interface components {
         AttachmentUploadInput: {
             /** Files */
             files: components["schemas"]["ThreadAttachmentInput"][];
+        };
+        /** AuditVerificationReport */
+        AuditVerificationReport: {
+            /** Events */
+            events?: {
+                [key: string]: unknown;
+            }[];
+            /** Failed Seq */
+            failed_seq?: number | null;
+            /** Head Hash */
+            head_hash: string;
+            /** Ok */
+            ok: boolean;
+            /** Reason */
+            reason?: string | null;
+            /** Total Events */
+            total_events: number;
         };
         /** BeginConnectionInput */
         BeginConnectionInput: {
@@ -3373,6 +3407,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_audit_v1_audit_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditVerificationReport"];
                 };
             };
             /** @description Validation Error */
