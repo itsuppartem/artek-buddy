@@ -74,11 +74,10 @@ def build_model(
 ) -> ModelSelection:
     params: list[ModelParameterValue] = []
     effort_value = effort if effort else settings.cursor_model_effort
-    use_fast = settings.cursor_model_fast if fast is None else fast
+    use_fast = settings.cursor_model_fast if fast is None else bool(fast)
     if effort_value:
         params.append(ModelParameterValue(id="effort", value=effort_value))
-    if use_fast:
-        params.append(ModelParameterValue(id="fast", value="true"))
+    params.append(ModelParameterValue(id="fast", value="true" if use_fast else "false"))
     return ModelSelection(id=model_id or settings.cursor_model, params=params)
 
 
@@ -260,7 +259,12 @@ class CursorRuntime(RuntimeBase):
         if persist_default or self.default_agent_id is None:
             self.default_agent_id = agent.agent_id
             self._save_state(agent.agent_id)
-        log.info("created agent %s", agent.agent_id)
+        log.info(
+            "created agent %s role=%s model=%s",
+            agent.agent_id,
+            role,
+            self.model.to_json(),
+        )
         return agent.agent_id
 
     async def ensure_session(
