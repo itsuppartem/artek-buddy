@@ -104,13 +104,25 @@ export function reduceThreadSnapshot(
   }
   if (event.type === "computer.takeover.requested") {
     const run = prev.run;
-    if (!run || (event.runId && run.id !== event.runId)) {
-      return { ...prev, cursor: event.seq };
-    }
+    const runId = event.runId || run?.id || "";
     return {
       ...prev,
       cursor: event.seq,
-      run: { ...run, status: "waiting_takeover" },
+      run: run
+        ? { ...run, id: event.runId || run.id, status: "waiting_takeover" }
+        : {
+            id: runId,
+            botId: prev.botId,
+            threadId: prev.threadId,
+            taskId: "",
+            status: "waiting_takeover",
+            trigger: "user",
+            modelProvider: "",
+            modelId: "",
+            startedAt: new Date().toISOString(),
+            completedAt: null,
+            error: null,
+          },
     };
   }
   if (

@@ -458,8 +458,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="browser_act",
         description=(
-            "Drive the remote Chromium: open a URL, fill a field, click, scroll, type, submit, or evaluate. "
-            "Use this for forms and page actions. The owner must Allow once / Always / Deny first. "
+            "Drive the remote Chromium: open a URL, fill a field, click, scroll, type, submit, evaluate, or extract text. "
+            "Use this for forms, page actions, and scraping DOM content. The owner must Allow once / Always / Deny first. "
             "Do not use Playwright or CDP to skip this card. "
             "Restore tabs and site permission chrome are already granted on this desktop; "
             "do not try to click those bubbles. File pickers and login still need request_takeover."
@@ -475,8 +475,10 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                     "type": "array",
                     "description": (
                         "Ordered page actions: goto (url), fill (selector, text), "
-                        "click (selector, force?), scroll (delta_y?, selector?, direction?), "
-                        "type (text), press (key), submit (selector?), evaluate (expression)."
+                        "click (selector, force?, all?), scroll (delta_y?, selector?, direction?, distance?), "
+                        "type (text), press (key), submit (selector?), evaluate (expression — returns result in response), "
+                        "extract (selector?, attribute? — returns text/attribute in response), "
+                        "wait (ms? or selector?), hover (selector)."
                     ),
                     "items": {"type": "object"},
                 },
