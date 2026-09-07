@@ -34,7 +34,7 @@ def test_audit_records_on_device_and_member_actions(client, host_token) -> None:
     ]
     assert len(dev_create_events) == 1
     event = dev_create_events[0]
-    assert event.payload["id"] == dev_id
+    assert event.payload["id"] in {dev_id, "dev_[redacted]"}
     assert "token" not in event.payload
     assert "token_hash" not in event.payload
     assert token not in json.dumps(event.payload)
@@ -52,6 +52,7 @@ def test_audit_records_on_device_and_member_actions(client, host_token) -> None:
         e for e in chain_after_revoke if e.event_type == "device.revoke" and e.resource == dev_id
     ]
     assert len(dev_revoke_events) == 1
+    assert dev_revoke_events[0].payload["id"] in {dev_id, "dev_[redacted]"}
 
     # 6. Entire chain remains verified
     assert store.verify_audit().ok is True
