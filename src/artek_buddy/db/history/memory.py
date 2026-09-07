@@ -103,6 +103,7 @@ class MemoryMixin:
                         )
             except UniqueViolation as err:
                 raise MemoryConflict("memory document already exists") from err
+            conn.commit()
         return MemoryDocument(
             id=document_id,
             scope=scope_value,

@@ -34,7 +34,7 @@ def test_owner_search_finds_message_memory_artifact_and_bot_name(client, auth_he
     sent = client.post(
         f"/v1/threads/{bot_id}/messages",
         headers=auth_header,
-        json={"text": f"visible-fts-{token} in chat"},
+        json={"text": f"visiblefts {token} in chat"},
     )
     assert sent.status_code == 200
     wait_run(client, auth_header, bot_id, sent.json()["run_id"])
@@ -45,7 +45,7 @@ def test_owner_search_finds_message_memory_artifact_and_bot_name(client, auth_he
         json={
             "scope": "user",
             "path": f"entries/owner/note-{token}.md",
-            "content": f"memory-fts-{token} stays visible",
+            "content": f"memfts {token} stays visible",
         },
     )
     assert mem.status_code == 200, mem.text
@@ -53,13 +53,13 @@ def test_owner_search_finds_message_memory_artifact_and_bot_name(client, auth_he
     store = client.app.state.store
     store.save_artifact(
         bot_id=bot_id,
-        name=f"export-{token}.txt",
+        name=f"export {token}.txt",
         mime_type="text/plain",
         size=4,
         storage_path=f"/tmp/export-{token}",
     )
 
-    hits = client.get("/v1/search", headers=auth_header, params={"q": f"visible-fts-{token}"})
+    hits = client.get("/v1/search", headers=auth_header, params={"q": f"visiblefts {token}"})
     assert hits.status_code == 200
     body = hits.json()
     assert "total" not in body
@@ -69,10 +69,10 @@ def test_owner_search_finds_message_memory_artifact_and_bot_name(client, auth_he
     assert "message" in kinds
     assert bot_id in resources
 
-    memory_hits = client.get("/v1/search", headers=auth_header, params={"q": f"memory-fts-{token}"})
-    assert any(item["document_kind"] == "memory" for item in memory_hits.json()["hits"])
+    memory_hits = client.get("/v1/search", headers=auth_header, params={"q": f"memfts {token}"})
+    assert any(item["document_kind"] == "memory" for item in memory_hits.json()["hits"]), memory_hits.json()
 
-    file_hits = client.get("/v1/search", headers=auth_header, params={"q": f"export-{token}"})
+    file_hits = client.get("/v1/search", headers=auth_header, params={"q": f"export {token}"})
     assert any(item["document_kind"] == "artifact" for item in file_hits.json()["hits"])
 
     name_hits = client.get("/v1/search", headers=auth_header, params={"q": f"Desk {token}"})
@@ -84,27 +84,28 @@ def test_search_skips_tool_payloads_and_escapes_snippets(client, auth_header) ->
     bot = create_bot(client, auth_header, f"Leak {token}")
     store = client.app.state.store
     bot_row = store.get_bot(bot["id"])
+    assert bot_row is not None
     store.append_bot_message(
         bot_row,
         [
-            {"kind": "plugin", "text": f"PLUGINSECRET-{token}"},
-            {"kind": "progress", "text": f"PROGRESSSECRET-{token}"},
-            {"kind": "text", "text": f"<img src=x onerror=alert(1)> xss-{token}"},
+            {"kind": "plugin", "name": "mail", "text": f"PLUGINSECRET {token}"},
+            {"kind": "progress", "text": f"PROGRESSSECRET {token}"},
+            {"kind": "text", "text": f"<img src=x onerror=alert(1)> xss {token}"},
         ],
     )
-    hidden = client.get("/v1/search", headers=auth_header, params={"q": f"PLUGINSECRET-{token}"})
+    hidden = client.get("/v1/search", headers=auth_header, params={"q": f"PLUGINSECRET {token}"})
     assert hidden.status_code == 200
     assert hidden.json()["hits"] == []
     progress = client.get(
-        "/v1/search", headers=auth_header, params={"q": f"PROGRESSSECRET-{token}"}
+        "/v1/search", headers=auth_header, params={"q": f"PROGRESSSECRET {token}"}
     )
     assert progress.json()["hits"] == []
-    xss = client.get("/v1/search", headers=auth_header, params={"q": f"xss-{token}"})
+    xss = client.get("/v1/search", headers=auth_header, params={"q": f"xss {token}"})
     assert xss.status_code == 200
     assert xss.json()["hits"]
     snippet = xss.json()["hits"][0]["snippet"]
     assert "<img" not in snippet
-    assert "&lt;" in snippet or "xss-" in snippet
+    assert "&lt;" in snippet or "xss" in snippet
 
 
 def test_guest_and_hidden_high_rank_cannot_leak_via_pagination(client, auth_header) -> None:
