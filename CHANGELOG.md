@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Added PostgreSQL durable jobs table (`0029_jobs.sql`) claimed via `FOR UPDATE SKIP LOCKED` with lease tracking, heartbeats, exponential backoff with jitter, idempotency keys, routine fire job migration, owner dead-letter inspection endpoint (`GET /v1/jobs/dead`), and CLI tool (`artek-buddy jobs-dead`).
 - Added tamper-evident audit chain in Postgres (`0028_audit.sql`), recording sha256 hash-chained canonical JSON events across member lifecycle, device creation/revocation, grants, and consent decisions, with CLI verification (`artek-buddy audit-verify` / `audit-export`) and `GET /v1/audit` owner endpoint.
 - Bound paired devices to a member actor (`0027_members.sql`), bootstrapping an immutable owner member, migrating unrevoked/existing devices to the owner, updating `GET /v1/me` with member and active devices list, allowing owners to revoke individual devices without deleting the member, and immediately denying authentication and terminating open SSE connections if a member is suspended.
 - Added in-tree performance budget measurement tool `infra/perf_budget.py` and `make perf` recording .deb install, cold window first paint, pairing/resume, large thread fixture load, first scripted SSE event latency, replay of N events, and process RSS in observation mode with secret redaction and sleep calibration.

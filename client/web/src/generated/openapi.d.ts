@@ -1050,6 +1050,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/jobs/dead": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Dead Jobs */
+        get: operations["list_dead_jobs_v1_jobs_dead_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -2098,6 +2115,47 @@ export interface components {
              * @default UTC
              */
             timezone: string;
+        };
+        /** DeadJob */
+        DeadJob: {
+            /**
+             * Attempts
+             * @default 0
+             */
+            attempts: number;
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+            /** Job Type */
+            job_type: string;
+            /** Last Error */
+            last_error?: string | null;
+            /**
+             * Max Attempts
+             * @default 5
+             */
+            max_attempts: number;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            };
+            /** Resource Id */
+            resource_id?: string | null;
+            /**
+             * State
+             * @default dead
+             */
+            state: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** DeadJobList */
+        DeadJobList: {
+            /** Jobs */
+            jobs: components["schemas"]["DeadJob"][];
         };
         /** DeploymentSettings */
         DeploymentSettings: {
@@ -5302,6 +5360,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_dead_jobs_v1_jobs_dead_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeadJobList"];
                 };
             };
             /** @description Validation Error */
