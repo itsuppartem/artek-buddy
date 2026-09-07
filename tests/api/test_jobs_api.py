@@ -177,10 +177,15 @@ def test_worker_run_once_migrates_routine_to_job(client, host_token) -> None:
     # 3. Verify a routine.fire job was enqueued and executed
     with store._conn() as conn:
         rows = conn.execute(
-            "SELECT id, job_type, resource_id, state FROM jobs WHERE job_type = 'routine.fire'",
+            """
+            SELECT id, job_type, resource_id, state FROM jobs
+            WHERE job_type = 'routine.fire' AND resource_id = %s
+            ORDER BY created_at DESC
+            """,
+            (routine.id,),
         ).fetchall()
         assert len(rows) >= 1
-        job_row = rows[-1]
+        job_row = rows[0]
         assert job_row["resource_id"] == routine.id
         assert job_row["state"] in {"succeeded", "queued", "running"}
 

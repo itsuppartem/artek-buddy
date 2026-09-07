@@ -71,18 +71,22 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
     due = store.claim_due_routines()
     for routine in due:
         idempotency_key = f"routine:{routine.id}:{routine.last_run_at}"
-        store.enqueue_job(
-            job_type="routine.fire",
-            resource_id=routine.id,
+        auto_run = store.ensure_automation_run(
+            routine,
+            trigger_kind="cron",
+            trigger_event_id=str(routine.last_run_at or ""),
             idempotency_key=idempotency_key,
-            payload={
-                "version": 1,
-                "routine_id": routine.id,
-                "bot_id": routine.bot_id,
-                "prompt": routine.prompt,
-            },
-            max_attempts=5,
         )
+        if auto_run.state == "waiting_for_approval":
+            bot = store.get_bot(routine.bot_id)
+            if bot is None:
+                store.finish_automation_run(
+                    auto_run.id, state="failed", error="bot_gone", error_code="bot_gone"
+                )
+            else:
+                store.ensure_approval_ask(bot, auto_run)
+        elif auto_run.state == "queued":
+            store.enqueue_automation_prompt(auto_run)
         store.ack_routine(routine.id)
 
     # 2. Claim and execute durable jobs (bounded concurrency for Pi)
@@ -98,15 +102,36 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
             bot_id = str(job.payload.get("bot_id") or "")
             prompt = str(job.payload.get("prompt") or "")
             status = wake_routine(base, token, bot_id, prompt)
+            auto_run_id = str(job.payload.get("automation_run_id") or "")
             if status in {200, 201}:
                 store.ack_job(job.id, result={"status": status})
+                if auto_run_id:
+                    store.finish_automation_run(auto_run_id, state="succeeded")
                 woke += 1
                 log.info("routine job succeeded id=%s status=%s", job.id, status)
             elif status == 409:
                 store.ack_job(job.id, result={"status": status, "skipped": "busy"})
+                if auto_run_id:
+                    store.finish_automation_run(
+                        auto_run_id, state="failed", error="bot_busy", error_code="bot_busy"
+                    )
                 log.info("routine job skipped busy id=%s", job.id)
+            elif status == 404:
+                store.fail_job(job.id, error=f"HTTP {status}")
+                if auto_run_id:
+                    store.finish_automation_run(
+                        auto_run_id, state="failed", error="bot_gone", error_code="bot_gone"
+                    )
+                log.warning("routine job failed id=%s status=%s", job.id, status)
             else:
                 store.fail_job(job.id, error=f"HTTP {status}")
+                if auto_run_id:
+                    store.finish_automation_run(
+                        auto_run_id,
+                        state="failed",
+                        error=f"HTTP {status}",
+                        error_code="wake_failed",
+                    )
                 log.warning("routine job failed id=%s status=%s", job.id, status)
         elif job.job_type == "search.rebuild":
             _run_search_rebuild(store, job, worker_id)

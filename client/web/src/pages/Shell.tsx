@@ -2684,7 +2684,15 @@ export function ShellPage() {
                       Close
                     </button>
                   </div>
-                  <RoutinesPanel botId={active.id} onLater={setLater} />
+                  <RoutinesPanel
+                    botId={active.id}
+                    onLater={setLater}
+                    onThreadChanged={() => {
+                      const id = activeIdRef.current;
+                      if (!id) return;
+                      return refreshThread(id).then(() => undefined);
+                    }}
+                  />
                 </div>
               ) : null}
               {panel === "worklog" && active ? (
