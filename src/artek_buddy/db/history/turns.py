@@ -209,6 +209,15 @@ class TurnsMixin:
                         (preview_snippet(preview_text), "running", now, bot.id),
                     )
                     queued_turn = False
+                self._record_message_created(
+                    conn,
+                    bot_id=bot.id,
+                    thread_id=bot.thread_id,
+                    message_id=msg_id,
+                    role="user",
+                    seq=seq,
+                    run_id=run_id,
+                )
         user = self._get_message(msg_id)
         run = self._get_run(run_id)
         if user is None or run is None:
@@ -324,6 +333,15 @@ class TurnsMixin:
                     """,
                     (preview_snippet(text), "running", now, bot.id),
                 )
+                self._record_message_created(
+                    conn,
+                    bot_id=bot.id,
+                    thread_id=bot.thread_id,
+                    message_id=msg_id,
+                    role="user",
+                    seq=seq,
+                    run_id=run_id,
+                )
         user = self._get_message(msg_id)
         run = self._get_run(run_id)
         if user is None or run is None:
@@ -375,6 +393,15 @@ class TurnsMixin:
                                 run.id,
                                 now,
                             ),
+                        )
+                        self._record_message_created(
+                            conn,
+                            bot_id=bot.id,
+                            thread_id=bot.thread_id,
+                            message_id=msg_id,
+                            role="bot",
+                            seq=seq,
+                            run_id=run.id,
                         )
                     conn.execute(
                         """

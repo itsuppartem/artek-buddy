@@ -156,6 +156,15 @@ class AsksMixin:
                         now,
                     ),
                 )
+                self._record_message_created(
+                    conn,
+                    bot_id=source.id,
+                    thread_id=source.thread_id,
+                    message_id=msg_id,
+                    role="bot",
+                    seq=seq,
+                    run_id=str(ask_row.get("from_run_id") or "") or None,
+                )
                 excerpt = ""
                 for block in ready_blocks:
                     if isinstance(block, dict) and block.get("text"):

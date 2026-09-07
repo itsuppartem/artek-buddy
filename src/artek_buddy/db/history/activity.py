@@ -56,6 +56,36 @@ class ActivityMixin:
             self.prune_activity()
         return record
 
+    def _record_message_created(
+        self,
+        conn: Any,
+        *,
+        bot_id: str,
+        thread_id: str,
+        message_id: str,
+        role: str,
+        seq: int,
+        run_id: str | None = None,
+        device_id: str | None = None,
+    ) -> ActivityRecord:
+        payload: dict[str, Any] = {
+            "id": message_id,
+            "thread_id": thread_id,
+            "role": role,
+            "seq": seq,
+        }
+        if run_id is not None:
+            payload["run_id"] = run_id
+        return self._append_activity_tx(
+            conn,
+            "message.created",
+            role,
+            bot_id,
+            payload,
+            device_id,
+            1,
+        )
+
     def _append_activity_tx(
         self,
         conn: Any,
