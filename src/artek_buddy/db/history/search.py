@@ -185,7 +185,11 @@ class SearchMixin:
                             d.document_kind,
                             d.resource_id,
                             d.source_id,
-                            d.title,
+                            CASE
+                                WHEN d.document_kind = 'message'
+                                    THEN COALESCE(NULLIF(b.name, ''), d.title, '')
+                                ELSE d.title
+                            END AS title,
                             ts_rank(d.search_vector, q.tsq) AS rank,
                             ts_headline(
                                 'simple',
@@ -193,7 +197,9 @@ class SearchMixin:
                                 q.tsq,
                                 %s
                             ) AS snippet
-                        FROM search_documents d, q
+                        FROM search_documents d
+                        LEFT JOIN bots b ON b.id = d.resource_id
+                        CROSS JOIN q
                         WHERE d.deleted_at IS NULL
                           AND d.resource_id = ANY(%s)
                           AND d.document_kind = ANY(%s)

@@ -340,7 +340,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Search filters inbox (and Archived) by name / preview. A name or preview hit is marked. Typing two or more characters also lists host hits for messages, memory, and files (`search-hits`); a hit opens that chat. No matches: empty copy plus Clear Search; clear restores the list | [ ] | [ ] |
+| Search filters inbox (and Archived) by name / preview. A name or preview hit is marked. Typing two or more characters also lists host hits for messages, memory, and files (`search-hits`); a message hit names that chat and opens it. No matches: **No chats or messages match** plus Clear Search; clear restores the list | [ ] | [ ] |
 | Click a row opens **that** chat on the first click (not the previous one). After Research, one click Lead → header and composer are Lead. Same after a third bot. Unsent Message text stays on the chat it was typed in | [ ] | [ ] |
 | Switching chats does not blank the thread or jump inbox order under the pointer. A recently opened chat paints immediately even if the snapshot GET is still in flight. A first visit (or one evicted from the three-chat cache) shows **Loading this chat…** under that header, not an empty column | [ ] | [ ] |
 | Opening a chat in the focused window marks it read. Looking at or dismissing an OS notification does **not**. A reply while that chat is focused on screen does not leave the unread pin | [ ] | [ ] |

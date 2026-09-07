@@ -26,5 +26,19 @@ describe("SearchHits", () => {
     expect(html).toContain("bot_abc");
     expect(html).toContain("unique-fts");
     expect(html).toContain("inbox-hit");
+    expect(html).toContain("Lead");
+  });
+
+  it("names a message hit from the inbox when the host title is empty", () => {
+    const html = renderToStaticMarkup(
+      createElement(SearchHits, {
+        query: "needle",
+        hits: [{ ...hit, title: "" }],
+        chatNames: { bot_abc: "Fts desk" },
+        onOpenBot: vi.fn(),
+      }),
+    );
+    expect(html).toContain("Fts desk");
+    expect(html).toContain("Open chat Fts desk");
   });
 });

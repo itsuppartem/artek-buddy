@@ -190,7 +190,7 @@ def test_inbox_search_no_match_shows_empty_and_clear(
     expect(bot_row(page, name)).to_have_count(0)
     empty = page.get_by_test_id("inbox-search-empty")
     expect(empty).to_be_visible()
-    expect(empty).to_contain_text("No chats match")
+    expect(empty).to_contain_text("No chats or messages match")
     expect(empty).to_contain_text("Clear Search")
     clearer = page.get_by_role("button", name="Clear Search")
     expect(clearer).to_be_visible()

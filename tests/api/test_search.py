@@ -68,6 +68,9 @@ def test_owner_search_finds_message_memory_artifact_and_bot_name(client, auth_he
     resources = {item["resource_id"] for item in body["hits"]}
     assert "message" in kinds
     assert bot_id in resources
+    message_hits = [item for item in body["hits"] if item["document_kind"] == "message"]
+    assert message_hits
+    assert message_hits[0]["title"] == f"Desk {token}"
 
     memory_hits = client.get("/v1/search", headers=auth_header, params={"q": f"memfts {token}"})
     assert any(item["document_kind"] == "memory" for item in memory_hits.json()["hits"]), (

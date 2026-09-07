@@ -1421,6 +1421,12 @@ export function ShellPage() {
     () => filterBots(archivedBots, query, (bot) => stripMarkdown(bot.preview || bot.title)),
     [archivedBots, query],
   );
+  const chatNames = useMemo(() => {
+    const names: Record<string, string> = {};
+    for (const bot of bots) names[bot.id] = bot.name;
+    for (const bot of archivedBots) names[bot.id] = bot.name;
+    return names;
+  }, [bots, archivedBots]);
 
   useEffect(() => {
     const needle = query.trim();
@@ -2074,7 +2080,12 @@ export function ShellPage() {
             </button>
           </div>
           <div className="ab-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
-            <SearchHits query={query} hits={hostHits} onOpenBot={(id) => openBot(id)} />
+            <SearchHits
+              query={query}
+              hits={hostHits}
+              chatNames={chatNames}
+              onOpenBot={(id) => openBot(id)}
+            />
             <InboxList
               sidebarView={sidebarView}
               query={query}

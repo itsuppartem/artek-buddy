@@ -19,10 +19,12 @@ const KIND_LABEL: Record<HostSearchHit["documentKind"], string> = {
 export function SearchHits({
   query,
   hits,
+  chatNames = {},
   onOpenBot,
 }: {
   query: string;
   hits: HostSearchHit[];
+  chatNames?: Record<string, string>;
   onOpenBot: (botId: string) => void;
 }) {
   if (!hits.length) return null;
@@ -30,7 +32,11 @@ export function SearchHits({
     <div data-testid="search-hits" className="mb-1 flex flex-col gap-0.5">
       {hits.map((hit) => {
         const openable = hit.resourceId.startsWith("bot_");
-        const label = hit.title || KIND_LABEL[hit.documentKind];
+        const chatName = chatNames[hit.resourceId] || "";
+        const label =
+          (hit.documentKind === "message" ? chatName || hit.title : hit.title) ||
+          chatName ||
+          KIND_LABEL[hit.documentKind];
         return (
           <button
             key={hit.id}
@@ -38,6 +44,7 @@ export function SearchHits({
             data-testid="search-hit"
             data-kind={hit.documentKind}
             data-bot-id={openable ? hit.resourceId : undefined}
+            aria-label={openable ? `Open chat ${label}` : label}
             disabled={!openable}
             onClick={() => {
               if (openable) onOpenBot(hit.resourceId);
