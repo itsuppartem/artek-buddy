@@ -213,6 +213,8 @@ def test_approval_wait_does_not_busy_the_team_desk(client, auth_header) -> None:
     assert not status.json().get("busy_bot_name")
     booted = client.post(f"/v1/computer/{other}/boot", headers=auth_header)
     assert booted.status_code == 200
+    stopped = client.post(f"/v1/computer/{other}/stop", headers=auth_header)
+    assert stopped.status_code == 200
 
 
 def test_deleted_bot_fails_the_next_automation_step(client, auth_header) -> None:
