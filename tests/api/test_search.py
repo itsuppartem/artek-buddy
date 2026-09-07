@@ -53,10 +53,10 @@ def test_owner_search_finds_message_memory_artifact_and_bot_name(client, auth_he
     store = client.app.state.store
     store.save_artifact(
         bot_id=bot_id,
-        name=f"export {token}.txt",
+        name=f"exportfile {token}",
         mime_type="text/plain",
         size=4,
-        storage_path=f"/tmp/export-{token}",
+        storage_path=f"artifacts/exportfile-{token}",
     )
 
     hits = client.get("/v1/search", headers=auth_header, params={"q": f"visiblefts {token}"})
@@ -74,8 +74,10 @@ def test_owner_search_finds_message_memory_artifact_and_bot_name(client, auth_he
         memory_hits.json()
     )
 
-    file_hits = client.get("/v1/search", headers=auth_header, params={"q": f"export {token}"})
-    assert any(item["document_kind"] == "artifact" for item in file_hits.json()["hits"])
+    file_hits = client.get("/v1/search", headers=auth_header, params={"q": f"exportfile {token}"})
+    assert any(item["document_kind"] == "artifact" for item in file_hits.json()["hits"]), (
+        file_hits.json()
+    )
 
     name_hits = client.get("/v1/search", headers=auth_header, params={"q": f"Desk {token}"})
     assert any(item["document_kind"] == "bot" for item in name_hits.json()["hits"])
