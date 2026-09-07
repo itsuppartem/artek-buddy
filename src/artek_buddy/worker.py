@@ -89,8 +89,7 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
 
     # 2. Claim and execute durable jobs (bounded concurrency for Pi)
     concurrency = int(
-        os.environ.get("WORKER_CONCURRENCY", str(DEFAULT_CONCURRENCY))
-        or str(DEFAULT_CONCURRENCY)
+        os.environ.get("WORKER_CONCURRENCY", str(DEFAULT_CONCURRENCY)) or str(DEFAULT_CONCURRENCY)
     )
     worker_id = f"worker_{os.getpid()}"
     claimed_jobs = store.claim_jobs(worker_id=worker_id, limit=concurrency)

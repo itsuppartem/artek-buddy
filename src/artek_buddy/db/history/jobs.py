@@ -47,9 +47,7 @@ class JobsMixin:
             run_at=parse_iso(row["run_at"]) or str(row["run_at"]),
             created_at=parse_iso(row["created_at"]) or str(row["created_at"]),
             updated_at=parse_iso(row["updated_at"]) or str(row["updated_at"]),
-            completed_at=(
-                parse_iso(row["completed_at"]) if row.get("completed_at") else None
-            ),
+            completed_at=(parse_iso(row["completed_at"]) if row.get("completed_at") else None),
         )
 
     def enqueue_job(

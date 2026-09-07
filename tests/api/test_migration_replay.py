@@ -20,7 +20,15 @@ from artek_buddy.db.history.store import MigrationChecksumError
 from artek_buddy.db.sql_split import split_sql_statements
 
 FIXTURE = Path(__file__).resolve().parents[1] / "unit" / "fixtures" / "semicolon_in_function.sql"
-EXPECTED_TABLES = ("bots", "devices", "computers", "consent_grants", "consent_requests", "audit", "jobs")
+EXPECTED_TABLES = (
+    "bots",
+    "devices",
+    "computers",
+    "consent_grants",
+    "consent_requests",
+    "audit",
+    "jobs",
+)
 
 
 def _with_db(url: str, name: str) -> str:
