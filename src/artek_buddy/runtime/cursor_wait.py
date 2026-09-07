@@ -74,12 +74,21 @@ def note_auth_failures(
     return consecutive, False
 
 
-def send_local_options(cwd: str, *, force: bool = False) -> dict[str, Any]:
+def send_local_options(
+    cwd: str,
+    *,
+    force: bool = False,
+    model: Any | None = None,
+) -> dict[str, Any]:
     """Local send options. `force` expires a stuck run; do not set it on every send."""
     local: dict[str, Any] = {"cwd": cwd}
     if force:
         local["force"] = True
-    return {"local": local}
+    payload: dict[str, Any] = {"local": local}
+    if model is not None:
+        to_json = getattr(model, "to_json", None)
+        payload["model"] = to_json() if callable(to_json) else model
+    return payload
 
 
 def should_retry_dead_wait(

@@ -53,7 +53,7 @@ class _Agents:
         self.resume_ids: list[str] = []
         self.create_calls = 0
 
-    async def create(self, **_options: Any) -> _Agent:
+    async def create(self, *_args: Any, **_options: Any) -> _Agent:
         self.create_calls += 1
         raise AssertionError("a fresh logical agent cannot heal a poisoned bridge")
 
@@ -127,10 +127,11 @@ async def test_dead_wait_restarts_bridge_and_retries_same_agent(tmp_path) -> Non
     assert first_agent.closed == 1
     assert first_client.agents.create_calls == 0
     assert recovered_client.agents.resume_ids == ["agent-old"]
+    model = runtime.model.to_json()
     assert first_agent.send_options == [
-        {"local": {"cwd": str(tmp_path / "workspace")}},
-        {"local": {"cwd": str(tmp_path / "workspace"), "force": True}},
+        {"local": {"cwd": str(tmp_path / "workspace")}, "model": model},
+        {"local": {"cwd": str(tmp_path / "workspace"), "force": True}, "model": model},
     ]
     assert resumed_agent.send_options == [
-        {"local": {"cwd": str(tmp_path / "workspace")}},
+        {"local": {"cwd": str(tmp_path / "workspace")}, "model": model},
     ]
