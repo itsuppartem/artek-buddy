@@ -3,8 +3,18 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from artek_buddy.__main__ import jobs_dead
 from artek_buddy.db.shaping import isoformat_utc
+
+
+@pytest.fixture(autouse=True)
+def clean_jobs(client) -> None:
+    store = client.app.state.store
+    with store._conn() as conn:
+        conn.execute("DELETE FROM jobs")
+        conn.commit()
 
 
 def test_job_enqueue_claim_and_ack_lifecycle(client) -> None:
@@ -188,7 +198,7 @@ def test_dead_jobs_api_and_cli(client, auth_header, capsys) -> None:
         max_attempts=1,
     )
     c = store.claim_jobs(worker_id="w", limit=1)[0]
-    store.fail_job(c.id, error="Dead error with code ABCD-1234")
+    store.fail_job(c.id, error="Dead error with code ABCD-EFGH")
 
     # 1. API GET /v1/jobs/dead (owner only)
     res = client.get("/v1/jobs/dead", headers=auth_header)
@@ -201,7 +211,7 @@ def test_dead_jobs_api_and_cli(client, auth_header, capsys) -> None:
     assert "token" not in dead_item["payload"]
     assert "test_secret_123" not in str(dead_item["payload"])
     assert "[redacted]" in str(dead_item["payload"]["info"])
-    assert "ABCD-1234" not in str(dead_item["last_error"])
+    assert "ABCD-EFGH" not in str(dead_item["last_error"])
     assert "[redacted]" in str(dead_item["last_error"])
 
     # 2. CLI jobs-dead command
