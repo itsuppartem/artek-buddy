@@ -10,7 +10,11 @@ async def _workspace_one_frame(self, heartbeat_s: float = 15.0):
 
 
 async def _thread_replay_then_stop(
-    self, bot_id: str, after: str | None = None, heartbeat_s: float = 15.0
+    self,
+    bot_id: str,
+    after: str | None = None,
+    heartbeat_s: float = 15.0,
+    replay: bool = True,
 ):
     yield HEARTBEAT
     if after and not self.has_event(bot_id, after):

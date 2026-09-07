@@ -81,6 +81,20 @@ class ConsentsMixin:
                             "action": "create",
                         },
                     )
+                if hasattr(self, "_append_activity_tx"):
+                    self._append_activity_tx(
+                        conn,
+                        event_type="grant.created",
+                        actor=device_id or "owner",
+                        resource=bot_id,
+                        payload={
+                            "grant_id": grant_id,
+                            "action_class": action_class,
+                            "scope_key": scope_key,
+                        },
+                        device_id=device_id,
+                        event_version=1,
+                    )
                 conn.commit()
             except UniqueViolation:
                 conn.rollback()
@@ -124,6 +138,21 @@ class ConsentsMixin:
                     isoformat_utc(),
                 ),
             )
+            if hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="consent.requested",
+                    actor="bot",
+                    resource=bot_id,
+                    payload={
+                        "request_id": request_id,
+                        "action_class": action_class,
+                        "scope_key": scope_key,
+                        "summary": summary,
+                    },
+                    device_id=None,
+                    event_version=1,
+                )
             conn.commit()
 
     def get_consent_request(self, request_id: str) -> Any:
@@ -260,6 +289,21 @@ class ConsentsMixin:
                         "scope_key": row["scope_key"],
                         "decision": decision,
                     },
+                )
+            if row is not None and hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="consent.answered",
+                    actor=device_id or "owner",
+                    resource=row["bot_id"],
+                    payload={
+                        "request_id": request_id,
+                        "decision": decision,
+                        "action_class": row["action_class"],
+                        "scope_key": row["scope_key"],
+                    },
+                    device_id=device_id if device_id != "host" else None,
+                    event_version=1,
                 )
             conn.commit()
         if row is None:

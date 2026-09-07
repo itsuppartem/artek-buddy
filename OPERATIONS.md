@@ -113,3 +113,12 @@ When testing releases or observing performance metrics on physical hardware (suc
    - A summary Markdown report (`perf-report.md`) detailing hardware specs, commit SHA, and test outcomes.
    - All output is automatically scrubbed of sensitive secrets or tokens.
 3. Use `--calibrate-sleep <seconds>` to verify measurement sensitivity when benchmarking timing changes.
+
+## Activity log retention
+
+The `activity` table is a workspace-monotonic SSE cursor (see #159), not the audit chain.
+
+- Bound: the newest **10 000** rows (`DEFAULT_ACTIVITY_RETENTION`). Older rows are pruned when the log grows past twice that count, or by calling `HistoryStore.prune_activity`.
+- Product state (messages, grants, members) stays in its own tables after prune.
+- A client whose `after_sequence` is older than the retained window receives `thread.replay.gap` / `activity.resync` and must refetch snapshots. Do not treat a missing cursor as “start at now.”
+- Do not store tokens, raw tool args, or screenshots in activity. Audit retention (#160) is a separate policy.

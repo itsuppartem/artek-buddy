@@ -28,6 +28,7 @@ EXPECTED_TABLES = (
     "consent_requests",
     "audit",
     "jobs",
+    "activity",
 )
 
 
@@ -60,9 +61,9 @@ def empty_database_url() -> Iterator[str]:
 
 def test_apply_migrations_replays_every_historical_file(empty_database_url: str) -> None:
     files = sorted(path.name for path in MIGRATIONS_DIR.glob("*.sql"))
-    assert len(files) == 29
+    assert len(files) == 30
     assert files[0].startswith("0001_")
-    assert files[-1].startswith("0029_")
+    assert files[-1].startswith("0030_")
 
     store = HistoryStore(empty_database_url)
     try:
@@ -188,3 +189,27 @@ def test_empty_checksum_is_backfilled_on_next_apply(empty_database_url: str) -> 
         ).fetchone()
     assert row is not None
     assert row["checksum"] == expected
+
+
+def test_activity_prune_reports_gap_on_isolated_db(empty_database_url: str) -> None:
+    store = HistoryStore(empty_database_url)
+    try:
+        store.open()
+        store.apply_migrations()
+        for index in range(8):
+            store.append_activity(
+                "message.created",
+                actor="user",
+                resource="bot_gap",
+                payload={"id": f"msg_gap_{index}"},
+            )
+        deleted = store.prune_activity(retain_count=2)
+        assert deleted >= 6
+        records, has_gap = store.replay_activity(after_seq=1, resource="bot_gap")
+        assert has_gap is True
+        assert records
+        recent, no_gap = store.replay_activity(after_seq=records[0].seq - 1)
+        assert no_gap is False
+        assert recent
+    finally:
+        store.close()

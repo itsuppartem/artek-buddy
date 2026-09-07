@@ -1,3 +1,4 @@
+from artek_buddy.db.history.activity import ActivityMixin
 from artek_buddy.db.history.asks import AsksMixin
 from artek_buddy.db.history.audit import AuditMixin
 from artek_buddy.db.history.books import BooksMixin
@@ -22,6 +23,7 @@ __all__ = ["HistoryStore", "InboxFullError", "MigrationChecksumError"]
 
 class HistoryStore(
     HistoryStoreCore,
+    ActivityMixin,
     AsksMixin,
     AuditMixin,
     BooksMixin,

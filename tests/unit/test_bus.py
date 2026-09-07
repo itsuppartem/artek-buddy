@@ -93,3 +93,26 @@ async def _assert_thread_publish() -> None:
     thread.join()
     await asyncio.wait_for(task, timeout=1)
     assert received == ["from_thread"]
+
+
+def test_subscribe_can_skip_in_memory_replay() -> None:
+    asyncio.run(_assert_skip_replay())
+
+
+async def _assert_skip_replay() -> None:
+    hub = EventHub()
+    hub.publish(_event("bot_a", "old_evt"))
+    received: list[str] = []
+
+    async def collect() -> None:
+        async for item in hub.subscribe("bot_a", heartbeat_s=0.2, replay=False):
+            if item is HEARTBEAT:
+                continue
+            received.append(item.id)
+            return
+
+    task = asyncio.create_task(collect())
+    await asyncio.sleep(0.02)
+    hub.publish(_event("bot_a", "live_evt"))
+    await asyncio.wait_for(task, timeout=1)
+    assert received == ["live_evt"]

@@ -99,6 +99,20 @@ class DevicesMixin:
                         "member_id": target_member_id,
                     },
                 )
+            if hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="device.created",
+                    actor=target_member_id,
+                    resource=device_id,
+                    payload={
+                        "id": device_id,
+                        "name": name.strip(),
+                        "platform": platform.strip() or "linux",
+                    },
+                    device_id=device_id,
+                    event_version=1,
+                )
             conn.commit()
         return DeviceCreated(
             id=device_id,
@@ -191,6 +205,17 @@ class DevicesMixin:
                     actor=actor,
                     resource=device_id,
                     payload={"id": device_id, "revoked_at": now},
+                )
+            if row is not None and hasattr(self, "_append_activity_tx"):
+                actor = str(row.get("member_id") or "mem_owner")
+                self._append_activity_tx(
+                    conn,
+                    event_type="device.revoked",
+                    actor=actor,
+                    resource=device_id,
+                    payload={"id": device_id, "revoked_at": now},
+                    device_id=device_id,
+                    event_version=1,
                 )
             conn.commit()
         return self._device_from_row(row) if row else None

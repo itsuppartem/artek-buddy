@@ -147,6 +147,22 @@ class MessagesMixin:
                         "UPDATE bots SET preview = %s, unread = TRUE, updated_at = %s WHERE id = %s",
                         (preview_snippet(excerpt), now, bot.id),
                     )
+                if hasattr(self, "_append_activity_tx"):
+                    self._append_activity_tx(
+                        conn,
+                        event_type="message.created",
+                        actor="bot",
+                        resource=bot.id,
+                        payload={
+                            "id": msg_id,
+                            "thread_id": bot.thread_id,
+                            "role": "bot",
+                            "run_id": run_id,
+                            "seq": seq,
+                        },
+                        device_id=None,
+                        event_version=1,
+                    )
         message = self._get_message(msg_id)
         if message is None:
             raise RuntimeError("failed to persist bot message")
@@ -175,6 +191,21 @@ class MessagesMixin:
                 """,
                 (artifact_id, bot_id, run_id, name, mime_type, size, storage_path, now),
             )
+            if hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="artifact.created",
+                    actor="bot",
+                    resource=bot_id,
+                    payload={
+                        "id": artifact_id,
+                        "name": name,
+                        "mime_type": mime_type,
+                        "size": size,
+                    },
+                    device_id=None,
+                    event_version=1,
+                )
             conn.commit()
         return Artifact(
             id=artifact_id,
@@ -250,6 +281,21 @@ class MessagesMixin:
                     "UPDATE bots SET preview = %s, unread = FALSE, updated_at = %s WHERE id = %s",
                     (preview_snippet(text), now, bot.id),
                 )
+                if hasattr(self, "_append_activity_tx"):
+                    self._append_activity_tx(
+                        conn,
+                        event_type="message.created",
+                        actor="user",
+                        resource=bot.id,
+                        payload={
+                            "id": msg_id,
+                            "thread_id": bot.thread_id,
+                            "role": "user",
+                            "seq": seq,
+                        },
+                        device_id=None,
+                        event_version=1,
+                    )
         message = self._get_message(msg_id)
         if message is None:
             raise RuntimeError("failed to persist inbox message")

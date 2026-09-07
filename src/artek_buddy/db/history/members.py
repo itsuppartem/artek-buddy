@@ -33,9 +33,10 @@ class MembersMixin:
                 INSERT INTO members (id, name, role, state, created_at, updated_at)
                 VALUES ('mem_owner', 'Owner', 'owner', 'active', now(), now())
                 ON CONFLICT (id) DO UPDATE SET updated_at = now()
-                RETURNING id, name, role, state, created_at, updated_at
+                RETURNING id, name, role, state, created_at, updated_at, (xmax = 0) AS inserted
                 """
             ).fetchone()
+            inserted = bool(row["inserted"]) if row is not None else False
             if hasattr(self, "_append_audit_event_tx"):
                 self._append_audit_event_tx(
                     conn,
@@ -48,6 +49,16 @@ class MembersMixin:
                         "role": "owner",
                         "state": "active",
                     },
+                )
+            if inserted and hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="member.created",
+                    actor="system",
+                    resource="mem_owner",
+                    payload={"id": "mem_owner", "name": "Owner", "role": "owner"},
+                    device_id=None,
+                    event_version=1,
                 )
             conn.commit()
         return self._member_from_row(row)
@@ -101,6 +112,16 @@ class MembersMixin:
                     resource=member_id,
                     payload={"id": member_id, "state": "suspended"},
                 )
+            if row is not None and hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="member.suspended",
+                    actor="mem_owner",
+                    resource=member_id,
+                    payload={"id": member_id, "state": "suspended"},
+                    device_id=None,
+                    event_version=1,
+                )
             conn.commit()
         return self._member_from_row(row) if row else None
 
@@ -123,6 +144,16 @@ class MembersMixin:
                     actor="mem_owner",
                     resource=member_id,
                     payload={"id": member_id, "state": "active"},
+                )
+            if row is not None and hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="member.activated",
+                    actor="mem_owner",
+                    resource=member_id,
+                    payload={"id": member_id, "state": "active"},
+                    device_id=None,
+                    event_version=1,
                 )
             conn.commit()
         return self._member_from_row(row) if row else None

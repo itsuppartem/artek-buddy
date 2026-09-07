@@ -5342,8 +5342,12 @@ export interface operations {
     };
     subscribe_workspace_events_v1_events_get: {
         parameters: {
-            query?: never;
+            query?: {
+                after?: string | null;
+                after_sequence?: number | null;
+            };
             header?: {
+                "Last-Event-ID"?: string | null;
                 authorization?: string | null;
             };
             path?: never;
@@ -6239,8 +6243,10 @@ export interface operations {
         parameters: {
             query?: {
                 after?: string | null;
+                after_sequence?: number | null;
             };
             header?: {
+                "Last-Event-ID"?: string | null;
                 authorization?: string | null;
             };
             path: {
