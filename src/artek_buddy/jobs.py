@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-import random
+import secrets
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
@@ -33,7 +33,7 @@ def calculate_backoff_seconds(
     raw = min(max_backoff, base * multiplier)
     if jitter:
         # 15% random jitter
-        factor = random.uniform(0.85, 1.15)
+        factor = secrets.SystemRandom().uniform(0.85, 1.15)
         raw = raw * factor
     return round(max(1.0, raw), 2)
 

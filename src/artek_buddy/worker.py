@@ -6,11 +6,9 @@ import os
 import time
 import urllib.error
 import urllib.request
-from datetime import UTC, datetime, timedelta
 
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
-from artek_buddy.db.shaping import isoformat_utc
 from artek_buddy.observe import configure_logging, mint_request_id
 
 log = logging.getLogger("artek_buddy.worker")
