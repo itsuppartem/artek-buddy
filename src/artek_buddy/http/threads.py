@@ -178,6 +178,7 @@ async def answer_thread_question(
     _actor: str = Depends(require_auth),
     history: HistoryStore = Depends(store),
     questions: ConsentHub = Depends(consent),
+    events: EventHub = Depends(hub),
 ) -> OkResponse:
     from artek_buddy.bot_credentials import raise_if_pasted_credential
 
@@ -193,7 +194,20 @@ async def answer_thread_question(
             )
             if answered is None:
                 raise HTTPException(status_code=409, detail="question is no longer waiting")
-            _message, auto_run = answered
+            message, auto_run = answered
+            _emit(
+                events,
+                bot,
+                ProductEventType.THREAD_MESSAGE_CREATED,
+                {"message": message.model_dump(mode="json")},
+                run_id=body.run_id,
+            )
+            done = (
+                ProductEventType.RUN_CANCELLED
+                if auto_run.state == "cancelled"
+                else ProductEventType.RUN_COMPLETED
+            )
+            _emit(events, bot, done, {}, run_id=body.run_id)
             if auto_run.state == "queued":
                 history.enqueue_automation_prompt(auto_run)
             return OkResponse(ok=True)

@@ -181,6 +181,7 @@ def test_routine_approval_asks_before_run(page: Page, client_url: str, host_url:
     expect(row.get_by_test_id("routine-run-state")).to_contain_text(
         "waiting for approval", timeout=8_000
     )
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Chats").click()
     open_chat(page, name)
     card = page.get_by_test_id("ask-card")
     expect(card).to_be_visible(timeout=8_000)

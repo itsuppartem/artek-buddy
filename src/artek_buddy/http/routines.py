@@ -9,10 +9,12 @@ from artek_buddy.contracts import (
     AutomationDryRun,
     AutomationRun,
     AutomationRunList,
+    Bot,
     CreateRoutineInput,
     FireRoutineInput,
     OkResponse,
     Principal,
+    ProductEventType,
     Routine,
     RoutineList,
     TestRunResult,
@@ -32,10 +34,46 @@ from artek_buddy.http.deps import (
 )
 from artek_buddy.http.turns import (
     _accept_turn,
+    _emit,
 )
 from artek_buddy.runtime import AgentRuntime
 
 router = APIRouter()
+
+
+def _publish_approval_ask(
+    history: HistoryStore, events: EventHub, bot: Bot, auto_run: AutomationRun
+) -> None:
+    message_id = str(auto_run.snapshot.get("approval_message_id") or "")
+    if not message_id:
+        return
+    message = history.get_message_in_thread(bot.thread_id, message_id)
+    if message is None:
+        return
+    run = history.get_run(message.run_id) if message.run_id else None
+    if run is not None:
+        _emit(
+            events,
+            bot,
+            ProductEventType.RUN_STARTED,
+            {"run": run.model_dump(mode="json")},
+            run_id=run.id,
+        )
+    _emit(
+        events,
+        bot,
+        ProductEventType.THREAD_MESSAGE_CREATED,
+        {"message": message.model_dump(mode="json")},
+        run_id=message.run_id,
+    )
+    if run is not None:
+        _emit(
+            events,
+            bot,
+            ProductEventType.RUN_WAITING_INPUT,
+            {"run_id": run.id},
+            run_id=run.id,
+        )
 
 
 @router.get("/v1/routines")
@@ -150,6 +188,7 @@ async def fire_routine(
     body: FireRoutineInput | None = None,
     _principal: Principal = Depends(require_owner),
     history: HistoryStore = Depends(store),
+    events: EventHub = Depends(hub),
 ) -> AutomationRun:
     payload = body or FireRoutineInput()
     event_id = (payload.trigger_event_id or "").strip() or secrets.token_hex(8)
@@ -169,6 +208,7 @@ async def fire_routine(
             if not auto_run.snapshot.get("approval_posted") and history.has_active_run(bot.id):
                 raise HTTPException(status_code=409, detail="bot is busy")
             auto_run = history.ensure_approval_ask(bot, auto_run)
+            _publish_approval_ask(history, events, bot, auto_run)
         elif auto_run.state == "queued":
             history.enqueue_automation_prompt(auto_run)
             refreshed = history.get_automation_run(auto_run.id)

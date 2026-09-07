@@ -79,7 +79,9 @@ export function RoutinesPanel({
   async function runNow(routine: Routine) {
     try {
       const fired = await api.routines.run(routine.id, crypto.randomUUID());
-      onLater(fired.state === "waiting_for_approval" ? "Waiting for approval" : "Routine started");
+      onLater(
+        fired.state === "waiting_for_approval" ? "Waiting for approval" : "Routine started",
+      );
       await refresh();
     } catch (err) {
       onLater(err instanceof Error ? err.message : "Routine did not start");

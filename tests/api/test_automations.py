@@ -197,6 +197,24 @@ def test_approval_deny_does_not_send_prompt(client, auth_header) -> None:
     assert prompt not in blob
 
 
+def test_approval_wait_does_not_busy_the_team_desk(client, auth_header) -> None:
+    waiting = create_bot(client, auth_header, "AskDesk", computer_mode="team")["id"]
+    other = create_bot(client, auth_header, "FreeDesk", computer_mode="team")["id"]
+    routine = _make_routine(client, auth_header, waiting, require_approval=True)
+    fired = client.post(
+        f"/v1/routines/{routine['id']}/run",
+        headers=auth_header,
+        json={"trigger_event_id": "desk-1"},
+    )
+    assert fired.status_code == 200
+    assert fired.json()["state"] == "waiting_for_approval"
+    status = client.get(f"/v1/computer/{other}", headers=auth_header)
+    assert status.status_code == 200
+    assert not status.json().get("busy_bot_name")
+    booted = client.post(f"/v1/computer/{other}/boot", headers=auth_header)
+    assert booted.status_code == 200
+
+
 def test_deleted_bot_fails_the_next_automation_step(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "GoneRtn")["id"]
     routine = _make_routine(client, auth_header, bot_id, require_approval=True)
