@@ -25,6 +25,28 @@ PAGE_KINDS = {
     "eval",
 }
 
+BROWSER_ACT_KINDS = (
+    "goto",
+    "fill",
+    "click",
+    "click_all",
+    "scroll",
+    "type",
+    "press",
+    "submit",
+    "evaluate",
+    "eval",
+    "extract",
+    "text",
+    "read",
+    "get_text",
+    "wait",
+    "sleep",
+    "hover",
+)
+
+BROWSER_ACT_PAGE_KINDS = frozenset(BROWSER_ACT_KINDS) - {"goto"}
+
 MAX_SEND_FILE_BYTES = 25 * 1024 * 1024
 
 MAX_INLINE_FILE_BYTES = 1 * 1024 * 1024
@@ -75,45 +97,74 @@ def _is_under(path: Path, root: Path) -> bool:
         return False
 
 
+def _normalize_browser_actions(
+    actions: list[Any],
+) -> tuple[list[dict[str, Any]], str | None]:
+    steps: list[dict[str, Any]] = []
+    for item in actions:
+        if not isinstance(item, dict):
+            return [], "browser_act action must be an object"
+        kind = str(item.get("kind") or "").strip().lower()
+        if not kind:
+            return [], "browser_act kind is empty"
+        if kind not in BROWSER_ACT_KINDS:
+            return [], f"unknown browser_act kind {kind!r}"
+        expression = str(item.get("expression") or item.get("script") or item.get("js") or "")
+        if kind in {"evaluate", "eval"} and not expression:
+            fields = ", ".join(sorted(str(key) for key in item))
+            return [], f"evaluate without expression/script/js (fields {fields})"
+        direction = str(item.get("direction") or "").lower()
+        clicks = int(item.get("clicks") or 3)
+        delta_y = item.get("delta_y")
+        if delta_y is None:
+            delta_y = item.get("dy")
+        if delta_y is not None:
+            dy = int(delta_y)
+        elif direction == "up":
+            dy = -int(item.get("distance") or clicks * 100)
+        elif direction == "down":
+            dy = int(item.get("distance") or clicks * 100)
+        else:
+            dy = 0
+        steps.append(
+            {
+                "kind": kind,
+                "url": str(item.get("url") or item.get("path") or ""),
+                "selector": str(item.get("selector") or ""),
+                "text": str(item.get("text") or ""),
+                "key": str(item.get("key") or ""),
+                "delta_x": int(item.get("delta_x") or item.get("dx") or 0),
+                "delta_y": dy,
+                "direction": direction,
+                "force": bool(item.get("force", False)),
+                "all": bool(item.get("all", False)),
+                "ms": int(item.get("ms") or item.get("timeout") or 1000),
+                "attribute": str(item.get("attribute") or item.get("attr") or ""),
+                "expression": expression,
+            }
+        )
+    return steps, None
+
+
+def _browser_act_fail_command(error: str) -> str:
+    import json
+
+    payload = json.dumps({"ok": False, "error": error}, ensure_ascii=False)
+    return (
+        "python3 - <<'PY'\n"
+        "import json, sys\n"
+        f"print({payload!r})\n"
+        "sys.exit(1)\n"
+        "PY"
+    )
+
+
 def _playwright_browser_command(actions: list[Any]) -> str:
     import json
 
-    steps = []
-    for item in actions:
-        if isinstance(item, dict):
-            direction = str(item.get("direction") or "").lower()
-            clicks = int(item.get("clicks") or 3)
-            delta_y = item.get("delta_y")
-            if delta_y is None:
-                delta_y = item.get("dy")
-            if delta_y is not None:
-                dy = int(delta_y)
-            elif direction == "up":
-                dy = -int(item.get("distance") or clicks * 100)
-            elif direction == "down":
-                dy = int(item.get("distance") or clicks * 100)
-            else:
-                dy = 0
-
-            steps.append(
-                {
-                    "kind": str(item.get("kind") or ""),
-                    "url": str(item.get("url") or item.get("path") or ""),
-                    "selector": str(item.get("selector") or ""),
-                    "text": str(item.get("text") or ""),
-                    "key": str(item.get("key") or ""),
-                    "delta_x": int(item.get("delta_x") or item.get("dx") or 0),
-                    "delta_y": dy,
-                    "direction": direction,
-                    "force": bool(item.get("force", False)),
-                    "all": bool(item.get("all", False)),
-                    "ms": int(item.get("ms") or item.get("timeout") or 1000),
-                    "attribute": str(item.get("attribute") or item.get("attr") or ""),
-                    "expression": str(
-                        item.get("expression") or item.get("script") or item.get("js") or ""
-                    ),
-                }
-            )
+    steps, error = _normalize_browser_actions(actions)
+    if error:
+        return _browser_act_fail_command(error)
     payload = json.dumps(steps)
     return (
         "python3 - <<'PY'\n"
@@ -164,7 +215,7 @@ def _playwright_browser_command(actions: list[Any]) -> str:
         "    step_data = []\n"
         "    try:\n"
         "        for step in STEPS:\n"
-        "            kind = step.get('kind')\n"
+        "            kind = str(step.get('kind') or '').lower()\n"
         "            if kind == 'goto' and step.get('url'):\n"
         "                page.goto(step['url'], wait_until='domcontentloaded', timeout=15000)\n"
         "                grant_site_chrome(context, page)\n"
@@ -208,7 +259,9 @@ def _playwright_browser_command(actions: list[Any]) -> str:
         "                    page.mouse.wheel(dx, dy)\n"
         "                    page.evaluate('([x, y]) => window.scrollBy(x, y)', [dx, dy])\n"
         "                step_data.append({'kind': kind, 'dx': dx, 'dy': dy})\n"
-        "            elif kind in ('evaluate', 'eval') and step.get('expression'):\n"
+        "            elif kind in ('evaluate', 'eval'):\n"
+        "                if not step.get('expression'):\n"
+        "                    raise RuntimeError('evaluate without expression/script/js')\n"
         "                res = page.evaluate(step['expression'])\n"
         "                step_data.append({'kind': kind, 'result': res})\n"
         "            elif kind in ('text', 'extract', 'read', 'get_text'):\n"
@@ -242,6 +295,8 @@ def _playwright_browser_command(actions: list[Any]) -> str:
         "            elif kind == 'submit':\n"
         "                sel = step.get('selector')\n"
         "                (page.locator(sel).press('Enter', timeout=15000) if sel else page.keyboard.press('Enter'))\n"
+        "            else:\n"
+        "                raise RuntimeError('unknown or skipped browser_act kind %r' % kind)\n"
         "        out = {'ok': True, 'url': page.url, 'title': page.title()}\n"
         "        if step_data:\n"
         "            out['data'] = step_data\n"

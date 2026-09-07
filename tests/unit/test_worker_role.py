@@ -47,6 +47,11 @@ def test_lead_cannot_use_worker_only_tools() -> None:
     assert "send_message" in lead
     assert "run_owner_command" not in lead
     assert "browser_act" not in lead
+    assert "ask_user" in lead
+    assert "ask_user" in worker
+    assert "request_takeover" in lead
+    assert "request_takeover" in worker
+    assert "browser_act" in worker
     assert "send_message" not in worker
     assert "run_owner_command" in worker
     assert "run_credential_scoped_command" in worker
@@ -54,6 +59,19 @@ def test_lead_cannot_use_worker_only_tools() -> None:
     assert "report_progress" in worker
     assert "report_progress" not in lead
     assert "spawn_subagent" not in worker
+
+
+def test_browser_act_schema_lists_runner_kinds() -> None:
+    from artek_buddy.runtime.tools.common import BROWSER_ACT_KINDS
+
+    tools = ProductTools(SimpleNamespace(store=None, settings=None))
+    browser = next(spec for spec in tools.specs("subagent") if spec.name == "browser_act")
+    items = browser.input_schema["properties"]["actions"]["items"]
+    assert items["properties"]["kind"]["enum"] == list(BROWSER_ACT_KINDS)
+    assert "expression" in items["properties"]
+    assert "extract" in items["properties"]["kind"]["enum"]
+    assert "evaluate" in items["properties"]["kind"]["enum"]
+    assert "click_all" in items["properties"]["kind"]["enum"]
 
 
 def test_send_message_spec_distinguishes_terminal_from_interim() -> None:

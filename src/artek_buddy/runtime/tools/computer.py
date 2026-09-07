@@ -9,7 +9,9 @@ from artek_buddy.consent import (
     browse_origin,
 )
 from artek_buddy.runtime.tools.common import (
+    BROWSER_ACT_PAGE_KINDS,
     PAGE_KINDS,
+    _normalize_browser_actions,
     _playwright_browser_command,
     _with_consent,
     emit_computer_event,
@@ -100,11 +102,14 @@ class ComputerToolsMixin:
         if not isinstance(actions, list) or not actions:
             return {"ok": False, "error": "actions must be a non-empty list"}
         origin = self._page_origin(actions, str(args.get("origin") or ""))
+        _, error = _normalize_browser_actions(actions)
+        if error:
+            return {"ok": False, "error": error}
         needs_page = False
         for item in actions:
             if not isinstance(item, dict):
                 continue
-            kind = str(item.get("kind") or "")
+            kind = str(item.get("kind") or "").lower()
             target = str(item.get("url") or item.get("path") or item.get("uri") or "")
             site = browse_origin(target)
             if site:
@@ -116,25 +121,7 @@ class ComputerToolsMixin:
                 )
                 if denied:
                     return denied
-            if kind in {
-                "fill",
-                "type",
-                "click",
-                "click_all",
-                "press",
-                "submit",
-                "key",
-                "scroll",
-                "evaluate",
-                "eval",
-                "text",
-                "extract",
-                "read",
-                "get_text",
-                "hover",
-                "wait",
-                "sleep",
-            }:
+            if kind in BROWSER_ACT_PAGE_KINDS:
                 needs_page = True
         if needs_page:
             denied = self._deny_page(_bot_id, origin)
@@ -168,7 +155,7 @@ class ComputerToolsMixin:
         for item in actions:
             if not isinstance(item, dict):
                 continue
-            kind = str(item.get("kind") or "")
+            kind = str(item.get("kind") or "").lower()
             if kind == "goto":
                 url = str(item.get("url") or item.get("path") or "")
                 if url:
@@ -291,4 +278,16 @@ class ComputerToolsMixin:
                 self.runtime.on_takeover_requested(bot_id, run_id)
             except Exception:
                 log.exception("takeover callback failed")
+        ctx = self._resolve_turn(bound_bot_id)
+        hub = getattr(self.runtime, "consent", None)
+        wait = getattr(hub, "wait_takeover", None) if hub is not None else None
+        if ctx is not None and ctx.role == "subagent" and callable(wait):
+            outcome = wait(bot_id, run_id)
+            if outcome != "released":
+                error = (
+                    "The owner cancelled takeover."
+                    if outcome == "cancelled"
+                    else "The owner did not release in time."
+                )
+                return {"ok": False, "waiting": True, "reason": reason, "error": error}
         return {"ok": True, "waiting": True, "reason": reason}

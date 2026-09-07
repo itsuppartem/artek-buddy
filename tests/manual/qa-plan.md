@@ -193,7 +193,7 @@ Optional evening:
 | --- | --- | --- |
 | Quiet box **15 minutes** with no input → **Sleeping** (sage). The pane shows **Sleeping • Click to start**, never a stale preview or Connecting layer. Open pane and pulse do not keep it warm. Click Sleeping wakes view-only; Take control is separate | [ ] | [ ] |
 | After Sleep then start (or Stop then Browser): Chromium has **no Restore tabs** bar. A site location / camera / notification request does not sit on the page as Allow/Block chrome. File picker and login still need Take control | [ ] | [ ] |
-| browser_act targets the active or requested tab, supports scroll, force click, click_all, page evaluate (with returned result), wait, and DOM text extraction; computer_observe attaches a screenshot for browser windows (no visual blindness); takeover card immediately displays waiting (never premature done) with Open computer button | [ ] | [ ] |
+| browser_act targets the active or requested tab, supports scroll, force click, click_all, page evaluate (with returned result), wait, and DOM text extraction; an unknown or empty kind (or evaluate without expression) fails instead of reporting ok; computer_observe screenshot is the viewport, not the document. Takeover card immediately displays waiting (never premature done) with Open computer button | [ ] | [ ] |
 | Chromium renders emoji glyphs cleanly without tofu boxes (`fonts-noto-color-emoji`) | [ ] | [ ] |
 
 Team:
@@ -273,6 +273,8 @@ On **Deb**: stop the `artek-buddy` container for about 30 seconds (or pull the n
 | Composer **Stop** while only the worker is running writes **Stopped.** and cancels that work | [ ] | [ ] |
 | This-PC Allow (read / write this Linux home) works on Deb. Refresh or open a second window while it runs: the same write/exec happens **once** and the losing window does not fail the winner's result | [ ] | — |
 | Scripted `please e2e-worker-auto-read`: lead finishes; refresh still lists the queued This-PC read; ACK once; worker continues with the file. A second window that loses the claim stands down | [ ] | — |
+| Scripted `please e2e-worker-blocked-browser`: worker Ask card waits in this chat; answering it resumes **that worker** (not a new lead plan). Message stays usable while the worker is paused | [ ] | [ ] |
+| Scripted `please e2e-worker-park-takeover`: computer card is waiting; **Release** resumes the **same worker**. Message stays usable while that worker is paused | [ ] | [ ] |
 | Back-to-back This-PC read + list are both ACKed promptly and return their own results; neither waits for the SSE heartbeat or receives the other job | [ ] | — |
 | Phone `/local/owner-*` is **403**. It does not fail an auto job while the paired Deb can claim it | — | [ ] |
 
@@ -632,7 +634,7 @@ If time is short, in this order:
 9. **§12 Pad and Cyrillic**
 10. **§25 File + §26 Picture + §27 Ctrl+V**
 11. **§28 Save feedback**
-12. **§10 workers** `please e2e-background-worker-chat` then status; the acknowledgement is immediate and does not start a second plan; Message stays usable; one final result. `please e2e-worker-progress`: **Still working:** in the waiting slot and Work log, not a durable chat bubble, and no worker card. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
+12. **§10 workers** `please e2e-background-worker-chat` then status; the acknowledgement is immediate and does not start a second plan; Message stays usable; one final result. `please e2e-worker-progress`: **Still working:** in the waiting slot and Work log, not a durable chat bubble, and no worker card. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. `please e2e-worker-blocked-browser` then answer the Ask card; `please e2e-worker-park-takeover` then Release. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
 13. **§1 / §21 Escape** on Bot profile & access and New bot. **§21 Secrets**: Store an arbitrary named secret with last four on one bot; the other bot is empty; Message strips the value; `please e2e-credential-command` delegates, asks consent when `CONSENT_AUTO=ask`, and returns no plaintext. Replace changes the next execution; Forget blocks it; Reset / Team ↔ Private preserve it
 14. **§14 Inbox** Search empty + one click opens that row. Switch A↔B keeps messages (no empty flash); a first/uncached visit shows Loading this chat…
 15. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Connection **Open to connect** is the same kind of link. `please e2e-send-terminal`: one complete answer, no paraphrased second bubble. `please e2e-send-then-answer`: teaser then the spec, both stay. Stop / typing dots clear and Message is usable. Unsent draft stays on that chat after a switch

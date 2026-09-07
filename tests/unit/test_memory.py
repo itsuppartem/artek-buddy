@@ -31,6 +31,8 @@ def test_wrap_turn_prompt_lead_mentions_takeover_and_slim_observe() -> None:
     assert "connect_app" in wrapped
     assert "run_credential_scoped_command" in wrapped
     assert "spawn a worker" in wrapped
+    assert "browser_act extract" in wrapped
+    assert "viewport, not the document" in wrapped
 
 
 def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
@@ -39,7 +41,10 @@ def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
     assert "spawn_subagent" in lead
     assert "finish this dispatch turn" in lead
     assert "You do not have run_owner_command" in lead
-    assert "Do not post to the owner chat" in worker
+    assert "ask_user" in worker
+    assert "request_takeover" in worker
+    assert "browser_act extract" in worker
+    assert "viewport, not the document" in worker
     assert "does not appear in the owner thread" in worker
     assert "You do not have send_message" in worker
     assert worker.count("send_message") == 1

@@ -302,7 +302,11 @@ class ScriptedRuntime(RuntimeBase):
                 await asyncio.sleep(0)
                 continue
             if step.tool:
-                if step.tool in {"ask_user", "run_credential_scoped_command"}:
+                if step.tool in {
+                    "ask_user",
+                    "run_credential_scoped_command",
+                    "request_takeover",
+                }:
                     tool_result = await asyncio.to_thread(
                         tools.execute,
                         step.tool,

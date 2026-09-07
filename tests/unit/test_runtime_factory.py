@@ -17,6 +17,8 @@ from artek_buddy.runtime.scripted import (
     E2E_LEAD_OWNER_SSH,
     E2E_META_TEXT,
     E2E_OLDER_COUNT,
+    E2E_OWNER_HELP_ANSWER,
+    E2E_OWNER_HELP_QUESTION,
     E2E_SEND_ANSWER,
     E2E_SEND_PARAPHRASE,
     E2E_SEND_TEASER,
@@ -30,6 +32,7 @@ from artek_buddy.runtime.scripted import (
     E2E_WORKER_STATUS,
     E2E_WORKER_STEER_ACK,
     E2E_WORKER_SUMMARY,
+    E2E_WORKER_TAKEOVER_RESULT,
     steps_for_prompt,
 )
 from artek_buddy.runtime.types import AgentRuntimeError
@@ -223,6 +226,21 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     parked = steps_for_prompt("please e2e-park-takeover")
     assert parked[0].tool == "request_takeover"
     assert "Pass the site check" in parked[0].args["reason"]
+
+    worker_ask = steps_for_prompt("please e2e-worker-blocked-browser")
+    assert worker_ask[0].tool == "spawn_subagent"
+    assert worker_ask[0].args["task"] == "please e2e-worker-ask"
+    ask_run = steps_for_prompt("please e2e-worker-ask")
+    assert ask_run[0].tool == "ask_user"
+    assert ask_run[0].args["question"] == E2E_OWNER_HELP_QUESTION
+    assert ask_run[-1].result == E2E_OWNER_HELP_ANSWER
+
+    worker_hold = steps_for_prompt("please e2e-worker-park-takeover")
+    assert worker_hold[0].tool == "spawn_subagent"
+    assert worker_hold[0].args["task"] == "please e2e-worker-desk-hold"
+    hold_run = steps_for_prompt("please e2e-worker-desk-hold")
+    assert hold_run[0].tool == "request_takeover"
+    assert hold_run[-1].result == E2E_WORKER_TAKEOVER_RESULT
 
     released = steps_for_prompt("The owner released the desktop. Continue the same task.")
     assert released[0].result == "continuing after takeover"
