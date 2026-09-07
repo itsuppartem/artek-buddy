@@ -37,6 +37,9 @@ from artek_buddy.stream import map_cursor_event
 
 log = logging.getLogger("artek_buddy")
 
+# Runtime-native workers ignore Fast off. Product workers use spawn_subagent.
+CURSOR_DISALLOWED_BUILTIN = ("task",)
+
 
 @dataclass
 class _SendAttempt:
@@ -66,19 +69,27 @@ async def _cancel_cursor_run(run: Any) -> None:
         return
 
 
+def _effort_allowed(model_id: str, allowed_params: set[str] | None) -> bool:
+    if allowed_params:
+        return "effort" in allowed_params
+    return not (model_id or "").lower().startswith("composer")
+
+
 def build_model(
     settings: Settings,
     model_id: str | None = None,
     effort: str | None = None,
     fast: bool | None = None,
+    allowed_params: set[str] | None = None,
 ) -> ModelSelection:
     params: list[ModelParameterValue] = []
+    chosen_id = model_id or settings.cursor_model
     effort_value = effort if effort else settings.cursor_model_effort
     use_fast = settings.cursor_model_fast if fast is None else bool(fast)
-    if effort_value:
+    if effort_value and _effort_allowed(chosen_id, allowed_params):
         params.append(ModelParameterValue(id="effort", value=effort_value))
     params.append(ModelParameterValue(id="fast", value="true" if use_fast else "false"))
-    return ModelSelection(id=model_id or settings.cursor_model, params=params)
+    return ModelSelection(id=chosen_id, params=params)
 
 
 def _is_unsupported_list_runs(exc: BaseException) -> bool:
@@ -128,6 +139,7 @@ class CursorRuntime(RuntimeBase):
         self._stream_locks: dict[str, asyncio.Lock] = {}
         self._auth_fails = 0
         self.bridge_recycles = 0
+        self._catalog_param_ids: dict[str, set[str]] = {}
 
     def health(self) -> bool:
         return self.client is not None
@@ -144,7 +156,13 @@ class CursorRuntime(RuntimeBase):
                 default = None
             if default and default[0] == "cursor" and default[1]:
                 model_id = default[1]
-        return build_model(self.settings, model_id, effort=effort, fast=fast)
+        return build_model(
+            self.settings,
+            model_id,
+            effort=effort,
+            fast=fast,
+            allowed_params=self._catalog_param_ids.get(model_id),
+        )
 
     @property
     def model(self) -> ModelSelection:
@@ -195,19 +213,33 @@ class CursorRuntime(RuntimeBase):
         )
 
     def _agent_options(
-        self, bot_id: str | None = None, role: str = "lead"
+        self,
+        bot_id: str | None = None,
+        role: str = "lead",
+        *,
+        name: str | None = None,
     ) -> tuple[ToolTurnBox, AgentOptions]:
         box, local = self._local(bot_id, role=role)
         return box, AgentOptions(
             api_key=self.settings.cursor_api_key,
             model=self.model,
             local=local,
+            name=name,
+            disallowed_tools=list(CURSOR_DISALLOWED_BUILTIN),
         )
 
     async def start(self) -> None:
         self._ensure_dirs()
         models = await self.client.models.list()
-        ids = [model.id for model in models]
+        ids: list[str] = []
+        catalog_params: dict[str, set[str]] = {}
+        for model in models:
+            ids.append(model.id)
+            raw = getattr(model, "parameters", None) or ()
+            catalog_params[model.id] = {
+                str(getattr(item, "id", "") or "") for item in raw if getattr(item, "id", None)
+            }
+        self._catalog_param_ids = catalog_params
         log.info("catalog models: %s", ", ".join(ids))
         if self.store is not None:
             try:
@@ -243,13 +275,8 @@ class CursorRuntime(RuntimeBase):
         bot_id: str | None,
         role: str,
     ) -> str:
-        box, local = self._local(bot_id, role)
-        agent = await self.client.agents.create(
-            model=self.model,
-            api_key=self.settings.cursor_api_key,
-            name=name,
-            local=local,
-        )
+        box, options = self._agent_options(bot_id, role, name=name)
+        agent = await self.client.agents.create(options)
         self._agents[agent.agent_id] = agent
         self._locks[agent.agent_id] = asyncio.Lock()
         self.bind_agent_bot(agent.agent_id, bot_id)
@@ -482,7 +509,10 @@ class CursorRuntime(RuntimeBase):
     ) -> _SendAttempt:
         events: list[ProductStreamEvent] = []
         streamed = 0
-        run = await agent.send(prompt, send_local_options(cwd, force=force))
+        run = await agent.send(
+            prompt,
+            send_local_options(cwd, force=force, model=self.model),
+        )
         log.info("run started run_id=%s agent_id=%s force=%s", run.id, agent_id, force)
         async for event in run.events():
             mapped_events = map_cursor_event(event)
