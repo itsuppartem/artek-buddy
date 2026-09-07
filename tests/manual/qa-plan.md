@@ -83,8 +83,8 @@ Phone: Today is first; Chats is list + selected thread; Models / Connections liv
 | Cursor **Reasoning** and its opened option list have readable foreground/background contrast in System, Light, and Dark | [ ] | [ ] |
 | Save on an empty key → error under that row, not silence | [ ] | [ ] |
 | Change Reasoning (e.g. Low) — no second Save — open chat shows `Using … · Low · Fast` (if Fast is on) | [ ] | [ ] |
-| Uncheck Fast — Using line drops Fast; reopen stays off. If no reply is running, the next Send is not Fast | [ ] | [ ] |
-| While a reply is streaming, change Reasoning or Fast → the turn does **not** break; the **open chat** shows `This turn keeps going.` (not only the inbox row). The send after it finishes is not Fast | [ ] | [ ] |
+| Uncheck Fast — Using line drops Fast; reopen stays off. If no reply is running, the next Send is not Fast, including a worker that chat spawns | [ ] | [ ] |
+| While a reply is streaming, change Reasoning or Fast → the turn does **not** break; the **open chat** shows `This turn keeps going.` (not only the inbox row). The send after it finishes is not Fast, including a worker | [ ] | [ ] |
 | Click a model chip — that id is **Using** (tan). **Use this model** is the same commit. Empty providers say to paste a key; no dead Use this model | [ ] | [ ] |
 | The next Send uses the new settings | [ ] | [ ] |
 
