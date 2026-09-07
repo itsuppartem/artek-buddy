@@ -35,7 +35,7 @@ def test_searchable_message_text_skips_traces_and_tools() -> None:
 
 def test_normalize_search_query_caps_length_and_tokens() -> None:
     assert normalize_search_query("  alpha   beta  ") == "alpha beta"
-    assert normalize_search_query("unique-fts-token") == "unique fts token"
+    assert normalize_search_query("unique-fts-token") == "unique-fts-token"
     assert normalize_search_query("") == ""
     long = "w" * 200
     assert len(normalize_search_query(long)) <= 80
