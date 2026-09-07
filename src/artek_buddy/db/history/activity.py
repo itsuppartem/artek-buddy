@@ -141,8 +141,7 @@ class ActivityMixin:
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    select_sql
-                    + " WHERE seq > %s AND resource = %s ORDER BY seq ASC LIMIT %s",
+                    select_sql + " WHERE seq > %s AND resource = %s ORDER BY seq ASC LIMIT %s",
                     (after_seq, resource, limit),
                 ).fetchall()
             conn.commit()
