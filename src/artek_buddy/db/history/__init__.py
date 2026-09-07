@@ -7,6 +7,7 @@ from artek_buddy.db.history.connections import ConnectionsMixin
 from artek_buddy.db.history.consents import ConsentsMixin
 from artek_buddy.db.history.devices import DevicesMixin
 from artek_buddy.db.history.inbox import InboxMixin
+from artek_buddy.db.history.jobs import JobsMixin
 from artek_buddy.db.history.members import MembersMixin
 from artek_buddy.db.history.memory import MemoryMixin
 from artek_buddy.db.history.messages import MessagesMixin
@@ -28,6 +29,7 @@ class HistoryStore(
     MessagesMixin,
     TurnsMixin,
     InboxMixin,
+    JobsMixin,
     SubagentsMixin,
     ConsentsMixin,
     DevicesMixin,
