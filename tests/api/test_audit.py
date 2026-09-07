@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from artek_buddy.__main__ import audit_export, audit_verify
 
 
