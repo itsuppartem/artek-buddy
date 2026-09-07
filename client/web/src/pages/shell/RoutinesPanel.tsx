@@ -5,6 +5,16 @@ import { useSaveAck } from "../../lib/save-ack";
 import type { Routine } from "../../types";
 import { Button } from "../../ui/button";
 
+function runStateLabel(state: string | null | undefined): string | null {
+  if (!state) return null;
+  if (state === "waiting_for_approval") return "waiting for approval";
+  if (state === "queued" || state === "running") return "running";
+  if (state === "succeeded") return "last run ok";
+  if (state === "failed") return "last run failed";
+  if (state === "cancelled") return "last run cancelled";
+  return state.replaceAll("_", " ");
+}
+
 export function RoutinesPanel({
   botId,
   onLater,
@@ -17,6 +27,7 @@ export function RoutinesPanel({
   const [name, setName] = useState("");
   const [cron, setCron] = useState("0 9 * * *");
   const [prompt, setPrompt] = useState("");
+  const [requireApproval, setRequireApproval] = useState(false);
   const saveAck = useSaveAck();
 
   async function refresh() {
@@ -42,6 +53,7 @@ export function RoutinesPanel({
           cron: cron.trim(),
           timezone: "UTC",
           active: true,
+          requireApproval,
         });
         await refresh();
       },
@@ -49,6 +61,7 @@ export function RoutinesPanel({
         setName("");
         setPrompt("");
         setCron("0 9 * * *");
+        setRequireApproval(false);
         setCreating(false);
       },
     );
@@ -65,8 +78,9 @@ export function RoutinesPanel({
 
   async function runNow(routine: Routine) {
     try {
-      await api.routines.testRun(routine.id);
-      onLater("Routine started");
+      const fired = await api.routines.run(routine.id, crypto.randomUUID());
+      onLater(fired.state === "waiting_for_approval" ? "Waiting for approval" : "Routine started");
+      await refresh();
     } catch (err) {
       onLater(err instanceof Error ? err.message : "Routine did not start");
     }
@@ -102,6 +116,11 @@ export function RoutinesPanel({
                       : "scheduled"
                     : "paused"}
                 </div>
+                {runStateLabel(routine.lastRunState) ? (
+                  <div data-testid="routine-run-state" className="mt-0.5 text-[12px] text-mute">
+                    {runStateLabel(routine.lastRunState)}
+                  </div>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -114,7 +133,7 @@ export function RoutinesPanel({
               </button>
             </div>
             <div className="mt-2 flex gap-3 text-[12.5px] text-mute">
-              <button type="button" onClick={() => void runNow(routine)}>
+              <button type="button" data-testid="routine-run" onClick={() => void runNow(routine)}>
                 Run
               </button>
               <button type="button" onClick={() => void remove(routine)}>
@@ -145,6 +164,15 @@ export function RoutinesPanel({
             rows={3}
             className="mt-2 w-full resize-none rounded-lg border border-hairline bg-raised px-2.5 py-2 text-[13px] text-paper outline-none"
           />
+          <label className="mt-2 flex items-center gap-2 text-[13px] text-mute">
+            <input
+              type="checkbox"
+              data-testid="routine-require-approval"
+              checked={requireApproval}
+              onChange={(event) => setRequireApproval(event.target.checked)}
+            />
+            Ask before it runs
+          </label>
           <div className="mt-2 flex gap-2">
             <Button
               type="button"

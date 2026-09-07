@@ -346,6 +346,7 @@ export const api = {
       timezone?: string;
       notify?: boolean;
       active?: boolean;
+      requireApproval?: boolean;
     }) {
       return request<Routine>("POST", "/v1/routines", input);
     },
@@ -358,6 +359,7 @@ export const api = {
         timezone: string;
         notify: boolean;
         active: boolean;
+        requireApproval: boolean;
       }>,
     ) {
       return request<Routine>("PATCH", `/v1/routines/${routineId}`, input);
@@ -367,6 +369,11 @@ export const api = {
     },
     testRun(routineId: string) {
       return request<TestRunResult>("POST", `/v1/routines/${routineId}/test`);
+    },
+    run(routineId: string, triggerEventId: string) {
+      return request<{ id: string; state: string }>("POST", `/v1/routines/${routineId}/run`, {
+        triggerEventId,
+      });
     },
   },
   me: {

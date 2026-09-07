@@ -188,7 +188,15 @@ async def answer_thread_question(
             raise HTTPException(status_code=404, detail="bot not found")
         updated = questions.answer_question(bot.id, body.run_id, body.message_id, body.answer)
         if updated is None:
-            raise HTTPException(status_code=409, detail="question is no longer waiting")
+            answered = history.answer_automation_ask(
+                bot.id, body.run_id, body.message_id, body.answer
+            )
+            if answered is None:
+                raise HTTPException(status_code=409, detail="question is no longer waiting")
+            _message, auto_run = answered
+            if auto_run.state == "queued":
+                history.enqueue_automation_prompt(auto_run)
+            return OkResponse(ok=True)
         return OkResponse(ok=True)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err

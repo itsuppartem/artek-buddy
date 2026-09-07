@@ -1259,6 +1259,57 @@ export interface paths {
         patch: operations["update_routine_v1_routines__routine_id__patch"];
         trace?: never;
     };
+    "/v1/routines/{routine_id}/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dry Run Routine */
+        post: operations["dry_run_routine_v1_routines__routine_id__dry_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/routines/{routine_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fire Routine */
+        post: operations["fire_routine_v1_routines__routine_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/routines/{routine_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Routine Runs */
+        get: operations["list_routine_runs_v1_routines__routine_id__runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/routines/{routine_id}/test": {
         parameters: {
             query?: never;
@@ -1595,6 +1646,55 @@ export interface components {
             reason?: string | null;
             /** Total Events */
             total_events: number;
+        };
+        /** AutomationDryRun */
+        AutomationDryRun: {
+            /**
+             * Dangerous Tools
+             * @default false
+             */
+            dangerous_tools: boolean;
+            /** Snapshot */
+            snapshot: {
+                [key: string]: unknown;
+            };
+        };
+        /** AutomationRun */
+        AutomationRun: {
+            /** Automation Id */
+            automation_id: string;
+            /** Created At */
+            created_at: string;
+            /** Definition Version */
+            definition_version: number;
+            /** Error */
+            error?: string | null;
+            /** Id */
+            id: string;
+            /** Routine Id */
+            routine_id: string;
+            /** Snapshot */
+            snapshot?: {
+                [key: string]: unknown;
+            };
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "waiting_for_approval" | "succeeded" | "failed" | "cancelled";
+            /** Thread Run Id */
+            thread_run_id?: string | null;
+            /** Trigger Event Id */
+            trigger_event_id: string;
+            /** Trigger Kind */
+            trigger_kind: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** AutomationRunList */
+        AutomationRunList: {
+            /** Runs */
+            runs?: components["schemas"]["AutomationRun"][];
         };
         /** BeginConnectionInput */
         BeginConnectionInput: {
@@ -2128,6 +2228,11 @@ export interface components {
             /** Prompt */
             prompt: string;
             /**
+             * Require Approval
+             * @default false
+             */
+            require_approval: boolean;
+            /**
              * Timezone
              * @default UTC
              */
@@ -2264,6 +2369,11 @@ export interface components {
             name: string;
             /** Size */
             size: number;
+        };
+        /** FireRoutineInput */
+        FireRoutineInput: {
+            /** Trigger Event Id */
+            trigger_event_id?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2519,10 +2629,17 @@ export interface components {
             created_at: string;
             /** Cron */
             cron: string;
+            /**
+             * Definition Version
+             * @default 1
+             */
+            definition_version: number;
             /** Id */
             id: string;
             /** Last Run At */
             last_run_at: string | null;
+            /** Last Run State */
+            last_run_state?: string | null;
             /** Name */
             name: string;
             /** Next Run At */
@@ -2531,6 +2648,11 @@ export interface components {
             notify: boolean;
             /** Prompt */
             prompt: string;
+            /**
+             * Require Approval
+             * @default false
+             */
+            require_approval: boolean;
             /** Timezone */
             timezone: string;
         };
@@ -2986,6 +3108,8 @@ export interface components {
             notify?: boolean | null;
             /** Prompt */
             prompt?: string | null;
+            /** Require Approval */
+            require_approval?: boolean | null;
             /** Timezone */
             timezone?: string | null;
         };
@@ -6027,6 +6151,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Routine"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dry_run_routine_v1_routines__routine_id__dry_run_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                routine_id: string;
+            };
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationDryRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fire_routine_v1_routines__routine_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                routine_id: string;
+            };
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FireRoutineInput"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_routine_runs_v1_routines__routine_id__runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                routine_id: string;
+            };
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRunList"];
                 };
             };
             /** @description Validation Error */

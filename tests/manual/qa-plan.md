@@ -443,9 +443,10 @@ Workspace rail → Routines. Phone: More → Routines.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| New: name, cron, prompt. Invalid cron disables Save | [ ] | [ ] |
-| On / off, Run (test), Delete | [ ] | [ ] |
+| New: name, cron, prompt, optional Ask before it runs. Invalid cron disables Save | [ ] | [ ] |
+| On / off, Run, Delete. Run uses a trigger id so a double click is one run | [ ] | [ ] |
 | Next run is a short time (`next 2026-08-31 09:30:00 UTC`), not `09:30:00.000000` | [ ] | [ ] |
+| Ask before it runs: Run opens an Approve / Deny card in that chat; Deny does not send the prompt; Approve sends the saved prompt | [ ] | [ ] |
 | A due routine fires through the same send path while the laptop can be closed (watch the thread later) | [ ] | [ ] |
 
 ---
@@ -615,7 +616,7 @@ Already in `develop`, not visible on screen:
 - Supervisor file writes without a heredoc
 - Release scans, SBOM, attestations, rulesets Protect develop / Protect main
 
-Out of this pass: collaboration (#154–#169) and research tickets (#98, #100).
+Out of this pass: remaining collaboration after automations (#157 grants, Team mentions) and research tickets (#98, #100).
 
 ---
 

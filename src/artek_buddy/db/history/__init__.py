@@ -1,6 +1,7 @@
 from artek_buddy.db.history.activity import ActivityMixin
 from artek_buddy.db.history.asks import AsksMixin
 from artek_buddy.db.history.audit import AuditMixin
+from artek_buddy.db.history.automations import AutomationsMixin
 from artek_buddy.db.history.books import BooksMixin
 from artek_buddy.db.history.bots import BotsMixin
 from artek_buddy.db.history.computer import ComputerMixin
@@ -27,6 +28,7 @@ class HistoryStore(
     ActivityMixin,
     AsksMixin,
     AuditMixin,
+    AutomationsMixin,
     BooksMixin,
     BotsMixin,
     MessagesMixin,
