@@ -373,7 +373,7 @@ class AutomationsMixin:
                     SET state = 'failed', error_code = 'denied', updated_at = now()
                     WHERE automation_run_id = %s AND kind = 'wait_approval'
                     """,
-                    (row["automation_run_id"]),
+                    (row["automation_run_id"],),
                 )
             self._append_activity_tx(
                 conn,

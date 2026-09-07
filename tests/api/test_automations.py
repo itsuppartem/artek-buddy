@@ -260,15 +260,23 @@ def test_cron_still_enqueues_routine_fire(client, host_token) -> None:
     run_once(store, host_base(), host_token)
     with store._conn() as conn:
         rows = conn.execute(
-            "SELECT id, job_type, resource_id, state FROM jobs WHERE job_type = 'routine.fire'",
+            """
+            SELECT id, job_type, resource_id, state FROM jobs
+            WHERE job_type = 'routine.fire' AND resource_id = %s
+            ORDER BY created_at DESC
+            """,
+            (routine.id,),
         ).fetchall()
         runs = conn.execute(
-            "SELECT id, trigger_kind FROM automation_runs WHERE routine_id = %s",
+            """
+            SELECT id, trigger_kind FROM automation_runs
+            WHERE routine_id = %s
+            ORDER BY created_at DESC
+            """,
             (routine.id,),
         ).fetchall()
         conn.commit()
     assert len(rows) >= 1
-    assert rows[-1]["resource_id"] == routine.id
-    assert rows[-1]["state"] in {"succeeded", "queued", "running"}
+    assert rows[0]["state"] in {"succeeded", "queued", "running"}
     assert runs
-    assert runs[-1]["trigger_kind"] == "cron"
+    assert runs[0]["trigger_kind"] == "cron"
