@@ -8,7 +8,7 @@ from artek_buddy.db.history import HistoryStore
 
 USAGE = (
     "usage: python -m artek_buddy "
-    "pair|worker|supervisor|memory-gateway|credential-broker|"
+    "pair|audit-verify|audit-export|worker|supervisor|memory-gateway|credential-broker|"
     "credential-migrate"
 )
 
@@ -33,10 +33,63 @@ def pair() -> int:
     return 0
 
 
+def audit_verify() -> int:
+    url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://artek:artek@127.0.0.1:5432/artek_buddy",
+    )
+    store = HistoryStore(url)
+    try:
+        store.open()
+        store.apply_migrations()
+        res = store.verify_audit()
+    except DatabaseUnavailable as err:
+        print(f"audit verification database error: {err}", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+    if not res.ok:
+        print(
+            f"AUDIT INTEGRITY VIOLATION at seq {res.failed_seq}: {res.reason}",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"Audit chain valid: {res.total_events} events verified (head: {res.head_hash})")
+    return 0
+
+
+def audit_export() -> int:
+    import json
+
+    url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://artek:artek@127.0.0.1:5432/artek_buddy",
+    )
+    store = HistoryStore(url)
+    try:
+        store.open()
+        store.apply_migrations()
+        records = store.get_audit_chain()
+    except DatabaseUnavailable as err:
+        print(f"audit export database error: {err}", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+    data = [r.to_dict() for r in records]
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args == ["pair"]:
         return pair()
+    if args == ["audit-verify"]:
+        return audit_verify()
+    if args == ["audit-export"]:
+        return audit_export()
     if args == ["worker"] or args == ["worker", "--once"]:
         from artek_buddy.worker import worker
 

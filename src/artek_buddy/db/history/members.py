@@ -3,6 +3,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from artek_buddy.audit import (
+    AUDIT_MEMBER_ACTIVATE,
+    AUDIT_MEMBER_CREATE,
+    AUDIT_MEMBER_SUSPEND,
+)
 from artek_buddy.auth import hash_secret
 from artek_buddy.contracts.domain import Member, Principal
 from artek_buddy.db.shaping import isoformat_utc
@@ -31,6 +36,19 @@ class MembersMixin:
                 RETURNING id, name, role, state, created_at, updated_at
                 """
             ).fetchone()
+            if hasattr(self, "_append_audit_event_tx"):
+                self._append_audit_event_tx(
+                    conn,
+                    AUDIT_MEMBER_CREATE,
+                    actor="system",
+                    resource="mem_owner",
+                    payload={
+                        "id": "mem_owner",
+                        "name": "Owner",
+                        "role": "owner",
+                        "state": "active",
+                    },
+                )
             conn.commit()
         return self._member_from_row(row)
 
@@ -75,6 +93,14 @@ class MembersMixin:
                 """,
                 (now, member_id),
             ).fetchone()
+            if row is not None and hasattr(self, "_append_audit_event_tx"):
+                self._append_audit_event_tx(
+                    conn,
+                    AUDIT_MEMBER_SUSPEND,
+                    actor="mem_owner",
+                    resource=member_id,
+                    payload={"id": member_id, "state": "suspended"},
+                )
             conn.commit()
         return self._member_from_row(row) if row else None
 
@@ -90,6 +116,14 @@ class MembersMixin:
                 """,
                 (now, member_id),
             ).fetchone()
+            if row is not None and hasattr(self, "_append_audit_event_tx"):
+                self._append_audit_event_tx(
+                    conn,
+                    AUDIT_MEMBER_ACTIVATE,
+                    actor="mem_owner",
+                    resource=member_id,
+                    payload={"id": member_id, "state": "active"},
+                )
             conn.commit()
         return self._member_from_row(row) if row else None
 

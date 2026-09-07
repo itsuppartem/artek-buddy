@@ -20,6 +20,9 @@ dependencies = [
     "playwright==1.62.0",
 ]
 
+[project.scripts]
+artek-buddy = "artek_buddy.__main__:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest==9.1.1",

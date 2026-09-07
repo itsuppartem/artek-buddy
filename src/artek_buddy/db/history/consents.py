@@ -5,6 +5,7 @@ from typing import Any
 
 from psycopg.errors import UniqueViolation
 
+from artek_buddy.audit import AUDIT_CONSENT_DECISION, AUDIT_GRANT_CHANGE
 from artek_buddy.db.shaping import (
     DEFAULT_WORKSPACE_ID,
     isoformat_utc,
@@ -66,6 +67,20 @@ class ConsentsMixin:
                     """,
                     (grant_id, workspace_id, bot_id, device_id, action_class, scope_key, now),
                 )
+                if hasattr(self, "_append_audit_event_tx"):
+                    self._append_audit_event_tx(
+                        conn,
+                        AUDIT_GRANT_CHANGE,
+                        actor=device_id or "owner",
+                        resource=grant_id,
+                        payload={
+                            "id": grant_id,
+                            "bot_id": bot_id,
+                            "action_class": action_class,
+                            "scope_key": scope_key,
+                            "action": "create",
+                        },
+                    )
                 conn.commit()
             except UniqueViolation:
                 conn.rollback()
@@ -232,6 +247,20 @@ class ConsentsMixin:
                 """,
                 (decision, device_id if device_id != "host" else None, now, request_id),
             ).fetchone()
+            if row is not None and hasattr(self, "_append_audit_event_tx"):
+                self._append_audit_event_tx(
+                    conn,
+                    AUDIT_CONSENT_DECISION,
+                    actor=device_id or "owner",
+                    resource=request_id,
+                    payload={
+                        "request_id": request_id,
+                        "bot_id": row["bot_id"],
+                        "action_class": row["action_class"],
+                        "scope_key": row["scope_key"],
+                        "decision": decision,
+                    },
+                )
             conn.commit()
         if row is None:
             return None

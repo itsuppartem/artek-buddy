@@ -607,6 +607,17 @@ class Principal(BaseModel):
     role: str = "owner"
 
 
+class AuditVerificationReport(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    ok: bool
+    total_events: int
+    head_hash: str
+    failed_seq: int | None = None
+    reason: str | None = None
+    events: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class DeviceList(BaseModel):
     devices: list[Device]
 
