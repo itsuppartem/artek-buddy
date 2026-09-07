@@ -176,6 +176,7 @@ import { ModelsPane } from "./shell/ModelsPane";
 import { PaneResizeHandle } from "./shell/PaneResizeHandle";
 import { PluginsPane } from "./shell/PluginsPane";
 import { RoutinesPanel } from "./shell/RoutinesPanel";
+import { type HostSearchHit, SearchHits } from "./shell/SearchHits";
 import { TodayView } from "./shell/TodayView";
 import { WorkLogPane } from "./shell/WorkLogPane";
 import { WorkspaceRail, type WorkspaceView } from "./shell/WorkspaceRail";
@@ -211,6 +212,7 @@ export function ShellPage() {
   const [bots, setBots] = useState<Bot[]>([]);
   const [botsReady, setBotsReady] = useState(false);
   const [query, setQuery] = useState("");
+  const [hostHits, setHostHits] = useState<HostSearchHit[]>([]);
   const [archivedBots, setArchivedBots] = useState<Bot[]>([]);
   const [sidebarView, setSidebarView] = useState<SidebarView>("inbox");
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() =>
@@ -1419,6 +1421,31 @@ export function ShellPage() {
     () => filterBots(archivedBots, query, (bot) => stripMarkdown(bot.preview || bot.title)),
     [archivedBots, query],
   );
+
+  useEffect(() => {
+    const needle = query.trim();
+    if (needle.length < 2) {
+      setHostHits([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void api
+        .search({ q: needle, limit: 8 })
+        .then((page) => {
+          if (!cancelled && query.trim() === needle) {
+            setHostHits(page.hits ?? []);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setHostHits([]);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
   const emptyInbox = inboxEmptyState(bots.length, archivedBots.length);
   const attentionCount = bots.filter((bot) => bot.unread).length;
   const needsModel = !modelState?.defaultModel;
@@ -2047,6 +2074,7 @@ export function ShellPage() {
             </button>
           </div>
           <div className="ab-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
+            <SearchHits query={query} hits={hostHits} onOpenBot={(id) => openBot(id)} />
             <InboxList
               sidebarView={sidebarView}
               query={query}
@@ -2065,6 +2093,7 @@ export function ShellPage() {
                 });
               }}
               onOpenArchived={() => setSidebarView("archived")}
+              hostHitCount={hostHits.length}
             />
           </div>
         </aside>

@@ -47,6 +47,7 @@ from artek_buddy.http.memory import router as memory_router
 from artek_buddy.http.models import router as models_router
 from artek_buddy.http.page import router as page_router
 from artek_buddy.http.routines import router as routines_router
+from artek_buddy.http.search import router as search_router
 from artek_buddy.http.session import router as session_router
 from artek_buddy.http.threads import router as threads_router
 from artek_buddy.http.turns import (
@@ -78,6 +79,7 @@ async def lifespan(app: FastAPI):
         async with open_runtime(settings, store, computers) as runtime:
             try:
                 store.ensure_workspace()
+                store.ensure_search_index()
                 leftover = store.fail_orphaned_runs()
                 if leftover:
                     log.warning("marked %s leftover run(s) failed after restart", leftover)
@@ -160,6 +162,7 @@ app.include_router(threads_router)
 app.include_router(consents_router)
 app.include_router(memory_router)
 app.include_router(routines_router)
+app.include_router(search_router)
 app.include_router(jobs_router)
 app.include_router(connections_router)
 app.include_router(computer_router)

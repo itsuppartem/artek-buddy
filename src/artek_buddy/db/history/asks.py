@@ -164,6 +164,7 @@ class AsksMixin:
                     role="bot",
                     seq=seq,
                     run_id=str(ask_row.get("from_run_id") or "") or None,
+                    blocks=ready_blocks,
                 )
                 excerpt = ""
                 for block in ready_blocks:

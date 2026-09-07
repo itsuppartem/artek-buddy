@@ -340,7 +340,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Search filters inbox (and Archived) by name / preview. A name or preview hit is marked. No matches: empty copy plus Clear Search; clear restores the list | [ ] | [ ] |
+| Search filters inbox (and Archived) by name / preview. A name or preview hit is marked. Typing two or more characters also lists host hits for messages, memory, and files (`search-hits`); a hit opens that chat. No matches: empty copy plus Clear Search; clear restores the list | [ ] | [ ] |
 | Click a row opens **that** chat on the first click (not the previous one). After Research, one click Lead → header and composer are Lead. Same after a third bot. Unsent Message text stays on the chat it was typed in | [ ] | [ ] |
 | Switching chats does not blank the thread or jump inbox order under the pointer. A recently opened chat paints immediately even if the snapshot GET is still in flight. A first visit (or one evicted from the three-chat cache) shows **Loading this chat…** under that header, not an empty column | [ ] | [ ] |
 | Opening a chat in the focused window marks it read. Looking at or dismissing an OS notification does **not**. A reply while that chat is focused on screen does not leave the unread pin | [ ] | [ ] |
@@ -636,7 +636,7 @@ If time is short, in this order:
 11. **§28 Save feedback**
 12. **§10 workers** `please e2e-background-worker-chat` then status; the acknowledgement is immediate and does not start a second plan; Message stays usable; one final result. `please e2e-worker-progress`: **Still working:** in the waiting slot and Work log, not a durable chat bubble, and no worker card. `please e2e-worker-activity-no-text` then status keeps the same worker. `please e2e-lead-owner-ssh` finishes; the next Send is a new run. `please e2e-worker-auto-read`: refresh still lists the queued This-PC read; ACK once. `please e2e-worker-blocked-browser` then answer the Ask card; `please e2e-worker-park-takeover` then Release. **This-PC** back-to-back read/list and one Allow action exactly once on Deb (including a git/find write form: card, Deny leaves the file/branch uncreated)
 13. **§1 / §21 Escape** on Bot profile & access and New bot. **§21 Secrets**: Store an arbitrary named secret with last four on one bot; the other bot is empty; Message strips the value; `please e2e-credential-command` delegates, asks consent when `CONSENT_AUTO=ask`, and returns no plaintext. Replace changes the next execution; Forget blocks it; Reset / Team ↔ Private preserve it
-14. **§14 Inbox** Search empty + one click opens that row. Switch A↔B keeps messages (no empty flash); a first/uncached visit shows Loading this chat…
+14. **§14 Inbox** Search empty + one click opens that row. A unique phrase in a transcript appears under Search as a host hit and opens that chat. Switch A↔B keeps messages (no empty flash); a first/uncached visit shows Loading this chat…
 15. **§15 Composer + links** Ctrl+A selects, does not Send; `please e2e-markdown-preview` opens and copies its URL. Connection **Open to connect** is the same kind of link. `please e2e-send-terminal`: one complete answer, no paraphrased second bubble. `please e2e-send-then-answer`: teaser then the spec, both stay. Stop / typing dots clear and Message is usable. Unsent draft stays on that chat after a switch
 16. **§8 / §15 Dismiss** on needs-you keeps the current chat. Park while this chat is open, then switch — still «needs you»
 17. **§9 Queue** pending mark, then local Sent while offline

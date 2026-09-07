@@ -147,6 +147,23 @@ export const api = {
       return request<WorkspaceDispatchResult>("POST", "/v1/workspace/dispatch", { text });
     },
   },
+  search(input: { q: string; limit?: number }) {
+    const params = new URLSearchParams();
+    params.set("q", input.q);
+    if (input.limit != null) params.set("limit", String(input.limit));
+    return request<{
+      hits: Array<{
+        id: string;
+        documentKind: "message" | "memory" | "artifact" | "bot";
+        resourceId: string;
+        sourceId: string;
+        title: string;
+        snippet: string;
+      }>;
+      hasMore: boolean;
+      nextCursor: string | null;
+    }>("GET", `/v1/search?${params.toString()}`);
+  },
   local: {
     status() {
       return request<LocalStatus>("GET", "/local/status").then((status) => {
