@@ -150,13 +150,7 @@ def _browser_act_fail_command(error: str) -> str:
     import json
 
     payload = json.dumps({"ok": False, "error": error}, ensure_ascii=False)
-    return (
-        "python3 - <<'PY'\n"
-        "import json, sys\n"
-        f"print({payload!r})\n"
-        "sys.exit(1)\n"
-        "PY"
-    )
+    return f"python3 - <<'PY'\nimport json, sys\nprint({payload!r})\nsys.exit(1)\nPY"
 
 
 def _playwright_browser_command(actions: list[Any]) -> str:
