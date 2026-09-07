@@ -422,6 +422,9 @@ class ConsentHub(OwnerJobTransport):
         self._results: dict[str, dict[str, Any]] = {}
         self._result_waiters: dict[str, threading.Event] = {}
         self._questions: dict[str, OwnerQuestion] = {}
+        self._takeover_waiters: dict[str, dict[str, threading.Event]] = {}
+        self._takeover_results: dict[str, str] = {}
+        self._takeover_released: set[str] = set()
 
     def _mode(self) -> str | None:
         if self.auto in {"allow", "deny"}:
@@ -749,6 +752,63 @@ class ConsentHub(OwnerJobTransport):
                 run_id,
             )
         return None, "The owner did not answer in time."
+
+    def wait_takeover(
+        self,
+        bot_id: str,
+        run_id: str,
+        timeout: float = OWNER_QUESTION_WAIT,
+    ) -> str:
+        if not bot_id or not run_id:
+            return "timeout"
+        waiter = threading.Event()
+        with self._lock:
+            if bot_id in self._takeover_released:
+                self._takeover_released.discard(bot_id)
+                return "released"
+            existing = self._takeover_results.pop(run_id, None)
+            if existing is not None:
+                return existing
+            self._takeover_waiters.setdefault(bot_id, {})[run_id] = waiter
+        waiter.wait(timeout)
+        with self._lock:
+            pending = self._takeover_waiters.get(bot_id)
+            if pending is not None:
+                pending.pop(run_id, None)
+                if not pending:
+                    self._takeover_waiters.pop(bot_id, None)
+            self._takeover_released.discard(bot_id)
+            return self._takeover_results.pop(run_id, "timeout")
+
+    def release_takeovers(self, bot_id: str) -> None:
+        if not bot_id:
+            return
+        to_wake: list[threading.Event] = []
+        with self._lock:
+            pending = self._takeover_waiters.pop(bot_id, {})
+            for run_id, waiter in pending.items():
+                self._takeover_results[run_id] = "released"
+                to_wake.append(waiter)
+            if not pending:
+                self._takeover_released.add(bot_id)
+        for waiter in to_wake:
+            waiter.set()
+
+    def cancel_takeovers(self, run_ids: list[str]) -> None:
+        wanted = set(run_ids)
+        to_wake: list[threading.Event] = []
+        with self._lock:
+            for bot_id, pending in list(self._takeover_waiters.items()):
+                for run_id in list(pending):
+                    if run_id not in wanted:
+                        continue
+                    waiter = pending.pop(run_id)
+                    self._takeover_results[run_id] = "cancelled"
+                    to_wake.append(waiter)
+                if not pending:
+                    self._takeover_waiters.pop(bot_id, None)
+        for waiter in to_wake:
+            waiter.set()
 
     def abort_question(self, run_id: str) -> None:
         with self._lock:

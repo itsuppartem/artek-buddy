@@ -302,7 +302,11 @@ class ScriptedRuntime(RuntimeBase):
                 await asyncio.sleep(0)
                 continue
             if step.tool:
-                if step.tool in {"ask_user", "run_credential_scoped_command"}:
+                role = self.resolve_turn_role(bot_id)
+                blocking = step.tool in {"ask_user", "run_credential_scoped_command"} or (
+                    step.tool == "request_takeover" and role == "subagent"
+                )
+                if blocking:
                     tool_result = await asyncio.to_thread(
                         tools.execute,
                         step.tool,

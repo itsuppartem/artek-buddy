@@ -278,6 +278,9 @@ async def stop_thread(
         question_hub = getattr(current_app().state, "consent", None)
         if question_hub is not None:
             question_hub.cancel_questions(stop_ids)
+            cancel_takeovers = getattr(question_hub, "cancel_takeovers", None)
+            if callable(cancel_takeovers):
+                cancel_takeovers(stop_ids)
             cancel_jobs = getattr(question_hub, "cancel_owner_jobs", None)
             if callable(cancel_jobs):
                 cancel_jobs(stop_ids)

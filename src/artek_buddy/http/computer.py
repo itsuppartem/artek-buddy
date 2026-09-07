@@ -179,6 +179,13 @@ async def computer_release(
         raise _db_error(err) from err
     _emit(events, bot, ProductEventType.COMPUTER_TAKEOVER_RELEASED, {})
     _emit_computer(events, bot, status)
+    hub = getattr(rt, "consent", None)
+    release_waiters = getattr(hub, "release_takeovers", None) if hub is not None else None
+    if callable(release_waiters):
+        try:
+            release_waiters(bot.id)
+        except Exception:
+            log.exception("failed to release worker takeover waiters")
     try:
         _resume_parked_takeover(history, rt, events, bot)
     except Exception:

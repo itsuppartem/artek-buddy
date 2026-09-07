@@ -443,3 +443,45 @@ def test_deny_git_write_options_leave_temp_repo_unchanged(tmp_path: Path) -> Non
     assert not leaked.exists()
     assert not listing.exists()
     assert "stolen-branch" not in branches
+
+
+def test_wait_takeover_release_before_and_during_wait() -> None:
+    hub = ConsentHub(SimpleNamespace())
+    hub.release_takeovers("bot_1")
+    assert hub.wait_takeover("bot_1", "sub_1", timeout=0.2) == "released"
+
+    started = threading.Event()
+    outcome: list[str] = []
+
+    def _wait() -> None:
+        started.set()
+        outcome.append(hub.wait_takeover("bot_1", "sub_2", timeout=2))
+
+    thread = threading.Thread(target=_wait)
+    thread.start()
+    assert started.wait(1)
+    time.sleep(0.05)
+    hub.release_takeovers("bot_1")
+    thread.join(2)
+    assert not thread.is_alive()
+    assert outcome == ["released"]
+
+    cancelled: list[str] = []
+    registered = threading.Event()
+
+    def _wait_cancel() -> None:
+        cancelled.append(hub.wait_takeover("bot_2", "sub_3", timeout=2))
+
+    hold = threading.Thread(target=_wait_cancel)
+    hold.start()
+    deadline = time.time() + 1
+    while time.time() < deadline:
+        with hub._lock:
+            if hub._takeover_waiters.get("bot_2", {}).get("sub_3") is not None:
+                registered.set()
+                break
+        time.sleep(0.01)
+    assert registered.is_set()
+    hub.cancel_takeovers(["sub_3"])
+    hold.join(2)
+    assert cancelled == ["cancelled"]

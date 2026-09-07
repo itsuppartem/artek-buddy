@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from artek_buddy.runtime.tools.common import BROWSER_ACT_KINDS
+
 
 @dataclass(frozen=True)
 class ToolSpec:
@@ -102,7 +104,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             },
             "required": ["question"],
         },
-        lead_only=True,
     ),
     ToolSpec(
         name="remember",
@@ -480,7 +481,47 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                         "extract (selector?, attribute? — returns text/attribute in response), "
                         "wait (ms? or selector?), hover (selector)."
                     ),
-                    "items": {"type": "object"},
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "enum": list(BROWSER_ACT_KINDS),
+                                "description": "Page action. Kind is case-insensitive.",
+                            },
+                            "url": {"type": "string", "description": "Target URL for goto."},
+                            "path": {"type": "string", "description": "Alias of url."},
+                            "selector": {
+                                "type": "string",
+                                "description": "CSS/locator for fill, click, extract, hover, wait.",
+                            },
+                            "text": {"type": "string", "description": "Typed or filled text."},
+                            "key": {"type": "string", "description": "Key for press."},
+                            "expression": {
+                                "type": "string",
+                                "description": "JavaScript for evaluate. Required for evaluate/eval.",
+                            },
+                            "script": {"type": "string", "description": "Alias of expression."},
+                            "js": {"type": "string", "description": "Alias of expression."},
+                            "attribute": {
+                                "type": "string",
+                                "description": "Attribute name for extract.",
+                            },
+                            "attr": {"type": "string", "description": "Alias of attribute."},
+                            "force": {"type": "boolean", "description": "Force click."},
+                            "all": {"type": "boolean", "description": "Click every match."},
+                            "delta_x": {"type": "number"},
+                            "delta_y": {"type": "number"},
+                            "dx": {"type": "number"},
+                            "dy": {"type": "number"},
+                            "direction": {"type": "string", "description": "up or down."},
+                            "distance": {"type": "number"},
+                            "clicks": {"type": "number"},
+                            "ms": {"type": "number", "description": "Wait milliseconds."},
+                            "timeout": {"type": "number", "description": "Alias of ms."},
+                        },
+                        "required": ["kind"],
+                    },
                 },
             },
             "required": ["actions"],
@@ -503,7 +544,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             },
             "additionalProperties": False,
         },
-        lead_only=True,
     ),
     ToolSpec(
         name="message_bot",

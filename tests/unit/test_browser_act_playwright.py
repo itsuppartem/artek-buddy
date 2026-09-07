@@ -57,3 +57,25 @@ def test_playwright_browser_command_extract_and_click_all() -> None:
     assert "page.wait_for_timeout" in cmd
     assert "step_data" in cmd
     assert "clicked" in cmd
+
+
+def test_playwright_browser_command_unknown_kind_fails_closed() -> None:
+    cmd = _playwright_browser_command([{"kind": "explode"}])
+    assert '"ok": false' in cmd
+    assert "explode" in cmd
+    assert "connect_over_cdp" not in cmd
+
+
+def test_playwright_browser_command_wrong_case_extract_is_known() -> None:
+    cmd = _playwright_browser_command([{"kind": "Extract", "selector": "div.post"}])
+    assert "connect_over_cdp" in cmd
+    assert "inner_text" in cmd
+    assert '"kind": "extract"' in cmd
+
+
+def test_playwright_browser_command_evaluate_without_expression_fails_closed() -> None:
+    cmd = _playwright_browser_command([{"kind": "evaluate", "code": "1+1"}])
+    assert '"ok": false' in cmd
+    assert "evaluate without expression" in cmd
+    assert "code" in cmd
+    assert "connect_over_cdp" not in cmd

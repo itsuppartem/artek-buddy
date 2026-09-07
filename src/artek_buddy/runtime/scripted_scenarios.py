@@ -46,6 +46,7 @@ E2E_GIT_BAN = "Don't merge until I say so."
 E2E_GIT_FREE = "You may merge and push without asking."
 E2E_WORKER_SUMMARY = "The background job is done."
 E2E_WORKER_RESULT = "blocked work finished"
+E2E_WORKER_TAKEOVER_RESULT = "worker continued after takeover"
 E2E_WORKER_BLOCK_S = 10.0
 E2E_WORKER_ACTIVITY_TOOLS = 20
 E2E_WORKER_ACTIVITY_HOLD_S = 8.0
@@ -462,6 +463,38 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         return [
             scripted_tool("run_owner_command", command="sleep 120"),
             scripted_finish(E2E_LEAD_OWNER_SSH),
+        ]
+    if "e2e-worker-blocked-browser" in hay:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name=E2E_SUBAGENT_NAME,
+                task="please e2e-worker-ask",
+            ),
+            scripted_finish(E2E_WORKER_ACK),
+        ]
+    if "e2e-worker-ask" in hay:
+        return [
+            scripted_tool(
+                "ask_user",
+                question=E2E_OWNER_HELP_QUESTION,
+                options=["I completed the step", "Stop"],
+            ),
+            scripted_finish(E2E_OWNER_HELP_ANSWER),
+        ]
+    if "e2e-worker-park-takeover" in hay:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name=E2E_SUBAGENT_NAME,
+                task="please e2e-worker-desk-hold",
+            ),
+            scripted_finish(E2E_WORKER_ACK),
+        ]
+    if "e2e-worker-desk-hold" in hay:
+        return [
+            scripted_tool("request_takeover", reason=E2E_TAKEOVER_REASON),
+            scripted_finish(E2E_WORKER_TAKEOVER_RESULT),
         ]
     if "e2e-blocked-browser" in hay:
         return [

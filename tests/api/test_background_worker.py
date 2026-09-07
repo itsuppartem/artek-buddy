@@ -258,3 +258,121 @@ def test_stop_ends_worker_progress_heartbeats(client, auth_header) -> None:
             return
         time.sleep(0.1)
     raise AssertionError(f"progress worker was not cancelled: {last}")
+
+
+def _pending_asks(payload: dict) -> list[tuple[dict, dict]]:
+    found: list[tuple[dict, dict]] = []
+    for message in payload.get("messages") or []:
+        for block in message.get("blocks") or []:
+            if (
+                block.get("kind") == "ask"
+                and block.get("status") == "pending"
+                and not block.get("consent_id")
+            ):
+                found.append((message, block))
+    return found
+
+
+def _computer_waiting(payload: dict) -> list[dict]:
+    found: list[dict] = []
+    for message in payload.get("messages") or []:
+        for block in message.get("blocks") or []:
+            if block.get("kind") == "computer" and block.get("state") == "waiting":
+                found.append(block)
+    return found
+
+
+def test_worker_ask_user_pauses_then_resumes(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_OWNER_HELP_ANSWER, E2E_OWNER_HELP_QUESTION
+
+    bot_id = create_bot(client, auth_header, "WorkerAsk")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-worker-blocked-browser"},
+    )
+    assert sent.status_code == 200
+    wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    deadline = time.time() + 8
+    last: dict = {}
+    pending: list[tuple[dict, dict]] = []
+    while time.time() < deadline:
+        snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+        assert snap.status_code == 200
+        last = snap.json()
+        pending = _pending_asks(last)
+        if pending:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"worker ask never appeared: {message_texts(last)}")
+    message, block = pending[0]
+    assert E2E_OWNER_HELP_QUESTION in (block.get("text") or "")
+    run_id = message["run_id"]
+    assert run_id != sent.json()["run_id"]
+    workers = _running(_workers(client, auth_header, bot_id))
+    assert workers and workers[0]["id"] == run_id
+    answered = client.post(
+        f"/v1/threads/{bot_id}/answer",
+        headers=auth_header,
+        json={
+            "run_id": run_id,
+            "message_id": message["id"],
+            "answer": "I completed the step",
+        },
+    )
+    assert answered.status_code == 200, answered.text
+    deadline = time.time() + 15
+    finished: list[dict] = []
+    while time.time() < deadline:
+        finished = [item for item in _workers(client, auth_header, bot_id) if item["id"] == run_id]
+        if finished and finished[0]["status"] == "completed":
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"worker did not resume after ask: {finished}")
+    assert finished[0].get("result") == E2E_OWNER_HELP_ANSWER
+
+
+def test_worker_request_takeover_pauses_then_release_resumes(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_TAKEOVER_REASON, E2E_WORKER_TAKEOVER_RESULT
+
+    bot_id = create_bot(client, auth_header, "WorkerDesk")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-worker-park-takeover"},
+    )
+    assert sent.status_code == 200
+    wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    deadline = time.time() + 8
+    last: dict = {}
+    cards: list[dict] = []
+    while time.time() < deadline:
+        snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+        assert snap.status_code == 200
+        last = snap.json()
+        cards = _computer_waiting(last)
+        if cards:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"worker takeover card never appeared: {last}")
+    assert E2E_TAKEOVER_REASON in (cards[-1].get("text") or "")
+    workers = _running(_workers(client, auth_header, bot_id))
+    assert workers
+    worker_id = workers[0]["id"]
+    released = client.post(f"/v1/computer/{bot_id}/release", headers=auth_header)
+    assert released.status_code == 200
+    deadline = time.time() + 15
+    finished: list[dict] = []
+    while time.time() < deadline:
+        finished = [
+            item for item in _workers(client, auth_header, bot_id) if item["id"] == worker_id
+        ]
+        if finished and finished[0]["status"] == "completed":
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"worker did not resume after release: {finished}")
+    assert finished[0].get("result") == E2E_WORKER_TAKEOVER_RESULT
