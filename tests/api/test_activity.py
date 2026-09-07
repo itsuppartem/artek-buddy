@@ -68,9 +68,7 @@ def test_activity_replay_survives_cleared_event_hub(client, auth_header, monkeyp
     assert "persist me" in response.text
 
 
-def test_thread_events_emit_gap_when_store_reports_gap(
-    client, auth_header, monkeypatch
-) -> None:
+def test_thread_events_emit_gap_when_store_reports_gap(client, auth_header, monkeypatch) -> None:
     bot = create_bot(client, auth_header, "ActivityGapSse")
     monkeypatch.setattr(
         type(client.app.state.store),

@@ -105,8 +105,7 @@ def _activity_thread_frame(history: HistoryStore, bot: Bot, record: ActivityReco
                 run_id=record.payload.get("run_id"),
             )
             return (
-                f"id: {record.seq}\nevent: {event.type.value}\n"
-                f"data: {event.model_dump_json()}\n\n"
+                f"id: {record.seq}\nevent: {event.type.value}\ndata: {event.model_dump_json()}\n\n"
             )
     return record.to_sse()
 
@@ -396,18 +395,12 @@ async def subscribe_thread_events(
         raise _db_error(err) from err
 
     after_seq = parse_activity_cursor(after, last_event_id, after_sequence)
-    cursor_label = (
-        str(after_sequence)
-        if after_sequence is not None
-        else (after or last_event_id)
-    )
+    cursor_label = str(after_sequence) if after_sequence is not None else (after or last_event_id)
 
     async def gen():
         replayed_durable = after_seq is not None
         if after_seq is not None:
-            records, has_gap = history.replay_activity(
-                after_seq=after_seq, resource=bot_id
-            )
+            records, has_gap = history.replay_activity(after_seq=after_seq, resource=bot_id)
             if has_gap:
                 yield _replay_gap_frame(bot, cursor_label)
             else:
