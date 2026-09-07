@@ -618,6 +618,26 @@ class AuditVerificationReport(BaseModel):
     events: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class DeadJob(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: Id
+    job_type: str
+    resource_id: str | None = None
+    idempotency_key: str | None = None
+    state: str = "dead"
+    payload: dict[str, Any] = Field(default_factory=dict)
+    last_error: str | None = None
+    attempts: int = 0
+    max_attempts: int = 5
+    created_at: str
+    updated_at: str
+
+
+class DeadJobList(BaseModel):
+    jobs: list[DeadJob]
+
+
 class DeviceList(BaseModel):
     devices: list[Device]
 

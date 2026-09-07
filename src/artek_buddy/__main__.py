@@ -8,7 +8,7 @@ from artek_buddy.db.history import HistoryStore
 
 USAGE = (
     "usage: python -m artek_buddy "
-    "pair|audit-verify|audit-export|worker|supervisor|memory-gateway|credential-broker|"
+    "pair|audit-verify|audit-export|jobs-dead|worker|supervisor|memory-gateway|credential-broker|"
     "credential-migrate"
 )
 
@@ -82,6 +82,29 @@ def audit_export() -> int:
     return 0
 
 
+def jobs_dead() -> int:
+    import json
+
+    url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://artek:artek@127.0.0.1:5432/artek_buddy",
+    )
+    store = HistoryStore(url)
+    try:
+        store.open()
+        store.apply_migrations()
+        dead = store.list_dead_jobs()
+    except DatabaseUnavailable as err:
+        print(f"dead jobs listing database error: {err}", file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+
+    data = [j.to_dict(redact=True) for j in dead]
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args == ["pair"]:
@@ -90,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
         return audit_verify()
     if args == ["audit-export"]:
         return audit_export()
+    if args == ["jobs-dead"]:
+        return jobs_dead()
     if args == ["worker"] or args == ["worker", "--once"]:
         from artek_buddy.worker import worker
 
