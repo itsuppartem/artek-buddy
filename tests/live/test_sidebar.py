@@ -190,7 +190,7 @@ def test_inbox_search_no_match_shows_empty_and_clear(
     expect(bot_row(page, name)).to_have_count(0)
     empty = page.get_by_test_id("inbox-search-empty")
     expect(empty).to_be_visible()
-    expect(empty).to_contain_text("No chats match")
+    expect(empty).to_contain_text("No chats or messages match")
     expect(empty).to_contain_text("Clear Search")
     clearer = page.get_by_role("button", name="Clear Search")
     expect(clearer).to_be_visible()
@@ -342,3 +342,18 @@ def test_inbox_row_click_opens_that_chat(page: Page, client_url: str, host_url: 
     expect(bot_row(page, lead)).to_have_attribute("aria-current", "page")
     expect(thread_header(page)).not_to_contain_text(research)
     expect(thread_header(page)).not_to_contain_text(park)
+
+
+def test_inbox_host_search_opens_matching_chat(page: Page, client_url: str, host_url: str) -> None:
+    token = uuid.uuid4().hex[:8]
+    name = unique_bot("Fts")
+    phrase = f"unique-fts-{token}"
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    send_message(page, phrase, name)
+    search = page.get_by_placeholder("Search")
+    search.fill(phrase)
+    hit = page.get_by_test_id("search-hit").filter(has_text=name)
+    expect(hit).to_be_visible(timeout=8_000)
+    hit.click()
+    expect(thread_header(page)).to_contain_text(name)

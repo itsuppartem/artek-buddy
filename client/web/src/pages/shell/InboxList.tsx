@@ -18,6 +18,7 @@ export function InboxList({
   onOpenBot,
   onContextMenu,
   onOpenArchived,
+  hostHitCount = 0,
 }: {
   sidebarView: SidebarView;
   query: string;
@@ -31,6 +32,7 @@ export function InboxList({
   onOpenBot: (id: string) => void;
   onContextMenu: (bot: Bot, event: MouseEvent<HTMLButtonElement>) => void;
   onOpenArchived: () => void;
+  hostHitCount?: number;
 }) {
   if (sidebarView === "archived") {
     return (
@@ -70,12 +72,12 @@ export function InboxList({
               </button>
             </div>
           ))}
-          {inboxSearchEmpty(query, archived.length) ? (
+          {inboxSearchEmpty(query, archived.length, hostHitCount) ? (
             <p
               data-testid="inbox-search-empty"
               className="px-2.5 py-3 text-[13px] leading-5 text-mute"
             >
-              No chats match. Clear Search or try another name.
+              No chats or messages match. Clear Search or try another name.
             </p>
           ) : null}
         </div>
@@ -148,9 +150,9 @@ export function InboxList({
           </div>
         </button>
       ))}
-      {inboxSearchEmpty(query, bots.length) ? (
+      {inboxSearchEmpty(query, bots.length, hostHitCount) ? (
         <p data-testid="inbox-search-empty" className="px-2.5 py-3 text-[13px] leading-5 text-mute">
-          No chats match. Clear Search or try another name.
+          No chats or messages match. Clear Search or try another name.
         </p>
       ) : null}
       {archivedCount > 0 ? (

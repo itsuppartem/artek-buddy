@@ -1293,6 +1293,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search */
+        get: operations["search_v1_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/session": {
         parameters: {
             query?: never;
@@ -2578,6 +2595,45 @@ export interface components {
         ScreenUrlResult: {
             /** Url */
             url?: string | null;
+        };
+        /** SearchHit */
+        SearchHit: {
+            /**
+             * Document Kind
+             * @enum {string}
+             */
+            document_kind: "message" | "memory" | "artifact" | "bot";
+            /** Id */
+            id: string;
+            /** Resource Id */
+            resource_id: string;
+            /**
+             * Snippet
+             * @default
+             */
+            snippet: string;
+            /** Source Id */
+            source_id: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
+        /**
+         * SearchPage
+         * @description Authorized hits only. No total — a count would leak hidden rows.
+         */
+        SearchPage: {
+            /**
+             * Has More
+             * @default false
+             */
+            has_more: boolean;
+            /** Hits */
+            hits?: components["schemas"]["SearchHit"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /** SessionRequest */
         SessionRequest: {
@@ -6043,6 +6099,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_v1_search_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                kinds?: string | null;
+                cursor?: string | null;
+                limit?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchPage"];
                 };
             };
             /** @description Validation Error */

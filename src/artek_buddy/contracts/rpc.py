@@ -49,6 +49,7 @@ PROCEDURES: list[Procedure] = [
     _p("me", "GET", "/v1/me", None, "Me", True),
     _p("audit.get", "GET", "/v1/audit", None, "AuditVerificationReport", True),
     _p("jobs.dead", "GET", "/v1/jobs/dead", None, "DeadJobList", True),
+    _p("search.query", "GET", "/v1/search", None, "SearchPage", True),
     _p("deployment.get", "GET", "/v1/deployment", None, "DeploymentSettings", True),
     _p(
         "deployment.update",

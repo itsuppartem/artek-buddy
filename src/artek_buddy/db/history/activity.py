@@ -67,6 +67,7 @@ class ActivityMixin:
         seq: int,
         run_id: str | None = None,
         device_id: str | None = None,
+        blocks: list[Any] | None = None,
     ) -> ActivityRecord:
         payload: dict[str, Any] = {
             "id": message_id,
@@ -76,7 +77,7 @@ class ActivityMixin:
         }
         if run_id is not None:
             payload["run_id"] = run_id
-        return self._append_activity_tx(
+        record = self._append_activity_tx(
             conn,
             "message.created",
             role,
@@ -85,6 +86,10 @@ class ActivityMixin:
             device_id,
             1,
         )
+        indexer = getattr(self, "_index_search_message_tx", None)
+        if callable(indexer) and blocks is not None:
+            indexer(conn, bot_id=bot_id, message_id=message_id, blocks=blocks)
+        return record
 
     def _append_activity_tx(
         self,

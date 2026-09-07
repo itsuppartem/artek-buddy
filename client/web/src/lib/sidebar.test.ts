@@ -41,6 +41,7 @@ describe("inboxSearchEmpty", () => {
     expect(inboxSearchEmpty("Alpha", 1)).toBe(false);
     expect(inboxSearchEmpty("", 0)).toBe(false);
     expect(inboxSearchEmpty("   ", 0)).toBe(false);
+    expect(inboxSearchEmpty("zzz-no-match", 0, 2)).toBe(false);
   });
 });
 

@@ -280,6 +280,38 @@ class JobsMixin:
             conn.commit()
         return self._job_record_from_row(row) if row else None
 
+    def update_job_payload(
+        self,
+        job_id: str,
+        payload: dict[str, Any],
+        *,
+        worker_id: str | None = None,
+    ) -> bool:
+        payload_json = json.dumps(payload, ensure_ascii=False)
+        with self._conn() as conn:
+            if worker_id:
+                row = conn.execute(
+                    """
+                    UPDATE jobs
+                    SET payload = %s::jsonb, updated_at = now()
+                    WHERE id = %s AND lease_owner = %s AND state = 'running'
+                    RETURNING id
+                    """,
+                    (payload_json, job_id, worker_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    UPDATE jobs
+                    SET payload = %s::jsonb, updated_at = now()
+                    WHERE id = %s AND state IN ('queued', 'running')
+                    RETURNING id
+                    """,
+                    (payload_json, job_id),
+                ).fetchone()
+            conn.commit()
+        return row is not None
+
     def list_dead_jobs(self, limit: int = 50) -> list[JobRecord]:
         with self._conn() as conn:
             rows = conn.execute(

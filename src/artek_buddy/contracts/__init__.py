@@ -114,6 +114,7 @@ from artek_buddy.contracts.ids import (
     SandboxKind,
 )
 from artek_buddy.contracts.rpc import PROCEDURES, PROCEDURES_BY_NAME, Procedure
+from artek_buddy.contracts.search import SearchHit, SearchPage
 
 __all__ = [
     "BOT_COLORS",
@@ -208,6 +209,8 @@ __all__ = [
     "SaveBotCredentialInput",
     "RunStatus",
     "SandboxKind",
+    "SearchHit",
+    "SearchPage",
     "SessionRequest",
     "SessionResponse",
     "SetComputerInput",
