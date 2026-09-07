@@ -70,7 +70,9 @@ def test_owner_search_finds_message_memory_artifact_and_bot_name(client, auth_he
     assert bot_id in resources
 
     memory_hits = client.get("/v1/search", headers=auth_header, params={"q": f"memfts {token}"})
-    assert any(item["document_kind"] == "memory" for item in memory_hits.json()["hits"]), memory_hits.json()
+    assert any(item["document_kind"] == "memory" for item in memory_hits.json()["hits"]), (
+        memory_hits.json()
+    )
 
     file_hits = client.get("/v1/search", headers=auth_header, params={"q": f"export {token}"})
     assert any(item["document_kind"] == "artifact" for item in file_hits.json()["hits"])
