@@ -40,7 +40,8 @@ def authorized_search_resource_ids(
 
 
 def normalize_search_query(raw: str | None) -> str:
-    text = " ".join((raw or "").split())
+    # simple tsvector splits hyphenated words; keep the query on the same lexemes.
+    text = " ".join((raw or "").replace("-", " ").split())
     if not text:
         return ""
     if len(text) > SEARCH_QUERY_MAX:

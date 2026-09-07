@@ -86,6 +86,22 @@ def test_owner_search_finds_message_memory_artifact_and_bot_name(client, auth_he
     assert any(item["document_kind"] == "bot" for item in name_hits.json()["hits"])
 
 
+def test_owner_search_matches_hyphenated_query(client, auth_header) -> None:
+    token = secrets.token_hex(6)
+    bot = create_bot(client, auth_header, f"Hyphen {token}")
+    phrase = f"unique-fts-{token}"
+    sent = client.post(
+        f"/v1/threads/{bot['id']}/messages",
+        headers=auth_header,
+        json={"text": phrase},
+    )
+    assert sent.status_code == 200
+    wait_run(client, auth_header, bot["id"], sent.json()["run_id"])
+    hits = client.get("/v1/search", headers=auth_header, params={"q": phrase})
+    assert hits.status_code == 200
+    assert any(item["resource_id"] == bot["id"] for item in hits.json()["hits"]), hits.json()
+
+
 def test_search_skips_tool_payloads_and_escapes_snippets(client, auth_header) -> None:
     token = secrets.token_hex(6)
     bot = create_bot(client, auth_header, f"Leak {token}")
