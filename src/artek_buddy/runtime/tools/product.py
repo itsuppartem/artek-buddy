@@ -26,7 +26,6 @@ from artek_buddy.runtime.worker_activity import touch_worker_activity
 
 WORKER_ONLY_TOOLS = frozenset(
     {
-        "send_file",
         "read_owner_file",
         "write_owner_file",
         "list_owner_dir",

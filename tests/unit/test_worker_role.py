@@ -1,8 +1,10 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 from artek_buddy.bot_credentials import BotCredentialStatus, CredentialExecutionResult
 from artek_buddy.config import Settings
 from artek_buddy.runtime.base import RuntimeBase
+from artek_buddy.runtime.tools.common import map_desktop_home_path
 from artek_buddy.runtime.tools.product import ProductTools
 from artek_buddy.runtime.types import TurnContext
 
@@ -38,6 +40,36 @@ def _message_tools(tmp_path):
     return runtime, ProductTools(runtime), bot, turn, appended
 
 
+def _send_file_tools(tmp_path, *, role: str = "lead"):
+    runtime = _runtime(tmp_path)
+    bot_id = "bot_" + ("c" * 16)
+    home_key = bot_id
+    home = Path(runtime.settings.agent_data_dir) / "homes" / home_key
+    home.mkdir(parents=True)
+    (home / "notes.txt").write_text("hello from the bot", encoding="utf-8")
+    saved: list[dict] = []
+    blocks: list[list[dict]] = []
+    bot = SimpleNamespace(id=bot_id, workspace_id="ws_1", thread_id="th_1")
+
+    def save_artifact(**kwargs):
+        saved.append(kwargs)
+        return SimpleNamespace(id=kwargs["artifact_id"])
+
+    def append_message(_bot, posted, run_id):
+        blocks.append(list(posted))
+        return SimpleNamespace(id=f"msg_{run_id}")
+
+    runtime.store = SimpleNamespace(
+        get_bot=lambda bid: bot if bid == bot.id else None,
+        get_computer_for_bot=lambda _bot: SimpleNamespace(home_key=home_key),
+        save_artifact=save_artifact,
+        append_bot_message=append_message,
+    )
+    turn = TurnContext(bot_id=bot.id, run_id=f"run_{role}", thread_id="th_1", role=role)
+    runtime.freeze_turn(turn)
+    return runtime, ProductTools(runtime), bot, turn, home, saved, blocks
+
+
 def test_lead_cannot_use_worker_only_tools() -> None:
     tools = ProductTools(SimpleNamespace(store=None, settings=None))
     lead_specs = tools.specs("lead")
@@ -45,6 +77,8 @@ def test_lead_cannot_use_worker_only_tools() -> None:
     worker = {spec.name for spec in tools.specs("subagent")}
     assert "spawn_subagent" in lead
     assert "send_message" in lead
+    assert "send_file" in lead
+    assert "send_file" in worker
     assert "run_owner_command" not in lead
     assert "browser_act" not in lead
     assert "ask_user" in lead
@@ -59,6 +93,61 @@ def test_lead_cannot_use_worker_only_tools() -> None:
     assert "report_progress" in worker
     assert "report_progress" not in lead
     assert "spawn_subagent" not in worker
+
+
+def test_map_desktop_home_path_is_lexical(tmp_path) -> None:
+    home = tmp_path / "homes" / "bot_c"
+    mapped = map_desktop_home_path("/home/artek/inbox/notes.txt", home)
+    assert mapped == str(home / "inbox" / "notes.txt")
+    assert map_desktop_home_path("inbox/notes.txt", home) == "inbox/notes.txt"
+    assert map_desktop_home_path("/home/artek-other/x", home) == "/home/artek-other/x"
+    escaped = map_desktop_home_path("/home/artek/../../etc/passwd", home)
+    assert escaped == str(home / ".." / ".." / "etc" / "passwd")
+
+
+def test_lead_send_file_posts_file_card(tmp_path) -> None:
+    _runtime, tools, bot, turn, _home, saved, blocks = _send_file_tools(tmp_path, role="lead")
+    result = tools.execute(
+        "send_file",
+        {"path": "notes.txt", "text": "Here is notes.txt"},
+        bound_bot_id=bot.id,
+        turn=turn,
+    )
+    assert result["ok"] is True
+    assert result["name"] == "notes.txt"
+    assert saved and saved[0]["bot_id"] == bot.id
+    kinds = [block["kind"] for block in blocks[0]]
+    assert kinds == ["text", "file"]
+    assert blocks[0][1]["name"] == "notes.txt"
+    dest = Path(saved[0]["storage_path"])
+    assert dest.read_text(encoding="utf-8") == "hello from the bot"
+
+
+def test_send_file_maps_desktop_guest_home(tmp_path) -> None:
+    _runtime, tools, bot, turn, _home, saved, blocks = _send_file_tools(tmp_path, role="lead")
+    result = tools.execute(
+        "send_file",
+        {"path": "/home/artek/notes.txt"},
+        bound_bot_id=bot.id,
+        turn=turn,
+    )
+    assert result["ok"] is True
+    assert result["name"] == "notes.txt"
+    assert blocks[0][0]["kind"] == "file"
+    assert saved
+
+
+def test_send_file_rejects_host_path_outside_home(tmp_path) -> None:
+    _runtime, tools, bot, turn, _home, saved, blocks = _send_file_tools(tmp_path, role="lead")
+    result = tools.execute(
+        "send_file",
+        {"path": "/etc/passwd"},
+        bound_bot_id=bot.id,
+        turn=turn,
+    )
+    assert result == {"ok": False, "error": "file not found"}
+    assert saved == []
+    assert blocks == []
 
 
 def test_browser_act_schema_lists_runner_kinds() -> None:
