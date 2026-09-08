@@ -57,6 +57,34 @@ def unique_bot(prefix: str) -> str:
     return f"{prefix} {uuid.uuid4().hex[:8]}"
 
 
+def _boxes_overlap(left: dict[str, float], right: dict[str, float], slack: float = 4) -> bool:
+    return not (
+        left["x"] + left["width"] - slack <= right["x"]
+        or right["x"] + right["width"] - slack <= left["x"]
+        or left["y"] + left["height"] - slack <= right["y"]
+        or right["y"] + right["height"] - slack <= left["y"]
+    )
+
+
+def expect_pairing_mark_inside_card(page: Page) -> None:
+    form = page.get_by_test_id("pairing")
+    mark = form.get_by_test_id("app-mark")
+    expect(mark).to_be_visible()
+    form_box = form.bounding_box()
+    mark_box = mark.bounding_box()
+    assert form_box is not None and mark_box is not None
+    pad = 8
+    assert mark_box["x"] >= form_box["x"] - pad
+    assert mark_box["y"] >= form_box["y"] - pad
+    assert mark_box["x"] + mark_box["width"] <= form_box["x"] + form_box["width"] + pad
+    assert mark_box["y"] + mark_box["height"] <= form_box["y"] + form_box["height"] + pad
+    pair = page.get_by_role("button", name="Pair").bounding_box()
+    code = page.get_by_placeholder("XXXX-XXXX").bounding_box()
+    assert pair is not None and code is not None
+    assert not _boxes_overlap(mark_box, pair)
+    assert not _boxes_overlap(mark_box, code)
+
+
 def bot_row(page: Page, name: str):
     return page.locator(f'[data-testid="bot-row"][data-bot-name="{name}"]')
 

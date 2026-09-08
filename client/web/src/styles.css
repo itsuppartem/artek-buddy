@@ -240,7 +240,7 @@ a:focus-visible {
     transform: translateY(0) rotate(-0.25deg);
   }
   50% {
-    transform: translateY(-5px) rotate(0.25deg);
+    transform: translateY(-3px) rotate(0.25deg);
   }
 }
 

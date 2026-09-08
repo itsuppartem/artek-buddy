@@ -64,7 +64,7 @@ export function PairingPage({
           data-testid="pairing"
           className="grid w-full max-w-[820px] overflow-hidden rounded-[20px] border border-hairline bg-plate shadow-[0_28px_80px_rgba(25,48,82,0.14)] md:grid-cols-[0.9fr_1.1fr]"
         >
-          <div className="relative min-h-[190px] overflow-hidden bg-soft-blue p-5 md:flex md:min-h-[520px] md:flex-col md:justify-between md:p-8">
+          <div className="flex min-h-[220px] flex-col gap-4 overflow-hidden bg-soft-blue p-5 md:min-h-[520px] md:justify-between md:p-8">
             <div>
               <p className="font-mono text-[9px] tracking-[0.08em] text-tan uppercase">
                 Private control surface
@@ -83,7 +83,7 @@ export function PairingPage({
               alt=""
               width={360}
               height={360}
-              className="pairing-mascot pointer-events-none absolute right-0 bottom-0 w-[175px] object-contain md:static md:mx-auto md:-mb-12 md:w-[min(100%,330px)]"
+              className="pairing-mascot pointer-events-none mx-auto mt-auto h-auto w-[min(100%,200px)] object-contain object-center md:w-[min(100%,300px)]"
             />
           </div>
           <div className="flex flex-col justify-center p-6 md:p-9">
