@@ -491,8 +491,8 @@ PROCEDURES: list[Procedure] = [
     # Artifacts / usage / export / notifications
     _p("artifacts.list", "GET", "/v1/artifacts", "BotIdInput", "ArtifactList", True),
     _p("artifacts.download", "GET", "/v1/artifacts/{artifact_id}", None, "File", True),
-    _p("usage.list", "GET", "/v1/usage", None, "UsageRecordList"),
-    _p("usage.summary", "GET", "/v1/usage/summary", None, "UsageSummary"),
+    _p("usage.list", "GET", "/v1/usage", None, "UsageRecordList", True),
+    _p("usage.summary", "GET", "/v1/usage/summary", None, "UsageSummary", True),
     _p("export.bot", "GET", "/v1/export/{bot_id}", "BotIdInput", "ExportManifest"),
     _p(
         "notifications.register_push",

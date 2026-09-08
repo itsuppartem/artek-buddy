@@ -82,6 +82,7 @@ from artek_buddy.http.deps import (
 from artek_buddy.http.turn_registry import cancel_turns as _cancel_turns
 from artek_buddy.http.turn_registry import drop_turn as _drop_turn
 from artek_buddy.http.turn_registry import register_turn as _register_turn
+from artek_buddy.http.usage_persist import persist_product_usage
 
 
 def _emit(
@@ -633,6 +634,7 @@ async def _run_turn(
     reply_text = ""
     error: str | None = None
     status = "failed"
+    turn_usage = None
     if ASKED_YOU_MARK in (text or ""):
         try:
             history.bind_pending_ask_run(bot.id, run.id)
@@ -672,6 +674,7 @@ async def _run_turn(
                     rt.bind_agent_bot(item.agent_id, bot.id)
                 status = product_run_status(item.status)
                 reply_text = item.result or draft or ""
+                turn_usage = item.usage
                 if status != "completed":
                     error = owner_visible_error(item.error, item.id)
                     if not reply_text or reply_text.strip() == error:
@@ -742,6 +745,7 @@ async def _run_turn(
     elif not reply_text:
         reply_text = draft or ""
 
+    persist_product_usage(history, events, bot, run.id, turn_usage)
     try:
         bot_msg, finished = history.finish_turn(bot, run, reply_text, status, error=error)
     except DatabaseUnavailable:

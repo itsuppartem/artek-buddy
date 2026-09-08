@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Persist per-turn token usage (`0033_usage.sql`, `GET /v1/usage`, `GET /v1/usage/summary`): input, output, cache, reasoning, and total for lead and worker product runs. Missing usage is omitted, not a failed turn. Counts-only `usage.recorded` SSE. No Models spend pane.
 - Added permission-aware Postgres full-text search (`0031_search_documents.sql`, `GET /v1/search`): GIN `simple` over message text, memory, artifact names, and bot names. The authorized resource set is applied in SQL before `ts_rank`, headline, and limit. Non-owner callers get the same empty page as a miss. The inbox Search box keeps name/preview filter and lists host hits underneath.
 - Extended routines into versioned automations (`0032_automations.sql`): cron still fires, Run is an idempotent manual trigger, an optional approval ask pauses on this host, and edits do not mutate an in-flight snapshot. Dry-run previews the prompt without enqueueing tools.
 - Added a durable Postgres activity log (`0030_activity.sql`) with a workspace-monotonic sequence, same-transaction writes for messages, grants, consent decisions, member/device lifecycle, and artifact metadata, and resumable SSE via `after_sequence` / `Last-Event-ID`. A pruned cursor emits an explicit gap/resync instead of a silent hole. EventHub stays live fan-out only.

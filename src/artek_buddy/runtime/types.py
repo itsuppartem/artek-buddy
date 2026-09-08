@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from artek_buddy.runtime.token_usage import TokenUsage
+
 TurnRole = Literal["lead", "subagent"]
 ActivityKind = Literal["run_started", "tool_started", "tool_finished", "text", "clarification"]
 
@@ -30,6 +32,7 @@ class RunRecord:
     status: str
     result: str | None = None
     error: str | None = None
+    usage: TokenUsage | None = None
 
 
 @dataclass(frozen=True)

@@ -99,6 +99,8 @@ from artek_buddy.contracts.domain import (
     UpdateDeploymentInput,
     UpdateRoutineInput,
     UsageRecord,
+    UsageRecordList,
+    UsageSummary,
     WorkspaceDispatchInput,
     WorkspaceDispatchResult,
 )
@@ -240,6 +242,8 @@ __all__ = [
     "UpdateDeploymentInput",
     "UpdateRoutineInput",
     "UsageRecord",
+    "UsageRecordList",
+    "UsageSummary",
     "WindowState",
     "WorkspaceDispatchInput",
     "WorkspaceDispatchResult",

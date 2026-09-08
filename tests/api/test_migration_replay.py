@@ -34,6 +34,7 @@ EXPECTED_TABLES = (
     "automation_steps",
     "automation_runs",
     "automation_step_runs",
+    "usage_records",
 )
 
 
@@ -66,9 +67,9 @@ def empty_database_url() -> Iterator[str]:
 
 def test_apply_migrations_replays_every_historical_file(empty_database_url: str) -> None:
     files = sorted(path.name for path in MIGRATIONS_DIR.glob("*.sql"))
-    assert len(files) == 32
+    assert len(files) == 33
     assert files[0].startswith("0001_")
-    assert files[-1].startswith("0032_")
+    assert files[-1].startswith("0033_")
 
     store = HistoryStore(empty_database_url)
     try:

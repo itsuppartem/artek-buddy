@@ -18,11 +18,34 @@ from artek_buddy.runtime.scripted_scenarios import (
     _user_tail,
     steps_for_prompt,
 )
+from artek_buddy.runtime.token_usage import (
+    SCRIPTED_LEAD_USAGE,
+    SCRIPTED_WORKER_USAGE,
+    TokenUsage,
+)
 from artek_buddy.runtime.tools import ProductTools
 from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord
 from artek_buddy.stream import _map_tool_to_events
 
 log = logging.getLogger("artek_buddy")
+
+
+def _scripted_usage(role: str, hay: str, status: str, model: str) -> TokenUsage | None:
+    if status not in {"completed", "finished"}:
+        return None
+    if "e2e-no-usage" in hay:
+        return None
+    base = SCRIPTED_WORKER_USAGE if role == "subagent" else SCRIPTED_LEAD_USAGE
+    return TokenUsage(
+        input_tokens=base.input_tokens,
+        output_tokens=base.output_tokens,
+        cache_read_tokens=base.cache_read_tokens,
+        cache_write_tokens=base.cache_write_tokens,
+        reasoning_tokens=base.reasoning_tokens,
+        total_tokens=base.total_tokens,
+        provider="scripted",
+        model=model or "scripted",
+    )
 
 
 def __getattr__(name: str) -> Any:
@@ -152,6 +175,7 @@ class ScriptedRuntime(RuntimeBase):
         self.last_prompt = prompt
         self.last_tool_results = []
         hay = _user_tail(prompt).lower()
+        model = self.settings.cursor_model or "scripted"
         if "e2e-dead-wait-stuck" in hay:
             run_id = new_id("run")
             self._auth_fails, recycle = note_auth_failures(
@@ -186,6 +210,7 @@ class ScriptedRuntime(RuntimeBase):
                 status="completed",
                 result="ok",
                 error=None,
+                usage=_scripted_usage(role, hay, "completed", model),
             )
             return
         if "e2e-auth-error" in hay:
@@ -199,6 +224,7 @@ class ScriptedRuntime(RuntimeBase):
                     status="completed",
                     result="recovered",
                     error=None,
+                    usage=_scripted_usage(role, hay, "completed", model),
                 )
                 return
             self._auth_fails, recycle = note_auth_failures(
@@ -362,6 +388,7 @@ class ScriptedRuntime(RuntimeBase):
             status=status,
             result=result or None,
             error=error,
+            usage=_scripted_usage(role, hay, status, model),
         )
 
     async def list_models(self) -> list[dict[str, Any]]:
