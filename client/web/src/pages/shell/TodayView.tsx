@@ -57,7 +57,10 @@ export function TodayView({
   }
 
   return (
-    <main data-testid="today-view" className="ab-scroll min-h-0 min-w-0 flex-1 overflow-y-auto bg-ink">
+    <main
+      data-testid="today-view"
+      className="ab-scroll min-h-0 min-w-0 flex-1 overflow-y-auto bg-ink"
+    >
       <div className="mx-auto w-full max-w-[1180px] px-6 py-7 lg:px-8">
         <header className="mb-5">
           <p className="font-mono text-[10px] tracking-[0.08em] text-tan uppercase">
