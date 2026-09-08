@@ -113,6 +113,7 @@ import {
   isRawRunFailedMessage,
   isToolNoise,
 } from "../lib/thread-events";
+import { captureMessageAnchor, restoreThreadScroll } from "../lib/thread-scroll";
 import {
   applyOlderPageForBot,
   applySnapshotForBot,
@@ -321,6 +322,8 @@ export function ShellPage() {
   const seenAlertKeys = useRef(new Set<string>());
   const dismissedAlerts = useRef(new Set<string>());
   const stickToLatest = useRef(true);
+  const scrollAnchor = useRef<ReturnType<typeof captureMessageAnchor>>(null);
+  const messageScroll = useRef<HTMLDivElement>(null);
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
   const botIdRef = useRef<string | undefined>(undefined);
@@ -357,7 +360,6 @@ export function ShellPage() {
   const threadCache = useRef(createThreadSnapshotCache());
   const discardedBotIds = useRef(new Set<string>());
   const heldUnreadIds = useRef(new Set<string>());
-  const messageScroll = useRef<HTMLDivElement>(null);
 
   const active = bots.find((bot) => bot.id === botId);
   activeIdRef.current = active?.id;
@@ -1457,6 +1459,24 @@ export function ShellPage() {
   const needsModel = !modelState?.defaultModel;
   const hatchOpen = hatchIsOpen(panel, Boolean(active));
 
+  useLayoutEffect(() => {
+    if (phoneShell) return;
+    const element = messageScroll.current;
+    if (!element) return;
+    restoreThreadScroll(element, scrollAnchor.current, stickToLatest.current);
+  }, [hatchOpen, hatchWidth, panel, phoneShell]);
+
+  useEffect(() => {
+    if (phoneShell) return;
+    const element = messageScroll.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => {
+      restoreThreadScroll(element, scrollAnchor.current, stickToLatest.current);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [active?.id, phoneShell, hatchOpen]);
+
   function resizeRack(width: number) {
     setRackWidth(
       constrainPaneWidth("left", width, {
@@ -2318,6 +2338,7 @@ export function ShellPage() {
               if (!element) return;
               stickToLatest.current =
                 element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+              scrollAnchor.current = captureMessageAnchor(element);
             }}
             className="ab-scroll flex min-w-0 flex-1 flex-col gap-[13px] overflow-x-hidden overflow-y-auto px-7 py-6"
           >

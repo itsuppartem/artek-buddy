@@ -802,3 +802,52 @@ def test_hello_does_not_add_identity_city_card(
     open_memory(page, name)
     expect(page.get_by_test_id("new-memory")).to_be_visible(timeout=8_000)
     expect(page.get_by_test_id("memory-doc").filter(has_text=token)).to_have_count(0)
+
+
+def test_opening_computer_keeps_latest_messages_in_view(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("DeskPin")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    send_message(page, "please e2e-load-earlier", name)
+    thread = page.get_by_test_id("thread")
+    expect(page.get_by_test_id("load-earlier")).to_be_visible(timeout=15_000)
+    thread.evaluate("el => { el.scrollTop = el.scrollHeight; }")
+    last = page.locator('[data-testid="thread-message"]').last
+    expect(last).to_be_in_viewport()
+    last_id = last.get_attribute("data-message-id")
+    assert last_id
+    page.get_by_role("button", name="Computer").click()
+    expect(page.get_by_test_id("computer-state")).to_be_visible(timeout=8_000)
+    expect(page.locator(f'[data-message-id="{last_id}"]')).to_be_in_viewport()
+    overflow = thread.evaluate("el => el.scrollHeight - el.clientHeight")
+    scroll_top = thread.evaluate("el => el.scrollTop")
+    assert overflow > 0
+    assert scroll_top != 0
+    close_computer_pane(page)
+    expect(page.locator(f'[data-message-id="{last_id}"]')).to_be_in_viewport()
+
+
+def test_opening_computer_keeps_scrolled_up_place(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("DeskMid")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    send_message(page, "please e2e-load-earlier", name)
+    thread = page.get_by_test_id("thread")
+    expect(page.get_by_test_id("load-earlier")).to_be_visible(timeout=15_000)
+    mid = page.locator('[data-testid="thread-message"]').nth(2)
+    mid.scroll_into_view_if_needed()
+    mid_id = mid.get_attribute("data-message-id")
+    assert mid_id
+    last = page.locator('[data-testid="thread-message"]').last
+    expect(last).not_to_be_in_viewport()
+    page.get_by_role("button", name="Computer").click()
+    expect(page.get_by_test_id("computer-state")).to_be_visible(timeout=8_000)
+    expect(page.locator(f'[data-message-id="{mid_id}"]')).to_be_in_viewport()
+    expect(last).not_to_be_in_viewport()
+    close_computer_pane(page)
+    expect(page.locator(f'[data-message-id="{mid_id}"]')).to_be_in_viewport()
+    expect(last).not_to_be_in_viewport()
