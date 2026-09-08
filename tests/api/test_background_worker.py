@@ -308,9 +308,7 @@ def test_worker_streamed_essay_does_not_become_progress(client, auth_header) -> 
     assert reload_snap.status_code == 200
     body = reload_snap.json()
     assert body["run"]["status"] == "completed"
-    restored = [
-        item for item in (body.get("subagents") or []) if item.get("status") == "completed"
-    ]
+    restored = [item for item in (body.get("subagents") or []) if item.get("status") == "completed"]
     assert restored
     assert restored[0].get("progress") == E2E_WORKER_PROGRESS_STEP
     assert E2E_WORKER_ESSAY_MARK not in (restored[0].get("progress") or "")

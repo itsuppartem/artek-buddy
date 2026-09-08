@@ -220,6 +220,10 @@ def _parse_identity_city(user: str) -> str | None:
 def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     user = _user_tail(prompt or "")
     hay = user.lower()
+    # Worker result excerpts can contain markdown blank lines, so _user_tail
+    # may drop the inbox marker that sits before the last "\n\n".
+    if "a background worker finished" in (prompt or "").lower():
+        return [scripted_finish(E2E_WORKER_SUMMARY)]
     if ASKED_YOU_MARK in hay:
         return [
             scripted_tool("send_message", text=E2E_ASK_READY, terminal=True),
@@ -514,8 +518,6 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(E2E_OWNER_HELP_ANSWER),
         ]
-    if "a background worker finished" in hay:
-        return [scripted_finish(E2E_WORKER_SUMMARY)]
     if "e2e-worker-activity-no-text" in hay:
         return [
             scripted_tool(

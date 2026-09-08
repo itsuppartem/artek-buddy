@@ -4,6 +4,7 @@ import pytest
 
 from artek_buddy.bot_asks import ASKED_YOU_MARK
 from artek_buddy.config import Settings
+from artek_buddy.memory import wrap_turn_prompt
 from artek_buddy.runtime.factory import open_runtime, runtime_kind
 from artek_buddy.runtime.scripted import (
     E2E_ASK_FREE_QUESTION,
@@ -184,6 +185,19 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert steered[-1].result == E2E_WORKER_STEER_ACK
     done = steps_for_prompt("A background worker finished.\nresult: blocked work finished")
     assert done[0].result == E2E_WORKER_SUMMARY
+    essay_notify = wrap_turn_prompt(
+        (
+            "A background worker finished.\n"
+            "name: WorkerEssay\n"
+            "status: completed\n"
+            f"result: {E2E_WORKER_ESSAY.strip()[:400]}\n"
+            "Write one concise owner-facing result. Do not repeat the task or reasoning."
+        ),
+        None,
+        role="lead",
+    )
+    assert "\n\n" in E2E_WORKER_ESSAY
+    assert steps_for_prompt(essay_notify)[0].result == E2E_WORKER_SUMMARY
 
     ask = steps_for_prompt("please e2e-ask-bot KnowsPeer | what city do you know")
     assert ask[0].tool == "message_bot"
