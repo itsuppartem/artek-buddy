@@ -60,7 +60,11 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+<<<<<<< HEAD
 - Phone Today, Chats, and More are real scrollports, and the tab bar sits on the viewport bottom with one home-indicator inset.
+=======
+- Window Stop ends the live Cursor run, not only the host row, so the next Send starts a new turn instead of failing with an already-active-run error.
+>>>>>>> origin/develop
 - The chat lead can attach a downloadable file card again (`send_file`). That tool is no longer worker-only. A desktop-box path under `/home/artek` maps onto that bot's computer home. A host path in a text bubble is not the download.
 - Unchecking Fast now sends Fast off on every Send, not only session create. Composer does not send extra-high reasoning with that flag (that combo billed Fast). The runtime built-in task tool is denied so extra Fast workers cannot start; product workers stay on `spawn_subagent`.
 - Browser workers can call `ask_user` and `request_takeover` on the worker turn (`please e2e-worker-blocked-browser`, `please e2e-worker-park-takeover`). Unknown or empty `browser_act` kinds, and `evaluate` without an expression, return `ok: false` instead of a silent success.
