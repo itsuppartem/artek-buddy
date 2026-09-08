@@ -59,6 +59,16 @@ E2E_WORKER_PROGRESS_LINE_2 = "Still working: push MR 76. Next: comment on the ti
 E2E_WORKER_PROGRESS_RESULT = "progress job done"
 E2E_WORKER_PROGRESS_HOLD_S = 8.0
 E2E_WORKER_PROGRESS_GAP_S = 0.4
+E2E_WORKER_ESSAY_HOLD_S = 2.5
+E2E_WORKER_ESSAY_MARK = "Finish body that must not fill Still working"
+E2E_WORKER_ESSAY = (
+    f"## {E2E_WORKER_ESSAY_MARK}\n\n"
+    "This markdown dump is the worker's final answer: findings, headings, and a long "
+    "review that would overflow the waiting slot if streaming text were copied into "
+    "progress. The owner already gets one lead result. Keep this paragraph obviously "
+    "distinct from the clipped report_progress step. "
+    + ("More notes from the worker transcript. " * 8)
+)
 E2E_LEAD_OWNER_SSH = "Lead must not hold This-PC SSH."
 E2E_ASK_READY = "I am ready to answer. The city is Subotica."
 E2E_ASK_ANSWER = "They said the city is Subotica."
@@ -211,6 +221,10 @@ def _parse_identity_city(user: str) -> str | None:
 def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
     user = _user_tail(prompt or "")
     hay = user.lower()
+    # Worker result excerpts can contain markdown blank lines, so _user_tail
+    # may drop the inbox marker that sits before the last "\n\n".
+    if "a background worker finished" in (prompt or "").lower():
+        return [scripted_finish(E2E_WORKER_SUMMARY)]
     if ASKED_YOU_MARK in hay:
         return [
             scripted_tool("send_message", text=E2E_ASK_READY, terminal=True),
@@ -505,8 +519,6 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(E2E_OWNER_HELP_ANSWER),
         ]
-    if "a background worker finished" in hay:
-        return [scripted_finish(E2E_WORKER_SUMMARY)]
     if "e2e-worker-activity-no-text" in hay:
         return [
             scripted_tool(
@@ -574,6 +586,26 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 "spawn_subagent",
                 name="WorkerProgress",
                 task="please e2e-worker-progress-run",
+            ),
+            scripted_finish(E2E_WORKER_ACK),
+        ]
+    if "e2e-worker-essay-run" in hay:
+        return [
+            scripted_tool(
+                "report_progress",
+                step=E2E_WORKER_PROGRESS_STEP,
+                remaining=E2E_WORKER_PROGRESS_REMAINING,
+            ),
+            scripted_text(E2E_WORKER_ESSAY),
+            scripted_delay(E2E_WORKER_ESSAY_HOLD_S),
+            scripted_finish(E2E_WORKER_ESSAY),
+        ]
+    if "e2e-worker-essay" in hay:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name="WorkerEssay",
+                task="please e2e-worker-essay-run",
             ),
             scripted_finish(E2E_WORKER_ACK),
         ]

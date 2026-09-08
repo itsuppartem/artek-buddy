@@ -46,6 +46,31 @@ def wait_worker_step(
     raise AssertionError(f"{bot_id} never reached progress {step!r}: {last}")
 
 
+def wait_worker_essay_streamed(
+    client,
+    auth_header: dict[str, str],
+    bot_id: str,
+    mark: str,
+    timeout: float = 8.0,
+) -> dict:
+    deadline = time.time() + timeout
+    last: list[dict] = []
+    while time.time() < deadline:
+        last = _workers(client, auth_header, bot_id)
+        for item in last:
+            blob = " ".join(
+                (
+                    str(item.get("progress") or ""),
+                    str(item.get("thinking") or ""),
+                    str(item.get("result") or ""),
+                )
+            )
+            if item.get("last_activity_kind") == "text" or mark in blob:
+                return item
+        time.sleep(0.1)
+    raise AssertionError(f"{bot_id} never streamed worker essay {mark!r}: {last}")
+
+
 def test_simple_chat_does_not_spawn_a_worker(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "DirectLead")["id"]
     sent = client.post(
@@ -228,6 +253,67 @@ def test_worker_progress_stays_off_the_transcript(client, auth_header) -> None:
         item for item in _workers(client, auth_header, bot_id) if item["status"] == "completed"
     ]
     assert finished and "progress job done" in (finished[0].get("result") or "")
+
+
+def test_worker_streamed_essay_does_not_become_progress(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import (
+        E2E_WORKER_ACK,
+        E2E_WORKER_ESSAY,
+        E2E_WORKER_ESSAY_MARK,
+        E2E_WORKER_PROGRESS_REMAINING,
+        E2E_WORKER_PROGRESS_STEP,
+        E2E_WORKER_SUMMARY,
+    )
+
+    bot_id = create_bot(client, auth_header, "WorkerEssayLead")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-worker-essay"},
+    )
+    assert sent.status_code == 200
+    lead = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert lead["run"]["status"] == "completed"
+    assert E2E_WORKER_ACK in message_texts(lead)
+
+    streamed = wait_worker_essay_streamed(client, auth_header, bot_id, E2E_WORKER_ESSAY_MARK)
+    assert streamed["status"] == "running"
+    assert streamed.get("progress") == E2E_WORKER_PROGRESS_STEP
+    assert streamed.get("progress_remaining") == E2E_WORKER_PROGRESS_REMAINING
+    assert E2E_WORKER_ESSAY_MARK in (streamed.get("thinking") or "")
+    assert E2E_WORKER_ESSAY_MARK not in (streamed.get("progress") or "")
+    assert E2E_WORKER_ESSAY not in (streamed.get("progress") or "")
+
+    deadline = time.time() + 1.2
+    while time.time() < deadline:
+        live = _running(_workers(client, auth_header, bot_id))
+        assert live, "worker left running before the delayed finish"
+        assert live[0].get("progress") == E2E_WORKER_PROGRESS_STEP
+        assert E2E_WORKER_ESSAY_MARK not in (live[0].get("progress") or "")
+        time.sleep(0.2)
+
+    done = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_SUMMARY, timeout=20)
+    final_texts = message_texts(done)
+    assert final_texts.count(E2E_WORKER_SUMMARY) == 1
+    assert E2E_WORKER_ESSAY_MARK not in "\n".join(final_texts)
+    finished = [
+        item for item in _workers(client, auth_header, bot_id) if item["status"] == "completed"
+    ]
+    assert finished
+    assert finished[0].get("result") == E2E_WORKER_ESSAY
+    assert finished[0].get("progress") == E2E_WORKER_PROGRESS_STEP
+    assert E2E_WORKER_ESSAY_MARK not in (finished[0].get("progress") or "")
+
+    reload_snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert reload_snap.status_code == 200
+    body = reload_snap.json()
+    assert body["run"]["status"] == "completed"
+    restored = [item for item in (body.get("subagents") or []) if item.get("status") == "completed"]
+    assert restored
+    assert restored[0].get("progress") == E2E_WORKER_PROGRESS_STEP
+    assert E2E_WORKER_ESSAY_MARK not in (restored[0].get("progress") or "")
+    assert E2E_WORKER_ESSAY not in (restored[0].get("progress") or "")
+    assert restored[0].get("result") == E2E_WORKER_ESSAY
 
 
 def test_stop_ends_worker_progress_heartbeats(client, auth_header) -> None:
