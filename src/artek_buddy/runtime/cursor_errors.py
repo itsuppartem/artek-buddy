@@ -6,7 +6,7 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 
 import cursor_sdk
-from cursor_sdk import AgentBusyError, CursorAgentError
+from cursor_sdk import AgentBusyError
 
 from artek_buddy.runtime.cursor_wait import CURSOR_AUTH_ERROR_HINT
 from artek_buddy.runtime.types import AgentRuntimeError, AgentRuntimeExhausted
