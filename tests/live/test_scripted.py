@@ -75,6 +75,7 @@ def test_dead_wait_stuck_shows_run_error(page: Page, client_url: str, host_url: 
     err = page.get_by_test_id("run-error")
     expect(err).to_be_visible(timeout=20_000)
     expect(err).to_contain_text("The turn failed.")
+    expect(err).to_contain_text("The host retried")
     expect(err).to_contain_text("Send again")
     send_message(page, "hello", name)
     expect(page.locator('[data-testid="thread-message"][data-role="bot"]').last).to_contain_text(

@@ -24,8 +24,10 @@ from artek_buddy.config import Settings
 from artek_buddy.runtime.base import RuntimeBase
 from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.cursor_wait import (
+    current_product_run_id,
     dead_wait_owner_error,
     describe_cursor_wait,
+    log_cursor_turn_runs,
     log_cursor_wait,
     note_auth_failures,
     send_local_options,
@@ -77,8 +79,26 @@ async def _cancel_cursor_run(run: Any) -> None:
         result = cancel()
         if asyncio.iscoroutine(result):
             await result
+    except UnsupportedRunOperationError:
+        log.debug("cursor run cancel unsupported id=%s", getattr(run, "id", None))
     except Exception:
         log.exception("cursor run cancel failed")
+
+
+async def _release_cursor_run(run: Any) -> None:
+    """Cancel a live handle when supported, then wait so a retry send is not a second bill."""
+    if run is None:
+        return
+    await _cancel_cursor_run(run)
+    wait = getattr(run, "wait", None)
+    if not callable(wait):
+        return
+    try:
+        result = wait()
+        if asyncio.iscoroutine(result):
+            await result
+    except Exception:
+        log.debug("cursor run wait after cancel failed", exc_info=True)
 
 
 def _effort_allowed(model_id: str, allowed_params: set[str] | None) -> bool:
@@ -588,6 +608,8 @@ class CursorRuntime(RuntimeBase):
             force = False
             forced_once = False
             bridge_restarted_once = False
+            sdk_run_ids: list[str] = []
+            retry_reason: str | None = None
             try:
                 agent_id, agent, _lock = await self._agent(session_id, bot_id=bot_id, role=role)
                 self._stream_locks.setdefault(agent_id, stream_lock)
@@ -610,7 +632,11 @@ class CursorRuntime(RuntimeBase):
                         )
                         force = True
                         forced_once = True
+                        retry_reason = "agent_busy"
                         continue
+                    run_id = str(getattr(attempt.run, "id", "") or "")
+                    if run_id:
+                        sdk_run_ids.append(run_id)
                     for event in attempt.events:
                         yield event
                     self._auth_fails, recycle = note_auth_failures(
@@ -621,7 +647,7 @@ class CursorRuntime(RuntimeBase):
                     )
                     if attempt.mapped == "completed":
                         yield RunRecord(
-                            id=str(getattr(attempt.run, "id", "")),
+                            id=run_id,
                             agent_id=agent_id,
                             status=attempt.mapped,
                             result=attempt.text,
@@ -634,15 +660,15 @@ class CursorRuntime(RuntimeBase):
                         error=attempt.error,
                         duration_s=attempt.duration_s,
                     )
-                    if retry_dead and not forced_once:
+                    if retry_dead and not bridge_restarted_once:
+                        retry_reason = "dead_wait"
                         log.warning(
-                            "dead cursor wait; retrying same send with force on %s",
+                            "dead cursor wait; cancelling run %s before bridge recycle on %s",
+                            run_id,
                             agent_id,
                         )
-                        force = True
-                        forced_once = True
-                        continue
-                    if retry_dead and forced_once and not bridge_restarted_once:
+                        await _release_cursor_run(attempt.run)
+                        live_run.clear()
                         await self._leave_bridge()
                         bridge_held = False
                         agent_id, agent, bridge_epoch = await self._restart_bridge(
@@ -665,6 +691,8 @@ class CursorRuntime(RuntimeBase):
                         bridge_restarted_once = True
                         continue
                     if recycle and not bridge_restarted_once:
+                        await _release_cursor_run(attempt.run)
+                        live_run.clear()
                         await self._leave_bridge()
                         bridge_held = False
                         agent_id, agent, bridge_epoch = await self._restart_bridge(
@@ -680,13 +708,16 @@ class CursorRuntime(RuntimeBase):
                         attempt.error, recycle or bridge_restarted_once
                     )
                     yield RunRecord(
-                        id=str(getattr(attempt.run, "id", "")),
+                        id=run_id,
                         agent_id=agent_id,
                         status=attempt.mapped,
                         result=attempt.text,
                         error=error_code,
                     )
                     return
+            except AgentBusyError:
+                log.warning("cursor agent still busy after force retry")
+                raise
             except CursorAgentError as err:
                 log.error(
                     "run did not start: %s retryable=%s request_id=%s",
@@ -707,6 +738,12 @@ class CursorRuntime(RuntimeBase):
                 await _cancel_cursor_run(live_run[0] if live_run else None)
                 raise
             finally:
+                if sdk_run_ids or retry_reason:
+                    log_cursor_turn_runs(
+                        current_product_run_id(self, bot_id),
+                        sdk_run_ids,
+                        retry_reason,
+                    )
                 if bridge_held:
                     await self._leave_bridge()
 
