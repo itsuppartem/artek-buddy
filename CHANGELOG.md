@@ -62,6 +62,7 @@
 ### Fixed
 - Busy chats keep **Still working:** in one waiting slot under the transcript. The header stays a short Working line and the run summary does not repeat that paragraph.
 - Window Stop ends the live Cursor run, not only the host row, so the next Send starts a new turn instead of failing with an already-active-run error.
+- A dead Cursor wait no longer bills a second Run via a forced send before recycling the local bridge. The first runtime run is cancelled first; a successful recovery stays silent and a failed recovery says the host retried.
 - The chat lead can attach a downloadable file card again (`send_file`). That tool is no longer worker-only. A desktop-box path under `/home/artek` maps onto that bot's computer home. A host path in a text bubble is not the download.
 - Unchecking Fast now sends Fast off on every Send, not only session create. Composer does not send extra-high reasoning with that flag (that combo billed Fast). The runtime built-in task tool is denied so extra Fast workers cannot start; product workers stay on `spawn_subagent`.
 - Browser workers can call `ask_user` and `request_takeover` on the worker turn (`please e2e-worker-blocked-browser`, `please e2e-worker-park-takeover`). Unknown or empty `browser_act` kinds, and `evaluate` without an expression, return `ok: false` instead of a silent success.
@@ -140,7 +141,7 @@
 - A shorter restatement of an already detailed standing rule no longer revises the same Memory chapter or writes another identical Remembered line.
 - Back-to-back and parallel This-PC calls no longer reuse a process-global consent id. Late owner results are rejected, completed auto jobs are not offered again, and the phone/host page leaves auto jobs for the paired Linux client.
 - A new model session no longer receives the current user send twice in compact history; repeated identical user lines from silent failed runs collapse to one.
-- An instant dead Cursor wait after a good turn retries that same send: it expires a stuck run, then restarts the poisoned local SDK bridge and resumes the same chat if needed. A successful recovery no longer asks the owner to Send again.
+- An instant dead Cursor wait after a good turn cancels that runtime run, then restarts the poisoned local SDK bridge and retries the same send once. A successful recovery stays silent; a failed recovery says the host retried. The host does not open a second billed run while the first handle is still live.
 - Stop on a live turn writes Stopped. A late model complete from that run does not land as a bot bubble.
 - Release keeps the last guest frame on the overlay until the view-only picture loads. Take control from Sleeping names Waking the desktop… instead of a black void.
 - One click on an inbox row opens that chat. A leftover mouse-up or a late inbox fallback does not land on the previous thread.
