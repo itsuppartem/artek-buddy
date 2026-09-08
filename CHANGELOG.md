@@ -61,6 +61,7 @@
 
 ### Fixed
 - Busy chats keep **Still working:** in one waiting slot under the transcript. The header stays a short Working line and the run summary does not repeat that paragraph.
+- Quota and bad-key Cursor send failures finish with an owner-visible `run-error` instead of a silent dead turn: exhausted quota says to wait and try again; an invalid key says to open Models. A retryable rate limit waits `retry_after` (or a bounded backoff) and retries send once before that message. Busy still uses local force once.
 - The pairing Cavalier mark stays inside the sky hero on Deb and Phone instead of clipping off the card or covering Pair.
 - Phone Today, Chats, and More are real scrollports, and the tab bar sits on the viewport bottom with one home-indicator inset.
 - Streaming worker text no longer fills **Still working:** (`please e2e-worker-essay`). That slot stays the last clipped `report_progress` step (or dots) until the worker is terminal; the finish body is the worker `result`, not `progress`.

@@ -23,6 +23,12 @@ from cursor_sdk import (
 from artek_buddy.config import Settings
 from artek_buddy.runtime.base import RuntimeBase
 from artek_buddy.runtime.capabilities import RuntimeCapabilities
+from artek_buddy.runtime.cursor_errors import (
+    log_cursor_agent_error,
+    map_cursor_agent_error,
+    rate_limit_wait_seconds,
+    should_retry_rate_limit,
+)
 from artek_buddy.runtime.cursor_wait import (
     current_product_run_id,
     dead_wait_owner_error,
@@ -530,6 +536,38 @@ class CursorRuntime(RuntimeBase):
             except Exception:
                 log.exception("failed to cancel stale cursor run %s", rid)
 
+    async def _send_with_limit_retry(
+        self,
+        agent: Any,
+        prompt: str,
+        cwd: str,
+        *,
+        force: bool,
+    ) -> Any:
+        """Call send() only. One rate-limit retry if send raised before a run started."""
+        options = send_local_options(cwd, force=force, model=self.model)
+        retried = False
+        while True:
+            try:
+                return await agent.send(prompt, options)
+            except CursorAgentError as err:
+                if isinstance(err, AgentBusyError) or _is_agent_busy_error(err):
+                    raise
+                if should_retry_rate_limit(err, retried=retried):
+                    wait_s = rate_limit_wait_seconds(err, 0)
+                    log.warning(
+                        "cursor rate limited; waiting %.3fs then retrying once "
+                        "retryable=%s request_id=%s",
+                        wait_s,
+                        getattr(err, "is_retryable", None),
+                        getattr(err, "request_id", None),
+                    )
+                    await asyncio.sleep(wait_s)
+                    retried = True
+                    continue
+                log_cursor_agent_error(err)
+                raise map_cursor_agent_error(err) from err
+
     async def _attempt_send(
         self,
         agent: Any,
@@ -542,10 +580,7 @@ class CursorRuntime(RuntimeBase):
     ) -> _SendAttempt:
         events: list[ProductStreamEvent] = []
         streamed = 0
-        run = await agent.send(
-            prompt,
-            send_local_options(cwd, force=force, model=self.model),
-        )
+        run = await self._send_with_limit_retry(agent, prompt, cwd, force=force)
         live_run.clear()
         live_run.append(run)
         log.info("run started run_id=%s agent_id=%s force=%s", run.id, agent_id, force)
@@ -719,17 +754,8 @@ class CursorRuntime(RuntimeBase):
                 log.warning("cursor agent still busy after force retry")
                 raise
             except CursorAgentError as err:
-                log.error(
-                    "run did not start: %s retryable=%s request_id=%s",
-                    err.message,
-                    err.is_retryable,
-                    getattr(err, "request_id", None),
-                )
-                raise AgentRuntimeError(
-                    err.message,
-                    retryable=bool(err.is_retryable),
-                    request_id=getattr(err, "request_id", None),
-                ) from err
+                log_cursor_agent_error(err)
+                raise map_cursor_agent_error(err) from err
             except asyncio.CancelledError:
                 # 3.11+ keeps the task cancelled until uncancel(); run.cancel() must still await.
                 current = asyncio.current_task()
