@@ -524,6 +524,7 @@ Or, on the scripted host: `please e2e-send-file`.
 | Check | Deb | Phone |
 | --- | :---: | :---: |
 | Thread shows a **file-card** with the name (e.g. `notes.txt`), not a raw dump of the bytes | [ ] | [ ] |
+| The chat you are in (lead) posts that card itself. A `/data/homes/…` path in a text bubble, or “send_file is unavailable”, is a fail | [ ] | [ ] |
 | Download works. Deb: system Save dialog, default Downloads / Загрузки; Cancel writes nothing. Phone: browser / share sheet, **not** the Linux home | [ ] | [ ] |
 | Card stays after Download. A second Download does not duplicate the Pi copy | [ ] | [ ] |
 | Deleting **this chat** removes that chat’s inbox copy; other bots and a Team home stay | [ ] | [ ] |

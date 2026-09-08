@@ -20,6 +20,7 @@ from artek_buddy.runtime.tools.common import (
     _is_under,
     _safe_filename,
     log,
+    map_desktop_home_path,
 )
 
 
@@ -311,8 +312,10 @@ class ChatToolsMixin:
         text = str(raw or "").strip()
         if not text:
             return None
-        path = Path(text)
         roots = self._agent_file_roots(bot_id)
+        home = roots[0] if roots else Path(self.runtime.home_cwd(bot_id))
+        text = map_desktop_home_path(text, home)
+        path = Path(text)
         candidates: list[Path] = []
         if path.is_absolute():
             candidates.append(path)

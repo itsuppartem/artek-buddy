@@ -51,6 +51,23 @@ MAX_SEND_FILE_BYTES = 25 * 1024 * 1024
 
 MAX_INLINE_FILE_BYTES = 1 * 1024 * 1024
 
+# Guest HOME inside the desktop box (bind-mounted from the bot computer home).
+DESKTOP_GUEST_HOME = "/home/artek"
+
+
+def map_desktop_home_path(raw: str, home: Path) -> str:
+    """Rewrite a desktop-box HOME path onto this bot's host home. Lexical only."""
+    text = str(raw or "").strip()
+    if not text:
+        return text
+    posix = text.replace("\\", "/")
+    prefix = DESKTOP_GUEST_HOME
+    if posix == prefix or posix.startswith(prefix + "/"):
+        rel = posix[len(prefix) :].lstrip("/")
+        return str(home / rel) if rel else str(home)
+    return text
+
+
 CONSENT_DONE = "The owner already answered the Allow card. Do not ask them to press Allow."
 
 OWNER_STEER = (
