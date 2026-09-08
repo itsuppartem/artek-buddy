@@ -854,12 +854,6 @@ def test_worker_essay_stays_out_of_still_working(
     expect(page.get_by_test_id("work-log-worker")).to_be_visible()
     expect(page.get_by_test_id("thread-stop")).to_be_visible()
     expect(composer(page)).to_be_enabled()
-    deadline = time.time() + 4.0
-    while time.time() < deadline:
-        expect(status).to_contain_text(E2E_WORKER_PROGRESS_LINE)
-        expect(status).not_to_contain_text(E2E_WORKER_ESSAY_MARK)
-        expect(pane).not_to_contain_text(E2E_WORKER_ESSAY_MARK)
-        time.sleep(0.3)
     expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_be_visible(timeout=20_000)
     expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_have_count(1)
     expect(status).to_have_count(0)

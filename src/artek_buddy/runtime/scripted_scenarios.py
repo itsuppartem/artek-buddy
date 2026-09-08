@@ -59,6 +59,7 @@ E2E_WORKER_PROGRESS_LINE_2 = "Still working: push MR 76. Next: comment on the ti
 E2E_WORKER_PROGRESS_RESULT = "progress job done"
 E2E_WORKER_PROGRESS_HOLD_S = 8.0
 E2E_WORKER_PROGRESS_GAP_S = 0.4
+E2E_WORKER_ESSAY_HOLD_S = 2.5
 E2E_WORKER_ESSAY_MARK = "Finish body that must not fill Still working"
 E2E_WORKER_ESSAY = (
     f"## {E2E_WORKER_ESSAY_MARK}\n\n"
@@ -596,7 +597,7 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
                 remaining=E2E_WORKER_PROGRESS_REMAINING,
             ),
             scripted_text(E2E_WORKER_ESSAY),
-            scripted_delay(E2E_WORKER_PROGRESS_HOLD_S),
+            scripted_delay(E2E_WORKER_ESSAY_HOLD_S),
             scripted_finish(E2E_WORKER_ESSAY),
         ]
     if "e2e-worker-essay" in hay:

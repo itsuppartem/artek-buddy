@@ -284,7 +284,7 @@ def test_worker_streamed_essay_does_not_become_progress(client, auth_header) -> 
     assert E2E_WORKER_ESSAY_MARK not in (streamed.get("progress") or "")
     assert E2E_WORKER_ESSAY not in (streamed.get("progress") or "")
 
-    deadline = time.time() + 4.0
+    deadline = time.time() + 1.2
     while time.time() < deadline:
         live = _running(_workers(client, auth_header, bot_id))
         assert live, "worker left running before the delayed finish"
