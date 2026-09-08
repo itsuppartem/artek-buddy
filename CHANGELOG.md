@@ -60,6 +60,7 @@
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+- Phone Today, Chats, and More are real scrollports, and the tab bar sits on the viewport bottom with one home-indicator inset.
 - Streaming worker text no longer fills **Still working:** (`please e2e-worker-essay`). That slot stays the last clipped `report_progress` step (or dots) until the worker is terminal; the finish body is the worker `result`, not `progress`.
 - Window Stop ends the live Cursor run, not only the host row, so the next Send starts a new turn instead of failing with an already-active-run error.
 - A dead Cursor wait no longer bills a second Run via a forced send before recycling the local bridge. The first runtime run is cancelled first; a successful recovery stays silent and a failed recovery says the host retried.
