@@ -57,7 +57,6 @@ import {
 } from "../lib/consent";
 import { copyText } from "../lib/copy-text";
 import { hatchIsOpen, hatchPointerEvents } from "../lib/hatch";
-import { captureMessageAnchor, restoreThreadScroll } from "../lib/thread-scroll";
 import { inFlightProgressText } from "../lib/in-flight-status";
 import { contextLinkUrl, stripMarkdown } from "../lib/markdown";
 import { dispatchMemoryChanged } from "../lib/memory";
@@ -114,6 +113,7 @@ import {
   isRawRunFailedMessage,
   isToolNoise,
 } from "../lib/thread-events";
+import { captureMessageAnchor, restoreThreadScroll } from "../lib/thread-scroll";
 import {
   applyOlderPageForBot,
   applySnapshotForBot,

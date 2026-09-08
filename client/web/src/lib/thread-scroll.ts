@@ -12,6 +12,13 @@ export function captureMessageAnchor(element: HTMLElement): ScrollAnchor | null 
   return null;
 }
 
+function escapeMessageId(value: string): string {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(value);
+  }
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 export function restoreThreadScroll(
   element: HTMLElement,
   anchor: ScrollAnchor | null,
@@ -23,7 +30,7 @@ export function restoreThreadScroll(
   }
   if (!anchor) return;
   const node = element.querySelector<HTMLElement>(
-    `[data-message-id="${CSS.escape(anchor.id)}"]`,
+    `[data-message-id="${escapeMessageId(anchor.id)}"]`,
   );
   if (!node) return;
   element.scrollTop = node.offsetTop - anchor.fromTop;
