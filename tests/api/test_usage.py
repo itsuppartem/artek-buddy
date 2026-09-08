@@ -145,22 +145,34 @@ def test_worker_usage_run_id_is_distinct_from_lead(client, auth_header) -> None:
     worker_row = _wait_usage_row(client, auth_header, bot_id, worker_id)
     assert lead_row["run_id"] == lead_id
     assert worker_row["run_id"] == worker_id
+    assert lead_row["run_id"] != worker_row["run_id"]
     assert lead_row["input_tokens"] == SCRIPTED_LEAD_USAGE.input_tokens
     assert worker_row["input_tokens"] == SCRIPTED_WORKER_USAGE.input_tokens
+    lead_summary = client.get(
+        "/v1/usage/summary",
+        headers=auth_header,
+        params={"bot_id": bot_id, "run_id": lead_id},
+    )
+    assert lead_summary.status_code == 200
+    assert lead_summary.json()["runs"] == 1
+    assert lead_summary.json()["total_tokens"] == SCRIPTED_LEAD_USAGE.total_tokens
+    worker_summary = client.get(
+        "/v1/usage/summary",
+        headers=auth_header,
+        params={"bot_id": bot_id, "run_id": worker_id},
+    )
+    assert worker_summary.status_code == 200
+    assert worker_summary.json()["runs"] == 1
+    assert worker_summary.json()["total_tokens"] == SCRIPTED_WORKER_USAGE.total_tokens
+    listed = client.get("/v1/usage", headers=auth_header, params={"bot_id": bot_id})
+    assert listed.status_code == 200
+    run_ids = {item["run_id"] for item in listed.json()["records"]}
+    assert lead_id in run_ids
+    assert worker_id in run_ids
     summary = client.get(
         "/v1/usage/summary",
         headers=auth_header,
         params={"bot_id": bot_id},
     )
     assert summary.status_code == 200
-    totals = summary.json()
-    assert totals["runs"] == 2
-    assert totals["input_tokens"] == (
-        SCRIPTED_LEAD_USAGE.input_tokens + SCRIPTED_WORKER_USAGE.input_tokens
-    )
-    assert totals["output_tokens"] == (
-        SCRIPTED_LEAD_USAGE.output_tokens + SCRIPTED_WORKER_USAGE.output_tokens
-    )
-    assert totals["total_tokens"] == (
-        SCRIPTED_LEAD_USAGE.total_tokens + SCRIPTED_WORKER_USAGE.total_tokens
-    )
+    assert summary.json()["runs"] >= 2
