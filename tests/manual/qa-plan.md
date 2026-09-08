@@ -55,7 +55,7 @@ Mint three bots for the run. Names can differ; they must be distinct:
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Pairing uses the new navy / sky / cream Cavalier. The dog belongs to this palette; no old warm-card art remains | [ ] | [ ] |
+| Pairing uses the new navy / sky / cream Cavalier. The full lying mark sits inside the sky hero on Deb and Phone; it does not cover Pair or the code field | [ ] | [ ] |
 | After Pair the first surface is **Today**, not a random bot. It shows **What needs doing?** and does not boot a desktop | [ ] | [ ] |
 | Today identifies **Workspace routing · uses every bot's context**; there is no coordinator bot in Chats and pinning does not choose one. Submit an outcome: the host reads existing bot profiles, activity, and bounded recent context, routes once, stays on Today, and the selected existing bot moves to **In progress** | [ ] | [ ] |
 | Open the routed bot: the exact outcome appears once in that bot's durable chat. With no bots, the action says **Create your first bot**; it never invents a lead chat | [ ] | [ ] |
@@ -289,7 +289,7 @@ Home Screen, phone width (375×812). Also confirm the wide Deb window does **not
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Pair title **Pair this phone**, code `XXXX-XXXX` → Pair. Pairing options contains device name Phone; **no** host URL field | — | [ ] |
+| Pair title **Pair this phone**, code `XXXX-XXXX` → Pair. The Cavalier mark is fully inside the hero. Pairing options contains device name Phone; **no** host URL field | — | [ ] |
 | Deb pair is **Pair this computer**. Pairing options contains Host URL and this PC's device name | [ ] | — |
 | After Pair, **Today** is visible and scrolls: **Ready for you** and **Open routines** can be brought above the tab bar. Bottom **Today / Chats / Desktop / More**, targets at least 44px. Top notch / safe area present; **no** second empty belt under the nav | — | [ ] |
 | Chats shows the inbox between Search and the bottom nav. A long list scrolls; Search stays; the list does not slide under the nav. Tap a bot for the thread; Chats remains selected and Back returns to the list | — | [ ] |
@@ -327,7 +327,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 
 | Check | Deb | Phone |
 | --- | --- | --- |
-| Fresh pair with a 15-minute one-use code works. A second use of the same code fails under the form | [ ] | [ ] |
+| Fresh pair with a 15-minute one-use code works. A second use of the same code fails under the form. The Cavalier mark stays inside the pairing hero | [ ] | [ ] |
 | Pairing body says to create a one-use code on the host and choose Pair. **Pairing options** reveals Host URL only on Deb and device name on both surfaces. Phone has no token / mint / `python -m`; Deb shows `docker exec artek-buddy python -m artek_buddy pair`. Funnel / tailnet Pair on that same HTTPS URL succeeds (not `forbidden`) | [ ] | [ ] |
 | After pair, the credential is not visible in the page (Deb: `~/.config/artek-buddy/token` mode 600; Phone: httpOnly cookie) | [ ] | [ ] |
 | Auth error: **Pair this computer again** (Deb) / **Pair this phone again** (Phone). Click unpairs to the matching pair screen. Does not queue as an offline send | [ ] | [ ] |
