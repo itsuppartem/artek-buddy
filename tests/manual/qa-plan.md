@@ -178,6 +178,7 @@ Open **Desktop** for **Demo** (Private) or Team.
 | Check | Deb | Phone |
 | --- | --- | --- |
 | **Offline • Click to start** → Booting → Running **view-only** (Preview · view only / fake: Running tile). Not the fullscreen control overlay. **Take control** is a separate grant. Settings still does not boot | [ ] | [ ] |
+| Deb: a long chat pinned to the latest stays on those last bubbles after **Computer** opens or closes; scrolling up then opening Computer does not jump the transcript to the top | [ ] | — |
 | Preview is a live screen, caption **Preview · view only**. Not black text «Desktop is running». Click on the preview does **not** take control | [ ] | [ ] |
 | fluxbox panel: window title, close, menu. Not a bare X | [ ] | [ ] |
 | **Take control** → mouse / keys go to the guest. Caps Lock raises case (`abc` → `ABC`). **Release** → the same turn continues; typing dots and Stop work again | [ ] | [ ] |
@@ -371,7 +372,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Header shows bot identity plus **Computer** only. Work summary names decision / working / complete / failed and owns the single **Show work log** action without covering the transcript or composer | [ ] | [ ] |
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
-| Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
+| Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages. Opening **Computer** (or Work log / Library) on Deb does not rewind that same chat | [ ] | [ ] |
 | Failed / cancelled run shows a run-error, not a silent hole. After 60+ minutes idle, the first live Cursor Send may restart its local bridge but still completes on that Send with no red line. Scripted `please e2e-dead-wait` proves the bounded hidden retry (bot `ok`, no Send-again); `please e2e-dead-wait-stuck` still shows one terminal error | [ ] | [ ] |
 | `please e2e-park-takeover`: as soon as the computer card appears, typing dots and Stop are gone. A follow-up while `waiting_takeover` starts a turn (does not only enqueue) | [ ] | [ ] |
 | Stop keeps the run cancelled: a late complete does not append the essay (scripted `please e2e-late-complete` or a live Cursor turn). **Stopped.** is one `run-error` line. Queued owner lines survive Stop and prepend to the **next** send. Stop must not leave a running zombie; `please e2e-lead-owner-ssh` then another Send is a new run | [ ] | [ ] |
