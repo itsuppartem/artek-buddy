@@ -372,8 +372,8 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Attention pill sits **under** the header, not over Send or Load earlier. Title opens that chat; Dismiss hides it and does **not** switch the open chat | [ ] | [ ] |
 | A finished background chat still raises replied / failed. Finishing does not steal the open chat | [ ] | [ ] |
 | Thread stays on the latest cards when pinned to the bottom. A switch lands on the latest messages | [ ] | [ ] |
-| Failed / cancelled run shows a run-error, not a silent hole. After 60+ minutes idle, the first live Cursor Send may restart its local bridge but still completes on that Send with no red line. Scripted `please e2e-dead-wait` proves the bounded hidden retry (bot `ok`, no Send-again); `please e2e-dead-wait-stuck` still shows one terminal error | [ ] | [ ] |
 | Quota / bad-key Send (live Cursor): quota `run-error` is **The model quota is exhausted. Wait and try again.** (retryable, not **The turn failed.**). A bad or missing Cursor key says **Open Models and check the Cursor key.** and does not look like a silent dead turn | [ ] | [ ] |
+| Failed / cancelled run shows a run-error, not a silent hole. After 60+ minutes idle, the first live Cursor Send may restart its local bridge but still completes on that Send with no red line. Scripted `please e2e-dead-wait` proves the bounded hidden retry (bot `ok`, no Send-again); `please e2e-dead-wait-stuck` still shows one terminal error that the host retried | [ ] | [ ] |
 | `please e2e-park-takeover`: as soon as the computer card appears, typing dots and Stop are gone. A follow-up while `waiting_takeover` starts a turn (does not only enqueue) | [ ] | [ ] |
 | Stop keeps the run cancelled: a late complete does not append the essay (scripted `please e2e-late-complete` or a live Cursor turn). **Stopped.** is one `run-error` line. Queued owner lines survive Stop and prepend to the **next** send. Stop must not leave a running zombie; after Stop the next Send is a new run (`please e2e-lead-owner-ssh` or a live Cursor turn) and does not show the busy / already-has-active-run error | [ ] | [ ] |
 
@@ -645,7 +645,7 @@ If time is short, in this order:
 16. **§8 / §15 Dismiss** on needs-you keeps the current chat. Park while this chat is open, then switch — still «needs you»
 17. **§9 Queue** pending mark, then local Sent while offline
 18. **§15 Stop** on a live turn shows Stopped. A late complete does not land. The next Send is a new run and does not show the busy / already-has-active-run error
-19. **§15 dead wait / quota / key** after 60+ minutes idle, the first live Send completes without a red line; scripted `please e2e-dead-wait` completes on that send and `please e2e-dead-wait-stuck` still shows one terminal error. A quota fail says exhausted and wait; a bad Cursor key says to open Models — not a silent dead turn
+19. **§15 dead wait / quota / key** after 60+ minutes idle, the first live Send completes without a red line; scripted `please e2e-dead-wait` completes on that send and `please e2e-dead-wait-stuck` still shows one terminal error that the host retried. A quota fail says exhausted and wait; a bad Cursor key says to open Models — not a silent dead turn
 20. **§23 Notifications** launch three times → one client; unfocused, minimized, or hidden `please e2e-slow` → one Artek Buddy row, and opening that chat withdraws it
 
 Then the rest of §1, 6, 8, 9, 10, 13–24, 30.

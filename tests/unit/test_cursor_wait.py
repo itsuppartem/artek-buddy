@@ -94,6 +94,8 @@ def test_dead_wait_owner_error_names_the_next_step() -> None:
     from artek_buddy.runtime.cursor_wait import DEAD_WAIT_NEXT_STEP, dead_wait_owner_error
 
     assert dead_wait_owner_error(TURN_FAILED, True) == DEAD_WAIT_NEXT_STEP
+    assert "retried" in DEAD_WAIT_NEXT_STEP
+    assert "Send again" in DEAD_WAIT_NEXT_STEP
     assert dead_wait_owner_error(TURN_FAILED, False) == TURN_FAILED
 
 
@@ -131,3 +133,13 @@ def test_wait_error_logs_status_and_error_code(caplog) -> None:
         )
     assert "status=error" in caplog.text
     assert "Authentication error" in caplog.text
+
+
+def test_log_cursor_turn_runs_lists_every_sdk_id(caplog) -> None:
+    from artek_buddy.runtime.cursor_wait import log_cursor_turn_runs
+
+    with caplog.at_level("INFO", logger="artek_buddy"):
+        log_cursor_turn_runs("run_product", ["run-dead", "run-recovered"], "dead_wait")
+    assert "product_run=run_product" in caplog.text
+    assert "sdk_run_ids=run-dead,run-recovered" in caplog.text
+    assert "retry_reason=dead_wait" in caplog.text
