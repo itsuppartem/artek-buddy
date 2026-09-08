@@ -28,8 +28,8 @@ from artek_buddy.runtime.scripted import (
     E2E_WORKER_ACK,
     E2E_WORKER_BLOCK_S,
     E2E_WORKER_ESSAY,
+    E2E_WORKER_ESSAY_HOLD_S,
     E2E_WORKER_ESSAY_MARK,
-    E2E_WORKER_PROGRESS_HOLD_S,
     E2E_WORKER_PROGRESS_LINE,
     E2E_WORKER_PROGRESS_RESULT,
     E2E_WORKER_PROGRESS_STEP,
@@ -166,7 +166,7 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
         and E2E_WORKER_ESSAY_MARK in str(step.event[1].get("text") or "")
         for step in essay_run
     )
-    assert essay_run[-2].delay_s == E2E_WORKER_PROGRESS_HOLD_S
+    assert essay_run[-2].delay_s == E2E_WORKER_ESSAY_HOLD_S
     assert essay_run[-1].result == E2E_WORKER_ESSAY
     assert len(E2E_WORKER_ESSAY) > 200
     assert E2E_WORKER_ESSAY_MARK not in E2E_WORKER_PROGRESS_LINE
@@ -198,6 +198,18 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     )
     assert "\n\n" in E2E_WORKER_ESSAY
     assert steps_for_prompt(essay_notify)[0].result == E2E_WORKER_SUMMARY
+    inbox_follow_up = (
+        "The user sent these messages while you were working. "
+        "They were not injected mid-turn. Apply them now.\n"
+        "1. "
+        "A background worker finished.\n"
+        "name: WorkerEssay\n"
+        "status: completed\n"
+        f"result: {E2E_WORKER_ESSAY.strip()[:400]}\n"
+        "Write one concise owner-facing result. Do not repeat the task or reasoning."
+    )
+    assert "\n\n" in inbox_follow_up
+    assert steps_for_prompt(inbox_follow_up)[0].result == E2E_WORKER_SUMMARY
 
     ask = steps_for_prompt("please e2e-ask-bot KnowsPeer | what city do you know")
     assert ask[0].tool == "message_bot"
