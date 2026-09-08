@@ -79,13 +79,13 @@ class _DuckSdkError(CursorAgentError):
         is_retryable: bool = True,
         request_id: str | None = None,
     ) -> None:
+        self._duck_retry_after = retry_after
+        self._duck_retryable = is_retryable
+        self._duck_request_id = request_id
         try:
             super().__init__(message, status=status)
         except TypeError:
             super().__init__(message)
-        self._duck_retry_after = retry_after
-        self._duck_retryable = is_retryable
-        self._duck_request_id = request_id
         self.message = message
         if status is not None and getattr(self, "status", None) is None:
             try:
@@ -97,13 +97,25 @@ class _DuckSdkError(CursorAgentError):
     def retry_after(self) -> Any:
         return self._duck_retry_after
 
+    @retry_after.setter
+    def retry_after(self, value: Any) -> None:
+        self._duck_retry_after = value
+
     @property
     def is_retryable(self) -> bool:
         return self._duck_retryable
 
+    @is_retryable.setter
+    def is_retryable(self, value: bool) -> None:
+        self._duck_retryable = bool(value)
+
     @property
     def request_id(self) -> str | None:
         return self._duck_request_id
+
+    @request_id.setter
+    def request_id(self, value: str | None) -> None:
+        self._duck_request_id = value
 
 
 def _sdk_type(name: str) -> type | None:
