@@ -26,6 +26,10 @@ from artek_buddy.runtime.scripted import (
     E2E_SUBAGENT_NAME,
     E2E_WORKER_ACK,
     E2E_WORKER_BLOCK_S,
+    E2E_WORKER_ESSAY,
+    E2E_WORKER_ESSAY_MARK,
+    E2E_WORKER_PROGRESS_HOLD_S,
+    E2E_WORKER_PROGRESS_LINE,
     E2E_WORKER_PROGRESS_RESULT,
     E2E_WORKER_PROGRESS_STEP,
     E2E_WORKER_RESULT,
@@ -149,6 +153,22 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert run[0].tool == "report_progress"
     assert run[0].args["step"] == E2E_WORKER_PROGRESS_STEP
     assert run[-1].result == E2E_WORKER_PROGRESS_RESULT
+    essay_lead = steps_for_prompt("please e2e-worker-essay")
+    assert essay_lead[0].tool == "spawn_subagent"
+    assert essay_lead[0].args["task"] == "please e2e-worker-essay-run"
+    essay_run = steps_for_prompt("please e2e-worker-essay-run")
+    assert essay_run[0].tool == "report_progress"
+    assert essay_run[0].args["step"] == E2E_WORKER_PROGRESS_STEP
+    assert any(
+        step.event
+        and step.event[0] == "thread.message.updated"
+        and E2E_WORKER_ESSAY_MARK in str(step.event[1].get("text") or "")
+        for step in essay_run
+    )
+    assert essay_run[-2].delay_s == E2E_WORKER_PROGRESS_HOLD_S
+    assert essay_run[-1].result == E2E_WORKER_ESSAY
+    assert len(E2E_WORKER_ESSAY) > 200
+    assert E2E_WORKER_ESSAY_MARK not in E2E_WORKER_PROGRESS_LINE
     lead_ssh = steps_for_prompt("please e2e-lead-owner-ssh")
     assert lead_ssh[0].tool == "run_owner_command"
     assert lead_ssh[-1].result == E2E_LEAD_OWNER_SSH
