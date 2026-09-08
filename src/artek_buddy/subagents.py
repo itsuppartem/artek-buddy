@@ -238,7 +238,7 @@ class SubagentService:
                 if item.type == "thread.message.updated":
                     draft = accumulate(draft, item.payload)
                     if draft:
-                        record = self.store.update_subagent(sub_id, progress=draft) or record
+                        record = self.store.update_subagent(sub_id, thinking=draft) or record
                         self.store.record_subagent_activity(sub_id, kind="text")
                         record = self.store.get_subagent(sub_id) or record
                         self._emit(live, record)

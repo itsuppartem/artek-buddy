@@ -1,5 +1,7 @@
 import { IconClose } from "../../ui/icons";
 
+export const PROGRESS_LINE_MAX = 200;
+
 export type WorkLogWorker = {
   id: string;
   parentRunId?: string | null;
@@ -15,6 +17,12 @@ export function summarizeWorkItem(task: string, maxLength = 76): string {
   if (firstSentence && firstSentence.length <= maxLength) return firstSentence;
   if (compact.length <= maxLength) return compact;
   return `${compact.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+export function clipProgressLine(text: string, maxLength = PROGRESS_LINE_MAX): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (compact.length <= maxLength) return compact;
+  return compact.slice(0, maxLength).trimEnd();
 }
 
 export function workersForRun(workers: WorkLogWorker[], runId?: string | null): WorkLogWorker[] {
@@ -69,7 +77,7 @@ export function WorkLogPane({
           </span>
         </div>
         <p className="mt-2 text-[12.5px] leading-5 text-mute">
-          {progress || "Artek has not published a detailed progress step."}
+          {clipProgressLine(progress || "") || "Artek has not published a detailed progress step."}
         </p>
       </section>
 
@@ -92,7 +100,7 @@ export function WorkLogPane({
                   </strong>
                   {worker.progress ? (
                     <span className="mt-0.5 block truncate text-[11px] text-mute">
-                      {worker.progress}
+                      {clipProgressLine(worker.progress)}
                     </span>
                   ) : null}
                 </span>
@@ -108,7 +116,7 @@ export function WorkLogPane({
                 ) : null}
                 {worker.progress ? (
                   <p className="mt-2 break-words text-[11.5px] leading-5 text-paper">
-                    {worker.progress}
+                    {clipProgressLine(worker.progress)}
                   </p>
                 ) : null}
                 {worker.lastToolName ? (
