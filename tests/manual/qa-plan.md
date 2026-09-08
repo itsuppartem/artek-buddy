@@ -291,9 +291,9 @@ Home Screen, phone width (375×812). Also confirm the wide Deb window does **not
 | --- | --- | --- |
 | Pair title **Pair this phone**, code `XXXX-XXXX` → Pair. Pairing options contains device name Phone; **no** host URL field | — | [ ] |
 | Deb pair is **Pair this computer**. Pairing options contains Host URL and this PC's device name | [ ] | — |
-| After Pair, **Today** is visible. Bottom **Today / Chats / Desktop / More**, targets at least 44px. Top notch / safe area present; **no** second empty belt under the nav | — | [ ] |
-| Chats shows the inbox between Search and the bottom nav. Tap a bot for the thread; Chats remains selected and Back returns to the list | — | [ ] |
-| More opens Library. Models and Connections open there and Close returns to Library / More | — | [ ] |
+| After Pair, **Today** is visible and scrolls: **Ready for you** and **Open routines** can be brought above the tab bar. Bottom **Today / Chats / Desktop / More**, targets at least 44px. Top notch / safe area present; **no** second empty belt under the nav | — | [ ] |
+| Chats shows the inbox between Search and the bottom nav. A long list scrolls; Search stays; the list does not slide under the nav. Tap a bot for the thread; Chats remains selected and Back returns to the list | — | [ ] |
+| More opens Library and scrolls so **Bot profile & access** can be reached. Models and Connections open there and Close returns to Library / More | — | [ ] |
 | Desktop opens only the bot computer. Close on Desktop or overlay ✕ returns to the selected thread under Chats (blank Desktop is a fail) | — | [ ] |
 | Share → Add to Home Screen: hint at the **top**, not over Today / More / nav. Got it hides it | — | [ ] |
 | Turn on alerts — only from the home-screen icon, and only while the app is open. No background | — | [ ] |
