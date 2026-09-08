@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { summarizeWorkItem, WorkLogPane, workersForRun } from "./WorkLogPane";
+import { clipProgressLine, summarizeWorkItem, WorkLogPane, workersForRun } from "./WorkLogPane";
 
 describe("WorkLogPane", () => {
   it("keeps operational detail available without placing it in the conversation", () => {
@@ -66,5 +66,29 @@ describe("WorkLogPane", () => {
     );
 
     expect(workers.map((worker) => worker.id)).toEqual(["latest"]);
+  });
+
+  it("clamps a long progress dump to a short line", () => {
+    const dumped = "x".repeat(400);
+    expect(clipProgressLine(dumped)).toHaveLength(200);
+    const html = renderToStaticMarkup(
+      createElement(WorkLogPane, {
+        botName: "Research desk",
+        runId: "run-current",
+        runStatus: "running",
+        progress: dumped,
+        workers: [
+          {
+            id: "worker-1",
+            parentRunId: "run-current",
+            status: "running",
+            task: "Verify dates",
+            progress: dumped,
+          },
+        ],
+        onClose: vi.fn(),
+      }),
+    );
+    expect(html).not.toContain("x".repeat(201));
   });
 });
