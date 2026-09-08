@@ -2018,7 +2018,7 @@ export function ShellPage() {
           data-workspace-visible={
             phoneShell ? (phoneTab === "today" ? "1" : "0") : workspaceView === "today" ? "1" : "0"
           }
-          className="min-w-0 flex-1"
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         >
           <TodayView
             bots={bots}
@@ -2034,7 +2034,7 @@ export function ShellPage() {
           data-phone-show={phoneTab === "chats" ? "1" : "0"}
           data-workspace-visible={phoneShell || workspaceView !== "today" ? "1" : "0"}
           style={phoneShell ? undefined : { width: rackWidth }}
-          className="flex shrink-0 flex-col bg-plate"
+          className="flex min-h-0 shrink-0 flex-col bg-plate"
         >
           <div className="app-drag flex min-h-11 items-center justify-between px-3 pb-1 pt-3">
             {pageSurface() === "host" ? (
@@ -2079,7 +2079,7 @@ export function ShellPage() {
               New
             </button>
           </div>
-          <div className="ab-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
+          <div className="ab-scroll flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
             <SearchHits
               query={query}
               hits={hostHits}
@@ -2121,7 +2121,7 @@ export function ShellPage() {
           data-testid="thread-pane"
           data-phone-show={phoneTab === "chat" ? "1" : "0"}
           data-workspace-visible={phoneShell || workspaceView !== "today" ? "1" : "0"}
-          className="relative flex min-w-0 flex-1 flex-col bg-ink"
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ink"
           onPaste={onChatPaste}
         >
           <div className="flex min-h-[58px] items-center justify-between border-b border-hairline bg-plate px-4 py-2.5">
@@ -2627,7 +2627,7 @@ export function ShellPage() {
           {hatchOpen ? (
             <div
               style={phoneShell ? undefined : { width: hatchWidth }}
-              className={`ab-scroll h-full overflow-y-auto px-4 py-3 ${phoneShell ? "w-full" : ""}`}
+              className={`ab-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3 ${phoneShell ? "w-full" : ""}`}
             >
               {panel === "library" ? (
                 <LibraryPane
