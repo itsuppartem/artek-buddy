@@ -830,6 +830,45 @@ def test_worker_progress_line_without_status_ping(
     expect(page.get_by_test_id("subagent-card")).to_have_count(0)
 
 
+def test_worker_essay_stays_out_of_still_working(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    from artek_buddy.runtime.scripted import (
+        E2E_WORKER_ACK,
+        E2E_WORKER_ESSAY_MARK,
+        E2E_WORKER_PROGRESS_LINE,
+        E2E_WORKER_SUMMARY,
+    )
+
+    name = _named(page, client_url, host_url, "BgEssay")
+    send_message(page, "please e2e-worker-essay", name)
+    thread = page.get_by_test_id("thread")
+    expect(thread.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
+    status = page.get_by_test_id("typing-indicator")
+    expect(status).to_be_visible(timeout=8_000)
+    expect(status).to_contain_text(E2E_WORKER_PROGRESS_LINE, timeout=8_000)
+    expect(status).not_to_contain_text(E2E_WORKER_ESSAY_MARK)
+    expect(
+        page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_ESSAY_MARK)
+    ).to_have_count(0)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+    expect(page.get_by_test_id("open-work-log")).to_have_count(1)
+    page.get_by_test_id("open-work-log").click()
+    pane = page.get_by_test_id("work-log-pane")
+    expect(pane).to_be_visible()
+    expect(pane).not_to_contain_text(E2E_WORKER_ESSAY_MARK)
+    expect(page.get_by_test_id("work-log-worker")).to_be_visible()
+    expect(page.get_by_test_id("thread-stop")).to_be_visible()
+    expect(composer(page)).to_be_enabled()
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_be_visible(timeout=20_000)
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_have_count(1)
+    expect(status).to_have_count(0)
+    expect(
+        page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_ESSAY_MARK)
+    ).to_have_count(0)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+
+
 def test_takeover_banner_on_other_chat(page: Page, client_url: str, host_url: str) -> None:
     speaker = unique_bot("Need")
     watcher = unique_bot("Idle")
