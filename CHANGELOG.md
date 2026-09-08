@@ -61,6 +61,7 @@
 
 ### Fixed
 - Busy chats keep **Still working:** in one waiting slot under the transcript. The header stays a short Working line and the run summary does not repeat that paragraph.
+- The pairing Cavalier mark stays inside the sky hero on Deb and Phone instead of clipping off the card or covering Pair.
 - Phone Today, Chats, and More are real scrollports, and the tab bar sits on the viewport bottom with one home-indicator inset.
 - Streaming worker text no longer fills **Still working:** (`please e2e-worker-essay`). That slot stays the last clipped `report_progress` step (or dots) until the worker is terminal; the finish body is the worker `result`, not `progress`.
 - Window Stop ends the live Cursor run, not only the host row, so the next Send starts a new turn instead of failing with an already-active-run error.
