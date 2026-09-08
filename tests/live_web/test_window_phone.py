@@ -6,6 +6,7 @@ from tests.live.helpers import (
     arm_page,
     bot_row,
     composer,
+    expect_pairing_mark_inside_card,
     fulfill_json,
     thread_header,
     unique_bot,
@@ -26,6 +27,7 @@ def test_host_page_pairing_copy_has_no_token_or_module(page: Page, host_url: str
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
     expect(form.get_by_text("Pair this phone")).to_be_visible()
+    expect_pairing_mark_inside_card(page)
     expect(form).to_contain_text(
         "Create a one-use pairing code on the host. Enter it here, then choose Pair."
     )
