@@ -804,10 +804,17 @@ def test_worker_progress_line_without_status_ping(
     status = page.get_by_test_id("typing-indicator")
     expect(status).to_contain_text(E2E_WORKER_PROGRESS_LINE, timeout=8_000)
     expect(
+        page.get_by_test_id("thread-pane").get_by_text(E2E_WORKER_PROGRESS_LINE, exact=True)
+    ).to_have_count(1)
+    expect(page.get_by_test_id("thread-header")).not_to_contain_text("Still working")
+    expect(page.get_by_test_id("thread-header")).to_contain_text("Working")
+    expect(page.get_by_test_id("work-summary")).not_to_contain_text("Still working")
+    expect(page.get_by_test_id("work-summary")).to_contain_text("Working on this task")
+    expect(page.get_by_test_id("open-work-log")).to_have_count(1)
+    expect(
         page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_PROGRESS_LINE)
     ).to_have_count(0)
     expect(page.get_by_test_id("subagent-card")).to_have_count(0)
-    expect(page.get_by_test_id("open-work-log")).to_have_count(1)
     page.get_by_test_id("open-work-log").click()
     expect(page.get_by_test_id("work-log-pane")).to_be_visible()
     expect(page.get_by_test_id("work-log-worker")).to_be_visible()

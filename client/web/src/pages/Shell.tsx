@@ -2142,7 +2142,7 @@ export function ShellPage() {
                 </span>
                 {active ? (
                   <span className="mt-0.5 block truncate text-[10.5px] text-mute">
-                    {isBusy ? flightText || "Working" : active.title || "Ready"}
+                    {isBusy ? "Working" : active.title || "Ready"}
                   </span>
                 ) : null}
               </span>
@@ -2266,10 +2266,9 @@ export function ShellPage() {
                           : "Task is complete"}
                   </p>
                   <p className="mt-0.5 truncate text-[11px] text-mute">
-                    {flightText ||
-                      (isParked
-                        ? "Open the computer or answer the request to continue."
-                        : "The conversation keeps the result and decisions.")}
+                    {isParked
+                      ? "Open the computer or answer the request to continue."
+                      : "The conversation keeps the result and decisions."}
                   </p>
                 </div>
                 <button
