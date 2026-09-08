@@ -53,20 +53,32 @@ class _SendAttempt:
     duration_s: float
 
 
+def _is_agent_busy_error(exc: BaseException) -> bool:
+    message = getattr(exc, "message", None)
+    text = str(message if message is not None else exc).lower()
+    return "already has active run" in text
+
+
 async def _cancel_cursor_run(run: Any) -> None:
     if run is None:
         return
-    for name in ("cancel", "stop", "abort"):
-        fn = getattr(run, name, None)
-        if not callable(fn):
-            continue
+    supports = getattr(run, "supports", None)
+    if callable(supports):
         try:
-            result = fn()
-            if asyncio.iscoroutine(result):
-                await result
+            if not supports("cancel"):
+                return
         except Exception:
-            log.exception("cursor run %s failed", name)
+            log.exception("cursor run supports(cancel) failed")
+            return
+    cancel = getattr(run, "cancel", None)
+    if not callable(cancel):
         return
+    try:
+        result = cancel()
+        if asyncio.iscoroutine(result):
+            await result
+    except Exception:
+        log.exception("cursor run cancel failed")
 
 
 def _effort_allowed(model_id: str, allowed_params: set[str] | None) -> bool:
@@ -506,6 +518,7 @@ class CursorRuntime(RuntimeBase):
         cwd: str,
         *,
         force: bool,
+        live_run: list[Any],
     ) -> _SendAttempt:
         events: list[ProductStreamEvent] = []
         streamed = 0
@@ -513,6 +526,8 @@ class CursorRuntime(RuntimeBase):
             prompt,
             send_local_options(cwd, force=force, model=self.model),
         )
+        live_run.clear()
+        live_run.append(run)
         log.info("run started run_id=%s agent_id=%s force=%s", run.id, agent_id, force)
         async for event in run.events():
             mapped_events = map_cursor_event(event)
@@ -569,7 +584,7 @@ class CursorRuntime(RuntimeBase):
         async with stream_lock:
             bridge_epoch = await self._enter_bridge()
             bridge_held = True
-            run = None
+            live_run: list[Any] = []
             force = False
             forced_once = False
             bridge_restarted_once = False
@@ -582,9 +597,11 @@ class CursorRuntime(RuntimeBase):
                     await self._cancel_stale_runs(agent_id)
                     try:
                         attempt = await self._attempt_send(
-                            agent, agent_id, prompt, cwd, force=force
+                            agent, agent_id, prompt, cwd, force=force, live_run=live_run
                         )
-                    except AgentBusyError:
+                    except (AgentBusyError, CursorAgentError) as err:
+                        if not (isinstance(err, AgentBusyError) or _is_agent_busy_error(err)):
+                            raise
                         if forced_once:
                             raise
                         log.warning(
@@ -594,7 +611,6 @@ class CursorRuntime(RuntimeBase):
                         force = True
                         forced_once = True
                         continue
-                    run = attempt.run
                     for event in attempt.events:
                         yield event
                     self._auth_fails, recycle = note_auth_failures(
@@ -684,7 +700,11 @@ class CursorRuntime(RuntimeBase):
                     request_id=getattr(err, "request_id", None),
                 ) from err
             except asyncio.CancelledError:
-                await _cancel_cursor_run(run)
+                # 3.11+ keeps the task cancelled until uncancel(); run.cancel() must still await.
+                current = asyncio.current_task()
+                if current is not None:
+                    current.uncancel()
+                await _cancel_cursor_run(live_run[0] if live_run else None)
                 raise
             finally:
                 if bridge_held:
