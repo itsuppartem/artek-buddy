@@ -4,6 +4,7 @@ import pytest
 
 from artek_buddy.bot_asks import ASKED_YOU_MARK
 from artek_buddy.config import Settings
+from artek_buddy.memory import wrap_turn_prompt
 from artek_buddy.runtime.factory import open_runtime, runtime_kind
 from artek_buddy.runtime.scripted import (
     E2E_ASK_FREE_QUESTION,
@@ -26,6 +27,10 @@ from artek_buddy.runtime.scripted import (
     E2E_SUBAGENT_NAME,
     E2E_WORKER_ACK,
     E2E_WORKER_BLOCK_S,
+    E2E_WORKER_ESSAY,
+    E2E_WORKER_ESSAY_HOLD_S,
+    E2E_WORKER_ESSAY_MARK,
+    E2E_WORKER_PROGRESS_LINE,
     E2E_WORKER_PROGRESS_RESULT,
     E2E_WORKER_PROGRESS_STEP,
     E2E_WORKER_RESULT,
@@ -149,6 +154,22 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert run[0].tool == "report_progress"
     assert run[0].args["step"] == E2E_WORKER_PROGRESS_STEP
     assert run[-1].result == E2E_WORKER_PROGRESS_RESULT
+    essay_lead = steps_for_prompt("please e2e-worker-essay")
+    assert essay_lead[0].tool == "spawn_subagent"
+    assert essay_lead[0].args["task"] == "please e2e-worker-essay-run"
+    essay_run = steps_for_prompt("please e2e-worker-essay-run")
+    assert essay_run[0].tool == "report_progress"
+    assert essay_run[0].args["step"] == E2E_WORKER_PROGRESS_STEP
+    assert any(
+        step.event
+        and step.event[0] == "thread.message.updated"
+        and E2E_WORKER_ESSAY_MARK in str(step.event[1].get("text") or "")
+        for step in essay_run
+    )
+    assert essay_run[-2].delay_s == E2E_WORKER_ESSAY_HOLD_S
+    assert essay_run[-1].result == E2E_WORKER_ESSAY
+    assert len(E2E_WORKER_ESSAY) > 200
+    assert E2E_WORKER_ESSAY_MARK not in E2E_WORKER_PROGRESS_LINE
     lead_ssh = steps_for_prompt("please e2e-lead-owner-ssh")
     assert lead_ssh[0].tool == "run_owner_command"
     assert lead_ssh[-1].result == E2E_LEAD_OWNER_SSH
@@ -164,6 +185,31 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert steered[-1].result == E2E_WORKER_STEER_ACK
     done = steps_for_prompt("A background worker finished.\nresult: blocked work finished")
     assert done[0].result == E2E_WORKER_SUMMARY
+    essay_notify = wrap_turn_prompt(
+        (
+            "A background worker finished.\n"
+            "name: WorkerEssay\n"
+            "status: completed\n"
+            f"result: {E2E_WORKER_ESSAY.strip()[:400]}\n"
+            "Write one concise owner-facing result. Do not repeat the task or reasoning."
+        ),
+        None,
+        role="lead",
+    )
+    assert "\n\n" in E2E_WORKER_ESSAY
+    assert steps_for_prompt(essay_notify)[0].result == E2E_WORKER_SUMMARY
+    inbox_follow_up = (
+        "The user sent these messages while you were working. "
+        "They were not injected mid-turn. Apply them now.\n"
+        "1. "
+        "A background worker finished.\n"
+        "name: WorkerEssay\n"
+        "status: completed\n"
+        f"result: {E2E_WORKER_ESSAY.strip()[:400]}\n"
+        "Write one concise owner-facing result. Do not repeat the task or reasoning."
+    )
+    assert "\n\n" in inbox_follow_up
+    assert steps_for_prompt(inbox_follow_up)[0].result == E2E_WORKER_SUMMARY
 
     ask = steps_for_prompt("please e2e-ask-bot KnowsPeer | what city do you know")
     assert ask[0].tool == "message_bot"
