@@ -347,9 +347,7 @@ async def test_non_retryable_cursor_error_is_not_retried(tmp_path, instant_sleep
 
 
 @pytest.mark.asyncio
-async def test_non_retryable_rate_limit_is_exhausted_without_retry(
-    tmp_path, instant_sleep
-) -> None:
+async def test_non_retryable_rate_limit_is_exhausted_without_retry(tmp_path, instant_sleep) -> None:
     agent = _Agent(
         "agent-quota-locked",
         [make_rate_limit(retry_after=0, is_retryable=False)],
