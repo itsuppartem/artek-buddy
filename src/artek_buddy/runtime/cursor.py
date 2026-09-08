@@ -750,6 +750,9 @@ class CursorRuntime(RuntimeBase):
                         error=error_code,
                     )
                     return
+            except AgentBusyError:
+                log.warning("cursor agent still busy after force retry")
+                raise
             except CursorAgentError as err:
                 log_cursor_agent_error(err)
                 raise map_cursor_agent_error(err) from err
