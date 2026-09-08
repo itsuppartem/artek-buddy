@@ -30,6 +30,7 @@ import type {
   ThreadMessagePage,
   ThreadSendResult,
   ThreadSnapshot,
+  UsageRecord,
   WorkspaceDispatchResult,
 } from "./types";
 
@@ -163,6 +164,18 @@ export const api = {
       hasMore: boolean;
       nextCursor: string | null;
     }>("GET", `/v1/search?${params.toString()}`);
+  },
+  usage: {
+    list(input: { botId?: string; runId?: string } = {}) {
+      const params = new URLSearchParams();
+      if (input.botId) params.set("bot_id", input.botId);
+      if (input.runId) params.set("run_id", input.runId);
+      const query = params.toString();
+      return request<{ records: UsageRecord[] }>(
+        "GET",
+        query ? `/v1/usage?${query}` : "/v1/usage",
+      ).then((data) => data.records ?? []);
+    },
   },
   local: {
     status() {

@@ -26,6 +26,7 @@ export type ThreadMessage = Camelize<Schema["ThreadMessage"]>;
 export type MessageBlock = ThreadMessage["blocks"][number];
 export type MessageReply = Camelize<Schema["MessageReplyRef"]>;
 export type Subagent = Camelize<Schema["Subagent"]>;
+export type UsageRecord = Camelize<Schema["UsageRecord"]>;
 export type ThreadSnapshot = Camelize<Schema["ThreadSnapshot"]>;
 export type ThreadMessagePage = Camelize<Schema["ThreadMessagePage"]>;
 export type MemoryDocument = Camelize<Schema["MemoryDocument"]>;

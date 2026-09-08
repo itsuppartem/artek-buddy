@@ -869,6 +869,36 @@ def test_worker_essay_stays_out_of_still_working(
     expect(page.get_by_test_id("subagent-card")).to_have_count(0)
 
 
+@pytest.mark.timeout(90)
+def test_work_log_keeps_history_across_two_worker_turns(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    from artek_buddy.runtime.scripted import E2E_WORKER_ACK, E2E_WORKER_SUMMARY
+
+    name = _named(page, client_url, host_url, "WorkHist")
+    send_message(page, "please e2e-background-worker-chat", name)
+    thread = page.get_by_test_id("thread")
+    expect(thread.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_be_visible(timeout=20_000)
+    send_message(page, "please e2e-background-worker-chat", name)
+    expect(thread.get_by_text(E2E_WORKER_ACK)).to_have_count(2, timeout=15_000)
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_have_count(2, timeout=20_000)
+    expect(page.get_by_test_id("open-work-log")).to_have_count(1)
+    page.get_by_test_id("open-work-log").click()
+    pane = page.get_by_test_id("work-log-pane")
+    expect(pane).to_be_visible()
+    expect(page.get_by_test_id("work-log-worker")).to_have_count(2)
+    assert page.get_by_test_id("work-log-run").count() >= 2
+    expect(pane.get_by_text("please e2e-worker-block")).to_have_count(2)
+    expect(page.get_by_test_id("work-log-usage").first).to_contain_text("in", timeout=8_000)
+    page.get_by_label("Close work log").click()
+    expect(pane).to_have_count(0)
+    expect(page.get_by_test_id("open-work-log")).to_have_count(1)
+    page.get_by_test_id("open-work-log").click()
+    expect(page.get_by_test_id("work-log-pane")).to_be_visible()
+    expect(page.get_by_test_id("work-log-worker")).to_have_count(2)
+
+
 def test_takeover_banner_on_other_chat(page: Page, client_url: str, host_url: str) -> None:
     speaker = unique_bot("Need")
     watcher = unique_bot("Idle")

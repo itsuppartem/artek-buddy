@@ -156,6 +156,7 @@ import type {
   ProductEvent,
   ThreadMessage,
   ThreadSnapshot,
+  UsageRecord,
 } from "../types";
 import { BotAvatar } from "../ui/bot-avatar";
 import { Button } from "../ui/button";
@@ -179,7 +180,7 @@ import { PluginsPane } from "./shell/PluginsPane";
 import { RoutinesPanel } from "./shell/RoutinesPanel";
 import { type HostSearchHit, SearchHits } from "./shell/SearchHits";
 import { TodayView } from "./shell/TodayView";
-import { WorkLogPane } from "./shell/WorkLogPane";
+import { usageFromRecords, WorkLogPane } from "./shell/WorkLogPane";
 import { WorkspaceRail, type WorkspaceView } from "./shell/WorkspaceRail";
 
 type Panel =
@@ -318,6 +319,7 @@ export function ShellPage() {
   offlineCaptionsRef.current = offlineCaptions;
   hostDownRef.current = hostDown;
   const [later, setLater] = useState<string | null>(null);
+  const [usageRecords, setUsageRecords] = useState<UsageRecord[]>([]);
   const [attention, setAttention] = useState<AttentionAlert | null>(null);
   const seenAlertKeys = useRef(new Set<string>());
   const dismissedAlerts = useRef(new Set<string>());
@@ -375,6 +377,26 @@ export function ShellPage() {
       (thread && !isParked && (hasLive(thread) || hasActiveWorkers(thread))),
   );
   const flightText = inFlightProgressText(thread?.subagents);
+  const hasWorkLog = Boolean(thread?.run) || (thread?.subagents ?? []).length > 0;
+
+  useEffect(() => {
+    if (!active?.id) {
+      setUsageRecords([]);
+      return;
+    }
+    let cancelled = false;
+    void api.usage
+      .list({ botId: active.id })
+      .then((rows) => {
+        if (!cancelled) setUsageRecords(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setUsageRecords([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active?.id, thread?.run?.id, thread?.subagents?.length]);
 
   useEffect(() => {
     botsRef.current = bots;
@@ -1259,6 +1281,12 @@ export function ShellPage() {
             if (event.type === "run.completed" || event.type === "run.failed") {
               void refreshBotsRef.current().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
+            }
+            if (event.type === "usage.recorded") {
+              void api.usage
+                .list({ botId: active.id })
+                .then((rows) => setUsageRecords(rows))
+                .catch(() => undefined);
             }
           }
         } catch (err) {
@@ -2258,7 +2286,7 @@ export function ShellPage() {
               ) : null}
             </div>
           ) : null}
-          {active && thread?.run ? (
+          {active && hasWorkLog ? (
             <div className="px-4 pt-3">
               <div
                 data-testid="work-summary"
@@ -2270,7 +2298,7 @@ export function ShellPage() {
                       ? "bg-copper"
                       : isBusy
                         ? "ab-live-dot bg-sage"
-                        : thread.run.status === "failed"
+                        : thread?.run?.status === "failed"
                           ? "bg-danger"
                           : "bg-tan"
                   }`}
@@ -2281,7 +2309,7 @@ export function ShellPage() {
                       ? "Needs your decision"
                       : isBusy
                         ? "Working on this task"
-                        : thread.run.status === "failed"
+                        : thread?.run?.status === "failed"
                           ? "Task failed"
                           : "Task is complete"}
                   </p>
@@ -2721,7 +2749,17 @@ export function ShellPage() {
                   runId={thread?.run?.id}
                   runStatus={isBusy ? "working" : thread?.run?.status}
                   progress={flightText}
-                  workers={thread?.subagents ?? []}
+                  workers={(thread?.subagents ?? []).map((item) => ({
+                    id: item.id,
+                    parentRunId: item.parentRunId,
+                    status: item.status,
+                    task: item.task,
+                    progress: item.progress,
+                    lastToolName: item.lastToolName,
+                    lastActivityAt: item.lastActivityAt,
+                    createdAt: item.createdAt,
+                  }))}
+                  usageByRun={usageFromRecords(usageRecords)}
                   onClose={closeContextPanel}
                 />
               ) : null}
