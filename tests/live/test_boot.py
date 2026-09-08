@@ -6,6 +6,7 @@ from tests.live.helpers import (
     arm_page,
     bot_row,
     create_named_bot,
+    expect_pairing_mark_inside_card,
     fulfill_json,
     open_bot_menu,
     pair_fresh,
@@ -33,6 +34,7 @@ def test_pairing_form_fields_and_rejected_url(page: Page, client_url: str) -> No
     expect(form).to_be_visible(timeout=20_000)
     expect(form.get_by_test_id("app-mark")).to_be_visible()
     expect(form.locator('img[src="/pairing-mark.png"]')).to_be_visible()
+    expect_pairing_mark_inside_card(page)
     form.get_by_text("Pairing options", exact=True).click()
     expect(page.get_by_label("Host URL")).to_be_visible()
     expect(page.get_by_label("Pairing code")).to_be_visible()
