@@ -10,7 +10,9 @@ log = logging.getLogger("artek_buddy")
 CURSOR_AUTH_ERROR_HINT = "authentication error"
 CURSOR_AUTH_RECYCLE_AFTER = 3
 CURSOR_INSTANT_FAIL_S = 2.0
-DEAD_WAIT_NEXT_STEP = "The turn failed. Send again — the host will start a new session."
+DEAD_WAIT_NEXT_STEP = (
+    "The turn failed. The host retried. Send again — the host will start a new session."
+)
 
 
 def store_error_code(result: Any, run: Any) -> str | None:
@@ -131,3 +133,29 @@ def log_cursor_wait(
         duration_s,
         error_code,
     )
+
+
+def log_cursor_turn_runs(
+    product_run: str,
+    sdk_run_ids: list[str],
+    retry_reason: str | None,
+) -> None:
+    log.info(
+        "cursor turn product_run=%s sdk_run_ids=%s retry_reason=%s",
+        product_run or "-",
+        ",".join(sdk_run_ids) or "-",
+        retry_reason or "-",
+    )
+
+
+def current_product_run_id(runtime: Any, bot_id: str | None) -> str:
+    from artek_buddy.observe import snapshot
+
+    turn_id = snapshot().get("turn_id") or ""
+    if turn_id:
+        return turn_id
+    resolve = getattr(runtime, "resolve_turn", None)
+    if not callable(resolve):
+        return ""
+    found = resolve(bot_id)
+    return str(getattr(found, "run_id", "") or "") if found is not None else ""
