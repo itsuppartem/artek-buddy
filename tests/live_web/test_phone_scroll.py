@@ -3,7 +3,12 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 from tests.live.helpers import unique_bot
-from tests.live_web.helpers import create_named_bot_phone, expect_bot_in_chats, open_phone_tab, pair_host_page
+from tests.live_web.helpers import (
+    create_named_bot_phone,
+    expect_bot_in_chats,
+    open_phone_tab,
+    pair_host_page,
+)
 
 pytestmark = pytest.mark.live
 
