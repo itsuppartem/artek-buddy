@@ -39,6 +39,7 @@ from artek_buddy.runtime.cursor_wait import (
     send_local_options,
     should_retry_dead_wait,
 )
+from artek_buddy.runtime.token_usage import extract_token_usage
 from artek_buddy.runtime.tools import ProductTools
 from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord, ToolTurnBox
 from artek_buddy.stream import map_cursor_event
@@ -59,6 +60,7 @@ class _SendAttempt:
     text: str | None
     error: str | None
     duration_s: float
+    usage: Any = None
 
 
 def _is_agent_busy_error(exc: BaseException) -> bool:
@@ -616,6 +618,8 @@ class CursorRuntime(RuntimeBase):
             duration_s,
             wait_error,
         )
+        model_id = str(getattr(self.model, "id", None) or self.settings.cursor_model or "")
+        usage = extract_token_usage(result, run, provider="cursor", model=model_id)
         return _SendAttempt(
             run=run,
             agent_id=agent_id,
@@ -625,6 +629,7 @@ class CursorRuntime(RuntimeBase):
             text=text or None,
             error=wait_error,
             duration_s=duration_s,
+            usage=usage,
         )
 
     async def stream(
@@ -687,6 +692,7 @@ class CursorRuntime(RuntimeBase):
                             status=attempt.mapped,
                             result=attempt.text,
                             error=None,
+                            usage=attempt.usage,
                         )
                         return
                     retry_dead = should_retry_dead_wait(
@@ -748,6 +754,7 @@ class CursorRuntime(RuntimeBase):
                         status=attempt.mapped,
                         result=attempt.text,
                         error=error_code,
+                        usage=attempt.usage,
                     )
                     return
             except AgentBusyError:

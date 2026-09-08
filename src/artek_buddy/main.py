@@ -55,6 +55,7 @@ from artek_buddy.http.turns import (
     _kick_inbox,
     _shutdown_work,
 )
+from artek_buddy.http.usage import router as usage_router
 from artek_buddy.http.workspace import router as workspace_router
 
 
@@ -159,6 +160,7 @@ app.include_router(bots_router)
 app.include_router(bot_credentials_router)
 app.include_router(books_router)
 app.include_router(threads_router)
+app.include_router(usage_router)
 app.include_router(consents_router)
 app.include_router(memory_router)
 app.include_router(routines_router)

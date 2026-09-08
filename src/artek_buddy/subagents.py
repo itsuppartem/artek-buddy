@@ -9,6 +9,7 @@ from artek_buddy.contracts.domain import Bot, Subagent
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.db.history import HistoryStore
 from artek_buddy.db.shaping import isoformat_utc, new_id
+from artek_buddy.http.usage_persist import persist_product_usage
 from artek_buddy.memory import format_memory_context, wrap_turn_prompt
 from artek_buddy.runtime import AgentRuntime, ProductStreamEvent, RunRecord
 from artek_buddy.runtime import worker_progress as progress_mod
@@ -217,6 +218,7 @@ class SubagentService:
             result = ""
             status = "completed"
             error: str | None = None
+            turn_usage = None
             async for item in self.runtime.stream(
                 prompt,
                 session_id=session_id,
@@ -225,6 +227,7 @@ class SubagentService:
             ):
                 if isinstance(item, RunRecord):
                     result = item.result or draft or ""
+                    turn_usage = item.usage
                     if item.status not in {"finished", "completed"} and not result:
                         result = item.error or f"subagent failed: {item.id}"
                     if item.status in {"cancelled", "canceled"}:
@@ -244,6 +247,7 @@ class SubagentService:
                         self._emit(live, record)
             if not result:
                 result = draft or ""
+            persist_product_usage(self.store, self.events, live, sub_id, turn_usage)
             final = self.store.update_subagent(sub_id, status=status, result=result, error=error)
             if final:
                 self._emit(live, final)

@@ -335,7 +335,25 @@ class UsageRecord(BaseModel):
     model: str
     input_tokens: int
     output_tokens: int
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    reasoning_tokens: int = 0
+    total_tokens: int = 0
     created_at: str
+
+
+class UsageRecordList(BaseModel):
+    records: list[UsageRecord]
+
+
+class UsageSummary(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    reasoning_tokens: int = 0
+    total_tokens: int = 0
+    runs: int = 0
 
 
 class ComputerStatus(BaseModel):

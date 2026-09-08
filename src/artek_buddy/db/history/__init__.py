@@ -19,6 +19,7 @@ from artek_buddy.db.history.search import SearchMixin
 from artek_buddy.db.history.store import HistoryStoreCore, InboxFullError, MigrationChecksumError
 from artek_buddy.db.history.subagents import SubagentsMixin
 from artek_buddy.db.history.turns import TurnsMixin
+from artek_buddy.db.history.usage import UsageMixin
 
 __all__ = ["HistoryStore", "InboxFullError", "MigrationChecksumError"]
 
@@ -45,5 +46,6 @@ class HistoryStore(
     ComputerMixin,
     ModelsMixin,
     ConnectionsMixin,
+    UsageMixin,
 ):
     pass
