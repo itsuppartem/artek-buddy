@@ -105,7 +105,7 @@ def get_version() -> str:
     version_file = ROOT / "VERSION"
     if version_file.is_file():
         return version_file.read_text(encoding="utf-8").strip()
-    return "0.10.27"
+    return "0.10.28"
 
 
 def get_total_memory_mb() -> float:

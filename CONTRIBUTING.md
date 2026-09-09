@@ -80,6 +80,8 @@ You can still build a local package (unreleased tree, or `ARTEK_BAKE_URL=1`):
 
 ```bash
 client/build-deb.sh
+# From Downloads, use dpkg. `apt install ./…` often fails because `_apt`
+# cannot read the home directory.
 sudo dpkg -i artek-buddy-client_<version>_all.deb
 sudo apt-get install -f
 ```

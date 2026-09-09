@@ -10,10 +10,10 @@ This is the owner eyes-on pass. Scripted CI already covers slices (`ui` = packag
 
 | | |
 | --- | --- |
-| `main` | Release **0.10.27**. |
-| `develop` | Daily since then: task-first Today, workspace rail, Work log, Library, Models / keys, memory book, bot-to-bot, connections, phone page. `VERSION` is still **0.10.27** until a bump lands on `main`. |
+| `main` | Release **0.10.28** (after this bump lands). |
+| `develop` | Same generation as 0.10.28 until the next VERSION bump. |
 | Pad / keyboard / Cyrillic | In `develop` (phone overlay). Drag/tap must keep control until Release; the Type on the desktop field is tappable. After pad or typing, the guest picture must update within a couple of seconds. |
-| GitHub Release `.deb` | **Old.** Do not use it for this pass. |
+| GitHub Release `.deb` | **0.10.28** once the Release exists. Until then, build from this tree. |
 | Linux | Window **built from this tree** (`client/build-deb.sh`, optionally `ARTEK_BAKE_URL=1` for a local URL). Wide shell, about 1280×720: workspace rail, optional chat rack, main surface, context pane. |
 | Phone | Home Screen on the **same host URL**. After a UI change, fully kill the icon and open it again. Viewport is iPhone 11 Pro: **375×812** CSS pixels (notch + home indicator). |
 | Host page on a computer | Same `:8080` URL in a desktop browser (mouse). Take control is the `.deb` overlay (pointer into the screen, no pad), even if the window is narrow. |
@@ -51,7 +51,7 @@ Mint three bots for the run. Names can differ; they must be distinct:
 
 ---
 
-## 1. Today, navigation, and visual system (not in 0.10.27)
+## 1. Today, navigation, and visual system
 
 | Check | Deb | Phone |
 | --- | --- | --- |

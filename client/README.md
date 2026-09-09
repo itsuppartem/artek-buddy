@@ -28,6 +28,8 @@ client/build-deb.sh
 # local build beside an existing release package; creates a distinct Debian version
 ARTEK_BUILD_SUFFIX=pr321.6b5ffef client/build-deb.sh
 # copy artek-buddy-client_<version>_all.deb to the desktop PC
+# From Downloads, use dpkg. `apt install ./…` often fails because `_apt`
+# cannot read the home directory.
 sudo dpkg -i artek-buddy-client_<version>_all.deb
 sudo apt-get install -f
 ```
@@ -69,7 +71,7 @@ touch ~/.config/artek-buddy/ssh-mux
 The client then wraps only `ssh` found through `PATH` with
 `ControlMaster=auto`, a private short `%C` socket, and bounded
 `ControlPersist`. It does not edit `~/.ssh/config`, select a key, or copy a key
-to the Pi. Remove `ssh-mux` to return to ordinary SSH behavior.
+to the host. Remove `ssh-mux` to return to ordinary SSH behavior.
 
 ## Live now
 

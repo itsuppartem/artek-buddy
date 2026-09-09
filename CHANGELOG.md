@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.10.28] - 2026-09-09
+
+Ships the window that lived on `develop` after **0.10.27**: Today, workspace rail, Work log, Library, phone host page, Models keys in the window, bot-to-bot, connections, playbooks, usage in Work log. Cursor remains the live agent runtime. An HTTP provider key in Models is catalog/check and a one-shot reply, not computer-use.
+
 ### Added
 - Model catalog Save keeps variants and parameter ids/values (`0034_model_catalog_extras.sql`). `GET /v1/models` exposes those extras when present and still omits them for id-only rows. A router catalog id is selectable only when the list actually includes it.
 - Host Cursor bridge applies Settings timeouts (`CURSOR_UNARY_TIMEOUT_S`, `CURSOR_STREAM_TIMEOUT_S`, `CURSOR_MAX_RETRIES`) via SDK `with_options`. A timeout finishes as a retryable owner-visible message, not a hang. Read-only RPC retries stay small; a send that already has a run id is not retried.
