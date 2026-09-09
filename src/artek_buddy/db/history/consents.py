@@ -5,6 +5,7 @@ from typing import Any
 
 from psycopg.errors import UniqueViolation
 
+from artek_buddy.audit import AUDIT_CONSENT_DECISION, AUDIT_GRANT_CHANGE
 from artek_buddy.db.shaping import (
     DEFAULT_WORKSPACE_ID,
     isoformat_utc,
@@ -38,6 +39,7 @@ class ConsentsMixin:
                     """
                     SELECT id FROM consent_grants
                     WHERE bot_id = %s AND action_class = %s AND scope_key = %s
+                      AND device_id IS NULL
                     LIMIT 1
                     """,
                     (bot_id, action_class, scope_key),
@@ -65,6 +67,34 @@ class ConsentsMixin:
                     """,
                     (grant_id, workspace_id, bot_id, device_id, action_class, scope_key, now),
                 )
+                if hasattr(self, "_append_audit_event_tx"):
+                    self._append_audit_event_tx(
+                        conn,
+                        AUDIT_GRANT_CHANGE,
+                        actor=device_id or "owner",
+                        resource=grant_id,
+                        payload={
+                            "id": grant_id,
+                            "bot_id": bot_id,
+                            "action_class": action_class,
+                            "scope_key": scope_key,
+                            "action": "create",
+                        },
+                    )
+                if hasattr(self, "_append_activity_tx"):
+                    self._append_activity_tx(
+                        conn,
+                        event_type="grant.created",
+                        actor=device_id or "owner",
+                        resource=bot_id,
+                        payload={
+                            "grant_id": grant_id,
+                            "action_class": action_class,
+                            "scope_key": scope_key,
+                        },
+                        device_id=device_id,
+                        event_version=1,
+                    )
                 conn.commit()
             except UniqueViolation:
                 conn.rollback()
@@ -79,31 +109,50 @@ class ConsentsMixin:
         scope_key: str,
         summary: str,
         run_id: str | None = None,
+        parent_run_id: str | None = None,
         thread_id: str | None = None,
         message_id: str | None = None,
         workspace_id: str = DEFAULT_WORKSPACE_ID,
+        job_status: str | None = None,
     ) -> None:
         with self._conn() as conn:
             conn.execute(
                 """
                 INSERT INTO consent_requests (
-                    id, workspace_id, bot_id, run_id, thread_id, message_id,
-                    action_class, scope_key, summary, status, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s)
+                    id, workspace_id, bot_id, run_id, parent_run_id, thread_id, message_id,
+                    action_class, scope_key, summary, status, job_status, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s, %s)
                 """,
                 (
                     request_id,
                     workspace_id,
                     bot_id,
                     run_id,
+                    parent_run_id,
                     thread_id,
                     message_id,
                     action_class,
                     scope_key,
                     summary,
+                    job_status,
                     isoformat_utc(),
                 ),
             )
+            if hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="consent.requested",
+                    actor="bot",
+                    resource=bot_id,
+                    payload={
+                        "request_id": request_id,
+                        "action_class": action_class,
+                        "scope_key": scope_key,
+                        "summary": summary,
+                    },
+                    device_id=None,
+                    event_version=1,
+                )
             conn.commit()
 
     def get_consent_request(self, request_id: str) -> Any:
@@ -112,7 +161,8 @@ class ConsentsMixin:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                SELECT id, bot_id, action_class, scope_key, summary, status, run_id, message_id
+                SELECT id, bot_id, action_class, scope_key, summary, status, run_id, parent_run_id,
+                       message_id, job_status
                 FROM consent_requests WHERE id = %s
                 """,
                 (request_id,),
@@ -128,24 +178,83 @@ class ConsentsMixin:
             summary=row["summary"],
             status=row["status"],
             run_id=row["run_id"],
+            parent_run_id=row["parent_run_id"],
             message_id=row["message_id"],
+            job_status=row["job_status"],
         )
 
     def pending_auto_consent_id(self, bot_id: str, run_id: str | None) -> str | None:
-        if not run_id:
-            return None
+        pending = self.pending_auto_consent_ids(bot_id, run_id)
+        return pending[-1] if pending else None
+
+    def pending_auto_consent_ids(self, bot_id: str, run_ids: str | list[str] | None) -> list[str]:
+        if isinstance(run_ids, str):
+            ids = [run_ids] if run_ids else []
+        else:
+            ids = [item for item in (run_ids or []) if item]
+        if not ids:
+            return []
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT id FROM consent_requests
+                WHERE bot_id = %s
+                  AND status = 'pending'
+                  AND job_status = 'queued'
+                  AND message_id IS NULL
+                  AND (run_id = ANY(%s) OR parent_run_id = ANY(%s))
+                ORDER BY created_at, id
+                """,
+                (bot_id, ids, ids),
+            ).fetchall()
+            conn.commit()
+        return [str(row["id"]) for row in rows]
+
+    def owner_job_ids_for_runs(self, run_ids: list[str]) -> list[str]:
+        ids = [item for item in run_ids if item]
+        if not ids:
+            return []
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT id FROM consent_requests
+                WHERE run_id = ANY(%s)
+                  AND job_status IN ('queued', 'acknowledged')
+                """,
+                (ids,),
+            ).fetchall()
+            conn.commit()
+        return [str(row["id"]) for row in rows]
+
+    def acknowledge_consent_job(self, request_id: str) -> bool:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                SELECT id FROM consent_requests
-                WHERE bot_id = %s AND run_id = %s AND status = 'pending' AND message_id IS NULL
-                ORDER BY created_at DESC
-                LIMIT 1
+                UPDATE consent_requests
+                SET job_status = 'acknowledged', acknowledged_at = %s
+                WHERE id = %s AND job_status = 'queued'
+                RETURNING id
                 """,
-                (bot_id, run_id),
+                (isoformat_utc(), request_id),
             ).fetchone()
             conn.commit()
-        return str(row["id"]) if row else None
+        return row is not None
+
+    def finish_consent_job(self, request_id: str, job_status: str) -> bool:
+        if job_status not in {"completed", "failed", "timed_out"}:
+            raise ValueError("invalid terminal consent job status")
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE consent_requests
+                SET job_status = %s, completed_at = %s
+                WHERE id = %s AND job_status IN ('queued', 'acknowledged')
+                RETURNING id
+                """,
+                (job_status, isoformat_utc(), request_id),
+            ).fetchone()
+            conn.commit()
+        return row is not None
 
     def answer_consent_request(
         self,
@@ -162,10 +271,40 @@ class ConsentsMixin:
                 UPDATE consent_requests
                 SET status = %s, device_id = %s, answered_at = %s
                 WHERE id = %s AND status = 'pending'
-                RETURNING id, bot_id, action_class, scope_key, summary, status, run_id, message_id
+                RETURNING id, bot_id, action_class, scope_key, summary, status, run_id, message_id,
+                          job_status
                 """,
                 (decision, device_id if device_id != "host" else None, now, request_id),
             ).fetchone()
+            if row is not None and hasattr(self, "_append_audit_event_tx"):
+                self._append_audit_event_tx(
+                    conn,
+                    AUDIT_CONSENT_DECISION,
+                    actor=device_id or "owner",
+                    resource=request_id,
+                    payload={
+                        "request_id": request_id,
+                        "bot_id": row["bot_id"],
+                        "action_class": row["action_class"],
+                        "scope_key": row["scope_key"],
+                        "decision": decision,
+                    },
+                )
+            if row is not None and hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="consent.answered",
+                    actor=device_id or "owner",
+                    resource=row["bot_id"],
+                    payload={
+                        "request_id": request_id,
+                        "decision": decision,
+                        "action_class": row["action_class"],
+                        "scope_key": row["scope_key"],
+                    },
+                    device_id=device_id if device_id != "host" else None,
+                    event_version=1,
+                )
             conn.commit()
         if row is None:
             return None
@@ -178,4 +317,5 @@ class ConsentsMixin:
             status=row["status"],
             run_id=row["run_id"],
             message_id=row["message_id"],
+            job_status=row["job_status"],
         )

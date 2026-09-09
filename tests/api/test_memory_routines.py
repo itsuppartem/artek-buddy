@@ -1,6 +1,65 @@
 from __future__ import annotations
 
-from tests.api.helpers import create_bot, wait_run
+import uuid
+
+from tests.api.helpers import create_bot, message_metas, message_texts, wait_run, wait_thread_has
+
+
+def test_ordinary_chat_grows_memory_book_without_panel(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "BookChat")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "My name is Artek. I live in Belgrade. Never open Gmail."},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    documents = listed.json()["documents"]
+    blob = "\n".join(str(item.get("content") or "") for item in documents)
+    assert "Artek" in blob
+    assert "Belgrade" in blob
+    assert "Gmail" in blob
+    identity = [item for item in documents if "Artek" in str(item.get("content") or "")]
+    assert identity
+    assert any("Belgrade" in str(item.get("content") or "") for item in identity)
+
+
+def test_ordinary_chat_rewrites_identity_when_the_city_changes(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "BookRewrite")["id"]
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "My name is Artek. I live in Belgrade."},
+    )
+    assert first.status_code == 200
+    assert wait_run(client, auth_header, bot_id, first.json()["run_id"])["run"]["status"] == (
+        "completed"
+    )
+    later = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "I live in Subotica."},
+    )
+    assert later.status_code == 200
+    assert wait_run(client, auth_header, bot_id, later.json()["run_id"])["run"]["status"] == (
+        "completed"
+    )
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    identity = [
+        item
+        for item in listed.json()["documents"]
+        if "Artek" in str(item.get("content") or "")
+        or "Subotica" in str(item.get("content") or "")
+        or "Belgrade" in str(item.get("content") or "")
+    ]
+    blob = "\n".join(str(item.get("content") or "") for item in identity)
+    assert "Artek" in blob
+    assert "Subotica" in blob
+    assert "Belgrade" not in blob
 
 
 def test_memory_create_update_export_delete(client, auth_header) -> None:
@@ -138,3 +197,169 @@ def test_subagents_empty_and_missing_stop(client, auth_header) -> None:
         json={"text": "keep going"},
     )
     assert steered.status_code == 404
+
+
+def test_spawn_subagent_does_not_write_started_line(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_SUBAGENT_NAME, E2E_WORKER_SUMMARY
+
+    bot_id = create_bot(client, auth_header, "WorkerStep")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-subagent"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    assert f"Started {E2E_SUBAGENT_NAME}." not in message_texts(snap)
+    listed = client.get(f"/v1/bots/{bot_id}/subagents", headers=auth_header)
+    assert listed.status_code == 200
+    assert listed.json()["subagents"]
+    done = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_SUMMARY)
+    texts = message_texts(done)
+    assert texts.count(E2E_WORKER_SUMMARY) == 1
+    assert not any(text.startswith(("Started ", "Finished ", "Stopped ")) for text in texts)
+
+
+def test_remember_same_rule_thrice_writes_one_meta(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "MemThrice")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-remember-same-thrice"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    remembered = [text for text in message_metas(snap) if text.startswith("Remembered:")]
+    assert len(remembered) == 1
+    assert "YouTrack" in remembered[0]
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    hits = [
+        item for item in listed.json()["documents"] if "YouTrack" in str(item.get("content") or "")
+    ]
+    assert len(hits) == 1
+
+
+def test_worker_remember_does_not_write_remembered_line(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_WORKER_ACK, E2E_WORKER_SUMMARY
+
+    bot_id = create_bot(client, auth_header, "MemWorker")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-background-worker-remember"},
+    )
+    assert sent.status_code == 200
+    snap = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_ACK)
+    assert E2E_WORKER_ACK in message_texts(snap)
+    done = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_SUMMARY)
+    remembered = [text for text in message_metas(done) if text.startswith("Remembered:")]
+    assert remembered == []
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    hits = [
+        item for item in listed.json()["documents"] if "YouTrack" in str(item.get("content") or "")
+    ]
+    assert len(hits) == 1
+
+
+def test_remember_twice_writes_one_meta_and_one_row(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "MemOnce")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-remember-twice"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    remembered = [text for text in message_metas(snap) if text.startswith("Remembered:")]
+    assert len(remembered) == 1
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    hits = [
+        item
+        for item in listed.json()["documents"]
+        if "permission" in str(item.get("content") or "").lower()
+        and "read" in str(item.get("content") or "").lower()
+    ]
+    assert len(hits) == 1
+
+
+def test_git_approval_paraphrases_write_one_meta_and_one_row(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_GIT_APPROVAL, E2E_GIT_FREE
+
+    bot_id = create_bot(client, auth_header, "MemGit")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-remember-git-approval"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    remembered = [text for text in message_metas(snap) if text.startswith("Remembered:")]
+    assert len(remembered) == 1
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    hits = [
+        item
+        for item in listed.json()["documents"]
+        if "git commit" in str(item.get("content") or "").lower()
+    ]
+    assert len(hits) == 1
+    assert hits[0]["content"] == E2E_GIT_APPROVAL
+
+    free = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-remember-git-free"},
+    )
+    assert free.status_code == 200
+    after = wait_run(client, auth_header, bot_id, free.json()["run_id"])
+    assert after["run"]["status"] == "completed"
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    live = [
+        item
+        for item in listed.json()["documents"]
+        if "merge" in str(item.get("content") or "").lower()
+    ]
+    assert len(live) == 1
+    assert live[0]["content"] == E2E_GIT_FREE
+
+
+def test_scripted_identity_city_lists_and_replaces(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "IdCity")["id"]
+    stem = uuid.uuid4().hex[:8]
+    first, second = f"Osijek{stem}", f"Split{stem}"
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": f"please e2e-identity-city {first}"},
+    )
+    assert sent.status_code == 200
+    assert wait_run(client, auth_header, bot_id, sent.json()["run_id"])["run"]["status"] == (
+        "completed"
+    )
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    blob = "\n".join(str(item.get("content") or "") for item in listed.json()["documents"])
+    assert first in blob
+    assert second not in blob
+    later = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": f"please e2e-identity-city {second}"},
+    )
+    assert later.status_code == 200
+    assert wait_run(client, auth_header, bot_id, later.json()["run_id"])["run"]["status"] == (
+        "completed"
+    )
+    listed = client.get(f"/v1/memory?bot_id={bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    blob = "\n".join(str(item.get("content") or "") for item in listed.json()["documents"])
+    assert second in blob
+    assert first not in blob

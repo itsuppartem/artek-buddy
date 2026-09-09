@@ -1,29 +1,42 @@
 import { camelize, snakify } from "./camel";
 import type { LocalStatus, PairedDevice } from "./lib/pairing";
 import type {
+  BeginConnectionResult,
   Bot,
+  BotCredential,
   ComputerFileContent,
   ComputerFileList,
   ComputerStatus,
+  Connection,
+  ConnectionCatalog,
+  ConnectionKeyStatus,
   ConsentJob,
   DeploymentSettings,
   HealthResponse,
   MarkdownExport,
   Me,
   MemoryDocument,
+  ModelCredential,
+  ModelCredentialList,
+  ModelListResponse,
   OkResponse,
   ProductEvent,
   Routine,
   ScreenUrlResult,
+  SkillBook,
   Subagent,
   TakeoverResult,
   TestRunResult,
   ThreadMessagePage,
   ThreadSendResult,
   ThreadSnapshot,
+  UsageRecord,
+  WorkspaceDispatchResult,
 } from "./types";
 
 const REQUEST_TIMEOUT_MS = 30_000;
+
+let localNonce = "";
 
 export class ApiError extends Error {
   constructor(
@@ -64,9 +77,18 @@ export async function request<T>(
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   const init: RequestInit = { method, headers, signal: controller.signal };
+  const localMutating = path.startsWith("/local/") && method !== "GET";
+  if (localMutating) {
+    headers["Content-Type"] = "application/json";
+    if (localNonce) {
+      headers["X-Artek-Local-Nonce"] = localNonce;
+    }
+  }
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(snakify(body));
+  } else if (localMutating) {
+    init.body = "{}";
   }
   let response: Response;
   try {
@@ -121,22 +143,75 @@ export async function request<T>(
 }
 
 export const api = {
+  workspace: {
+    dispatch(text: string) {
+      return request<WorkspaceDispatchResult>("POST", "/v1/workspace/dispatch", { text });
+    },
+  },
+  search(input: { q: string; limit?: number }) {
+    const params = new URLSearchParams();
+    params.set("q", input.q);
+    if (input.limit != null) params.set("limit", String(input.limit));
+    return request<{
+      hits: Array<{
+        id: string;
+        documentKind: "message" | "memory" | "artifact" | "bot";
+        resourceId: string;
+        sourceId: string;
+        title: string;
+        snippet: string;
+      }>;
+      hasMore: boolean;
+      nextCursor: string | null;
+    }>("GET", `/v1/search?${params.toString()}`);
+  },
+  usage: {
+    list(input: { botId?: string; runId?: string } = {}) {
+      const params = new URLSearchParams();
+      if (input.botId) params.set("bot_id", input.botId);
+      if (input.runId) params.set("run_id", input.runId);
+      const query = params.toString();
+      return request<{ records: UsageRecord[] }>(
+        "GET",
+        query ? `/v1/usage?${query}` : "/v1/usage",
+      ).then((data) => data.records ?? []);
+    },
+  },
   local: {
     status() {
-      return request<LocalStatus>("GET", "/local/status");
+      return request<LocalStatus>("GET", "/local/status").then((status) => {
+        if (status.nonce) {
+          localNonce = status.nonce;
+        }
+        return status;
+      });
     },
     pair(input: { url?: string; pairingCode: string; name: string; platform?: string }) {
-      return request<{ ok: boolean; device: PairedDevice; error?: string }>(
-        "POST",
-        "/local/pair",
-        input,
-      );
+      return api.local
+        .status()
+        .then(() =>
+          request<{ ok: boolean; device: PairedDevice; error?: string }>(
+            "POST",
+            "/local/pair",
+            input,
+          ),
+        );
     },
     unpair() {
       return request<{ ok: boolean; paired?: boolean }>("POST", "/local/unpair");
     },
-    notify(input: { title: string; body: string; urgency: "low" | "normal" | "critical" }) {
+    notify(input: {
+      title: string;
+      body: string;
+      urgency: "low" | "normal" | "critical";
+      tag?: string;
+    }) {
       return request<{ ok: boolean }>("POST", "/local/notify", input).catch(() => ({ ok: false }));
+    },
+    dismissNotify(tag: string) {
+      return request<{ ok: boolean }>("POST", "/local/notify-dismiss", { tag }).catch(() => ({
+        ok: false,
+      }));
     },
     ownerRead(path: string) {
       return request<{
@@ -197,12 +272,22 @@ export const api = {
     get(consentId: string) {
       return request<ConsentJob>("GET", `/v1/consents/${encodeURIComponent(consentId)}`);
     },
+    ack(consentId: string) {
+      return request<{ ok: boolean; claim?: string | null }>(
+        "POST",
+        `/v1/consents/${encodeURIComponent(consentId)}/ack`,
+        { claimCapable: true },
+      );
+    },
     answer(consentId: string, decision: string) {
       return request<OkResponse>("POST", `/v1/consents/${encodeURIComponent(consentId)}`, {
         decision,
       });
     },
-    uploadFile(consentId: string, input: { name: string; text?: string; contentBase64?: string }) {
+    uploadFile(
+      consentId: string,
+      input: { name: string; text?: string; contentBase64?: string; claim?: string },
+    ) {
       return request<OkResponse>(
         "POST",
         `/v1/consents/${encodeURIComponent(consentId)}/file`,
@@ -223,6 +308,7 @@ export const api = {
         bytes?: number;
         entries?: unknown[];
         error?: string;
+        claim?: string;
       },
     ) {
       return request<OkResponse>(
@@ -273,6 +359,7 @@ export const api = {
       timezone?: string;
       notify?: boolean;
       active?: boolean;
+      requireApproval?: boolean;
     }) {
       return request<Routine>("POST", "/v1/routines", input);
     },
@@ -285,6 +372,7 @@ export const api = {
         timezone: string;
         notify: boolean;
         active: boolean;
+        requireApproval: boolean;
       }>,
     ) {
       return request<Routine>("PATCH", `/v1/routines/${routineId}`, input);
@@ -294,6 +382,11 @@ export const api = {
     },
     testRun(routineId: string) {
       return request<TestRunResult>("POST", `/v1/routines/${routineId}/test`);
+    },
+    run(routineId: string, triggerEventId: string) {
+      return request<{ id: string; state: string }>("POST", `/v1/routines/${routineId}/run`, {
+        triggerEventId,
+      });
     },
   },
   me: {
@@ -361,6 +454,19 @@ export const api = {
       const query = deleteMemories ? "?delete_memories=true" : "";
       return request<OkResponse>("DELETE", `/v1/bots/${botId}${query}`);
     },
+    credentials(botId: string) {
+      return request<{ credentials: BotCredential[] }>("GET", `/v1/bots/${botId}/credentials`).then(
+        (data) => data.credentials ?? [],
+      );
+    },
+    saveCredential(botId: string, provider: string, secret: string) {
+      return request<BotCredential>("PUT", `/v1/bots/${botId}/credentials/${provider}`, {
+        secret,
+      });
+    },
+    forgetCredential(botId: string, provider: string) {
+      return request<OkResponse>("DELETE", `/v1/bots/${botId}/credentials/${provider}`);
+    },
   },
   subagents: {
     list(botId: string) {
@@ -373,6 +479,67 @@ export const api = {
     },
     restart(botId: string, subagentId: string) {
       return request<Subagent>("POST", `/v1/bots/${botId}/subagents/${subagentId}/restart`);
+    },
+  },
+  books: {
+    list(botId: string) {
+      return request<{ books: SkillBook[] }>("GET", `/v1/bots/${botId}/books`);
+    },
+  },
+  connections: {
+    status() {
+      return request<ConnectionKeyStatus>("GET", "/v1/connections/status");
+    },
+    setKey(apiKey: string) {
+      return request<ConnectionKeyStatus>("POST", "/v1/connections/key", { apiKey });
+    },
+    clearKey() {
+      return request<OkResponse>("DELETE", "/v1/connections/key");
+    },
+    catalog(q = "") {
+      const query = q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+      return request<ConnectionCatalog>("GET", `/v1/connections/catalog${query}`);
+    },
+    list() {
+      return request<{ connections: Connection[] }>("GET", "/v1/connections");
+    },
+    begin(provider: string, redirectUrl: string) {
+      return request<BeginConnectionResult>("POST", "/v1/connections", {
+        provider,
+        redirectUrl,
+      });
+    },
+    complete(connectionId: string) {
+      return request<Connection>("POST", `/v1/connections/${connectionId}/complete`);
+    },
+    revoke(connectionId: string) {
+      return request<OkResponse>("POST", `/v1/connections/${connectionId}/revoke`);
+    },
+  },
+  models: {
+    credentials() {
+      return request<ModelCredentialList>("GET", "/v1/models/credentials");
+    },
+    list() {
+      return request<ModelListResponse>("GET", "/v1/models");
+    },
+    connect(provider: string, apiKey?: string) {
+      return request<ModelCredential>("POST", "/v1/models/credentials", {
+        provider,
+        apiKey,
+      });
+    },
+    forget(provider: string) {
+      return request<OkResponse>("DELETE", `/v1/models/credentials/${provider}`);
+    },
+    setDefault(provider: string, model: string, effort?: string, fast?: boolean, botId?: string) {
+      return request<OkResponse>("POST", "/v1/models/default", {
+        provider,
+        model,
+        effort,
+        fast,
+        botId,
+      });
     },
   },
   computer: {
@@ -397,7 +564,10 @@ export const api = {
     release(botId: string) {
       return request<OkResponse>("POST", `/v1/computer/${botId}/release`);
     },
-    input(botId: string, body: { kind: string; payload: Record<string, unknown> }) {
+    input(
+      botId: string,
+      body: { kind: string; payload: Record<string, unknown>; leaseId: string },
+    ) {
       return request<OkResponse>("POST", `/v1/computer/${botId}/input`, body);
     },
     heartbeat(botId: string) {
@@ -460,6 +630,13 @@ export const api = {
     followUp(botId: string, text: string) {
       return request<OkResponse>("POST", `/v1/threads/${botId}/follow-up`, { text });
     },
+    answer(botId: string, runId: string, messageId: string, answer: string) {
+      return request<OkResponse>("POST", `/v1/threads/${botId}/answer`, {
+        runId,
+        messageId,
+        answer,
+      });
+    },
     markRead(botId: string) {
       return request<OkResponse>("POST", `/v1/threads/${botId}/read`);
     },
@@ -470,14 +647,26 @@ export const api = {
       botId: string,
       after: string | null,
       signal: AbortSignal,
+      afterSequence?: number | null,
     ): AsyncGenerator<ProductEvent> {
-      const query = after ? `?after=${encodeURIComponent(after)}` : "";
+      const params = new URLSearchParams();
+      if (afterSequence != null && afterSequence > 0) {
+        params.set("after_sequence", String(afterSequence));
+      } else if (after) {
+        params.set("after", after);
+      }
+      const query = params.toString() ? `?${params.toString()}` : "";
       yield* readSse(`/v1/threads/${botId}/events${query}`, signal);
     },
   },
   events: {
-    async *subscribe(signal: AbortSignal): AsyncGenerator<ProductEvent> {
-      yield* readSse("/v1/events", signal);
+    async *subscribe(
+      signal: AbortSignal,
+      afterSequence?: number | null,
+    ): AsyncGenerator<ProductEvent> {
+      const query =
+        afterSequence != null && afterSequence > 0 ? `?after_sequence=${afterSequence}` : "";
+      yield* readSse(`/v1/events${query}`, signal);
     },
   },
 };
@@ -504,6 +693,7 @@ async function* readSse(path: string, signal: AbortSignal): AsyncGenerator<Produ
   const decoder = new TextDecoder();
   let buffer = "";
   let eventName = "message";
+  let eventId = "";
   let dataLines: string[] = [];
   while (!signal.aborted) {
     const { value, done } = await reader.read();
@@ -521,16 +711,19 @@ async function* readSse(path: string, signal: AbortSignal): AsyncGenerator<Produ
           try {
             const parsed = camelize<ProductEvent>(JSON.parse(raw));
             if (eventName && eventName !== "message") parsed.type = eventName;
+            if (eventId) parsed.id = eventId;
             yield parsed;
           } catch {
-            // ignore a broken frame and keep the stream
+            // ignore a broken or future-typed frame and keep the stream
           }
         }
         eventName = "message";
+        eventId = "";
         continue;
       }
       if (line.startsWith(":")) continue;
-      if (line.startsWith("event:")) eventName = line.slice(6).trim();
+      if (line.startsWith("id:")) eventId = line.slice(3).trim();
+      else if (line.startsWith("event:")) eventName = line.slice(6).trim();
       else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
     }
   }

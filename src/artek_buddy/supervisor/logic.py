@@ -40,6 +40,13 @@ _TERMINAL_APPS = frozenset(
 )
 
 _CAPS_KEYS = frozenset({"Caps_Lock", "CapsLock", "capslock", "caps_lock"})
+_WEB_OPEN = re.compile(r"(?i)^(https?://|www\.)")
+_BARE_HOST_OPEN = re.compile(r"(?i)^[a-z0-9.-]+\.[a-z]{2,}(/.*)?$")
+
+
+def is_web_open_target(path: str) -> bool:
+    text = (path or "").strip()
+    return bool(_WEB_OPEN.match(text) or _BARE_HOST_OPEN.match(text))
 
 
 def _is_browser_app(name: str) -> bool:
@@ -61,6 +68,36 @@ def normalize_keysym(key: str) -> str:
     return value
 
 
+def _ascii_typeable(text: str) -> bool:
+    return all(ch in "\t\n" or 32 <= ord(ch) <= 126 for ch in text)
+
+
+def type_text_command(text: str) -> str:
+    if not text:
+        return "true"
+    if _ascii_typeable(text):
+        return f"xdotool type --clearmodifiers --delay 12 -- {shell_quote(text)}"
+    quoted = shell_quote(text)
+    return (
+        f"printf '%s' {quoted} | xclip -selection clipboard -i; "
+        f"printf '%s' {quoted} | xclip -selection primary -i; "
+        "xdotool key --clearmodifiers ctrl+v"
+    )
+
+
+def clipboard_command(text: str, *, paste: bool = True) -> str:
+    if not text:
+        return "true"
+    quoted = shell_quote(text)
+    parts = [
+        f"printf '%s' {quoted} | xclip -selection clipboard -i",
+        f"printf '%s' {quoted} | xclip -selection primary -i",
+    ]
+    if paste:
+        parts.append("xdotool key --clearmodifiers ctrl+v")
+    return "; ".join(parts)
+
+
 def _close_app_command(raw_app: str) -> str:
     # Kill by window class + exact comm. `pkill -f` matches supervisor wrappers.
     if _is_browser_app(raw_app):
@@ -74,7 +111,15 @@ def _close_app_command(raw_app: str) -> str:
             "done"
         )
     if _is_files_app(raw_app):
-        raw_app = "pcmanfm"
+        return (
+            "for cls in Thunar thunar PCManFM pcmanfm; do "
+            'ids=$(xdotool search --onlyvisible --class "$cls" 2>/dev/null || true); '
+            'for id in $ids; do xdotool windowkill "$id" 2>/dev/null || true; done; '
+            "done; "
+            "for comm in thunar pcmanfm; do "
+            'pkill -x "$comm" >/dev/null 2>&1 || true; '
+            "done"
+        )
     safe = re.sub(r"[^A-Za-z0-9._+-]", "", raw_app.strip())
     if not safe:
         return "true"
@@ -88,10 +133,13 @@ def _close_app_command(raw_app: str) -> str:
 
 def x11vnc_command(port: int, *, view_only: bool = False) -> str:
     extra = " -viewonly" if view_only else ""
+    # Viewer Caps_Lock would toggle the guest lock and then invert letter case.
+    # Keep polling below a video frame and coalesce rapid redraws briefly. The
+    # former 100 ms waits were visible on every pointer and keyboard action.
     return (
         f"x11vnc -display :1 -forever -shared{extra} -nopw -listen 127.0.0.1 "
-        f"-rfbport {port} -xkb -ncache 0 -noxdamage -noshm -noxinerama "
-        f"-threads -wait 100 -defer 100"
+        f"-rfbport {port} -xkb -skip_lockkeys -ncache 0 -noxdamage -noshm -noxinerama "
+        f"-threads -wait 30 -defer 20"
     )
 
 
@@ -198,8 +246,7 @@ def action_command(actions: list[dict]) -> str:
                 if item.get("double"):
                     parts.append(f"xdotool click {button}")
         elif kind == "type":
-            text = str(item.get("text") or "")
-            parts.append(f"xdotool type --delay 12 -- {shell_quote(text)}")
+            parts.append(type_text_command(str(item.get("text") or "")))
         elif kind == "key":
             key = normalize_keysym(str(item.get("key") or item.get("text") or ""))
             if key:
@@ -207,6 +254,10 @@ def action_command(actions: list[dict]) -> str:
         elif kind == "scroll":
             clicks = int(item.get("clicks") or 3)
             button = 4 if str(item.get("direction") or "up") == "up" else 5
+            if item.get("x") is not None and item.get("y") is not None:
+                x = int(item.get("x") or 0)
+                y = int(item.get("y") or 0)
+                parts.append(f"xdotool mousemove {x} {y}")
             parts.append(f"xdotool click --repeat {max(1, clicks)} {button}")
         elif kind == "wait":
             ms = int(item.get("ms") or 350)
@@ -214,8 +265,11 @@ def action_command(actions: list[dict]) -> str:
         elif kind == "open":
             path = str(item.get("path") or item.get("url") or "").strip()
             if path:
-                if re.match(r"^(https?://|www\.|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/.*)?$)", path):
-                    target = path if path.startswith(("http://", "https://")) else f"https://{path}"
+                if is_web_open_target(path):
+                    if re.match(r"(?i)^https?://", path):
+                        target = path
+                    else:
+                        target = f"https://{path}"
                     parts.append(
                         f"nohup artek-browser {shell_quote(target)} >/tmp/artek/open.log 2>&1 &"
                     )
@@ -226,12 +280,14 @@ def action_command(actions: list[dict]) -> str:
             if _is_browser_app(raw_app):
                 app = "artek-browser"
             elif _is_files_app(raw_app):
-                app = "pcmanfm"
+                app = "thunar"
             elif _is_terminal_app(raw_app):
                 app = "xterm"
             else:
                 app = raw_app
             uri = str(item.get("uri") or item.get("url") or "").strip()
+            if not uri and app == "thunar":
+                uri = "/home/artek"
             if uri:
                 parts.append(
                     f"nohup {shell_quote(app)} {shell_quote(uri)} >/tmp/artek/launch.log 2>&1 &"
@@ -249,7 +305,9 @@ def input_command(kind: str, payload: dict) -> str:
         key = payload.get("key") or payload.get("text")
         return action_command([{"kind": "key", "key": key}])
     if kind == "clipboard":
-        return action_command([{"kind": "type", "text": payload.get("text")}])
+        text = str(payload.get("text") or "")
+        paste = bool(payload.get("paste", True))
+        return clipboard_command(text, paste=paste)
     return action_command(
         [
             {

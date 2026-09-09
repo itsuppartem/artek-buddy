@@ -1,7 +1,9 @@
 import {
   type ClipboardEvent,
+  type Dispatch,
   type DragEvent,
   type KeyboardEvent,
+  type SetStateAction,
   type SyntheticEvent,
   useEffect,
   useLayoutEffect,
@@ -13,15 +15,32 @@ import { useNavigate, useParams } from "react-router-dom";
 import { abortableDelay, api, classifyError, isLiveTurn, type ShellErrorKind } from "../api";
 import {
   type AttentionAlert,
+  alertKeysToRemember,
   allowAlert,
   answeredAskBody,
   attentionFingerprint,
-  attentionFromBotChange,
   attentionFromEvent,
+  desktopWindowFocused,
   isHistoricalEvent,
+  nativeNotifyTag,
+  parkedAttentionForView,
+  rememberShownAlert,
+  shouldClearAttentionForView,
+  shouldConsiderEventForAttention,
+  shouldCountThreadRead,
   shouldReplaceAttention,
   shouldSendDesktopAlert,
+  shouldSendNativeAlert,
+  shouldStickDismissOnView,
+  shouldWatchBackgroundBot,
 } from "../lib/alerts";
+import { healthOkClearsError, workspaceEventsAuthLoss } from "../lib/auth-loss";
+import { composerCanSend, composerPlaceholder, composerShouldSend } from "../lib/composer";
+import {
+  applyComposerSendResult,
+  type ComposerSlot,
+  emptyComposerSlot,
+} from "../lib/composer-slots";
 import {
   composerRedo,
   composerUndo,
@@ -30,45 +49,118 @@ import {
   pushComposerChange,
   resetComposerHistory,
 } from "../lib/composer-undo";
-import { fulfillOwnerJob, isAutoOwnerJob, reportOwnerJobError } from "../lib/consent";
-import { stripMarkdown } from "../lib/markdown";
+import {
+  fulfillOwnerJob,
+  isAutoOwnerJob,
+  pendingOwnerJobIds,
+  shouldAutoFulfillOwnerJob,
+} from "../lib/consent";
+import { copyText } from "../lib/copy-text";
+import { hatchIsOpen, hatchPointerEvents } from "../lib/hatch";
+import { inFlightProgressText } from "../lib/in-flight-status";
+import { contextLinkUrl, stripMarkdown } from "../lib/markdown";
+import { dispatchMemoryChanged } from "../lib/memory";
+import { NEEDS_MODEL_TEXT } from "../lib/models";
+import {
+  captionForMessage,
+  captionTargetId,
+  enqueueSend,
+  formatOfflineCaption,
+  isQueuedMessageId,
+  mergeQueuedIntoMessages,
+  newQueuedId,
+  OFFLINE_CAPTIONS_KEY,
+  OFFLINE_QUEUE_KEY,
+  type OfflineCaption,
+  parseStoredList,
+  type QueuedSend,
+  rememberCaption,
+  removeQueuedSend,
+  shouldQueueSend,
+  writeStoredList,
+} from "../lib/offline-queue";
+import { openOwnerBrowser } from "../lib/owner-browser";
+import { clampPaneWidth, constrainPaneWidth } from "../lib/pane-resize";
+import { panelEscapeAction } from "../lib/panel-escape";
+import {
+  nextPhoneTab,
+  type PhoneTab,
+  phoneTabAfterPanel,
+  shouldUsePhoneDeskControls,
+  shouldUsePhoneShell,
+} from "../lib/phone-shell";
+import { ownerRunError } from "../lib/run-error";
 import {
   embeddableScreenUrl,
   screenFrameLooksFailed,
+  screenPolicy,
+  shouldFetchScreenUrl,
+  shouldKeepScreenUrlOnRelease,
   shouldRefreshScreenUrl,
   shouldReplaceScreenUrl,
   shouldTakeControl,
 } from "../lib/screen";
-import { filterBots, inboxEmptyState, type SidebarView, sortInboxBots } from "../lib/sidebar";
 import {
+  filterBots,
+  inboxEmptyState,
+  inboxFallbackPath,
+  type SidebarView,
+  sortInboxBots,
+} from "../lib/sidebar";
+import {
+  canAnswerOwnerPrompt,
   isHiddenLiveDraft,
+  isRawRunFailedMessage,
   isToolNoise,
-  mergeThreadSnapshot,
-  prependThreadMessagePage,
 } from "../lib/thread-events";
+import { captureMessageAnchor, restoreThreadScroll } from "../lib/thread-scroll";
+import {
+  applyOlderPageForBot,
+  applySnapshotForBot,
+  createThreadSnapshotCache,
+  forgetThread,
+  peekThread,
+  rememberThread,
+  touchThread,
+} from "../lib/thread-snapshot-cache";
 import {
   addPendingFiles,
   clipboardFilePaths,
-  clipboardHasAttachable,
+  clipboardPrefersImage,
+  clipboardShouldClaim,
   droppedFiles,
   filesFromAttachedPayload,
   type PendingFile,
+  pasteClipboardData,
   pastedFiles,
   previewKind,
   readClipboardFiles,
   readFileBase64,
   transferFilePaths,
 } from "../lib/uploads";
+import {
+  isIosDevice,
+  isStandaloneDisplay,
+  pageSurface,
+  pairAgainLabel,
+  shouldHoldHostAlert,
+  shouldOfferWebAlerts,
+  shouldShowWebNotification,
+  webNotificationBody,
+} from "../lib/web-notify";
 import type {
   Bot,
   ComputerMode,
   ComputerStatus,
+  ModelCredentialList,
   ProductEvent,
   ThreadMessage,
   ThreadSnapshot,
+  UsageRecord,
 } from "../types";
 import { BotAvatar } from "../ui/bot-avatar";
 import { Button } from "../ui/button";
+import { IconClose, IconComputer, IconPlus, IconSearch, IconSend, IconStop } from "../ui/icons";
 import { WindowChrome } from "../ui/window-chrome";
 import { BotContextMenu, type ContextMenuPosition } from "./BotContextMenu";
 import { MessageContextMenu } from "./MessageContextMenu";
@@ -77,9 +169,44 @@ import { BotSettings } from "./shell/BotSettings";
 import { ComputerOverlay } from "./shell/ComputerOverlay";
 import { ComputerPane } from "./shell/ComputerPane";
 import { CreateBotForm } from "./shell/CreateBotForm";
-import { MessageView, replyExcerpt } from "./shell/MessageView";
+import { HostPhoneBanners } from "./shell/HostPhoneBanners";
+import { InboxList } from "./shell/InboxList";
+import { LibraryPane } from "./shell/LibraryPane";
+import { MemoryPanel } from "./shell/MemoryPanel";
+import { MessageView, messageCopyText, replyExcerpt } from "./shell/MessageView";
+import { ModelsPane } from "./shell/ModelsPane";
+import { PaneResizeHandle } from "./shell/PaneResizeHandle";
+import { PluginsPane } from "./shell/PluginsPane";
+import { RoutinesPanel } from "./shell/RoutinesPanel";
+import { type HostSearchHit, SearchHits } from "./shell/SearchHits";
+import { TodayView } from "./shell/TodayView";
+import { usageFromRecords, WorkLogPane } from "./shell/WorkLogPane";
+import { WorkspaceRail, type WorkspaceView } from "./shell/WorkspaceRail";
 
-type Panel = "computer" | "settings" | "create" | null;
+type Panel =
+  | "computer"
+  | "settings"
+  | "create"
+  | "models"
+  | "plugins"
+  | "memory"
+  | "routines"
+  | "library"
+  | "worklog"
+  | null;
+
+const DEFAULT_RACK_WIDTH = 276;
+const DEFAULT_HATCH_WIDTH = 360;
+
+function savedPaneWidth(pane: "left" | "right", fallback: number): number {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const stored = Number(window.localStorage.getItem(`artek-pane-width-${pane}`));
+    return Number.isFinite(stored) && stored > 0 ? clampPaneWidth(pane, stored) : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 export function ShellPage() {
   const { botId } = useParams();
@@ -87,8 +214,41 @@ export function ShellPage() {
   const [bots, setBots] = useState<Bot[]>([]);
   const [botsReady, setBotsReady] = useState(false);
   const [query, setQuery] = useState("");
+  const [hostHits, setHostHits] = useState<HostSearchHit[]>([]);
   const [archivedBots, setArchivedBots] = useState<Bot[]>([]);
   const [sidebarView, setSidebarView] = useState<SidebarView>("inbox");
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() =>
+    botId ? "chats" : "today",
+  );
+  const [phoneTab, setPhoneTab] = useState<PhoneTab>(() => (botId ? "chat" : "today"));
+  const [phoneShell, setPhoneShell] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : shouldUsePhoneShell(window.innerWidth, window.innerHeight),
+  );
+  const [phoneDesk, setPhoneDesk] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : shouldUsePhoneDeskControls(window.matchMedia("(hover: hover) and (pointer: fine)").matches),
+  );
+  const [rackWidth, setRackWidth] = useState(() => savedPaneWidth("left", DEFAULT_RACK_WIDTH));
+  const [hatchWidth, setHatchWidth] = useState(() => savedPaneWidth("right", DEFAULT_HATCH_WIDTH));
+  const [memoryFocusFact, setMemoryFocusFact] = useState<string | null>(null);
+  const [alertOffer, setAlertOffer] = useState<"hide" | "ask" | "ready">(() =>
+    shouldOfferWebAlerts({
+      surface: pageSurface(),
+      permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+      standalone: isStandaloneDisplay(),
+      ios: isIosDevice(),
+    }),
+  );
+  const [homeHintDismissed, setHomeHintDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("artek-home-screen-hint") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const [draft, setDraft] = useState("");
   const draftHistory = useRef(createComposerHistory(""));
@@ -98,14 +258,30 @@ export function ShellPage() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
-  const panelAfterSettings = useRef<"computer" | null>(null);
+  const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
+  const panelAfterSettings = useRef<"library" | null>(null);
   const panelAfterCreate = useRef<"computer" | null>(null);
+  const createFromToday = useRef(false);
+  const panelAfterModels = useRef<"computer" | "library" | null>(null);
+  const panelAfterPlugins = useRef<"computer" | "library" | null>(null);
+  const panelAfterContext = useRef<"library" | null>(null);
   const creatingBot = useRef(false);
   const filesEpoch = useRef(0);
+  const queueFilesRef = useRef<(incoming: File[]) => void>(() => undefined);
   const pendingAlerts = useRef(
     new Map<string, { alert: AttentionAlert; notifyOnFinish: boolean; key: string }>(),
   );
   const fulfilledOwnerJobs = useRef(new Set<string>());
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("artek-pane-width-left", String(rackWidth));
+      localStorage.setItem("artek-pane-width-right", String(hatchWidth));
+    } catch {
+      // Persistence is optional on restricted browser surfaces.
+    }
+  }, [rackWidth, hatchWidth]);
+
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const screenUrlRef = useRef<string | null>(null);
@@ -122,20 +298,54 @@ export function ShellPage() {
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ShellErrorKind>("host");
   const errorKindRef = useRef<ShellErrorKind>("host");
+  const [offlineQueue, setOfflineQueue] = useState<QueuedSend[]>(() =>
+    parseStoredList<QueuedSend>(window.localStorage.getItem(OFFLINE_QUEUE_KEY)),
+  );
+  const [offlineCaptions, setOfflineCaptions] = useState<OfflineCaption[]>(() =>
+    parseStoredList<OfflineCaption>(window.localStorage.getItem(OFFLINE_CAPTIONS_KEY)),
+  );
+  const [hostDown, setHostDown] = useState(() => offlineQueue.length > 0);
+  const offlineQueueRef = useRef(offlineQueue);
+  const offlineCaptionsRef = useRef(offlineCaptions);
+  const hostDownRef = useRef(hostDown);
+  const flushingQueue = useRef(false);
+  useEffect(() => {
+    if (!error && !hostDown) return;
+    setWorkspaceView((current) => (current === "today" ? "chats" : current));
+    setPhoneTab((current) => (current === "today" ? "chat" : current));
+    if (errorKind === "auth") setPanel(null);
+  }, [error, errorKind, hostDown]);
+  offlineQueueRef.current = offlineQueue;
+  offlineCaptionsRef.current = offlineCaptions;
+  hostDownRef.current = hostDown;
   const [later, setLater] = useState<string | null>(null);
+  const [usageRecords, setUsageRecords] = useState<UsageRecord[]>([]);
   const [attention, setAttention] = useState<AttentionAlert | null>(null);
   const seenAlertKeys = useRef(new Set<string>());
   const dismissedAlerts = useRef(new Set<string>());
   const stickToLatest = useRef(true);
-  const recentKindAt = useRef(new Map<string, number>());
+  const scrollAnchor = useRef<ReturnType<typeof captureMessageAnchor>>(null);
+  const messageScroll = useRef<HTMLDivElement>(null);
   const prevBotsRef = useRef(new Map<string, Bot>());
   const activeIdRef = useRef<string | undefined>(undefined);
   const botIdRef = useRef<string | undefined>(undefined);
+  const requestedBotId = useRef<string | null>(null);
+  const inboxPointerDown = useRef<string | null>(null);
   const botsRef = useRef<Bot[]>([]);
+  const windowFocusedRef = useRef(true);
+  const gtkActiveRef = useRef<boolean | null>(null);
+  const [windowFocused, setWindowFocused] = useState(true);
+  const [pageHidden, setPageHidden] = useState(false);
   const shellOpenedAt = useRef(Date.now());
+  const freshBotIds = useRef(new Set<string>());
+  const previousViewingRef = useRef<string | null>(null);
   const refreshBotsRef = useRef<() => Promise<Bot[]>>(async () => []);
   const considerEventRef = useRef<
-    (incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) => void
+    (
+      incoming: ProductEvent,
+      bot: Bot,
+      opts?: { live?: boolean; source?: "thread" | "workspace" },
+    ) => void
   >(() => undefined);
   const [contextMenu, setContextMenu] = useState<{
     bot: Bot;
@@ -144,30 +354,88 @@ export function ShellPage() {
   const [messageMenu, setMessageMenu] = useState<{
     message: ThreadMessage;
     position: ContextMenuPosition;
+    url?: string;
   } | null>(null);
   const [replyTo, setReplyTo] = useState<ThreadMessage | null>(null);
-  const expandedHistoryThread = useRef<string | null>(null);
+  const composerSlots = useRef(new Map<string, ComposerSlot<ThreadMessage>>());
+  const composerBotRef = useRef<string | undefined>(undefined);
+  const threadCache = useRef(createThreadSnapshotCache());
   const discardedBotIds = useRef(new Set<string>());
   const heldUnreadIds = useRef(new Set<string>());
-  const messageScroll = useRef<HTMLDivElement>(null);
 
   const active = bots.find((bot) => bot.id === botId);
   activeIdRef.current = active?.id;
   botIdRef.current = botId;
-  const thread = active && snapshot?.botId === active.id ? snapshot : null;
+  const cachedEntry = active ? peekThread(threadCache.current, active.id) : undefined;
+  const cachedSnapshot = cachedEntry?.snapshot ?? null;
+  const thread = active && snapshot?.botId === active.id ? snapshot : cachedSnapshot;
+  const historyAtStart = Boolean(cachedEntry?.atStart);
+  const loadingThread = Boolean(active && !thread && !error);
   const isParked = thread?.run?.status === "waiting_takeover";
   const isBusy = Boolean(
     (thread?.run && isLiveTurn(thread.run.status)) ||
       (thread && !isParked && (hasLive(thread) || hasActiveWorkers(thread))),
   );
+  const flightText = inFlightProgressText(thread?.subagents);
+  const hasWorkLog = Boolean(thread?.run) || (thread?.subagents ?? []).length > 0;
+
+  useEffect(() => {
+    if (!active?.id) {
+      setUsageRecords([]);
+      return;
+    }
+    let cancelled = false;
+    void api.usage
+      .list({ botId: active.id })
+      .then((rows) => {
+        if (!cancelled) setUsageRecords(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setUsageRecords([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active?.id, thread?.run?.id, thread?.subagents?.length]);
 
   useEffect(() => {
     botsRef.current = bots;
   }, [bots]);
 
   useEffect(() => {
+    function applyFocus() {
+      const hidden = document.hidden;
+      const focused = desktopWindowFocused({
+        gtkActive: gtkActiveRef.current,
+        pageHidden: hidden,
+        browserFocused: document.visibilityState === "visible" && document.hasFocus(),
+      });
+      windowFocusedRef.current = focused;
+      setWindowFocused(focused);
+      setPageHidden(hidden);
+    }
+    function onGtkActive(active: boolean | number) {
+      gtkActiveRef.current = Boolean(active);
+      applyFocus();
+    }
+    applyFocus();
+    window.addEventListener("focus", applyFocus);
+    window.addEventListener("blur", applyFocus);
+    document.addEventListener("visibilitychange", applyFocus);
+    const win = window as Window & {
+      __artekSetWindowActive?: (active: boolean | number) => void;
+    };
+    win.__artekSetWindowActive = onGtkActive;
+    return () => {
+      window.removeEventListener("focus", applyFocus);
+      window.removeEventListener("blur", applyFocus);
+      document.removeEventListener("visibilitychange", applyFocus);
+      delete win.__artekSetWindowActive;
+    };
+  }, []);
+
+  useEffect(() => {
     filesEpoch.current += 1;
-    setPendingFiles([]);
   }, [botId]);
 
   function patchBotUnread(id: string, unread: boolean) {
@@ -181,34 +449,94 @@ export function ShellPage() {
     heldUnreadIds.current.delete(id);
     patchBotUnread(id, false);
     void api.threads.markRead(id).catch(() => undefined);
+    if (pageSurface() === "desktop") {
+      void api.local.dismissNotify(nativeNotifyTag(id));
+    }
+  }
+
+  async function readGtkWindowActive(): Promise<boolean | null> {
+    if (pageSurface() !== "desktop") return gtkActiveRef.current;
+    try {
+      const status = await api.local.status();
+      if (status.windowActive === true || status.windowActive === false) {
+        gtkActiveRef.current = status.windowActive;
+        const hidden = typeof document !== "undefined" && document.hidden;
+        const focused = desktopWindowFocused({
+          gtkActive: status.windowActive,
+          pageHidden: hidden,
+          browserFocused:
+            typeof document !== "undefined" &&
+            document.visibilityState === "visible" &&
+            document.hasFocus(),
+        });
+        windowFocusedRef.current = focused;
+        setWindowFocused(focused);
+        setPageHidden(hidden);
+        return status.windowActive;
+      }
+    } catch {
+      /* loopback down */
+    }
+    return gtkActiveRef.current;
   }
 
   useEffect(() => {
     if (!botId) return;
-    markOpenThreadRead(botId);
-  }, [botId]);
+    void (async () => {
+      const gtkWindowActive = await readGtkWindowActive();
+      if (
+        !shouldCountThreadRead({
+          viewingBotId: botId,
+          chatId: botId,
+          windowFocused,
+          pageHidden,
+          gtkWindowActive,
+        })
+      ) {
+        return;
+      }
+      markOpenThreadRead(botId);
+    })();
+  }, [botId, windowFocused, pageHidden]);
 
-  function dispatchAlert(next: AttentionAlert, key: string, notifyOnFinish: boolean) {
+  async function dispatchAlert(next: AttentionAlert, key: string, notifyOnFinish: boolean) {
     if (!allowAlert(next, notifyOnFinish)) return;
-    if (seenAlertKeys.current.has(key)) return;
-    if (dismissedAlerts.current.has(attentionFingerprint(next))) {
+    const fingerprint = attentionFingerprint(next);
+    if (seenAlertKeys.current.has(key) || seenAlertKeys.current.has(fingerprint)) return;
+    if (dismissedAlerts.current.has(fingerprint)) {
       seenAlertKeys.current.add(key);
+      seenAlertKeys.current.add(fingerprint);
       return;
     }
-    const kindKey = `${next.botId}:${next.kind}`;
-    const now = Date.now();
-    const last = recentKindAt.current.get(kindKey) ?? 0;
-    if (now - last < 8_000) {
-      seenAlertKeys.current.add(key);
-      return;
-    }
+    const gtkWindowActive = await readGtkWindowActive();
+    if (seenAlertKeys.current.has(key) || seenAlertKeys.current.has(fingerprint)) return;
     const viewing = activeIdRef.current || botIdRef.current || null;
-    if (
-      !shouldSendDesktopAlert({
-        windowFocused: true,
+    const hidden = typeof document !== "undefined" && document.hidden;
+    const surface = pageSurface();
+    const showBanner = shouldSendDesktopAlert({
+      windowFocused: true,
+      viewingBotId: viewing,
+      alertBotId: next.botId,
+    });
+    const showNative =
+      surface === "desktop" &&
+      shouldSendNativeAlert({
+        gtkWindowActive,
+        windowFocused: windowFocusedRef.current && !hidden,
         viewingBotId: viewing,
         alertBotId: next.botId,
-      })
+        pageHidden: hidden,
+      });
+    const showWeb =
+      surface === "host" &&
+      shouldShowWebNotification({
+        pageHidden: hidden,
+        viewingBotId: viewing,
+        alertBotId: next.botId,
+      });
+    if (
+      surface === "host" &&
+      shouldHoldHostAlert({ pageHidden: hidden, viewingBotId: viewing, alertBotId: next.botId })
     ) {
       const held = pendingAlerts.current.get(next.botId);
       if (!held || shouldReplaceAttention(held.alert, next)) {
@@ -216,47 +544,186 @@ export function ShellPage() {
       }
       return;
     }
-    seenAlertKeys.current.add(key);
-    recentKindAt.current.set(kindKey, now);
+    const surfaced = showBanner || showNative || showWeb;
+    if (!surfaced) return;
+    if (rememberShownAlert(seenAlertKeys.current, key) === "skip") return;
+    for (const item of alertKeysToRemember({
+      key,
+      fingerprint,
+      botId: next.botId,
+      kind: next.kind,
+      surfaced: true,
+    })) {
+      seenAlertKeys.current.add(item);
+    }
     if (seenAlertKeys.current.size > 250) {
       const oldest = seenAlertKeys.current.values().next().value;
       if (oldest) seenAlertKeys.current.delete(oldest);
     }
     pendingAlerts.current.delete(next.botId);
-    setAttention((current) => (shouldReplaceAttention(current, next) ? next : current));
+    if (showBanner) {
+      setAttention((current) => (shouldReplaceAttention(current, next) ? next : current));
+    }
+    if (showNative) {
+      void api.local.notify({
+        title: next.title,
+        body: next.body,
+        urgency: next.urgency,
+        tag: nativeNotifyTag(next.botId),
+      });
+    }
+    if (showWeb) {
+      raiseWebNotification(next);
+    }
+  }
+
+  function raiseWebNotification(next: AttentionAlert) {
+    if (pageSurface() !== "host") return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+      const note = new Notification(next.title, {
+        body: webNotificationBody(next),
+        tag: next.botId,
+      });
+      note.onclick = () => {
+        window.focus();
+        openBot(next.botId);
+        note.close();
+      };
+    } catch {
+      /* iOS ignores Notification if the home-screen app is not allowed */
+    }
+  }
+
+  function flushHeldWebAlerts() {
+    if (typeof document === "undefined" || !document.hidden) return;
+    const viewing = activeIdRef.current || botIdRef.current || null;
+    for (const [id, held] of [...pendingAlerts.current.entries()]) {
+      if (
+        !shouldShowWebNotification({
+          pageHidden: true,
+          viewingBotId: viewing,
+          alertBotId: id,
+        })
+      ) {
+        continue;
+      }
+      pendingAlerts.current.delete(id);
+      rememberShownAlert(seenAlertKeys.current, held.key);
+      seenAlertKeys.current.add(attentionFingerprint(held.alert));
+      raiseWebNotification(held.alert);
+    }
+  }
+
+  function flushHeldAlerts() {
+    const viewing = activeIdRef.current || botIdRef.current || null;
+    for (const [id, held] of [...pendingAlerts.current.entries()]) {
+      if (id === viewing) continue;
+      pendingAlerts.current.delete(id);
+      void dispatchAlert(held.alert, held.key, held.notifyOnFinish);
+    }
+  }
+
+  function raiseParkedAlerts() {
+    flushHeldAlerts();
+    const viewing = activeIdRef.current || botIdRef.current || null;
+    const next = parkedAttentionForView(
+      botsRef.current.map((bot) => ({
+        id: bot.id,
+        name: bot.name,
+        status: bot.status,
+        unread: bot.unread,
+        preview: bot.preview,
+        updatedAt: bot.updatedAt,
+      })),
+      viewing,
+      dismissedAlerts.current,
+      shellOpenedAt.current,
+      freshBotIds.current,
+    );
+    if (!next) return;
+    const source = botsRef.current.find((bot) => bot.id === next.botId);
+    void dispatchAlert(next, `${next.botId}:${next.kind}:parked`, source?.notifyOnFinish ?? true);
+  }
+
+  function openBot(id: string) {
+    requestedBotId.current = id;
+    activeIdRef.current = id;
+    botIdRef.current = id;
+    setWorkspaceView("chats");
+    setPhoneTab(nextPhoneTab("select-bot"));
+    navigate(`/app/${id}`);
   }
 
   function dismissAttention(alert: AttentionAlert | null = attention) {
     if (alert) {
       dismissedAlerts.current.add(attentionFingerprint(alert));
       pendingAlerts.current.delete(alert.botId);
+      if (pageSurface() === "desktop") {
+        void api.local.dismissNotify(nativeNotifyTag(alert.botId));
+      }
     }
     setAttention(null);
   }
 
   function startOwnerFulfill(consentId: string) {
     if (!consentId || fulfilledOwnerJobs.current.has(consentId)) return;
+    if (!shouldAutoFulfillOwnerJob(pageSurface())) return;
     fulfilledOwnerJobs.current.add(consentId);
-    void fulfillOwnerJob(consentId).catch((err) => {
+    void fulfillOwnerJob(consentId).catch(() => {
       fulfilledOwnerJobs.current.delete(consentId);
-      void reportOwnerJobError(consentId, err);
     });
   }
 
-  function considerEvent(incoming: ProductEvent, bot: Bot, opts?: { live?: boolean }) {
+  function considerEvent(
+    incoming: ProductEvent,
+    bot: Bot,
+    opts?: { live?: boolean; source?: "thread" | "workspace" },
+  ) {
     const granted = isAutoOwnerJob(incoming);
     if (granted) startOwnerFulfill(granted.consentId);
+    dispatchMemoryChanged(incoming.type);
     if (!opts?.live && isHistoricalEvent(incoming, shellOpenedAt.current)) return;
-    const next = attentionFromEvent(incoming, bot.name);
+    const next = shouldConsiderEventForAttention(opts?.source ?? "thread")
+      ? attentionFromEvent(incoming, bot.name)
+      : null;
     const answered = answeredAskBody(incoming);
     if (answered) {
-      dismissedAlerts.current.add(`${bot.id}:ask:${answered}`);
+      const held = pendingAlerts.current.get(bot.id);
+      if (held?.alert.kind === "ask") {
+        dismissedAlerts.current.add(attentionFingerprint(held.alert));
+      }
       pendingAlerts.current.delete(bot.id);
+      setAttention((current) => {
+        if (current?.botId !== bot.id || current.kind !== "ask") return current;
+        dismissedAlerts.current.add(attentionFingerprint(current));
+        return null;
+      });
     }
-    if (next) dispatchAlert(next, incoming.id, bot.notifyOnFinish);
+    flushHeldAlerts();
+    if (next) void dispatchAlert(next, incoming.id, bot.notifyOnFinish);
     if (incoming.type === "run.started") {
+      const running = { ...bot, status: "running" };
+      botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? running : item));
       const stored = prevBotsRef.current.get(bot.id);
       if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "running" });
+      setBots((list) =>
+        list.map((item) => (item.id === bot.id ? { ...item, status: "running" } : item)),
+      );
+    }
+    if (incoming.type === "computer.takeover.requested") {
+      const parked = {
+        ...bot,
+        status: "waiting_takeover",
+        updatedAt: new Date().toISOString(),
+      };
+      botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? parked : item));
+      const stored = prevBotsRef.current.get(bot.id);
+      if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "waiting_takeover" });
+      setBots((list) =>
+        list.map((item) => (item.id === bot.id ? { ...item, status: "waiting_takeover" } : item)),
+      );
+      void refreshBotsRef.current().catch(() => undefined);
     }
     if (incoming.type === "run.completed" || incoming.type === "run.failed") {
       void refreshBotsRef.current().catch(() => undefined);
@@ -265,60 +732,223 @@ export function ShellPage() {
   considerEventRef.current = considerEvent;
 
   useEffect(() => {
-    const viewing = active?.id ?? null;
-    for (const [id, held] of [...pendingAlerts.current.entries()]) {
-      if (id === viewing) continue;
-      pendingAlerts.current.delete(id);
-      dispatchAlert(held.alert, held.key, held.notifyOnFinish);
-    }
+    raiseParkedAlerts();
+    void refreshBotsRef.current().catch(() => undefined);
   }, [active?.id]);
 
   useEffect(() => {
-    if (attention && active?.id === attention.botId) {
-      dismissedAlerts.current.add(attentionFingerprint(attention));
+    const timer = window.setInterval(() => {
+      const viewing = activeIdRef.current || botIdRef.current;
+      const watch = botsRef.current.some((bot) =>
+        shouldWatchBackgroundBot(bot.status, bot.id, viewing),
+      );
+      if (watch) {
+        const needsList = botsRef.current.some(
+          (bot) =>
+            bot.id !== viewing &&
+            (bot.status === "queued" || bot.status === "leased" || bot.status === "running"),
+        );
+        if (needsList) void refreshBotsRef.current().catch(() => undefined);
+        else raiseParkedAlerts();
+      }
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (pageSurface() !== "host") return;
+    function onHide() {
+      if (typeof document !== "undefined" && document.hidden) {
+        flushHeldWebAlerts();
+      }
+    }
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onHide);
+    };
+  }, []);
+
+  useEffect(() => {
+    const viewing = activeIdRef.current || botIdRef.current || null;
+    const lookingAtThread =
+      viewing != null &&
+      shouldCountThreadRead({
+        viewingBotId: viewing,
+        chatId: viewing,
+        windowFocused,
+        pageHidden,
+        gtkWindowActive: gtkActiveRef.current,
+      });
+    if (lookingAtThread && shouldClearAttentionForView(attention, viewing)) {
+      if (shouldStickDismissOnView(attention, viewing, previousViewingRef.current)) {
+        dismissedAlerts.current.add(attentionFingerprint(attention));
+      }
       setAttention(null);
     }
-  }, [active?.id, attention]);
+    previousViewingRef.current = viewing;
+  }, [active?.id, attention, windowFocused, pageHidden]);
 
   async function refreshBots() {
     const list = await api.bots.list();
-    const prev = prevBotsRef.current;
-    if (prev.size) {
-      for (const next of list) {
-        const before = prev.get(next.id);
-        if (!before) continue;
-        const alert = attentionFromBotChange(before, next);
-        if (alert) {
-          const updated = Date.parse(next.updatedAt);
-          if (Number.isFinite(updated) && updated < shellOpenedAt.current) continue;
-          dispatchAlert(alert, `${next.id}:${alert.kind}:${next.updatedAt}`, next.notifyOnFinish);
-        }
-      }
-    }
     const viewing = activeIdRef.current || botIdRef.current;
-    if (viewing && !heldUnreadIds.current.has(viewing)) {
+    const gtkWindowActive = await readGtkWindowActive();
+    if (
+      viewing &&
+      !heldUnreadIds.current.has(viewing) &&
+      shouldCountThreadRead({
+        viewingBotId: viewing,
+        chatId: viewing,
+        windowFocused: windowFocusedRef.current,
+        pageHidden: typeof document !== "undefined" && document.hidden,
+        gtkWindowActive,
+      })
+    ) {
       const open = list.find((item) => item.id === viewing);
       if (open?.unread) {
         open.unread = false;
-        void api.threads.markRead(viewing).catch(() => undefined);
+        markOpenThreadRead(viewing);
       }
     }
     prevBotsRef.current = new Map(list.map((item) => [item.id, item]));
+    botsRef.current = list;
     for (const item of list) discardedBotIds.current.delete(item.id);
     const archivedList = await api.bots.listArchived().catch(() => [] as Bot[]);
     setBots(list);
+    raiseParkedAlerts();
     setArchivedBots(archivedList);
     if (archivedList.length === 0) setSidebarView("inbox");
     setBotsReady(true);
+    void refreshModels();
     return list;
   }
   refreshBotsRef.current = refreshBots;
+
+  async function refreshModels() {
+    try {
+      setModelState(await api.models.credentials());
+    } catch {
+      // Host errors stay on the existing banner.
+    }
+  }
+
+  function openModels() {
+    panelAfterModels.current =
+      panel === "computer" ? "computer" : panel === "library" ? "library" : null;
+    setWorkspaceView("library");
+    setPhoneTab(nextPhoneTab("open-more"));
+    setPanel("models");
+  }
+
+  function closeModels() {
+    const restore = panelAfterModels.current;
+    panelAfterModels.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+    setWorkspaceView(restore === "library" ? "library" : "chats");
+  }
+
+  function closeSettings() {
+    const restore = panelAfterSettings.current;
+    panelAfterSettings.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+    setWorkspaceView(restore === "library" ? "library" : "chats");
+  }
+
+  function closeCreate() {
+    if (createFromToday.current) {
+      createFromToday.current = false;
+      panelAfterCreate.current = null;
+      setPanel(null);
+      setWorkspaceView("today");
+      if (phoneShell) setPhoneTab(nextPhoneTab("open-today"));
+      return;
+    }
+    const restore = panelAfterCreate.current;
+    panelAfterCreate.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+  }
+
+  function openPlugins() {
+    panelAfterPlugins.current =
+      panel === "computer" ? "computer" : panel === "library" ? "library" : null;
+    setWorkspaceView("library");
+    setPhoneTab(nextPhoneTab("open-more"));
+    setPanel("plugins");
+  }
+
+  function closePlugins() {
+    const restore = panelAfterPlugins.current;
+    panelAfterPlugins.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+    setWorkspaceView(restore === "library" ? "library" : "chats");
+  }
+
+  function openLibrary() {
+    setWorkspaceView("library");
+    setPhoneTab(nextPhoneTab("open-more"));
+    setPanel("library");
+  }
+
+  function openRoutines() {
+    panelAfterContext.current = panel === "library" ? "library" : null;
+    setWorkspaceView(activeIdRef.current ? "routines" : "library");
+    setPhoneTab(nextPhoneTab("open-more"));
+    setPanel(activeIdRef.current ? "routines" : "library");
+  }
+
+  function openMemory() {
+    panelAfterContext.current = panel === "library" ? "library" : null;
+    setWorkspaceView("library");
+    setPhoneTab(nextPhoneTab("open-more"));
+    setPanel(activeIdRef.current ? "memory" : "library");
+  }
+
+  function closeSubcontext() {
+    const restore = panelAfterContext.current;
+    panelAfterContext.current = null;
+    setPanel(restore);
+    if (phoneShell) setPhoneTab(phoneTabAfterPanel(restore));
+    setWorkspaceView(restore === "library" ? "library" : "chats");
+  }
+
+  function closeContextPanel() {
+    setPanel(null);
+    setWorkspaceView("chats");
+    if (phoneShell) setPhoneTab(nextPhoneTab("open-chat"));
+  }
+
+  function persistQueue(next: QueuedSend[]): QueuedSend[] {
+    try {
+      writeStoredList(window.localStorage, OFFLINE_QUEUE_KEY, next);
+    } catch {
+      // Memory still holds the queue if storage is full.
+    }
+    return next;
+  }
+
+  function persistCaptions(next: OfflineCaption[]): OfflineCaption[] {
+    try {
+      writeStoredList(window.localStorage, OFFLINE_CAPTIONS_KEY, next);
+    } catch {
+      // Caption is optional after a reload.
+    }
+    return next;
+  }
 
   function showError(err: unknown, fallback: string) {
     const classified = classifyError(err);
     const message = classified.message || fallback;
     errorKindRef.current = classified.kind;
     setErrorKind(classified.kind);
+    if (classified.kind === "host") {
+      setHostDown(true);
+      return;
+    }
     setError(message);
   }
 
@@ -329,11 +959,13 @@ export function ShellPage() {
     reconnecting.current = true;
     try {
       await api.health();
+      setHostDown(false);
+      await flushOfflineQueue();
       const recovering = errorKindRef.current === "host";
       if (loadBots || recovering) {
         await refreshBotsRef.current();
       }
-      if (loadBots || recovering) {
+      if (healthOkClearsError(errorKindRef.current)) {
         setError(null);
       }
     } catch (err) {
@@ -341,6 +973,77 @@ export function ShellPage() {
       showError(err, "Could not reach the host");
     } finally {
       reconnecting.current = false;
+    }
+  }
+
+  function parkSend(
+    botId: string,
+    text: string,
+    replyToId: string | null,
+    attachments: QueuedSend["attachments"],
+  ) {
+    const item: QueuedSend = {
+      id: newQueuedId(),
+      botId,
+      text,
+      replyToId,
+      attachments,
+      queuedAt: Date.now(),
+    };
+    setOfflineQueue((queue) => persistQueue(enqueueSend(queue, item)));
+    setHostDown(true);
+    if (activeIdRef.current === botId) {
+      setReplyTo(null);
+    } else {
+      const parked = composerSlots.current.get(botId) ?? emptyComposerSlot<ThreadMessage>();
+      composerSlots.current.set(botId, { ...parked, replyTo: null, sending: false });
+    }
+  }
+
+  async function flushOfflineQueue() {
+    if (flushingQueue.current) return;
+    const items = offlineQueueRef.current;
+    if (!items.length) return;
+    flushingQueue.current = true;
+    try {
+      for (const item of items) {
+        try {
+          await api.threads.send(item.botId, item.text, item.replyToId, item.attachments);
+          const snap =
+            activeIdRef.current === item.botId
+              ? await refreshThread(item.botId)
+              : await api.threads.get(item.botId).catch(() => null);
+          const messages = snap?.messages ?? [];
+          setOfflineCaptions((captions) => {
+            const taken = new Set(captions.map((caption) => caption.messageId));
+            const messageId = captionTargetId(item, messages, taken);
+            if (!messageId) return captions;
+            return persistCaptions(
+              rememberCaption(captions, {
+                messageId,
+                botId: item.botId,
+                queuedAt: item.queuedAt,
+              }),
+            );
+          });
+          setOfflineQueue((queue) => persistQueue(removeQueuedSend(queue, item.id)));
+        } catch (err) {
+          const classified = classifyError(err);
+          if (classified.kind === "host") {
+            setHostDown(true);
+            return;
+          }
+          if (classified.kind === "auth") {
+            showError(err, classified.message);
+            return;
+          }
+          showError(err, "Send failed");
+          setOfflineQueue((queue) => persistQueue(removeQueuedSend(queue, item.id)));
+          return;
+        }
+      }
+    } finally {
+      flushingQueue.current = false;
     }
   }
 
@@ -411,7 +1114,10 @@ export function ShellPage() {
       writeDraft("", true);
       setPendingFiles([]);
       setReplyTo(null);
+      setSending(false);
     }
+    composerSlots.current.delete(id);
+    forgetThread(threadCache.current, id);
     setBots((list) => list.filter((item) => item.id !== id));
   }
 
@@ -427,19 +1133,37 @@ export function ShellPage() {
     }
   }
 
+  function cacheSnapshot(action: SetStateAction<ThreadSnapshot | null>) {
+    setSnapshot((prev) => {
+      const next = typeof action === "function" ? action(prev) : action;
+      if (next?.botId) {
+        const held = threadCache.current.get(next.botId);
+        rememberThread(threadCache.current, next.botId, {
+          snapshot: next,
+          preserveLoadedHistory: held?.preserveLoadedHistory ?? false,
+          atStart: held?.atStart ?? false,
+        });
+      }
+      return next;
+    });
+  }
+
+  const publishSnapshot: Dispatch<SetStateAction<ThreadSnapshot | null>> = cacheSnapshot;
+
   async function refreshThread(id: string) {
-    if (discardedBotIds.current.has(id) || activeIdRef.current !== id) return null;
-    const scrollElement = messageScroll.current;
+    if (discardedBotIds.current.has(id)) return null;
+    const viewing = activeIdRef.current === id;
+    const scrollElement = viewing ? messageScroll.current : null;
     const stickToEnd =
       !scrollElement ||
       scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 80;
     const snap = await api.threads.get(id);
-    if (discardedBotIds.current.has(id) || activeIdRef.current !== id) return snap;
-    setSnapshot((prev) =>
-      mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId),
-    );
+    if (discardedBotIds.current.has(id) || snap.botId !== id) return snap;
+    const entry = applySnapshotForBot(threadCache.current, id, snap);
+    if (!entry || activeIdRef.current !== id) return snap;
+    setSnapshot(entry.snapshot);
     setComputer(snap.computer);
-    if (snap.pendingAutoConsentId) startOwnerFulfill(snap.pendingAutoConsentId);
+    for (const consentId of pendingOwnerJobIds(snap)) startOwnerFulfill(consentId);
     if (stickToEnd) {
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
@@ -450,16 +1174,17 @@ export function ShellPage() {
   }
 
   async function loadOlderMessages() {
-    if (!active || snapshot?.olderCursor == null || loadingOlder) return;
+    const requested = active?.id;
+    const cursor = thread?.olderCursor;
+    if (!requested || cursor == null || loadingOlder) return;
     const scrollElement = messageScroll.current;
     const previousHeight = scrollElement?.scrollHeight ?? 0;
-    const requested = active.id;
     setLoadingOlder(true);
     try {
-      const page = await api.threads.messages(requested, snapshot.olderCursor);
-      if (activeIdRef.current !== requested) return;
-      expandedHistoryThread.current = page.threadId;
-      setSnapshot((prev) => prependThreadMessagePage(prev, page));
+      const page = await api.threads.messages(requested, cursor);
+      const entry = applyOlderPageForBot(threadCache.current, requested, page);
+      if (!entry || activeIdRef.current !== requested) return;
+      setSnapshot(entry.snapshot);
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
         if (element) element.scrollTop += element.scrollHeight - previousHeight;
@@ -479,15 +1204,17 @@ export function ShellPage() {
 
   useEffect(() => {
     if (!botsReady) return;
-    if (botId && bots.some((bot) => bot.id === botId)) return;
-    const fallback = sortInboxBots(bots)[0];
-    if (!botId && fallback) {
-      navigate(`/app/${fallback.id}`, { replace: true });
-      return;
+    const listedIds = bots.map((bot) => bot.id);
+    if (botId && listedIds.includes(botId) && requestedBotId.current === botId) {
+      requestedBotId.current = null;
     }
-    if (botId && !bots.some((bot) => bot.id === botId)) {
-      navigate(fallback ? `/app/${fallback.id}` : "/app", { replace: true });
-    }
+    const next = inboxFallbackPath(
+      botId,
+      listedIds,
+      sortInboxBots(bots)[0]?.id,
+      requestedBotId.current,
+    );
+    if (next) navigate(next, { replace: true });
   }, [botsReady, botId, bots, navigate]);
 
   useEffect(() => {
@@ -507,9 +1234,10 @@ export function ShellPage() {
     setScreenError(null);
     setScreenEpoch(0);
     screenRetries.current = 0;
-    setSnapshot((prev) => (prev?.botId === active.id ? prev : null));
-    setComputer(null);
-    expandedHistoryThread.current = null;
+    const cached = touchThread(threadCache.current, active.id);
+    setSnapshot(cached?.snapshot ?? null);
+    setComputer(cached?.snapshot.computer ?? null);
+    setLoadingOlder(false);
     const abort = new AbortController();
     void (async () => {
       const _snap = await refreshThread(active.id).catch((err: unknown) => {
@@ -518,38 +1246,57 @@ export function ShellPage() {
       });
       if (abort.signal.aborted) return;
       let after: string | null = null;
+      let afterSequence: number | null = null;
       let retryMs = 250;
       while (!abort.signal.aborted) {
         try {
-          for await (const event of api.threads.subscribe(active.id, after, abort.signal)) {
+          for await (const event of api.threads.subscribe(
+            active.id,
+            after,
+            abort.signal,
+            afterSequence,
+          )) {
             if (abort.signal.aborted) break;
             if (event.type === "thread.replay.gap") {
               after = null;
+              afterSequence = null;
               retryMs = 250;
               void refreshThread(active.id).catch(() => undefined);
               void ensureScreenUrl(active.id, true, true);
               continue;
             }
-            after = event.id;
+            if (/^\d+$/.test(event.id)) afterSequence = Number(event.id);
+            else after = event.id;
             retryMs = 250;
-            if (discardedBotIds.current.has(active.id) || activeIdRef.current !== active.id) {
-              break;
+            const leftChat =
+              discardedBotIds.current.has(active.id) ||
+              abort.signal.aborted ||
+              activeIdRef.current !== active.id;
+            if (!leftChat) {
+              applyThreadEvent(event, publishSnapshot, setComputer);
             }
-            applyThreadEvent(event, setSnapshot, setComputer);
             const bot = botsRef.current.find((item) => item.id === active.id) ?? active;
-            considerEvent(event, bot);
+            considerEvent(event, bot, { source: "thread" });
+            if (leftChat) break;
             if (event.type === "run.completed" || event.type === "run.failed") {
               void refreshBotsRef.current().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
+            }
+            if (event.type === "usage.recorded") {
+              void api.usage
+                .list({ botId: active.id })
+                .then((rows) => setUsageRecords(rows))
+                .catch(() => undefined);
             }
           }
         } catch (err) {
           if (abort.signal.aborted) break;
           const classified = classifyError(err);
-          if (classified.kind === "auth") {
+          if (workspaceEventsAuthLoss(err) === "repair") {
             showError(err, classified.message);
             break;
           }
+          if (classified.kind === "host") setHostDown(true);
           // Reconnect after a dropped stream. The last event id keeps replay safe.
         }
         if (abort.signal.aborted) break;
@@ -579,17 +1326,25 @@ export function ShellPage() {
     const abort = new AbortController();
     void (async () => {
       let retryMs = 250;
+      let afterSequence: number | null = null;
       while (!abort.signal.aborted) {
         try {
-          for await (const event of api.events.subscribe(abort.signal)) {
+          for await (const event of api.events.subscribe(abort.signal, afterSequence)) {
+            if (/^\d+$/.test(event.id)) afterSequence = Number(event.id);
             if (abort.signal.aborted) break;
             retryMs = 250;
             const bot = botsRef.current.find((item) => item.id === event.botId);
-            if (bot) considerEventRef.current(event, bot, { live: true });
+            if (bot) {
+              considerEventRef.current(event, bot, { live: true, source: "workspace" });
+            }
           }
         } catch (err) {
           if (abort.signal.aborted) break;
-          if (classifyError(err).kind === "auth") break;
+          const classified = classifyError(err);
+          if (workspaceEventsAuthLoss(err) === "repair") {
+            showError(err, classified.message);
+            break;
+          }
         }
         if (abort.signal.aborted) break;
         try {
@@ -604,7 +1359,6 @@ export function ShellPage() {
   }, []);
 
   useEffect(() => {
-    setReplyTo(null);
     setMessageMenu(null);
   }, [active?.id]);
 
@@ -624,12 +1378,26 @@ export function ShellPage() {
       .catch(() => undefined);
   }, [panel, active?.id]);
 
+  const runLive = snapshot?.run?.status === "running" || snapshot?.run?.status === "waiting_input";
+
   useEffect(() => {
-    if ((panel !== "computer" && !computerOpen) || !active || computer?.state !== "running") return;
-    const ping = () => void api.computer.heartbeat(active.id).catch(() => undefined);
+    if ((panel !== "computer" && !computerOpen) || !active) return;
+    if (computer?.state !== "running" && !runLive) return;
+    const ping = () =>
+      void api.computer
+        .status(active.id)
+        .then(setComputer)
+        .catch(() => undefined);
     ping();
-    const timer = window.setInterval(ping, 60_000);
+    const ms = computer?.controlHolder === "user" ? 15_000 : 60_000;
+    const timer = window.setInterval(ping, ms);
     return () => window.clearInterval(timer);
+  }, [panel, computerOpen, active?.id, computer?.state, computer?.controlHolder, runLive]);
+
+  useEffect(() => {
+    if (!active) return;
+    if (!shouldFetchScreenUrl(panel === "computer", computerOpen, computer?.state)) return;
+    void ensureScreenUrl(active.id, true);
   }, [panel, computerOpen, active?.id, computer?.state]);
 
   useEffect(() => {
@@ -648,13 +1416,32 @@ export function ShellPage() {
   }, [active?.id, computer?.state, screenError]);
 
   useEffect(() => {
-    if (!computerOpen) return;
     function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") setComputerOpen(false);
+      if (event.key !== "Escape" || event.isComposing) return;
+      const action = panelEscapeAction({ computerOpen, panel });
+      if (action === "close-overlay") {
+        event.preventDefault();
+        setComputerOpen(false);
+        return;
+      }
+      if (action === "close-settings") {
+        event.preventDefault();
+        closeSettings();
+        return;
+      }
+      if (action === "close-create") {
+        event.preventDefault();
+        closeCreate();
+        return;
+      }
+      if (action === "close-panel") {
+        event.preventDefault();
+        closeContextPanel();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [computerOpen]);
+  }, [computerOpen, panel, phoneShell]);
 
   const filtered = useMemo(
     () => filterBots(sortInboxBots(bots), query, (bot) => stripMarkdown(bot.preview || bot.title)),
@@ -664,7 +1451,83 @@ export function ShellPage() {
     () => filterBots(archivedBots, query, (bot) => stripMarkdown(bot.preview || bot.title)),
     [archivedBots, query],
   );
+  const chatNames = useMemo(() => {
+    const names: Record<string, string> = {};
+    for (const bot of bots) names[bot.id] = bot.name;
+    for (const bot of archivedBots) names[bot.id] = bot.name;
+    return names;
+  }, [bots, archivedBots]);
+
+  useEffect(() => {
+    const needle = query.trim();
+    if (needle.length < 2) {
+      setHostHits([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void api
+        .search({ q: needle, limit: 8 })
+        .then((page) => {
+          if (!cancelled && query.trim() === needle) {
+            setHostHits(page.hits ?? []);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setHostHits([]);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
   const emptyInbox = inboxEmptyState(bots.length, archivedBots.length);
+  const attentionCount = bots.filter((bot) => bot.unread).length;
+  const needsModel = !modelState?.defaultModel;
+  const hatchOpen = hatchIsOpen(panel, Boolean(active));
+
+  useLayoutEffect(() => {
+    if (phoneShell) return;
+    const element = messageScroll.current;
+    if (!element) return;
+    restoreThreadScroll(element, scrollAnchor.current, stickToLatest.current);
+  }, [hatchOpen, hatchWidth, panel, phoneShell]);
+
+  useEffect(() => {
+    if (phoneShell) return;
+    const element = messageScroll.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => {
+      restoreThreadScroll(element, scrollAnchor.current, stickToLatest.current);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [active?.id, phoneShell, hatchOpen]);
+
+  function resizeRack(width: number) {
+    setRackWidth(
+      constrainPaneWidth("left", width, {
+        viewportWidth: window.innerWidth,
+        otherPaneWidth: hatchOpen ? hatchWidth : 0,
+        railWidth: 88,
+        separatorWidth: 8,
+        conversationMinWidth: 360,
+      }),
+    );
+  }
+
+  function resizeHatch(width: number) {
+    setHatchWidth(
+      constrainPaneWidth("right", width, {
+        viewportWidth: window.innerWidth,
+        otherPaneWidth: rackWidth,
+        railWidth: 88,
+        separatorWidth: 8,
+        conversationMinWidth: 360,
+      }),
+    );
+  }
 
   function writeDraft(value: string, reset = false) {
     if (reset) {
@@ -691,6 +1554,29 @@ export function ShellPage() {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }
 
+  useLayoutEffect(() => {
+    const prev = composerBotRef.current;
+    if (prev && prev !== botId) {
+      composerSlots.current.set(prev, {
+        draft,
+        history: draftHistory.current,
+        pendingFiles,
+        sending,
+        replyTo,
+      });
+    }
+    composerBotRef.current = botId;
+    const parked = botId ? composerSlots.current.get(botId) : undefined;
+    const next = parked ?? emptyComposerSlot<ThreadMessage>();
+    draftHistory.current = next.history;
+    draftChangeAt.current = 0;
+    setDraft(next.draft);
+    setPendingFiles(next.pendingFiles);
+    setSending(next.sending);
+    setReplyTo(next.replyTo);
+    window.requestAnimationFrame(() => sizeComposer());
+  }, [botId]);
+
   function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     const kind = composerUndoKind(event);
     if (kind === "undo") {
@@ -713,7 +1599,7 @@ export function ShellPage() {
       }
       return;
     }
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (composerShouldSend(event)) {
       event.preventDefault();
       const typed = event.currentTarget.value;
       if (composerRef.current) composerRef.current.value = typed;
@@ -732,6 +1618,38 @@ export function ShellPage() {
     }
     setPendingFiles(files);
   }
+  queueFilesRef.current = queueFiles;
+
+  useEffect(() => {
+    const win = window as Window & {
+      __artekAttachPastedImage?: (contentBase64: string, type: string, name: string) => void;
+      __artekComposerUndo?: () => void;
+      __artekComposerRedo?: () => void;
+      __artekSetWindowActive?: (active: boolean | number) => void;
+    };
+    win.__artekAttachPastedImage = (contentBase64, type, name) => {
+      queueFilesRef.current(filesFromAttachedPayload([{ name, type, contentBase64 }]));
+    };
+    win.__artekComposerUndo = () => {
+      const next = composerUndo(draftHistory.current);
+      if (!next) return;
+      draftHistory.current = next.history;
+      setDraft(next.value);
+      window.requestAnimationFrame(() => sizeComposer());
+    };
+    win.__artekComposerRedo = () => {
+      const next = composerRedo(draftHistory.current);
+      if (!next) return;
+      draftHistory.current = next.history;
+      setDraft(next.value);
+      window.requestAnimationFrame(() => sizeComposer());
+    };
+    return () => {
+      delete win.__artekAttachPastedImage;
+      delete win.__artekComposerUndo;
+      delete win.__artekComposerRedo;
+    };
+  }, []);
 
   function attachLocalPaths(paths: string[]) {
     if (!active || !paths.length) return;
@@ -752,21 +1670,24 @@ export function ShellPage() {
   }
 
   function onChatPaste(event: ClipboardEvent<HTMLElement>) {
-    const paths = clipboardFilePaths(event);
-    if (!clipboardHasAttachable(event)) return;
+    const wrapped = { clipboardData: pasteClipboardData(event) };
+    if (!clipboardShouldClaim(wrapped)) return;
     event.preventDefault();
     event.stopPropagation();
-    const files = pastedFiles(event);
+    const files = pastedFiles(wrapped);
     if (files.length) {
       queueFiles(files);
       return;
     }
-    if (paths.length) {
-      attachLocalPaths(paths);
-      return;
+    if (!clipboardPrefersImage(wrapped)) {
+      const paths = clipboardFilePaths(wrapped);
+      if (paths.length) {
+        attachLocalPaths(paths);
+        return;
+      }
     }
     const epoch = filesEpoch.current;
-    void readClipboardFiles(event).then((extra) => {
+    void readClipboardFiles(wrapped).then((extra) => {
       if (epoch !== filesEpoch.current) return;
       if (extra.length) queueFiles(extra);
     });
@@ -780,6 +1701,27 @@ export function ShellPage() {
       return;
     }
     attachLocalPaths(transferFilePaths(event.dataTransfer));
+  }
+
+  async function startTask(task: string) {
+    const text = task.trim();
+    if (!text) throw new Error("Describe the outcome first");
+    if (hostDownRef.current) {
+      throw new Error("Reconnect the host before starting workspace work");
+    }
+    try {
+      const dispatched = await api.workspace.dispatch(text);
+      setBots((list) =>
+        list.map((bot) => (bot.id === dispatched.botId ? { ...bot, status: "running" } : bot)),
+      );
+      void refreshBots().catch(() => undefined);
+    } catch (err) {
+      const classified = classifyError(err);
+      if (classified.kind === "auth") {
+        showError(err, classified.message);
+      }
+      throw err;
+    }
   }
 
   async function send(textOverride?: string) {
@@ -799,8 +1741,9 @@ export function ShellPage() {
     }
     setError(null);
     setSending(true);
+    let attachments: QueuedSend["attachments"];
     try {
-      const attachments = files.length
+      attachments = files.length
         ? await Promise.all(
             files.map(async (item) => ({
               name: item.file.name,
@@ -809,17 +1752,67 @@ export function ShellPage() {
             })),
           )
         : undefined;
+      if (hostDownRef.current) {
+        parkSend(targetId, text, replyId, attachments);
+        return;
+      }
       await api.threads.send(targetId, text, replyId, attachments);
-      setReplyTo(null);
+      const next = applyComposerSendResult({
+        currentBotId: activeIdRef.current,
+        targetId,
+        live: {
+          draft,
+          history: draftHistory.current,
+          pendingFiles,
+          sending: true,
+          replyTo,
+        },
+        parked: composerSlots.current.get(targetId),
+        result: { ok: true },
+      });
+      if (activeIdRef.current === targetId) {
+        setReplyTo(null);
+      } else if (next.parked) {
+        composerSlots.current.set(targetId, next.parked);
+      }
     } catch (err) {
-      if (textOverride == null) {
-        writeDraft(text);
-        setPendingFiles(files);
+      const classified = classifyError(err);
+      if (shouldQueueSend(classified.kind)) {
+        parkSend(targetId, text, replyId, attachments);
+        return;
+      }
+      const next = applyComposerSendResult({
+        currentBotId: activeIdRef.current,
+        targetId,
+        live: {
+          draft,
+          history: draftHistory.current,
+          pendingFiles,
+          sending: true,
+          replyTo,
+        },
+        parked: composerSlots.current.get(targetId),
+        result: { ok: false, draft: text, files },
+      });
+      if (activeIdRef.current === targetId) {
+        if (textOverride == null) {
+          writeDraft(text);
+          setPendingFiles(files);
+        }
+      } else if (next.parked) {
+        composerSlots.current.set(targetId, next.parked);
       }
       showError(err, "Send failed");
       return;
     } finally {
-      setSending(false);
+      if (activeIdRef.current === targetId) {
+        setSending(false);
+      } else {
+        const parked = composerSlots.current.get(targetId);
+        if (parked) {
+          composerSlots.current.set(targetId, { ...parked, sending: false });
+        }
+      }
     }
     void refreshThread(targetId).catch(() => undefined);
   }
@@ -836,17 +1829,15 @@ export function ShellPage() {
 
   async function bootComputer({
     takeControl,
-    overlay,
     force = false,
   }: {
     takeControl: boolean;
-    overlay: boolean;
     force?: boolean;
   }): Promise<boolean> {
     if (!active) return false;
     sleepHeld.current = false;
     const needsBoot = force || computer?.state !== "running" || !screenUrlRef.current;
-    if (overlay && needsBoot) setBooting(true);
+    if (needsBoot) setBooting(true);
     try {
       if (needsBoot) {
         const status = await api.computer.boot(active.id);
@@ -916,7 +1907,6 @@ export function ShellPage() {
     if (!active) return;
     const ok = await bootComputer({
       takeControl: shouldTakeControl(source),
-      overlay: computer?.state !== "running",
       force: computer?.state !== "running",
     });
     if (ok) setComputerOpen(true);
@@ -924,9 +1914,26 @@ export function ShellPage() {
 
   async function releaseComputer() {
     if (!active) return;
+    if (!shouldKeepScreenUrlOnRelease() && screenPolicy(screenUrlRef.current) === "control") {
+      adoptScreenUrl(null);
+      setScreenEpoch((value) => value + 1);
+    }
     await api.computer.release(active.id).catch(() => undefined);
     const status = await api.computer.status(active.id).catch(() => null);
-    if (status) setComputer(status);
+    if (status) {
+      setComputer(status);
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, computer: status };
+        const held = threadCache.current.get(prev.botId);
+        rememberThread(threadCache.current, prev.botId, {
+          snapshot: next,
+          preserveLoadedHistory: held?.preserveLoadedHistory ?? false,
+          atStart: held?.atStart ?? false,
+        });
+        return next;
+      });
+    }
     await ensureScreenUrl(active.id, true, true);
   }
 
@@ -934,6 +1941,7 @@ export function ShellPage() {
     name: string;
     title: string;
     description: string;
+    instructions: string;
     computerMode: ComputerMode;
   }) {
     const name = input.name.trim();
@@ -944,13 +1952,17 @@ export function ShellPage() {
         name,
         title: input.title,
         description: input.description,
-        instructions: input.description,
+        instructions: input.instructions,
         computerMode: input.computerMode,
       });
+      freshBotIds.current.add(bot.id);
       await refreshBots();
+      setWorkspaceView("chats");
+      setPhoneTab(nextPhoneTab("select-bot"));
       navigate(`/app/${bot.id}`);
       setPanel(panelAfterCreate.current);
       panelAfterCreate.current = null;
+      createFromToday.current = false;
     } catch (err) {
       showError(err, "Could not create chat");
     } finally {
@@ -960,6 +1972,9 @@ export function ShellPage() {
 
   function openCreate() {
     panelAfterCreate.current = panel === "computer" ? "computer" : null;
+    createFromToday.current = workspaceView === "today";
+    setWorkspaceView("chats");
+    setPhoneTab(nextPhoneTab("open-more"));
     setPanel("create");
   }
 
@@ -980,673 +1995,1023 @@ export function ShellPage() {
     return () => window.clearTimeout(timer);
   }, [later]);
 
+  useLayoutEffect(() => {
+    function apply() {
+      setPhoneShell(shouldUsePhoneShell(window.innerWidth, window.innerHeight));
+      setPhoneDesk(
+        shouldUsePhoneDeskControls(window.matchMedia("(hover: hover) and (pointer: fine)").matches),
+      );
+    }
+    apply();
+    const mouseDesktop = window.matchMedia("(hover: hover) and (pointer: fine)");
+    mouseDesktop.addEventListener("change", apply);
+    window.addEventListener("resize", apply);
+    window.addEventListener("orientationchange", apply);
+    return () => {
+      mouseDesktop.removeEventListener("change", apply);
+      window.removeEventListener("resize", apply);
+      window.removeEventListener("orientationchange", apply);
+    };
+  }, []);
+
   return (
-    <div className="relative flex h-full min-w-0 overflow-hidden bg-[#050506] text-[#DFDFE2]">
-      <aside className="flex w-[316px] shrink-0 flex-col border-r border-[#171719] bg-[#0B0B0C]">
-        <div className="app-drag flex items-center justify-between px-[18px] pb-3 pt-4">
-          <WindowChrome />
-          <button
-            type="button"
-            onClick={() => openCreate()}
-            className="app-no-drag text-[21px] text-[#7A7A80] hover:text-[#C9C9CE]"
-            title="New bot"
-            aria-label="New bot"
-          >
-            +
-          </button>
-        </div>
-        <div className="mx-3.5 mb-3 flex items-center gap-2.5 rounded-xl border border-[#202023] bg-[#141416] px-3 py-2 text-[14px] text-[#6C6C70]">
-          <span>⌕</span>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search"
-            className="w-full bg-transparent outline-none"
+    <div
+      className="relative flex h-full min-w-0 flex-col overflow-hidden bg-ink text-paper"
+      data-surface={pageSurface()}
+      data-workspace-view={workspaceView}
+      data-phone-tab={phoneTab}
+      data-phone-shell={phoneShell ? "1" : "0"}
+      data-desk-overlay={computerOpen ? "1" : "0"}
+    >
+      <HostPhoneBanners
+        alertOffer={alertOffer}
+        hintDismissed={homeHintDismissed}
+        onDismissHint={() => {
+          setHomeHintDismissed(true);
+          try {
+            localStorage.setItem("artek-home-screen-hint", "1");
+          } catch {
+            /* private mode */
+          }
+        }}
+        onAlertPermission={(permission) => {
+          setAlertOffer(
+            shouldOfferWebAlerts({
+              surface: pageSurface(),
+              permission,
+              standalone: isStandaloneDisplay(),
+              ios: isIosDevice(),
+            }),
+          );
+        }}
+      />
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <WorkspaceRail
+          active={workspaceView}
+          attentionCount={attentionCount}
+          onToday={() => {
+            setWorkspaceView("today");
+            setPanel(null);
+          }}
+          onChats={() => {
+            setWorkspaceView("chats");
+            setPanel(null);
+          }}
+          onRoutines={openRoutines}
+          onLibrary={openLibrary}
+        />
+        <div
+          data-shell="today"
+          data-phone-show={phoneTab === "today" ? "1" : "0"}
+          data-workspace-visible={
+            phoneShell ? (phoneTab === "today" ? "1" : "0") : workspaceView === "today" ? "1" : "0"
+          }
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        >
+          <TodayView
+            bots={bots}
+            botsReady={botsReady}
+            onOpenBot={openBot}
+            onStartTask={startTask}
+            onOpenRoutines={openRoutines}
+            onCreateBot={openCreate}
           />
         </div>
-        <div className="ab-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
-          {sidebarView === "archived" ? (
-            <>
-              <button
-                type="button"
-                data-testid="back-inbox"
-                onClick={() => setSidebarView("inbox")}
-                className="mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13.5px] text-[#85858A] hover:bg-[#131315] hover:text-[#ECECEE]"
-              >
-                ← Inbox
-              </button>
-              <div data-testid="archived-list" className="flex flex-col gap-0.5">
-                {filteredArchived.map((bot) => (
-                  <div
-                    key={bot.id}
-                    data-testid="archived-bot-row"
-                    data-bot-id={bot.id}
-                    className="flex items-center gap-3 rounded-xl px-2.5 py-[11px]"
-                  >
-                    <BotAvatar color={bot.color} size={38} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[15px] font-medium text-[#ECECEE]">
-                        {bot.name}
-                      </div>
-                      <div className="mt-0.5 truncate text-[13.5px] text-[#85858A]">
-                        {stripMarkdown(bot.preview || bot.title)}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      data-testid="restore-chat"
-                      onClick={() => void restoreBot(bot)}
-                      className="shrink-0 rounded-lg border border-[#303036] px-2.5 py-1 text-[12.5px] text-[#ECECEE] hover:bg-[#1A1A1D]"
-                    >
-                      Restore
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              {filtered.map((bot) => (
-                <button
-                  key={bot.id}
-                  type="button"
-                  data-testid="bot-row"
-                  data-bot-id={bot.id}
-                  data-bot-name={bot.name}
-                  aria-label={`Open chat ${bot.name}`}
-                  onClick={() => navigate(`/app/${bot.id}`)}
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    setContextMenu({
-                      bot,
-                      position: { x: event.clientX, y: event.clientY },
-                    });
-                  }}
-                  className="flex gap-3 rounded-xl px-2.5 py-[11px] text-left"
-                  style={{ background: active?.id === bot.id ? "#161618" : "transparent" }}
-                >
-                  <BotAvatar color={bot.color} size={38} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span
-                        className={`flex items-center gap-1.5 text-[15px] text-[#ECECEE] ${
-                          bot.unread ? "font-semibold" : "font-medium"
-                        }`}
-                      >
-                        {bot.name}
-                        {bot.pinned ? (
-                          <span title="Pinned" className="text-[11px] text-[#A8A8AD]">
-                            📌
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-[#6C6C70]">
-                        {bot.status === "idle" ? "" : bot.status}
-                        {bot.unread ? (
-                          <span
-                            data-testid="unread-dot"
-                            aria-hidden="true"
-                            className="inline-block h-2 w-2 rounded-full bg-[#8B5CF6]"
-                          />
-                        ) : null}
-                      </span>
-                    </div>
-                    <div
-                      data-testid="bot-preview"
-                      className={`mt-0.5 truncate text-[13.5px] ${
-                        bot.unread ? "font-medium text-[#C9C9CE]" : "text-[#85858A]"
-                      }`}
-                    >
-                      {stripMarkdown(bot.preview || bot.title)}
-                    </div>
-                  </div>
-                </button>
-              ))}
-              {archivedBots.length > 0 ? (
+        <aside
+          data-shell="rack"
+          data-phone-show={phoneTab === "chats" ? "1" : "0"}
+          data-workspace-visible={phoneShell || workspaceView !== "today" ? "1" : "0"}
+          style={phoneShell ? undefined : { width: rackWidth }}
+          className="flex min-h-0 shrink-0 flex-col bg-plate"
+        >
+          <div className="app-drag flex min-h-11 items-center justify-between px-3 pb-1 pt-3">
+            {pageSurface() === "host" ? (
+              <span className="text-[12px] font-semibold text-mute">Artek Buddy</span>
+            ) : (
+              <WindowChrome />
+            )}
+          </div>
+          <div className="px-3 pt-2 pb-3">
+            <h2 className="text-[18px] font-bold tracking-[-0.03em] text-paper">Work</h2>
+            <p className="mt-0.5 text-[11px] text-mute">Open and recent tasks</p>
+          </div>
+          <div className="mb-2 flex items-center gap-2 px-3">
+            <label className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[10px] border border-hairline bg-ink px-2.5 text-[13px] text-mute">
+              <IconSearch />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search"
+                aria-label="Search inbox"
+                className="w-full min-w-0 bg-transparent"
+              />
+              {query.trim() ? (
                 <button
                   type="button"
-                  data-testid="open-archived"
-                  onClick={() => setSidebarView("archived")}
-                  className="mt-1 flex items-center justify-between rounded-xl px-2.5 py-[11px] text-left text-[14px] text-[#85858A] hover:bg-[#131315] hover:text-[#ECECEE]"
+                  data-testid="inbox-search-clear"
+                  aria-label="Clear Search"
+                  onClick={() => setQuery("")}
+                  className="shrink-0 text-[13px] text-mute hover:text-paper"
                 >
-                  <span>Archived</span>
-                  <span data-testid="archived-count">{archivedBots.length}</span>
+                  ×
                 </button>
               ) : null}
-            </>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setLater("Plugins ship with a later stage.")}
-          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-[#131315]"
-        >
-          <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-[#17171A] text-[#9A9AA0]">
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+            </label>
+            <button
+              type="button"
+              aria-label="New bot"
+              onClick={() => openCreate()}
+              className="app-no-drag inline-flex min-h-10 shrink-0 items-center gap-1 rounded-[10px] bg-tan px-3 text-[12px] font-bold text-ink"
             >
-              <path d="M4 7h3a1 1 0 0 0 1-1 1.5 1.5 0 1 1 3 0 1 1 0 0 0 1 1h3v3a1 1 0 0 0 1 1 1.5 1.5 0 1 1 0 3 1 1 0 0 0-1 1v3h-3a1 1 0 0 0-1 1 1.5 1.5 0 1 1-3 0 1 1 0 0 0-1-1H4v-3a1 1 0 0 0-1-1 1.5 1.5 0 1 1 0-3 1 1 0 0 0 1-1z" />
-            </svg>
-          </span>
-          <span className="text-[14.5px] text-[#C9C9CE]">Plugins</span>
-        </button>
-        <div className="flex items-center gap-[11px] px-[18px] py-3.5">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-[#232326] text-[12px] text-[#A8A8AD]">
-            Y
-          </span>
-          <span className="text-[14.5px] text-[#C9C9CE]">You</span>
-        </div>
-      </aside>
-
-      <main
-        data-testid="thread-pane"
-        className="relative flex min-w-0 flex-1 flex-col bg-[#0D0D0E]"
-        onPaste={onChatPaste}
-      >
-        <div className="flex items-center justify-between border-b border-[#141416] px-[22px] py-[17px]">
-          <button
-            type="button"
-            data-testid="thread-header"
-            disabled={!active}
-            aria-label={active ? `Open settings for ${active.name}` : "Bot settings"}
-            onClick={() => {
-              panelAfterSettings.current = null;
-              setPanel("settings");
-            }}
-            className="flex min-w-0 items-center gap-3 disabled:cursor-default"
-          >
-            {active ? <BotAvatar color={active.color} size={26} /> : null}
-            <span className="min-w-0">
-              <span className="block truncate text-[16px] font-medium text-[#ECECEE]">
-                {active?.name ?? "Select a bot"}
-              </span>
-            </span>
-          </button>
-          <button
-            type="button"
-            title="Agent computer"
-            disabled={!active}
-            onClick={() => setPanel((current) => (current === "computer" ? null : "computer"))}
-            className="grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-[#1B1B1E] disabled:opacity-40"
-            style={{ background: panel ? "#1B1B1E" : "transparent" }}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#A8A8AD"
-              strokeWidth="1.6"
-            >
-              <rect x="2" y="4" width="20" height="13" rx="2" />
-              <path d="M8 21h8M12 17v4" />
-            </svg>
-          </button>
-        </div>
-        {attention || later ? (
-          <div className="flex w-full shrink-0 flex-col items-center gap-2 px-4 py-2">
-            {attention ? (
-              <div
-                data-testid="attention-alert"
-                className="flex max-w-[min(480px,90vw)] items-center gap-2 rounded-full bg-[#1A1A1D] py-2 pr-2 pl-4 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]"
-              >
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left hover:text-[#ECECEE]"
-                  onClick={() => {
-                    dismissedAlerts.current.add(attentionFingerprint(attention));
-                    navigate(`/app/${attention.botId}`);
-                    setAttention(null);
-                  }}
-                >
-                  <span className="font-medium text-[#ECECEE]">{attention.title}</span>
-                  {attention.body ? (
-                    <span className="mt-0.5 block truncate text-[12.5px] text-[#85858A]">
-                      {attention.body}
-                    </span>
-                  ) : null}
-                </button>
-                <button
-                  type="button"
-                  data-testid="attention-dismiss"
-                  aria-label="Dismiss alert"
-                  onClick={() => dismissAttention()}
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[#85858A] hover:bg-[#222226] hover:text-[#ECECEE]"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : null}
-            {later ? (
-              <div className="rounded-full bg-[#1A1A1D] px-4 py-2 text-[13.5px] text-[#C9C9CE] shadow-[0_12px_40px_rgba(0,0,0,.45)]">
-                {later}
-              </div>
-            ) : null}
+              <IconPlus />
+              New
+            </button>
           </div>
+          <div className="ab-scroll flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
+            <SearchHits
+              query={query}
+              hits={hostHits}
+              chatNames={chatNames}
+              onOpenBot={(id) => openBot(id)}
+            />
+            <InboxList
+              sidebarView={sidebarView}
+              query={query}
+              bots={filtered}
+              archived={filteredArchived}
+              archivedCount={archivedBots.length}
+              activeId={active?.id}
+              inboxPointerDown={inboxPointerDown}
+              onBackInbox={() => setSidebarView("inbox")}
+              onRestore={(bot) => void restoreBot(bot)}
+              onOpenBot={(id) => openBot(id)}
+              onContextMenu={(bot, event) => {
+                setContextMenu({
+                  bot,
+                  position: { x: event.clientX, y: event.clientY },
+                });
+              }}
+              onOpenArchived={() => setSidebarView("archived")}
+              hostHitCount={hostHits.length}
+            />
+          </div>
+        </aside>
+        {!phoneShell && workspaceView !== "today" ? (
+          <PaneResizeHandle
+            pane="left"
+            width={rackWidth}
+            defaultWidth={DEFAULT_RACK_WIDTH}
+            onChange={resizeRack}
+          />
         ) : null}
-        <div
-          ref={messageScroll}
-          data-testid="thread"
-          onScroll={() => {
-            const element = messageScroll.current;
-            if (!element) return;
-            stickToLatest.current =
-              element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-          }}
-          className="ab-scroll flex min-w-0 flex-1 flex-col gap-[13px] overflow-x-hidden overflow-y-auto px-7 py-6"
+
+        <main
+          data-testid="thread-pane"
+          data-phone-show={phoneTab === "chat" ? "1" : "0"}
+          data-workspace-visible={phoneShell || workspaceView !== "today" ? "1" : "0"}
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ink"
+          onPaste={onChatPaste}
         >
-          {error ? (
-            <div
-              data-testid={
-                errorKind === "host"
-                  ? "host-error"
-                  : errorKind === "auth"
-                    ? "auth-error"
-                    : "action-error"
-              }
-              className="self-center rounded-xl border border-[#4A2522] bg-[#1A1110] px-4 py-3 text-center text-[13.5px] text-[#F0AAA0]"
-            >
-              <div>{error}</div>
-              {errorKind === "host" ? (
+          <div className="flex min-h-[58px] items-center justify-between border-b border-hairline bg-plate px-4 py-2.5">
+            <div data-testid="thread-header" className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                data-testid="phone-chat-back"
+                aria-label="Back to chats"
+                onClick={() => setPhoneTab(nextPhoneTab("open-chats"))}
+                className="phone-chat-back grid h-10 w-10 shrink-0 place-items-center rounded-[10px] border border-hairline text-paper"
+              >
+                ←
+              </button>
+              {active ? <BotAvatar color={active.color} size={26} /> : null}
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-bold text-paper">
+                  {active?.name ?? "Select a bot"}
+                </span>
+                {active ? (
+                  <span className="mt-0.5 block truncate text-[10.5px] text-mute">
+                    {isBusy ? "Working" : active.title || "Ready"}
+                  </span>
+                ) : null}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                aria-label="Computer"
+                disabled={!active}
+                onClick={() => {
+                  if (panel === "computer") {
+                    setPanel(null);
+                    if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
+                    return;
+                  }
+                  setWorkspaceView("chats");
+                  setPhoneTab(nextPhoneTab("open-desk"));
+                  setPanel("computer");
+                }}
+                className={`thread-action inline-flex h-[36px] items-center gap-1.5 rounded-[9px] border px-2.5 text-[12px] disabled:opacity-40 ${
+                  panel === "computer"
+                    ? "border-tan bg-raised text-paper"
+                    : "border-hairline bg-ink text-paper"
+                }`}
+              >
+                <IconComputer />
+                <span className="thread-action-label">Computer</span>
+              </button>
+            </div>
+          </div>
+          {hostDown ? (
+            <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
+              <div
+                data-testid="reconnect-banner"
+                className="flex w-full items-center gap-2 border border-hairline border-l-[3px] border-l-tan bg-plate px-3 py-2 text-[13.5px] text-paper"
+              >
+                <p className="min-w-0 flex-1 text-left">Reconnecting to the host</p>
                 <button
                   type="button"
                   onClick={() => void reconnectHost(true)}
-                  className="mt-2 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+                  className="shrink-0 px-2 text-[13px] font-medium text-tan underline underline-offset-2"
                 >
                   Retry connection
                 </button>
-              ) : errorKind === "auth" ? (
+              </div>
+            </div>
+          ) : null}
+          {attention || later ? (
+            <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
+              {attention ? (
+                <div
+                  data-testid="attention-alert"
+                  className="flex w-full items-center gap-2 border border-hairline border-l-[3px] border-l-tan bg-plate px-3 py-2 text-[13.5px] text-paper"
+                >
+                  <button
+                    type="button"
+                    className="relative z-0 min-w-0 flex-1 text-left hover:text-tan"
+                    onClick={() => {
+                      dismissedAlerts.current.add(attentionFingerprint(attention));
+                      navigate(`/app/${attention.botId}`);
+                      setAttention(null);
+                    }}
+                  >
+                    <span className="font-medium text-paper">{attention.title}</span>
+                    {attention.body ? (
+                      <span className="mt-0.5 block truncate text-[12.5px] text-mute">
+                        {attention.body}
+                      </span>
+                    ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="attention-dismiss"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      dismissAttention();
+                    }}
+                    className="relative z-10 shrink-0 px-2 text-[13px] text-mute hover:text-paper"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              ) : null}
+              {later ? (
+                <div className="border border-hairline bg-plate px-4 py-2 text-[13.5px] text-paper">
+                  {later}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {active && hasWorkLog ? (
+            <div className="px-4 pt-3">
+              <div
+                data-testid="work-summary"
+                className="flex items-center gap-3 rounded-[12px] border border-hairline bg-plate px-3.5 py-2.5"
+              >
+                <span
+                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                    isParked
+                      ? "bg-copper"
+                      : isBusy
+                        ? "ab-live-dot bg-sage"
+                        : thread?.run?.status === "failed"
+                          ? "bg-danger"
+                          : "bg-tan"
+                  }`}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-bold text-paper">
+                    {isParked
+                      ? "Needs your decision"
+                      : isBusy
+                        ? "Working on this task"
+                        : thread?.run?.status === "failed"
+                          ? "Task failed"
+                          : "Task is complete"}
+                  </p>
+                  <p className="mt-0.5 truncate text-[11px] text-mute">
+                    {isParked
+                      ? "Open the computer or answer the request to continue."
+                      : "The conversation keeps the result and decisions."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  data-testid="open-work-log"
+                  onClick={() => {
+                    setPhoneTab(nextPhoneTab("open-more"));
+                    setPanel("worklog");
+                  }}
+                  className="shrink-0 text-[11px] font-semibold text-tan"
+                >
+                  Show work log
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {error && errorKind !== "host" ? (
+            <div
+              data-testid={errorKind === "auth" ? "auth-error" : "action-error"}
+              className="mx-4 mt-2 shrink-0 self-center rounded-xl border border-danger/40 bg-danger-bg px-4 py-3 text-center text-[13.5px] text-danger"
+            >
+              <div>{error}</div>
+              {errorKind === "auth" ? (
                 <button
                   type="button"
                   onClick={() => void forgetDevice()}
-                  className="mt-2 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
                 >
-                  Pair this computer again
+                  {pairAgainLabel()}
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => setError(null)}
-                  className="mt-2 text-[13px] font-medium text-[#ECECEE] underline underline-offset-2"
+                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
                 >
                   Dismiss
                 </button>
               )}
             </div>
           ) : null}
-          {!active && !error && botsReady && emptyInbox === "archived" ? (
-            <div
-              data-testid="empty-inbox"
-              className="m-auto flex max-w-sm flex-col items-center text-center"
-            >
-              <div className="text-[17px] font-medium text-[#ECECEE]">Chats are archived</div>
-              <p className="mt-2 text-[14px] leading-5 text-[#85858A]">
-                Restore one from Archived, or create a new bot.
-              </p>
-              <div className="mt-5 flex gap-2">
-                <Button type="button" onClick={() => setSidebarView("archived")}>
-                  Open archived
-                </Button>
-                <Button type="button" variant="outline" onClick={() => openCreate()}>
+          <div
+            ref={messageScroll}
+            data-testid="thread"
+            onScroll={() => {
+              const element = messageScroll.current;
+              if (!element) return;
+              stickToLatest.current =
+                element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+              scrollAnchor.current = captureMessageAnchor(element);
+            }}
+            className="ab-scroll flex min-w-0 flex-1 flex-col gap-[13px] overflow-x-hidden overflow-y-auto px-7 py-6"
+          >
+            {!active && !error && botsReady && emptyInbox === "archived" ? (
+              <div
+                data-testid="empty-inbox"
+                className="m-auto flex max-w-sm flex-col items-center text-center"
+              >
+                <div className="font-display text-[17px] text-paper">Chats are archived</div>
+                <p className="mt-2 text-[14px] leading-5 text-mute">
+                  Restore one from Archived, or create a new bot.
+                </p>
+                <div className="mt-5 flex gap-2">
+                  <Button type="button" onClick={() => setSidebarView("archived")}>
+                    Open archived
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => openCreate()}>
+                    Create bot
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            {!active && !error && botsReady && emptyInbox === "create" ? (
+              <div
+                data-testid="empty-bots"
+                className="m-auto flex max-w-sm flex-col items-center text-center"
+              >
+                <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-raised text-mute">
+                  <IconPlus />
+                </div>
+                <div className="font-display text-[17px] text-paper">Create your first bot</div>
+                <p className="mt-2 text-[14px] leading-5 text-mute">
+                  Give it a purpose, then it gets its own chat, memory, routines, and computer.
+                </p>
+                <Button type="button" className="mt-5" onClick={() => openCreate()}>
                   Create bot
                 </Button>
               </div>
-            </div>
-          ) : null}
-          {!active && !error && botsReady && emptyInbox === "create" ? (
-            <div
-              data-testid="empty-bots"
-              className="m-auto flex max-w-sm flex-col items-center text-center"
-            >
-              <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-[#1A1A1D] text-[23px] text-[#A8A8AD]">
-                +
-              </div>
-              <div className="text-[17px] font-medium text-[#ECECEE]">Create your first bot</div>
-              <p className="mt-2 text-[14px] leading-5 text-[#85858A]">
-                Give it a purpose, then it gets its own chat, memory, routines, and computer.
-              </p>
-              <Button type="button" className="mt-5" onClick={() => openCreate()}>
-                Create bot
-              </Button>
-            </div>
-          ) : null}
-          {thread?.olderCursor != null ? (
-            <button
-              type="button"
-              data-testid="load-earlier"
-              disabled={loadingOlder}
-              onClick={() => void loadOlderMessages()}
-              className="self-center rounded-lg px-3 py-1.5 text-[13px] text-[#85858A] hover:bg-[#1A1A1D] hover:text-[#C9C9CE] disabled:opacity-50"
-            >
-              {loadingOlder ? "Loading…" : "Load earlier messages"}
-            </button>
-          ) : null}
-          {(thread?.messages ?? [])
-            .filter((message) => !isToolNoise(message) && !isHiddenLiveDraft(message))
-            .map((message) => (
-              <MessageView
-                key={message.id}
-                botId={active?.id ?? ""}
-                canAnswer
-                message={message}
-                runStatus={thread?.run?.status}
-                onAnswer={(text) => send(text)}
-                onOpenComputer={() => void openOverlay("preview")}
-                onOpenBot={(id) => {
-                  void refreshBots().then(() => navigate(`/app/${id}`));
-                }}
-                onSubagentChange={() => {
-                  if (active) void refreshThread(active.id);
-                }}
-                onContextMenu={(event, item) => {
-                  event.preventDefault();
-                  setMessageMenu({
-                    message: item,
-                    position: { x: event.clientX, y: event.clientY },
-                  });
-                }}
-              />
-            ))}
-          {thread?.run && (thread.run.status === "failed" || thread.run.status === "cancelled") ? (
-            <div
-              data-testid="run-error"
-              className="self-start rounded-xl border border-[#4A2522] bg-[#1A1110] px-4 py-2 text-[13.5px] text-[#F0AAA0]"
-            >
-              {thread.run.error ||
-                (thread.run.status === "cancelled" ? "Stopped." : "The turn failed.")}
-            </div>
-          ) : null}
-          {thread?.run && isLiveTurn(thread.run.status) ? (
-            <div className="flex justify-start">
+            ) : null}
+            {active && needsModel && !error ? (
               <div
-                data-testid="typing-indicator"
-                className="flex items-center gap-1.5 rounded-[18px] bg-[#161619] border border-[#222226] px-4 py-3"
-                title="Typing…"
+                data-testid="needs-model"
+                className="mx-4 mt-3 rounded-[12px] border border-hairline border-l-[3px] border-l-tan bg-plate px-3.5 py-3"
               >
-                <span className="inline-block h-2 w-2 rounded-full bg-[#C45C26] animate-pulse" />
-                <span
-                  className="inline-block h-2 w-2 rounded-full bg-[#C45C26] animate-pulse"
-                  style={{ animationDelay: "150ms" }}
-                />
-                <span
-                  className="inline-block h-2 w-2 rounded-full bg-[#C45C26] animate-pulse"
-                  style={{ animationDelay: "300ms" }}
-                />
+                <p className="text-[14px] leading-5 text-paper">{NEEDS_MODEL_TEXT}</p>
+                <button
+                  type="button"
+                  data-testid="open-models-thread"
+                  className="mt-2 text-[13px] font-medium text-tan underline underline-offset-2"
+                  onClick={() => openModels()}
+                >
+                  Open Models
+                </button>
               </div>
-            </div>
-          ) : null}
-        </div>
-        <div className="px-6 pb-6 pt-3">
-          {replyTo ? (
-            <div
-              data-testid="reply-bar"
-              className="mb-2 flex items-center gap-3 rounded-[16px] border border-[#202023] bg-[#131315] px-3.5 py-2"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="text-[12px] text-[#85858A]">
-                  Replying to {replyTo.role === "bot" ? active?.name || "bot" : "you"}
-                </div>
-                <div className="truncate text-[13.5px] text-[#C9C9CE]">{replyExcerpt(replyTo)}</div>
+            ) : null}
+            {loadingThread ? (
+              <div
+                data-testid="thread-loading"
+                role="status"
+                aria-live="polite"
+                className="m-auto max-w-sm text-center text-[14px] leading-5 text-mute"
+              >
+                Loading this chat…
               </div>
+            ) : null}
+            {!loadingThread && thread?.olderCursor != null ? (
               <button
                 type="button"
-                className="text-[16px] text-[#85858A] hover:text-[#ECECEE]"
-                aria-label="Cancel reply"
-                onClick={() => setReplyTo(null)}
+                data-testid="load-earlier"
+                aria-label="Load earlier messages"
+                disabled={loadingOlder}
+                onClick={() => void loadOlderMessages()}
+                className="self-center rounded-lg border border-hairline px-3 py-1.5 text-[13px] text-paper hover:bg-raised disabled:opacity-50"
               >
-                ✕
+                {loadingOlder ? "Loading…" : "Load earlier messages"}
               </button>
-            </div>
-          ) : null}
-          {pendingFiles.length ? (
-            <div className="mb-2 flex flex-wrap items-end gap-2">
-              {pendingFiles.map((item) => (
-                <AttachChip
-                  key={item.id}
-                  item={item}
-                  onRemove={() =>
-                    setPendingFiles((list) => list.filter((entry) => entry.id !== item.id))
-                  }
+            ) : !loadingThread && historyAtStart ? (
+              <p data-testid="thread-start" className="self-center text-[13px] text-mute">
+                Beginning of this chat.
+              </p>
+            ) : null}
+            {mergeQueuedIntoMessages(
+              thread?.messages ?? [],
+              offlineQueue,
+              active?.id ?? "",
+              thread?.threadId ?? "",
+            )
+              .filter(
+                (message) =>
+                  !isToolNoise(message) &&
+                  !isHiddenLiveDraft(message) &&
+                  !isRawRunFailedMessage(message),
+              )
+              .map((message) => (
+                <MessageView
+                  key={message.id}
+                  canAnswer={canAnswerOwnerPrompt(message, thread?.run)}
+                  message={message}
+                  queued={isQueuedMessageId(message.id)}
+                  offlineCaption={offlineCaptionText(offlineCaptions, message.id)}
+                  runStatus={thread?.run?.status}
+                  onAnswer={async (text, item) => {
+                    if (!active || !item.runId) {
+                      throw new Error("This question is no longer waiting");
+                    }
+                    await api.threads.answer(active.id, item.runId, item.id, text);
+                  }}
+                  onOpenComputer={() => void openOverlay("preview")}
+                  onOpenMemory={(fact) => {
+                    setMemoryFocusFact(fact);
+                    openMemory();
+                  }}
+                  onOpenBot={(id) => {
+                    void refreshBots().then(() => navigate(`/app/${id}`));
+                  }}
+                  onContextMenu={(event, item) => {
+                    event.preventDefault();
+                    setMessageMenu({
+                      message: item,
+                      position: { x: event.clientX, y: event.clientY },
+                      url: contextLinkUrl(event.target),
+                    });
+                  }}
                 />
               ))}
-            </div>
-          ) : null}
-          <div
-            data-testid="thread-composer"
-            className="flex items-end gap-3.5 rounded-[28px] border border-[#202023] bg-[#131315] py-[9px] pr-2.5 pl-3"
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={onComposerDrop}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              data-testid="attach-files"
-              onChange={(event) => {
-                queueFiles(Array.from(event.target.files || []));
-                event.target.value = "";
-              }}
-            />
-            <button
-              type="button"
-              aria-label="Attach files"
-              disabled={!active}
-              onClick={() => fileInputRef.current?.click()}
-              className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-full border border-[#26262A] text-[18px] text-[#9A9AA0] hover:bg-[#1B1B1E] disabled:opacity-40"
-            >
-              +
-            </button>
-            <textarea
-              ref={composerRef}
-              value={draft}
-              rows={1}
-              aria-label="Message"
-              disabled={!active}
-              onChange={(event) => writeDraft(event.target.value)}
-              onPaste={onChatPaste}
-              onKeyDown={(event) => onComposerKeyDown(event)}
-              placeholder={
-                replyTo
-                  ? "Write a reply…"
-                  : active
-                    ? `Message ${active.name}`
-                    : "Create a bot to start"
-              }
-              className="max-h-40 min-h-[22px] flex-1 resize-none bg-transparent py-1.5 text-[15.5px] leading-[22px] text-[#E9E9EA] outline-none disabled:cursor-not-allowed disabled:opacity-40"
-            />
+            {thread?.run &&
+            (thread.run.status === "failed" || thread.run.status === "cancelled") ? (
+              <div
+                data-testid="run-error"
+                className="self-start rounded-xl border border-danger/40 bg-danger-bg px-4 py-2 text-[13.5px] text-danger"
+              >
+                {ownerRunError(thread.run.error ?? undefined, thread.run.status)}
+              </div>
+            ) : null}
             {isBusy ? (
+              <div className="flex justify-start">
+                <div
+                  data-testid="typing-indicator"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="flex items-center gap-1.5 rounded-[18px] border border-hairline bg-plate px-4 py-3"
+                >
+                  {flightText ? (
+                    <p className="m-0 text-[13.5px] leading-5 text-mute">{flightText}</p>
+                  ) : (
+                    <>
+                      <span className="sr-only">Working</span>
+                      <span aria-hidden="true" className="flex items-center gap-1.5">
+                        <span className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan" />
+                        <span
+                          className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
+                          style={{ animationDelay: "150ms" }}
+                        />
+                        <span
+                          className="ab-pulse inline-block h-2 w-2 rounded-full bg-tan"
+                          style={{ animationDelay: "300ms" }}
+                        />
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <div className="border-t border-hairline px-3 pb-3 pt-2.5">
+            {replyTo ? (
+              <div
+                data-testid="reply-bar"
+                className="mb-2 flex items-center gap-3 rounded-[10px] border border-hairline bg-raised px-3.5 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] text-mute">
+                    Replying to {replyTo.role === "bot" ? active?.name || "bot" : "you"}
+                  </div>
+                  <div className="truncate text-[13.5px] text-paper">{replyExcerpt(replyTo)}</div>
+                </div>
+                <button
+                  type="button"
+                  className="text-mute hover:text-paper"
+                  aria-label="Cancel reply"
+                  onClick={() => setReplyTo(null)}
+                >
+                  <IconClose />
+                </button>
+              </div>
+            ) : null}
+            {pendingFiles.length ? (
+              <div className="mb-2 flex flex-wrap items-end gap-2">
+                {pendingFiles.map((item) => (
+                  <AttachChip
+                    key={item.id}
+                    item={item}
+                    onRemove={() =>
+                      setPendingFiles((list) => list.filter((entry) => entry.id !== item.id))
+                    }
+                  />
+                ))}
+              </div>
+            ) : null}
+            {isBusy ? (
+              <p className="mb-1.5 px-1 text-[10.5px] text-mute">
+                This task is still running · replies steer it
+              </p>
+            ) : null}
+            {/* File drop and paste land on the Message row, not a dedicated control. */}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: composer drop/paste target */}
+            <div
+              data-testid="thread-composer"
+              className="flex items-end gap-2"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={onComposerDrop}
+              onPaste={onChatPaste}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                data-testid="attach-files"
+                onChange={(event) => {
+                  queueFiles(Array.from(event.target.files || []));
+                  event.target.value = "";
+                }}
+              />
               <button
                 type="button"
-                data-testid="thread-stop"
-                aria-label="Stop"
-                onClick={() => void stop()}
-                className="grid h-9 w-9 place-items-center rounded-full bg-[#E65707] text-white hover:bg-[#D44E06]"
-                title="Stop the lead and workers"
+                aria-label="Attach files"
+                disabled={!active}
+                onClick={() => fileInputRef.current?.click()}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-hairline bg-raised text-paper disabled:opacity-40"
               >
-                ■
+                <IconPlus />
               </button>
-            ) : null}
-            <button
-              type="button"
-              aria-label="Send"
-              disabled={!active || sending}
-              onClick={() => void send()}
-              className={`grid h-9 w-9 place-items-center rounded-full bg-[#F1F1EF] text-[#17171A] disabled:opacity-40 ${
-                !draft.trim() && pendingFiles.length === 0 ? "opacity-40" : ""
-              }`}
-            >
-              ↑
-            </button>
+              <textarea
+                ref={composerRef}
+                value={draft}
+                rows={1}
+                aria-label="Message"
+                disabled={!active}
+                onChange={(event) => writeDraft(event.target.value)}
+                onPaste={onChatPaste}
+                onKeyDown={(event) => onComposerKeyDown(event)}
+                placeholder={
+                  replyTo
+                    ? "Write a reply…"
+                    : active
+                      ? composerPlaceholder(active.name)
+                      : "Create a bot to start"
+                }
+                className="max-h-40 min-h-[44px] min-w-0 flex-1 resize-none rounded-[10px] border border-hairline bg-raised px-3 py-2.5 text-[15px] leading-[22px] text-paper disabled:cursor-not-allowed disabled:opacity-40"
+              />
+              {isBusy ? (
+                <button
+                  type="button"
+                  data-testid="thread-stop"
+                  aria-label="Stop"
+                  onClick={() => void stop()}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-tan px-3.5 text-[13px] font-bold text-tan"
+                >
+                  <IconStop />
+                  Stop
+                </button>
+              ) : null}
+              <button
+                type="button"
+                aria-label="Send"
+                disabled={!active || sending || !composerCanSend(draft, pendingFiles.length)}
+                onClick={() => void send()}
+                className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-tan px-4 text-[13px] font-bold text-ink disabled:opacity-40"
+              >
+                <IconSend />
+                Send
+              </button>
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
 
-      <aside
-        className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-[#0A0A0B] transition-[width] duration-200 ease-out ${
-          panel && (active || panel === "create") ? "w-[384px] border-l border-[#141416]" : "w-0"
-        }`}
-      >
-        {panel && (active || panel === "create") ? (
-          <div className="ab-scroll h-full w-[384px] overflow-y-auto px-5 py-[17px]">
-            {panel === "create" ? (
-              <CreateBotForm
-                onCancel={() => {
-                  setPanel(panelAfterCreate.current);
-                  panelAfterCreate.current = null;
-                }}
-                onCreate={(input) => void createBot(input)}
-              />
-            ) : null}
-            {panel === "settings" && active ? (
-              <BotSettings
-                bot={active}
-                computer={computer ?? snapshot?.computer ?? null}
-                onClose={() => setPanel(panelAfterSettings.current)}
-                onUpdated={() => void refreshBots()}
-                onDelete={(deleteMemories) => void deleteBot(active, deleteMemories)}
-                onRestart={() => restartComputer()}
-                onStop={() => stopComputer()}
-                onReset={() => resetComputer()}
-                onLater={setLater}
-              />
-            ) : null}
-            {panel === "computer" && active ? (
-              <ComputerPane
-                bot={active}
-                computer={computer ?? snapshot?.computer ?? null}
-                screenUrl={screenUrl}
-                screenError={screenError}
-                screenEpoch={screenEpoch}
-                previewFrameRef={previewFrameRef}
-                booting={booting}
-                onClose={() => setPanel(null)}
-                onSettings={() => {
-                  panelAfterSettings.current = "computer";
-                  setPanel("settings");
-                }}
-                onOpenFullscreen={() => void openOverlay("preview")}
-                onTakeControl={() => void openOverlay("button")}
-                onRelease={() => void releaseComputer()}
-                onRetryScreen={retryScreen}
-                onScreenFrameLoad={onScreenFrameLoad}
-                onLater={setLater}
-              />
-            ) : null}
-          </div>
+        {!phoneShell && workspaceView !== "today" && hatchOpen ? (
+          <PaneResizeHandle
+            pane="right"
+            width={hatchWidth}
+            defaultWidth={DEFAULT_HATCH_WIDTH}
+            onChange={resizeHatch}
+          />
         ) : null}
-      </aside>
-
-      {messageMenu ? (
-        <MessageContextMenu
-          position={messageMenu.position}
-          onClose={() => setMessageMenu(null)}
-          onReply={() => {
-            setReplyTo(messageMenu.message);
-            setMessageMenu(null);
+        <aside
+          data-shell="hatch"
+          data-hatch-open={hatchOpen ? "1" : "0"}
+          data-phone-show={phoneTab === "desk" || phoneTab === "more" ? "1" : "0"}
+          data-workspace-visible={phoneShell || workspaceView !== "today" ? "1" : "0"}
+          onWheel={(event) => {
+            if (hatchOpen) event.stopPropagation();
           }}
-        />
-      ) : null}
+          style={phoneShell ? undefined : { width: hatchOpen ? hatchWidth : 0 }}
+          className={`flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-ink ${
+            hatchPointerEvents(hatchOpen) === "none" ? "pointer-events-none" : "pointer-events-auto"
+          } ${
+            phoneShell
+              ? "w-full max-w-none border-l-0"
+              : hatchOpen
+                ? "border-l border-hairline"
+                : ""
+          }`}
+        >
+          {hatchOpen ? (
+            <div
+              style={phoneShell ? undefined : { width: hatchWidth }}
+              className={`ab-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3 ${phoneShell ? "w-full" : ""}`}
+            >
+              {panel === "library" ? (
+                <LibraryPane
+                  botName={active?.name}
+                  hasActiveBot={Boolean(active)}
+                  modelsReady={!needsModel}
+                  showRoutines={phoneShell}
+                  onOpenPlugins={openPlugins}
+                  onOpenModels={openModels}
+                  onOpenMemory={openMemory}
+                  onOpenRoutines={openRoutines}
+                  onOpenSettings={() => {
+                    if (!active) return;
+                    panelAfterSettings.current = "library";
+                    setPanel("settings");
+                  }}
+                  onClose={closeContextPanel}
+                />
+              ) : null}
+              {panel === "memory" && active ? (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-mono text-[10px] text-tan uppercase">Context used</p>
+                      <h2 className="mt-1 text-[18px] font-bold text-paper">Memory</h2>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Close Memory"
+                      onClick={closeSubcontext}
+                      className="rounded-[9px] border border-hairline px-3 py-2 text-[12px] text-paper"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <MemoryPanel botId={active.id} focusFact={memoryFocusFact} onLater={setLater} />
+                </div>
+              ) : null}
+              {panel === "routines" && active ? (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-mono text-[10px] text-tan uppercase">
+                        Repeat approved work
+                      </p>
+                      <h2 className="mt-1 text-[18px] font-bold text-paper">Routines</h2>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Close Routines"
+                      onClick={closeSubcontext}
+                      className="rounded-[9px] border border-hairline px-3 py-2 text-[12px] text-paper"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <RoutinesPanel
+                    botId={active.id}
+                    onLater={setLater}
+                    onThreadChanged={() => {
+                      const id = activeIdRef.current;
+                      if (!id) return;
+                      return refreshThread(id).then(() => undefined);
+                    }}
+                  />
+                </div>
+              ) : null}
+              {panel === "worklog" && active ? (
+                <WorkLogPane
+                  botName={active.name}
+                  runId={thread?.run?.id}
+                  runStatus={isBusy ? "working" : thread?.run?.status}
+                  progress={flightText}
+                  workers={(thread?.subagents ?? []).map((item) => ({
+                    id: item.id,
+                    parentRunId: item.parentRunId,
+                    status: item.status,
+                    task: item.task,
+                    progress: item.progress,
+                    lastToolName: item.lastToolName,
+                    lastActivityAt: item.lastActivityAt,
+                    createdAt: item.createdAt,
+                  }))}
+                  usageByRun={usageFromRecords(usageRecords)}
+                  onClose={closeContextPanel}
+                />
+              ) : null}
+              {panel === "plugins" ? <PluginsPane onClose={closePlugins} /> : null}
+              {panel === "models" ? (
+                <ModelsPane
+                  botId={active?.id}
+                  credentials={modelState}
+                  onChange={setModelState}
+                  onClose={closeModels}
+                  onApplied={() => {
+                    const id = activeIdRef.current;
+                    if (id) void refreshThread(id);
+                  }}
+                />
+              ) : null}
+              {panel === "create" ? (
+                <CreateBotForm onCancel={closeCreate} onCreate={(input) => void createBot(input)} />
+              ) : null}
+              {panel === "settings" && active ? (
+                <BotSettings
+                  bot={active}
+                  computer={computer ?? snapshot?.computer ?? null}
+                  onClose={closeSettings}
+                  onUpdated={() => void refreshBots()}
+                  onDelete={(deleteMemories) => void deleteBot(active, deleteMemories)}
+                  onRestart={() => restartComputer()}
+                  onStop={() => stopComputer()}
+                  onReset={() => resetComputer()}
+                  onLater={setLater}
+                />
+              ) : null}
+              {panel === "computer" && active ? (
+                <ComputerPane
+                  bot={active}
+                  computer={computer ?? snapshot?.computer ?? null}
+                  screenUrl={screenUrl}
+                  screenError={screenError}
+                  screenEpoch={screenEpoch}
+                  previewFrameRef={previewFrameRef}
+                  booting={booting}
+                  onClose={() => {
+                    setPanel(null);
+                    if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
+                  }}
+                  onOpenFullscreen={() => void openOverlay("preview")}
+                  onStart={() =>
+                    void bootComputer({
+                      takeControl: shouldTakeControl("start"),
+                    })
+                  }
+                  onTakeControl={() => void openOverlay("button")}
+                  onRelease={() => void releaseComputer()}
+                  onRetryScreen={retryScreen}
+                  onScreenFrameLoad={onScreenFrameLoad}
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </aside>
 
-      {contextMenu ? (
-        <BotContextMenu
-          bot={contextMenu.bot}
-          position={contextMenu.position}
-          onClose={() => setContextMenu(null)}
-          onTogglePinned={async () => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            try {
-              await api.bots.update(target.id, { pinned: !target.pinned });
-              await refreshBots();
-            } catch (err) {
-              showError(err, "Failed to update pin");
-            }
-          }}
-          onToggleUnread={async () => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            try {
-              if (target.unread) {
-                heldUnreadIds.current.delete(target.id);
-                await api.threads.markRead(target.id);
-                patchBotUnread(target.id, false);
-              } else {
-                heldUnreadIds.current.add(target.id);
-                await api.threads.markUnread(target.id);
-                patchBotUnread(target.id, true);
+        {messageMenu ? (
+          <MessageContextMenu
+            position={messageMenu.position}
+            url={messageMenu.url}
+            canCopy={Boolean(messageCopyText(messageMenu.message))}
+            onClose={() => setMessageMenu(null)}
+            onCopy={async () => {
+              const text = messageCopyText(messageMenu.message);
+              if (!text) return false;
+              const copied = await copyText(text);
+              if (!copied) {
+                errorKindRef.current = "action";
+                setErrorKind("action");
+                setError("Could not copy. Select the text instead.");
               }
-            } catch (err) {
-              showError(err, "Failed to toggle read status");
-            }
+              return copied;
+            }}
+            onCopyUrl={async () => {
+              if (!messageMenu.url) return false;
+              const copied = await copyText(messageMenu.url);
+              if (!copied) {
+                errorKindRef.current = "action";
+                setErrorKind("action");
+                setError("Could not copy URL. Select and copy the link instead.");
+              }
+              return copied;
+            }}
+            onOpenUrl={() => {
+              if (messageMenu.url) {
+                openOwnerBrowser(messageMenu.url);
+              }
+              setMessageMenu(null);
+            }}
+            onReply={() => {
+              setReplyTo(messageMenu.message);
+              setMessageMenu(null);
+            }}
+          />
+        ) : null}
+
+        {contextMenu ? (
+          <BotContextMenu
+            bot={contextMenu.bot}
+            position={contextMenu.position}
+            onClose={() => setContextMenu(null)}
+            onTogglePinned={async () => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              try {
+                await api.bots.update(target.id, { pinned: !target.pinned });
+                await refreshBots();
+              } catch (err) {
+                showError(err, "Failed to update pin");
+              }
+            }}
+            onToggleUnread={async () => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              try {
+                if (target.unread) {
+                  heldUnreadIds.current.delete(target.id);
+                  await api.threads.markRead(target.id);
+                  patchBotUnread(target.id, false);
+                } else {
+                  heldUnreadIds.current.add(target.id);
+                  await api.threads.markUnread(target.id);
+                  patchBotUnread(target.id, true);
+                }
+              } catch (err) {
+                showError(err, "Failed to toggle read status");
+              }
+            }}
+            onEdit={() => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              navigate(`/app/${target.id}`);
+              panelAfterSettings.current = null;
+              setPanel("settings");
+            }}
+            onDuplicate={async () => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              try {
+                const duplicated = await api.bots.duplicate(target.id);
+                freshBotIds.current.add(duplicated.id);
+                await refreshBots();
+                navigate(`/app/${duplicated.id}`);
+              } catch (err) {
+                showError(err, "Duplicate failed");
+              }
+            }}
+            onArchive={async () => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              try {
+                await api.bots.archive(target.id);
+                forgetBot(target.id, active?.id === target.id);
+                setArchivedBots((list) => [
+                  target,
+                  ...list.filter((item) => item.id !== target.id),
+                ]);
+                await refreshBots();
+              } catch (err) {
+                showError(err, "Archive failed");
+              }
+            }}
+            onDelete={async () => {
+              const target = contextMenu.bot;
+              setContextMenu(null);
+              try {
+                await api.bots.remove(target.id, false);
+                forgetBot(target.id, active?.id === target.id);
+                await refreshBots();
+              } catch (err) {
+                showError(err, "Delete failed");
+              }
+            }}
+          />
+        ) : null}
+      </div>
+
+      <nav data-testid="phone-nav" className="phone-nav" aria-label="Phone sections">
+        <button
+          type="button"
+          data-testid="phone-tab-today"
+          aria-current={phoneTab === "today" ? "page" : undefined}
+          onClick={() => {
+            setWorkspaceView("today");
+            setPhoneTab(nextPhoneTab("open-today"));
+            setPanel(null);
           }}
-          onEdit={() => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            navigate(`/app/${target.id}`);
-            panelAfterSettings.current = null;
-            setPanel("settings");
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          data-testid="phone-tab-chats"
+          aria-current={phoneTab === "chats" || phoneTab === "chat" ? "page" : undefined}
+          onClick={() => {
+            setWorkspaceView("chats");
+            setPhoneTab(nextPhoneTab("open-chats"));
+            setPanel(null);
           }}
-          onDuplicate={async () => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            try {
-              const duplicated = await api.bots.duplicate(target.id);
-              await refreshBots();
-              navigate(`/app/${duplicated.id}`);
-            } catch (err) {
-              showError(err, "Duplicate failed");
-            }
+        >
+          Chats
+        </button>
+        <button
+          type="button"
+          data-testid="phone-tab-desk"
+          aria-current={phoneTab === "desk" ? "page" : undefined}
+          disabled={!active}
+          onClick={() => {
+            setPhoneTab(nextPhoneTab("open-desk"));
+            setPanel((current) => current || "computer");
           }}
-          onArchive={async () => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            try {
-              await api.bots.archive(target.id);
-              forgetBot(target.id, active?.id === target.id);
-              setArchivedBots((list) => [target, ...list.filter((item) => item.id !== target.id)]);
-              await refreshBots();
-            } catch (err) {
-              showError(err, "Archive failed");
-            }
+        >
+          Desktop
+        </button>
+        <button
+          type="button"
+          data-testid="phone-tab-more"
+          aria-current={phoneTab === "more" ? "page" : undefined}
+          onClick={() => {
+            setWorkspaceView("library");
+            setPhoneTab(nextPhoneTab("open-more"));
+            setPanel("library");
           }}
-          onDelete={async () => {
-            const target = contextMenu.bot;
-            setContextMenu(null);
-            try {
-              await api.bots.remove(target.id, false);
-              forgetBot(target.id, active?.id === target.id);
-              await refreshBots();
-            } catch (err) {
-              showError(err, "Delete failed");
-            }
-          }}
-        />
-      ) : null}
+        >
+          More
+        </button>
+      </nav>
 
       <ComputerOverlay
         booting={booting}
         open={computerOpen}
         bot={active}
-        computer={computer}
+        computer={computer ?? snapshot?.computer ?? null}
         screenUrl={screenUrl}
         screenError={screenError}
         screenEpoch={screenEpoch}
         overlayFrameRef={overlayFrameRef}
         onRelease={() => void releaseComputer()}
-        onTakeControl={() => void bootComputer({ takeControl: true, overlay: false })}
-        onClose={() => setComputerOpen(false)}
+        onTakeControl={() => void bootComputer({ takeControl: true })}
+        onClose={() => {
+          setComputerOpen(false);
+          if (phoneShell) setPhoneTab(nextPhoneTab("close-desk"));
+        }}
         onRetry={retryScreen}
         onScreenFrameLoad={onScreenFrameLoad}
         onScreenError={(message) => setScreenError(message)}
+        phone={phoneDesk}
       />
     </div>
   );
@@ -1666,7 +3031,7 @@ function AttachChip({ item, onRemove }: { item: PendingFile; onRemove: () => voi
     <span
       data-testid="attach-chip"
       data-kind={kind}
-      className="flex max-w-full items-center gap-2 rounded-xl border border-[#26262A] bg-[#1B1B1E] px-2 py-1.5 text-[13px] text-[#C9C9CE]"
+      className="flex max-w-full items-center gap-2 rounded-xl border border-hairline bg-raised px-2 py-1.5 text-[13px] text-paper"
     >
       {kind === "image" && url ? (
         <img
@@ -1683,16 +3048,20 @@ function AttachChip({ item, onRemove }: { item: PendingFile; onRemove: () => voi
           controls
           preload="metadata"
           className="h-20 max-w-[200px] shrink-0 rounded-lg"
-        />
+        >
+          <track kind="captions" label="No captions for this file" srcLang="en" />
+        </video>
       ) : null}
       {kind === "audio" && url ? (
-        <audio data-testid="attach-preview" src={url} controls className="h-8 max-w-[220px]" />
+        <audio data-testid="attach-preview" src={url} controls className="h-8 max-w-[220px]">
+          <track kind="captions" label="No captions for this file" srcLang="en" />
+        </audio>
       ) : null}
       <span className="max-w-[140px] truncate">{item.file.name}</span>
       <button
         type="button"
         aria-label={`Remove ${item.file.name}`}
-        className="text-[#85858A] hover:text-[#ECECEE]"
+        className="text-mute hover:text-paper"
         onClick={onRemove}
       >
         ✕
@@ -1707,6 +3076,11 @@ function hasLive(snapshot: ThreadSnapshot): boolean {
       message.id.startsWith("stream:") &&
       message.blocks.some((b) => b.kind === "progress" && Boolean(b.text)),
   );
+}
+
+function offlineCaptionText(captions: OfflineCaption[], messageId: string): string | undefined {
+  const caption = captionForMessage(captions, messageId);
+  return caption ? formatOfflineCaption(caption.queuedAt) : undefined;
 }
 
 function hasActiveWorkers(snapshot: ThreadSnapshot): boolean {

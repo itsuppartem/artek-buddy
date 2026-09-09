@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import Depends, HTTPException, Query, Request, WebSocket
@@ -28,7 +29,6 @@ from artek_buddy.runtime import (
     AgentRuntime,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
 from fastapi import APIRouter
@@ -179,6 +179,13 @@ async def computer_release(
         raise _db_error(err) from err
     _emit(events, bot, ProductEventType.COMPUTER_TAKEOVER_RELEASED, {})
     _emit_computer(events, bot, status)
+    hub = getattr(rt, "consent", None)
+    release_waiters = getattr(hub, "release_takeovers", None) if hub is not None else None
+    if callable(release_waiters):
+        try:
+            release_waiters(bot.id)
+        except Exception:
+            log.exception("failed to release worker takeover waiters")
     try:
         _resume_parked_takeover(history, rt, events, bot)
     except Exception:
@@ -223,7 +230,13 @@ async def computer_input(
     boxes: ComputerService = Depends(computers),
 ) -> OkResponse:
     try:
-        boxes.send_input(_require_bot(history, bot_id), body.kind, body.payload)
+        await asyncio.to_thread(
+            boxes.send_input,
+            _require_bot(history, bot_id),
+            body.kind,
+            body.payload,
+            body.lease_id,
+        )
     except (ComputerBusy, ComputerError) as err:
         raise _computer_http(err) from err
     except DatabaseUnavailable as err:

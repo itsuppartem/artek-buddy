@@ -8,7 +8,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: "./",
+  base: "/",
   publicDir: path.resolve(here, "../assets/web"),
   server: {
     host: "127.0.0.1",

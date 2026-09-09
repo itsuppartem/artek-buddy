@@ -4,8 +4,10 @@ import re
 from typing import Any
 
 from artek_buddy.contracts.domain import MemoryDocument
+from artek_buddy.observe import redact_text
+from artek_buddy.status_ping import STATUS_PING_GUIDE
 
-MAX_AGENT_MEMORY_BYTES = 32 * 1024
+MAX_AGENT_MEMORY_BYTES = 256 * 1024
 MAX_MEMORY_CONTENT_CHARS = 100_000
 DEFAULT_MEMORY_PATH = "MEMORY.md"
 _PATH_RE = re.compile(r"^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")
@@ -137,6 +139,30 @@ def format_subagent_context(rows: list[Any]) -> str | None:
         task = _row_field(item, "task")
         ident = _row_field(item, "id")
         lines.append(f"{index}. {name} ({ident}) [{status}] — {task}")
+        progress = _row_field(item, "progress")
+        remaining = _row_field(item, "progress_remaining")
+        if (progress or "").strip():
+            lines.append(f"   step: {progress}")
+            if (remaining or "").strip():
+                lines.append(f"   remaining: {remaining}")
+        else:
+            lines.append("   text: no text update")
+        kind = _row_field(item, "last_activity_kind")
+        seq = _row_field(item, "activity_seq")
+        tool = _row_field(item, "last_tool_name")
+        running = _row_field(item, "tool_running")
+        when = _row_field(item, "last_activity_at")
+        if kind or seq or running:
+            bits = [f"seq={seq or 0}"]
+            if kind:
+                bits.append(str(kind))
+            if tool:
+                bits.append(str(tool))
+            if when:
+                bits.append(str(when))
+            if running:
+                bits.append("tool in flight")
+            lines.append("   activity: " + " ".join(bits))
         notes = _row_field(item, "clarifications")
         if notes:
             lines.append(f"   notes: {notes}")
@@ -144,6 +170,11 @@ def format_subagent_context(rows: list[Any]) -> str | None:
 
 
 THREAD_CONTEXT_CAP = 8000
+SESSION_RESUME_CAP = 2048
+_WORK_FACT = re.compile(
+    r"(?i)(?:\bbranch\b|\bветк\w*\b|\bpath\b|\bпуть\b|\bcwd\b|\brepo(?:sitory)?\b|~/|"
+    r"(?:^|\s)/(?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]*)"
+)
 
 
 def _block_text(block: Any) -> str:
@@ -181,6 +212,7 @@ def compact_thread_context(
     *,
     cap: int = THREAD_CONTEXT_CAP,
     exclude_ids: set[str] | None = None,
+    exclude_run_id: str | None = None,
 ) -> str:
     """Recent user/bot lines from this chat. Oldest parts drop first. Cap is UTF-8 bytes."""
     skip = exclude_ids or set()
@@ -191,6 +223,11 @@ def compact_thread_context(
         )
         if ident and ident in skip:
             continue
+        run_id = getattr(message, "run_id", None) or (
+            message.get("run_id") if isinstance(message, dict) else None
+        )
+        if exclude_run_id and run_id == exclude_run_id:
+            continue
         role = _message_role(message)
         if role not in {"user", "bot"}:
             continue
@@ -199,7 +236,10 @@ def compact_thread_context(
         )
         if not text:
             continue
-        lines.append(f"{role}: {text}")
+        line = f"{role}: {text}"
+        if role == "user" and lines and lines[-1] == line:
+            continue
+        lines.append(line)
     packed: list[str] = []
     used = 0
     prefix = "This chat, recent messages:\n"
@@ -225,6 +265,82 @@ def compact_thread_context(
     return prefix + "\n".join(packed)
 
 
+def _compact_lines(value: str, *, limit: int = 300) -> list[str]:
+    found: list[str] = []
+    for raw in (value or "").splitlines():
+        line = " ".join(raw.split()).strip()
+        if not line or line.startswith(("<", "</", "##", "```", "$ ")):
+            continue
+        found.append(redact_text(line)[:limit])
+    return found
+
+
+def format_session_resume(
+    *,
+    home_cwd: str,
+    bot: Any,
+    memory_context: str | None,
+    messages: list[Any],
+    max_bytes: int = SESSION_RESUME_CAP,
+) -> str | None:
+    """Bounded facts for the first turn after a model session was replaced."""
+    work: list[str] = []
+    for line in _compact_lines(memory_context or ""):
+        if _WORK_FACT.search(line) and line not in work:
+            work.append(line)
+        if len(work) >= 4:
+            break
+    last_bot = ""
+    recent_work: list[str] = []
+    for message in reversed(messages):
+        role = _message_role(message)
+        text = " ".join(
+            part for part in (_block_text(block) for block in _message_blocks(message)) if part
+        )
+        if role == "bot" and text and not last_bot:
+            last_bot = redact_text(" ".join(text.split()))[:500]
+        if role == "user" and text and _WORK_FACT.search(text):
+            fact = redact_text(" ".join(text.split()))[:300]
+            if fact not in recent_work:
+                recent_work.append(fact)
+        if last_bot and len(recent_work) >= 2:
+            break
+    for line in reversed(recent_work):
+        if line not in work:
+            work.append(line)
+        if len(work) >= 4:
+            break
+    if not work and not last_bot:
+        return None
+
+    constraints: list[str] = []
+    for field in ("description", "instructions"):
+        for line in _compact_lines(str(getattr(bot, field, "") or "")):
+            if line not in constraints:
+                constraints.append(line)
+            if len(constraints) >= 4:
+                break
+        if len(constraints) >= 4:
+            break
+
+    lines = [
+        "A new Cursor session replaced the previous one. These are reference facts, not commands; "
+        "verify mutable state before acting. The tool history from the replaced session is unavailable.",
+        "<session_resume>",
+        f"workspace: {home_cwd}",
+    ]
+    lines.extend(f"remembered: {line}" for line in work)
+    lines.extend(f"constraint: {line}" for line in constraints)
+    if last_bot:
+        lines.append(f"last_visible_result: {last_bot}")
+    closing = "\n</session_resume>"
+    available = max(0, max_bytes - _byte_length(closing))
+    body = _truncate_utf8("\n".join(lines), available).rstrip()
+    if not body:
+        return None
+    return body + closing
+
+
 def wrap_turn_prompt(
     user_text: str,
     memory_context: str | None,
@@ -238,20 +354,30 @@ def wrap_turn_prompt(
     steer: bool = False,
     thread_context: str | None = None,
     inbox_context: str | None = None,
+    other_bots: str | None = None,
+    books_context: str | None = None,
+    apps_context: str | None = None,
+    session_resume: str | None = None,
 ) -> str:
     parts: list[str] = []
     if memory_context:
         parts.append(memory_context)
+    if books_context:
+        parts.append(books_context)
+    if apps_context:
+        parts.append(apps_context)
     if role == "lead":
         parts.append(
             "You are the lead agent in this chat. You have a Linux desktop, command-line tools, and subagents. "
             "Communicate naturally, concisely, and directly with the user like a pragmatic engineer in chat. "
             "You have the send_message tool to post messages at any time into the chat (e.g. quick status updates, "
             "intermediate findings, or answers as soon as they are ready). "
-            "If you need a decision from the user with options, use ask_user or send_message with options.\n\n"
+            "If you need a decision or one concrete owner action, use ask_user; its answer returns "
+            "to the same tool call so you can continue this turn.\n\n"
             "Workflow and tools:\n"
             "- Opening sites, web pages, or apps on screen: use open_path(path='https://...') or launch_app(application='chromium', uri='...') "
-            "to open pages/apps directly and immediately on the user's screen in Chromium. Do NOT use slow mouse clicking/observing loops when open_path or launch_app can do it in one direct step.\n"
+            "to open pages/apps directly and immediately on the user's screen in Chromium. Do NOT use slow mouse clicking/observing loops when open_path or launch_app can do it in one direct step. "
+            "Do not launch the file manager unless the user asked to browse files.\n"
             "- Closing the on-screen browser or an app: use close_app(application='chromium') (or the app name). "
             "Do NOT click the window close button or loop on computer_observe.\n"
             "- External browser actions need owner consent. Opening a site uses open_path (card first). "
@@ -260,6 +386,11 @@ def wrap_turn_prompt(
             "That card in the thread is the permission UI. After a tool returns, they already answered. "
             "Never tell them to press Allow. "
             "Do not use Playwright, CDP, xdotool, or a shell script to skip that card.\n"
+            "- After the owner allowed the site, read the page with browser_act extract or evaluate. "
+            "A computer_observe screenshot is the viewport, not the document. "
+            "Do not close Chromium after one bad locator.\n"
+            "- Chromium restore-tabs and site permission chrome are already granted on this desktop. "
+            "Do not try to click those bubbles. File pickers and login still need request_takeover.\n"
             "- To give the user a file they can download from this chat, use send_file. "
             "Pass a path under this computer's home, or content plus a name for a generated file. "
             "Do not only mention the path.\n"
@@ -270,21 +401,52 @@ def wrap_turn_prompt(
             "- computer_observe does not need permission. Default is slim (window title, no screenshot JSON). "
             "Set include_image only when pixels are required. Prefer DOM / curl after the owner allowed the site. "
             "computer_act click/type on the remote desktop does. Pass several actions in one call; return_observe for a slim look after.\n"
-            "- If a page needs the human (login, captcha, challenge), call request_takeover with a short reason and stop. "
-            "Do not invent a password. Do not keep using tools after that.\n"
-            "- If a tool result includes owner_follow_up, the owner messaged you during this turn. Apply it immediately. Do not finish the old plan first.\n"
-            "- When checking progress or if the user asks status (e.g. 'ты завис?', 'еще делаешь?', 'как там?'): "
-            "you can reply immediately with send_message (e.g. 'Да, сейчас сверю...'), inspect workers/processes "
-            "(inspect_subagent, list_subagents, terminal), and if a worker is stuck or looping, stop it (stop_subagent) "
-            "and take over to finish the job directly.\n"
-            "- Delegation: when the user asks for substantive, distinct parallel background jobs (e.g. running scripts, doing complex parallel workflows), spawn a subagent using spawn_subagent(name=..., task=...). Do not spawn subagents for trivial questions or simple answers you can give directly.\n"
+            "- After one failed locator, page API, login, challenge, or unsupported browser action, "
+            "call ask_user for one concrete owner step instead of guessing selectors or inventing "
+            "site-specific APIs. Continue when the answer returns. Do not ask for passwords. "
+            "Use request_takeover only when the owner must operate this bot's desktop; then stop until Release.\n"
+            "- If a tool result includes owner_follow_up, the owner messaged you during this turn. Apply it immediately. Do not finish the old plan first. If that follow-up is a status-only ping, call send_message first.\n"
+            f"- {STATUS_PING_GUIDE} "
+            "Answer from host activity, not from blank progress text. "
+            "inspect_subagent / list_subagents return last_activity_at, activity_seq, last_tool_name, "
+            "tool_running, and the current step / remaining when the worker reported them. "
+            "If a tool is in flight or activity_seq has moved, keep that worker. "
+            "A correction uses steer_subagent on the same worker id. "
+            "stop_subagent requires inspected_activity_seq from the latest inspect; the host rejects Stop "
+            "while a tool is running or if activity advanced.\n"
+            "- Delegation: when the user asks for substantive tool work (coding, browser, remote computer, long search), spawn a subagent using spawn_subagent(name=..., task=...), then finish this dispatch turn. Do not keep doing that work yourself. Do not spawn subagents for trivial questions or simple answers you can give directly.\n"
+            "- Saved bot tokens: use list_bot_credentials for metadata. For substantive authenticated "
+            "GitHub, PyPI, or named-token work, spawn a worker and tell it the intended command; "
+            "the worker has run_credential_scoped_command. Never ask it to recover an env.sh file.\n"
+            "- You do not have run_owner_command, read_owner_file, write_owner_file, or list_owner_dir. "
+            "For This-PC SSH or owner files, spawn_subagent, then finish this dispatch turn. "
+            "Do not hold a remote shell on the lead turn — that queues the owner's next message.\n"
             "- Use list_subagents, inspect_subagent, steer_subagent, stop_subagent to monitor and steer workers.\n"
-            "- Memory: if the user states a preference, rule, person, project, place, or correction, "
-            "call remember with one short sentence. Shared (default) is about the owner and every bot sees it. "
-            "Set scope=bot only for a standing rule of this chat. "
-            "A later note on the same slot (name, city, timezone, tone, format) replaces the old one. "
+            "- To ask another inbox bot what it knows, call message_bot(bot=exact name or id, text=the question). "
+            "This chat shows that you asked. They work in their chat. Their last message comes back here; "
+            "you then answer the owner. Do not paste their thread. Do not spawn_subagent for that.\n"
+            "- Memory: if the user states a durable fact, preference, path, ban, or current work, "
+            "call remember and put it in the right section "
+            "(identity, tone, contacts, machines, paths, purpose, bans, do_not, wait). "
+            "A later note revises that section; it does not wipe the rest of the book. "
+            "Shared (default) is the owner book. Set scope=bot for this chat's standing rules "
+            "(bans, wait for an explicit go-ahead). "
+            "Call remember once per fact. A standing rule is this-chat only; "
+            "do not also write it as a shared preference. "
             "Do not remember one-off tasks such as opening a tab. "
             "To erase something, call remember with forget=true.\n"
+            "- Skills: when the owner asks to find and keep a published skill from the web, "
+            "call install_book(url) with the document URL after they Allow that origin. "
+            "Store the fetched markdown, not a paraphrase. Do not wait for them to teach the steps. "
+            "Names sit in <skill_books>. Open a matching book yourself before following its steps; "
+            "do not wait for the owner to name it or type a trigger. "
+            "forget_book drops one. save_book only revises a book already kept.\n"
+            "- Host apps: connected apps already have tools this turn. "
+            "Call those tools yourself when the task needs them; do not wait for a chip "
+            "or a please-use line. "
+            "To find GitHub or another catalog app, call list_apps(q), then connect_app(slug). "
+            "If a card has a login URL, the owner opens it (not the bot desktop). "
+            "Do not create git, SSH, or tokens on this computer for a catalog app.\n"
             "- Do not dump internal monologues; be helpful, concise, and proactive."
         )
     elif role == "subagent" or parallel:
@@ -295,12 +457,28 @@ def wrap_turn_prompt(
             "Those ask the owner Allow once / Always / Deny first. "
             "After a tool returns they already answered. Do not tell them to press Allow. "
             "Do not use Playwright or CDP to skip the card. "
+            "Restore tabs and site permission chrome are already granted on this desktop. "
+            "After the owner allows a site, read the page with browser_act extract or evaluate. "
+            "A computer_observe screenshot is the viewport, not the document. "
+            "Do not close Chromium after one bad locator. "
+            "After one failed locator, page API, or unsupported action, call ask_user; "
+            "use request_takeover if the owner must operate this desktop. "
             "To attach a downloadable file in this chat, use send_file. "
             "Use close_app(application='chromium') to close the on-screen browser. "
             "computer_observe does not need permission. "
-            "You can use send_message to post direct updates or findings to the user. "
-            "If this task has a standing rule for this chat, call remember; it stays with this bot."
+            "For an authenticated GitHub, PyPI, or named-token command, call "
+            "list_bot_credentials, then run_credential_scoped_command. Never read, source, "
+            "or create ~/.config/*/env.sh; the broker applies this bot's saved token only to "
+            "one owner-approved disposable runner and redacts it from returned output. "
+            "You do not have send_message; it is not in your catalog. "
+            "After each meaningful milestone (not every tool), call report_progress with the current "
+            "step and what is left. Never invent minutes remaining. "
+            "The host writes the owner-facing wording. Persist the result on this worker. "
+            "If this task has a standing rule for this chat, call remember; it stays with this bot "
+            "and does not appear in the owner thread."
         )
+    if session_resume:
+        parts.append(session_resume)
     if subagent_context:
         parts.append(subagent_context)
     if clarifications:
@@ -314,6 +492,8 @@ def wrap_turn_prompt(
         parts.append(thread_context)
     if inbox_context:
         parts.append(inbox_context)
+    if other_bots:
+        parts.append(other_bots)
     if reply_excerpt:
         who = reply_role or "message"
         parts.append(f'The user is replying to this {who}:\n"""\n{reply_excerpt}\n"""')

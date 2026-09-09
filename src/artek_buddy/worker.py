@@ -6,16 +6,15 @@ import os
 import time
 import urllib.error
 import urllib.request
-from datetime import UTC, datetime, timedelta
 
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import HistoryStore
-from artek_buddy.db.shaping import isoformat_utc
 from artek_buddy.observe import configure_logging, mint_request_id
 
 log = logging.getLogger("artek_buddy.worker")
 
 DEFAULT_POLL_SECONDS = 15
+DEFAULT_CONCURRENCY = 4
 RETRY_SECONDS = 60
 
 
@@ -24,11 +23,22 @@ def host_base() -> str:
     return f"http://127.0.0.1:{port}"
 
 
-def wake_routine(base: str, token: str, bot_id: str, prompt: str, timeout: float = 30) -> int:
+def wake_routine(
+    base: str,
+    token: str,
+    bot_id: str,
+    prompt: str,
+    timeout: float = 30,
+    *,
+    job_id: str | None = None,
+) -> int:
     request_id = mint_request_id()
+    payload: dict[str, str] = {"text": prompt, "trigger": "routine"}
+    if job_id:
+        payload["idempotency_key"] = job_id
     request = urllib.request.Request(
         f"{base.rstrip('/')}/v1/threads/{bot_id}/messages",
-        data=json.dumps({"text": prompt, "trigger": "routine"}).encode("utf-8"),
+        data=json.dumps(payload).encode("utf-8"),
         method="POST",
         headers={
             "Accept": "application/json",
@@ -68,21 +78,84 @@ def stop_computer(base: str, token: str, bot_id: str, timeout: float = 30) -> in
 
 
 def run_once(store: HistoryStore, base: str, token: str) -> int:
+    # 1. Enqueue due routines as durable jobs
     due = store.claim_due_routines()
-    woke = 0
     for routine in due:
-        status = wake_routine(base, token, routine.bot_id, routine.prompt)
-        if status in {200, 201}:
-            store.ack_routine(routine.id)
-            woke += 1
-            log.info("routine woke id=%s status=%s", routine.id, status)
-        elif status == 409:
-            store.ack_routine(routine.id)
-            log.info("routine skipped busy id=%s", routine.id)
+        idempotency_key = f"routine:{routine.id}:{routine.last_run_at}"
+        auto_run = store.ensure_automation_run(
+            routine,
+            trigger_kind="cron",
+            trigger_event_id=str(routine.last_run_at or ""),
+            idempotency_key=idempotency_key,
+        )
+        if auto_run.state == "waiting_for_approval":
+            bot = store.get_bot(routine.bot_id)
+            if bot is None:
+                store.finish_automation_run(
+                    auto_run.id, state="failed", error="bot_gone", error_code="bot_gone"
+                )
+            else:
+                store.ensure_approval_ask(bot, auto_run)
+        elif auto_run.state == "queued":
+            store.enqueue_automation_prompt(auto_run)
+        store.ack_routine(routine.id)
+
+    # 2. Claim and execute durable jobs (bounded concurrency for Pi)
+    concurrency = int(
+        os.environ.get("WORKER_CONCURRENCY", str(DEFAULT_CONCURRENCY)) or str(DEFAULT_CONCURRENCY)
+    )
+    worker_id = f"worker_{os.getpid()}"
+    claimed_jobs = store.claim_jobs(worker_id=worker_id, limit=concurrency)
+    woke = 0
+
+    for job in claimed_jobs:
+        if job.job_type == "routine.fire":
+            bot_id = str(job.payload.get("bot_id") or "")
+            prompt = str(job.payload.get("prompt") or "")
+            status = wake_routine(base, token, bot_id, prompt, job_id=job.id)
+            auto_run_id = str(job.payload.get("automation_run_id") or "")
+            if status in {200, 201}:
+                store.ack_job(job.id, result={"status": status})
+                if auto_run_id:
+                    store.finish_automation_run(auto_run_id, state="succeeded")
+                woke += 1
+                log.info("routine job succeeded id=%s status=%s", job.id, status)
+            elif status == 409:
+                store.ack_job(job.id, result={"status": status, "skipped": "busy"})
+                if auto_run_id:
+                    store.finish_automation_run(
+                        auto_run_id, state="failed", error="bot_busy", error_code="bot_busy"
+                    )
+                log.info("routine job skipped busy id=%s", job.id)
+            elif status == 404:
+                store.fail_job(job.id, error=f"HTTP {status}")
+                if auto_run_id:
+                    store.finish_automation_run(
+                        auto_run_id, state="failed", error="bot_gone", error_code="bot_gone"
+                    )
+                log.warning("routine job failed id=%s status=%s", job.id, status)
+            else:
+                store.fail_job(job.id, error=f"HTTP {status}")
+                if auto_run_id:
+                    store.finish_automation_run(
+                        auto_run_id,
+                        state="failed",
+                        error=f"HTTP {status}",
+                        error_code="wake_failed",
+                    )
+                log.warning("routine job failed id=%s status=%s", job.id, status)
+        elif job.job_type == "search.rebuild":
+            _run_search_rebuild(store, job, worker_id)
         else:
-            retry = datetime.now(UTC) + timedelta(seconds=RETRY_SECONDS)
-            store.reschedule_routine(routine.id, isoformat_utc(retry))
-            log.warning("routine wake failed id=%s status=%s", routine.id, status)
+            store.fail_job(job.id, error=f"unknown job type {job.job_type}")
+            log.warning("unknown job type id=%s type=%s", job.id, job.job_type)
+
+    # 3. Computer timeouts
+    idle_seconds = int(os.environ.get("COMPUTER_TAKEOVER_IDLE_SECONDS", "120") or "120")
+    try:
+        store.expire_idle_takeovers(idle_seconds)
+    except Exception:
+        log.exception("idle takeover expire failed")
     for bot_id in store.due_idle_computer_bots():
         status = stop_computer(base, token, bot_id)
         if status in {200, 201}:
@@ -92,7 +165,25 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
     return woke
 
 
-def worker() -> int:
+def _run_search_rebuild(store: HistoryStore, job: object, worker_id: str) -> None:
+    payload = dict(getattr(job, "payload", None) or {})
+    job_id = str(getattr(job, "id", "") or "")
+    try:
+        for _ in range(40):
+            store.heartbeat_job(job_id, worker_id)
+            payload, done = store.rebuild_search_chunk(payload)
+            store.update_job_payload(job_id, payload, worker_id=worker_id)
+            if done:
+                store.ack_job(job_id, result={"rebuilt": True, "phase": payload.get("phase")})
+                log.info("search rebuild finished id=%s", job_id)
+                return
+        log.info("search rebuild yielded id=%s phase=%s", job_id, payload.get("phase"))
+    except Exception:
+        log.exception("search rebuild failed id=%s", job_id)
+        store.fail_job(job_id, error="search rebuild failed")
+
+
+def worker(*, once: bool = False) -> int:
     configure_logging()
     url = os.environ.get(
         "DATABASE_URL",
@@ -108,17 +199,23 @@ def worker() -> int:
     try:
         store.open()
         store.apply_migrations()
+        store.ensure_search_index()
     except DatabaseUnavailable as err:
         log.error("worker db unavailable: %s", err)
         return 1
     base = host_base()
-    log.info("worker polling every %ss", poll)
     try:
+        if once:
+            run_once(store, base, token)
+            return 0
+        log.info("worker polling every %ss", poll)
         while True:
             try:
                 run_once(store, base, token)
             except DatabaseUnavailable:
-                log.exception("worker db")
+                log.warning("worker db unavailable, backing off for %ss", poll)
+            except Exception:
+                log.exception("worker loop error")
             time.sleep(poll)
     except KeyboardInterrupt:
         return 0

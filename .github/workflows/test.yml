@@ -2,10 +2,14 @@ name: test
 
 # Public repo: never echo secrets, never `env`, never `docker compose config`,
 # never upload .env / client.log / Playwright traces. Generated tokens are masked.
-# A green push of this workflow on main is what starts release.yml (not a parallel push).
+# A green push of this workflow on main is the SHA a later release must prove.
+# Topic-branch pushes and PRs into other bases must not burn runners; merge
+# truth is pull_request into develop/main, plus push to those branches.
 on:
   pull_request:
+    branches: [develop, main]
   push:
+    branches: [develop, main]
   workflow_dispatch:
 
 permissions:
@@ -32,6 +36,15 @@ jobs:
             pyproject.toml
             requirements-dev.txt
 
+      - name: PR title check
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_USER: ${{ github.event.pull_request.user.login }}
+        run: |
+          set +x
+          python infra/check_pr_title.py
+
       - name: Ruff, mypy, pip-audit
         run: |
           set +x
@@ -39,6 +52,7 @@ jobs:
           python -m ruff format --check src tests client
           python -m ruff check src tests client
           python -m mypy
+          PYTHONPATH=src python -m artek_buddy.pip_audit_ignore
           ignores=()
           while read -r id _; do
             case "$id" in
@@ -71,6 +85,7 @@ jobs:
       AGENT_RUNTIME: scripted
       SANDBOX_PROVIDER: fake
       CURSOR_API_KEY: ""
+      COMPOSIO_API_KEY: ""
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,22 +105,66 @@ jobs:
           cache: npm
           cache-dependency-path: client/web/package-lock.json
 
-      - name: Install and test
+      - name: Code quality, types, and openapi
         run: |
           set +x
           python -m pip install -r requirements-dev.txt
           python -m ruff format --check src tests client
           python -m ruff check src tests client
           python -m mypy
-          python -m pytest tests/unit tests/api tests/client \
-            --cov=artek_buddy --cov-branch \
-            --cov-report=term --cov-report=xml \
-            --cov-fail-under=56
-          python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
           PYTHONPATH=src python -m artek_buddy.openapi_export
           (cd client/web && npm ci && npm run generate:openapi)
           git diff --exit-code -- client/web/openapi.json client/web/src/generated/openapi.d.ts
-          (cd client/web && npm audit --audit-level=high && npm run lint && npm test && npm run check)
+          # Node 22's bundled npm still posts /security/audits/quick; that
+          # registry route is retired. npm 11 uses advisories/bulk.
+          (cd client/web && npx --yes npm@11 audit --audit-level=high && npm run lint && npm test && npm run check)
+
+      - name: Run backend tests
+        id: pytest
+        run: |
+          set +x
+          python -m pytest tests/unit tests/api tests/client \
+            --cov=artek_buddy --cov-branch \
+            --cov-report=term --cov-report=xml \
+            --cov-fail-under=71 \
+            --junitxml=junit-backend.xml
+        continue-on-error: true
+
+      - name: Coverage floors gate
+        if: steps.pytest.outcome == 'success'
+        run: |
+          set +x
+          python tests/coverage_floors_gate.py
+
+      - name: Publish test and coverage summaries
+        if: always()
+        run: |
+          set +x
+          if [ -f .coverage ]; then
+            python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+          if [ -f junit-backend.xml ]; then
+            python infra/junit_summary.py junit-backend.xml >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Check test outcome
+        if: always()
+        run: |
+          set +x
+          if [ "${{ steps.pytest.outcome }}" != "success" ]; then
+            echo "backend pytest failed" >&2
+            exit 1
+          fi
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: backend-test-results
+          path: |
+            junit-backend.xml
+            coverage.xml
+          if-no-files-found: ignore
 
   scan:
     runs-on: ubuntu-latest
@@ -168,6 +227,7 @@ jobs:
             printf 'AGENT_RUNTIME=scripted\n'
             printf 'SANDBOX_PROVIDER=fake\n'
             printf 'CURSOR_API_KEY=\n'
+            printf 'COMPOSIO_API_KEY=\n'
             printf 'CONSENT_AUTO=ask\n'
           } > "$RUNNER_TEMP/artek.env"
           {
@@ -231,7 +291,8 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update -o Acquire::ForceIPv4=true
           sudo apt-get install -y --no-install-recommends \
-            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils libnotify-bin \
+            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
+            gir1.2-ayatanaappindicator3-0.1 gir1.2-notify-0.7 xdg-utils libnotify-bin \
             libnss3 libnspr4 libgbm1 libasound2t64 libatk-bridge2.0-0 libxkbcommon0 \
             libxcomposite1 libxdamage1 libxrandr2 libcups2
           unset ARTEK_BAKE_URL
@@ -252,7 +313,8 @@ jobs:
           nohup artek-buddy --serve --port 4173 > "$RUNNER_TEMP/client-serve.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/client.pid"
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:4173/local/status >/dev/null; then
+            if curl -fsS -H "Origin: http://127.0.0.1:4173" \
+              http://127.0.0.1:4173/local/status >/dev/null; then
               echo "ARTEK_CLIENT_URL=http://127.0.0.1:4173" >> "$GITHUB_ENV"
               exit 0
             fi
@@ -270,7 +332,24 @@ jobs:
         run: |
           set +x
           export HOME="$ARTEK_CLIENT_HOME"
-          python -u -m pytest tests/live -m "live and not model" --browser chromium -vv --tb=short --timeout-method=thread
+          python -u -m pytest tests/live -m "live and not model" --browser chromium -vv --tb=short --timeout-method=thread \
+            --junitxml=junit-ui.xml
+
+      - name: Publish UI test summary
+        if: always()
+        run: |
+          set +x
+          if [ -f junit-ui.xml ]; then
+            python infra/junit_summary.py junit-ui.xml >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: ui-test-results
+          path: junit-ui.xml
+          if-no-files-found: ignore
 
       - name: Redacted logs on failure
         if: failure()
@@ -289,6 +368,148 @@ jobs:
           if [ -f "$RUNNER_TEMP/client.pid" ]; then
             kill "$(cat "$RUNNER_TEMP/client.pid")" 2>/dev/null || true
           fi
+          docker compose -f docker-compose.ci.yml down -v --remove-orphans || true
+          rm -f "$RUNNER_TEMP/artek.env"
+
+  ui_web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ARTEK_UI: "1"
+      ARTEK_HOST_URL: http://127.0.0.1:8080
+      COMPOSE_FILE: docker-compose.ci.yml
+      SANDBOX_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
+
+      - name: Mint ephemeral secrets
+        run: |
+          set +x
+          TOKEN=$(openssl rand -hex 24)
+          DBPASS=$(openssl rand -hex 16)
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$DBPASS"
+          umask 077
+          {
+            printf 'AGENT_HTTP_TOKEN=%s\n' "$TOKEN"
+            printf 'MEMORY_DB_PASSWORD=%s\n' "$DBPASS"
+            printf 'AGENT_RUNTIME=scripted\n'
+            printf 'SANDBOX_PROVIDER=fake\n'
+            printf 'CURSOR_API_KEY=\n'
+            printf 'COMPOSIO_API_KEY=\n'
+            printf 'CONSENT_AUTO=ask\n'
+          } > "$RUNNER_TEMP/artek.env"
+          {
+            echo "AGENT_HTTP_TOKEN=$TOKEN"
+            echo "MEMORY_DB_PASSWORD=$DBPASS"
+            echo "ARTEK_CI_ENV=$RUNNER_TEMP/artek.env"
+            echo "ARTEK_CI_DATA=$RUNNER_TEMP/artek-data"
+            echo "ARTEK_CI_WORKSPACE=$RUNNER_TEMP/artek-workspace"
+            echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/ms-playwright"
+          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/artek-data" "$RUNNER_TEMP/artek-workspace"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ms-playwright
+          key: ${{ runner.os }}-playwright-web-${{ hashFiles('requirements-dev.txt') }}
+
+      - name: Pin Ubuntu apt mirrors
+        run: |
+          set +x
+          sudo find /etc/apt/sources.list.d -maxdepth 1 \( -type f -o -type l \) \
+            ! -name 'ubuntu*' -exec rm -f {} +
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf '%s\n' \
+              $'http://archive.ubuntu.com/ubuntu/\tpriority:1' \
+              $'http://security.ubuntu.com/ubuntu/\tpriority:2' \
+              | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          for src in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.list; do
+            if [ -f "$src" ]; then
+              sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' "$src"
+            fi
+          done
+
+      - name: Build host image
+        run: |
+          set +x
+          docker build -t artek-buddy:ci .
+
+      - name: Start stack
+        run: |
+          set +x
+          docker compose -f docker-compose.ci.yml up -d
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "host did not become healthy"
+          chmod +x infra/ci-redact-logs.sh
+          infra/ci-redact-logs.sh compose
+          exit 1
+
+      - name: Install Playwright
+        timeout-minutes: 10
+        run: |
+          set +x
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update -o Acquire::ForceIPv4=true
+          sudo apt-get install -y --no-install-recommends \
+            libnss3 libnspr4 libgbm1 libasound2t64 libatk-bridge2.0-0 libxkbcommon0 \
+            libxcomposite1 libxdamage1 libxrandr2 libcups2
+          python -m pip install -r requirements-dev.txt
+          python -m playwright install chromium chromium-headless-shell
+
+      - name: Scripted host page
+        timeout-minutes: 15
+        env:
+          ARTEK_UI: "1"
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set +x
+          python -u -m pytest tests/live_web -m "live and not model" --browser chromium -vv --tb=short --timeout-method=thread \
+            --junitxml=junit-ui-web.xml
+
+      - name: Publish UI web test summary
+        if: always()
+        run: |
+          set +x
+          if [ -f junit-ui-web.xml ]; then
+            python infra/junit_summary.py junit-ui-web.xml >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Upload UI web test results
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: ui-web-test-results
+          path: junit-ui-web.xml
+          if-no-files-found: ignore
+
+      - name: Redacted logs on failure
+        if: failure()
+        run: |
+          set +x
+          chmod +x infra/ci-redact-logs.sh
+          infra/ci-redact-logs.sh compose
+
+      - name: Stop stack
+        if: always()
+        run: |
+          set +x
           docker compose -f docker-compose.ci.yml down -v --remove-orphans || true
           rm -f "$RUNNER_TEMP/artek.env"
 
@@ -421,7 +642,8 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update -o Acquire::ForceIPv4=true
           sudo apt-get install -y --no-install-recommends \
-            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils libnotify-bin \
+            dpkg-dev python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
+            gir1.2-ayatanaappindicator3-0.1 gir1.2-notify-0.7 xdg-utils libnotify-bin \
             libnss3 libnspr4 libgbm1 libasound2t64 libatk-bridge2.0-0 libxkbcommon0 \
             libxcomposite1 libxdamage1 libxrandr2 libcups2
           unset ARTEK_BAKE_URL
@@ -442,7 +664,8 @@ jobs:
           nohup artek-buddy --serve --port 4173 > "$RUNNER_TEMP/client-serve.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/client.pid"
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:4173/local/status >/dev/null; then
+            if curl -fsS -H "Origin: http://127.0.0.1:4173" \
+              http://127.0.0.1:4173/local/status >/dev/null; then
               echo "ARTEK_CLIENT_URL=http://127.0.0.1:4173" >> "$GITHUB_ENV"
               exit 0
             fi
@@ -459,7 +682,24 @@ jobs:
         run: |
           set +x
           export HOME="$ARTEK_CLIENT_HOME"
-          python -m pytest tests/live -m model --browser chromium -q
+          python -m pytest tests/live -m model --browser chromium -q \
+            --junitxml=junit-live.xml
+
+      - name: Publish live test summary
+        if: always()
+        run: |
+          set +x
+          if [ -f junit-live.xml ]; then
+            python infra/junit_summary.py junit-live.xml >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Upload live test results
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: live-test-results
+          path: junit-live.xml
+          if-no-files-found: ignore
 
       - name: Redacted logs on failure
         if: failure()
@@ -478,5 +718,152 @@ jobs:
           if [ -f "$RUNNER_TEMP/client.pid" ]; then
             kill "$(cat "$RUNNER_TEMP/client.pid")" 2>/dev/null || true
           fi
+          docker compose -f docker-compose.ci.yml down -v --remove-orphans || true
+          rm -f "$RUNNER_TEMP/artek.env"
+
+  live_web:
+    needs: live_gate
+    if: needs.live_gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ARTEK_LIVE: "1"
+      ARTEK_HOST_URL: http://127.0.0.1:8080
+      COMPOSE_FILE: docker-compose.ci.yml
+      SANDBOX_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
+
+      - name: Mint ephemeral secrets
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          set +x
+          TOKEN=$(openssl rand -hex 24)
+          DBPASS=$(openssl rand -hex 16)
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$DBPASS"
+          umask 077
+          {
+            printf 'AGENT_HTTP_TOKEN=%s\n' "$TOKEN"
+            printf 'MEMORY_DB_PASSWORD=%s\n' "$DBPASS"
+            printf 'CURSOR_API_KEY=%s\n' "$CURSOR_API_KEY"
+            printf 'AGENT_RUNTIME=cursor\n'
+            printf 'SANDBOX_PROVIDER=fake\n'
+            printf 'CURSOR_MODEL=grok-4.6\n'
+            printf 'CURSOR_MODEL_EFFORT=xhigh\n'
+            printf 'CURSOR_MODEL_FAST=true\n'
+            printf 'CONSENT_AUTO=\n'
+          } > "$RUNNER_TEMP/artek.env"
+          {
+            echo "AGENT_HTTP_TOKEN=$TOKEN"
+            echo "MEMORY_DB_PASSWORD=$DBPASS"
+            echo "ARTEK_CI_ENV=$RUNNER_TEMP/artek.env"
+            echo "ARTEK_CI_DATA=$RUNNER_TEMP/artek-data"
+            echo "ARTEK_CI_WORKSPACE=$RUNNER_TEMP/artek-workspace"
+            echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/ms-playwright"
+          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/artek-data" "$RUNNER_TEMP/artek-workspace"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ms-playwright
+          key: ${{ runner.os }}-playwright-web-${{ hashFiles('requirements-dev.txt') }}
+
+      - name: Pin Ubuntu apt mirrors
+        run: |
+          set +x
+          sudo find /etc/apt/sources.list.d -maxdepth 1 \( -type f -o -type l \) \
+            ! -name 'ubuntu*' -exec rm -f {} +
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf '%s\n' \
+              $'http://archive.ubuntu.com/ubuntu/\tpriority:1' \
+              $'http://security.ubuntu.com/ubuntu/\tpriority:2' \
+              | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          for src in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.list; do
+            if [ -f "$src" ]; then
+              sudo sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' "$src"
+            fi
+          done
+
+      - name: Build host image
+        run: |
+          set +x
+          docker build -t artek-buddy:ci .
+
+      - name: Start stack
+        run: |
+          set +x
+          docker compose -f docker-compose.ci.yml up -d
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "host did not become healthy"
+          chmod +x infra/ci-redact-logs.sh
+          infra/ci-redact-logs.sh compose
+          exit 1
+
+      - name: Install Playwright
+        timeout-minutes: 10
+        run: |
+          set +x
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update -o Acquire::ForceIPv4=true
+          sudo apt-get install -y --no-install-recommends \
+            libnss3 libnspr4 libgbm1 libasound2t64 libatk-bridge2.0-0 libxkbcommon0 \
+            libxcomposite1 libxdamage1 libxrandr2 libcups2
+          python -m pip install -r requirements-dev.txt
+          python -m playwright install chromium chromium-headless-shell
+
+      - name: Live model on host page
+        timeout-minutes: 30
+        env:
+          ARTEK_LIVE: "1"
+        run: |
+          set +x
+          python -m pytest tests/live_web -m model --browser chromium -q \
+            --junitxml=junit-live-web.xml
+
+      - name: Publish live web test summary
+        if: always()
+        run: |
+          set +x
+          if [ -f junit-live-web.xml ]; then
+            python infra/junit_summary.py junit-live-web.xml >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Upload live web test results
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: live-web-test-results
+          path: junit-live-web.xml
+          if-no-files-found: ignore
+
+      - name: Redacted logs on failure
+        if: failure()
+        run: |
+          set +x
+          chmod +x infra/ci-redact-logs.sh
+          infra/ci-redact-logs.sh compose
+
+      - name: Stop stack
+        if: always()
+        run: |
+          set +x
           docker compose -f docker-compose.ci.yml down -v --remove-orphans || true
           rm -f "$RUNNER_TEMP/artek.env"

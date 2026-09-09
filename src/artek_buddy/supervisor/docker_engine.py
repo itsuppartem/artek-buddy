@@ -1,10 +1,27 @@
 from __future__ import annotations
 
+import io
 import json
 import socket
+import tarfile
 from http.client import HTTPConnection
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
+
+ICC_OPTION = "com.docker.network.bridge.enable_icc"
+
+
+def bridge_icc_off(inspect: dict[str, Any]) -> bool:
+    options = inspect.get("Options") or {}
+    if not isinstance(options, dict):
+        return False
+    return str(options.get(ICC_OPTION, "")).lower() == "false"
+
+
+def network_has_containers(inspect: dict[str, Any]) -> bool:
+    containers = inspect.get("Containers") or {}
+    return bool(containers)
 
 
 class UnixHTTPConnection(HTTPConnection):
@@ -70,8 +87,17 @@ class DockerEngine:
     def ensure_network(self, name: str = "artek-computers") -> str:
         status, data = self.request("GET", f"/networks/{quote(name)}")
         if status == 200 and isinstance(data, dict):
-            return name
-        status, created = self.request(
+            if bridge_icc_off(data):
+                return name
+            if network_has_containers(data):
+                raise RuntimeError(
+                    f"{name} has inter-container communication enabled and still has "
+                    "containers. Stop those desktops, remove the network, and start the host again."
+                )
+            deleted, detail = self.request("DELETE", f"/networks/{quote(name)}")
+            if deleted not in {204, 404} and deleted >= 300:
+                raise RuntimeError(f"docker network delete failed: {deleted} {detail}")
+        created_status, created = self.request(
             "POST",
             "/networks/create",
             {
@@ -79,13 +105,18 @@ class DockerEngine:
                 "CheckDuplicate": True,
                 "Driver": "bridge",
                 "Internal": False,
-                "Options": {"com.docker.network.bridge.enable_icc": "false"},
+                "Options": {ICC_OPTION: "false"},
             },
         )
-        if status in {201, 409} or (isinstance(created, dict) and created.get("Id")):
+        if created_status == 409:
+            again_status, again = self.request("GET", f"/networks/{quote(name)}")
+            if again_status == 200 and isinstance(again, dict) and bridge_icc_off(again):
+                return name
+            raise RuntimeError(f"{name} already exists without inter-container communication off")
+        if created_status == 201 or (isinstance(created, dict) and created.get("Id")):
             return name
-        if status >= 300:
-            raise RuntimeError(f"docker network create failed: {status} {created}")
+        if created_status >= 300:
+            raise RuntimeError(f"docker network create failed: {created_status} {created}")
         return name
 
     def create(self, spec: dict[str, Any]) -> str:
@@ -112,6 +143,53 @@ class DockerEngine:
         status, data = self.request("DELETE", f"/containers/{quote(container_id)}?force=1")
         if status not in {204, 404} and status >= 300:
             raise RuntimeError(f"docker remove failed: {status} {data}")
+
+    def wait(self, container_id: str, timeout: float) -> tuple[bool, int | None]:
+        try:
+            status, data = self.request(
+                "POST",
+                f"/containers/{quote(container_id)}/wait?condition=not-running",
+                timeout=timeout,
+            )
+        except TimeoutError:
+            return False, None
+        if status >= 300 or not isinstance(data, dict):
+            raise RuntimeError(f"docker wait failed: {status}")
+        return True, int(data.get("StatusCode") or 0)
+
+    def logs(self, container_id: str, max_bytes: int) -> tuple[str, str, bool]:
+        path = f"/containers/{quote(container_id)}/logs?stdout=1&stderr=1&timestamps=0"
+        conn = UnixHTTPConnection(self.socket_path, timeout=10)
+        try:
+            conn.request("GET", path, headers={"Content-Type": "application/json"})
+            response = conn.getresponse()
+            raw = response.read(max_bytes * 4 + 1)
+            if response.status >= 300:
+                raise RuntimeError(f"docker logs failed: {response.status}")
+        finally:
+            conn.close()
+        return _demux_docker_streams(raw, max_bytes)
+
+    def put_file(self, container_id: str, path: str, data: bytes) -> None:
+        parent = str(Path(path).parent)
+        payload = tar_one_file(Path(path).name, data)
+        conn = UnixHTTPConnection(self.socket_path, timeout=60)
+        try:
+            conn.request(
+                "PUT",
+                f"/containers/{quote(container_id)}/archive?path={quote(parent, safe='/')}",
+                body=payload,
+                headers={
+                    "Content-Type": "application/x-tar",
+                    "Content-Length": str(len(payload)),
+                },
+            )
+            resp = conn.getresponse()
+            raw = resp.read()
+            if resp.status >= 300:
+                raise RuntimeError(f"docker put archive failed: {resp.status} {raw[:200]!r}")
+        finally:
+            conn.close()
 
     def exec(self, container_id: str, command: str) -> tuple[int, str]:
         status, created = self.request(
@@ -155,6 +233,29 @@ class DockerEngine:
         return base64.b64decode(text.strip())
 
 
+def tar_one_file(name: str, data: bytes) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        info = tarfile.TarInfo(name=name)
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def write_container_file(engine: Any, container_id: str, path: str, data: bytes) -> tuple[int, str]:
+    from artek_buddy.supervisor.logic import shell_quote
+
+    parent = str(Path(path).parent)
+    code, text = engine.exec(container_id, f"mkdir -p {shell_quote(parent)}")
+    if code != 0:
+        return code, text
+    try:
+        engine.put_file(container_id, path, data)
+    except Exception as err:
+        return 1, str(err)
+    return 0, ""
+
+
 def shell_path(path: str) -> str:
     from artek_buddy.supervisor.logic import shell_quote
 
@@ -184,3 +285,32 @@ def _demux_docker(raw: bytes) -> str:
             offset += 8 + size
         return b"".join(chunks).decode("utf-8", errors="replace")
     return raw.decode("utf-8", errors="replace")
+
+
+def _demux_docker_streams(raw: bytes, max_bytes: int) -> tuple[str, str, bool]:
+    stdout = bytearray()
+    stderr = bytearray()
+    offset = 0
+    truncated = len(raw) > max_bytes * 4
+    while offset + 8 <= len(raw):
+        stream = raw[offset]
+        size = int.from_bytes(raw[offset + 4 : offset + 8], "big")
+        end = offset + 8 + size
+        if end > len(raw):
+            truncated = True
+            break
+        target = stderr if stream == 2 else stdout
+        room = max_bytes - len(target)
+        if room > 0:
+            target.extend(raw[offset + 8 : end][:room])
+        if size > room:
+            truncated = True
+        offset = end
+    if offset == 0 and raw:
+        stdout.extend(raw[:max_bytes])
+        truncated = truncated or len(raw) > max_bytes
+    return (
+        stdout.decode("utf-8", errors="replace"),
+        stderr.decode("utf-8", errors="replace"),
+        truncated,
+    )

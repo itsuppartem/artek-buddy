@@ -1,0 +1,1 @@
+ALTER TABLE computers ADD COLUMN IF NOT EXISTS last_input_at TIMESTAMPTZ;

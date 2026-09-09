@@ -63,6 +63,23 @@ def supervisor_token(host_token: str, explicit: str = "") -> str:
     return derive_supervisor_token(host_token)
 
 
+def derive_credential_broker_token(host_token: str) -> str:
+    """Domain-separated bearer for the loopback credential broker."""
+    return hashlib.sha256(f"credential-broker:{host_token}".encode()).hexdigest()
+
+
+def credential_broker_token(host_token: str, explicit: str = "") -> str:
+    token = (explicit or "").strip()
+    if token:
+        return token
+    return derive_credential_broker_token(host_token)
+
+
+def derive_credential_executor_token(host_token: str) -> str:
+    """Internal executor bearer; not valid for the storage broker."""
+    return hashlib.sha256(f"credential-executor:{host_token}".encode()).hexdigest()
+
+
 def host_token_match(provided: str, expected: str) -> bool:
     if not provided or not expected:
         return False

@@ -20,6 +20,9 @@ def test_committed_openapi_matches_app_schema() -> None:
 def test_dumped_schema_includes_health_and_bots() -> None:
     document = json.loads(dump_openapi())
     assert "/health" in document["paths"]
+    assert "/livez" in document["paths"]
+    assert "/readyz" in document["paths"]
+    assert "503" in document["paths"]["/readyz"]["get"]["responses"]
     assert "/v1/bots" in document["paths"]
     assert "HealthResponse" in document["components"]["schemas"]
     assert all(not path.startswith("/novnc") for path in document["paths"])

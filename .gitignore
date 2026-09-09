@@ -26,7 +26,8 @@ client/url
 .cursor/rules/
 
 # local-only tooling — never commit
-scripts/
+scripts/*
+!scripts/check.sh
 test-results/
 docs/
 docker-compose.local.yml
@@ -36,9 +37,6 @@ workspace/*.py
 # desktop UI toolchain
 client/web/node_modules/
 client/web/dist/
-
-# host-side Cursor leftover; the live agent prompt is workspace/AGENTS.md
-/AGENTS.md
 
 # Playwright source tape; README ships media/demo.mp4
 media/*.webm

@@ -86,3 +86,29 @@ def test_send_inline_attachment_without_text(client, auth_header) -> None:
     ]
     assert file_blocks
     assert file_blocks[0]["name"] == "solo.txt"
+
+
+def test_scripted_lead_posts_file_card(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "LeadFileCard")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-send-file"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    file_blocks = [
+        block
+        for msg in snap["messages"]
+        if msg["role"] == "bot"
+        for block in msg.get("blocks") or []
+        if block.get("kind") == "file"
+    ]
+    assert len(file_blocks) == 1
+    assert file_blocks[0]["name"] == "notes.txt"
+    art_id = file_blocks[0]["artifact_id"]
+    assert str(art_id).startswith("art_")
+    downloaded = client.get(f"/v1/artifacts/{art_id}", headers=auth_header)
+    assert downloaded.status_code == 200
+    assert downloaded.content == b"hello from the bot"

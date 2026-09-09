@@ -22,6 +22,8 @@ export function applyThreadEvent(
     event.type === "agent.tool.called" ||
     event.type === "run.started" ||
     event.type === "run.waiting_input" ||
+    event.type === "computer.takeover.requested" ||
+    event.type === "computer.takeover.released" ||
     event.type === "run.completed" ||
     event.type === "run.failed" ||
     event.type === "run.cancelled"
@@ -30,5 +32,11 @@ export function applyThreadEvent(
   }
   if (isComputerStatusEvent(event)) {
     setComputer((prev) => reduceComputerStatus(prev, event));
+    setSnapshot((prev) => {
+      if (!prev?.computer) return prev;
+      const next = reduceComputerStatus(prev.computer, event);
+      if (!next || next === prev.computer) return prev;
+      return { ...prev, computer: next };
+    });
   }
 }

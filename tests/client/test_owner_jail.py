@@ -33,6 +33,36 @@ def test_owner_path_rejects_escape(client_mod, tmp_path: Path) -> None:
     assert client_mod._owner_path_status(err) == 403
 
 
+def test_owner_symlink_escape_is_denied(client_mod, tmp_path: Path) -> None:
+    outside = tmp_path.parent / "secret.txt"
+    outside.write_text("secret")
+    symlink = tmp_path / "link_outside.txt"
+    symlink.symlink_to(outside)
+
+    path, err = client_mod.inspect_owner_path("link_outside.txt", tmp_path, must_exist=True)
+    assert path is None
+    assert "outside" in err
+    assert client_mod._owner_path_status(err) == 403
+
+    path_nomust, err_nomust = client_mod.inspect_owner_path(
+        "link_outside.txt", tmp_path, must_exist=False
+    )
+    assert path_nomust is None
+    assert "outside" in err_nomust
+    assert client_mod._owner_path_status(err_nomust) == 403
+
+
+def test_owner_symlink_inside_home_is_allowed(client_mod, tmp_path: Path) -> None:
+    target = tmp_path / "target.txt"
+    target.write_text("content")
+    symlink = tmp_path / "link_inside.txt"
+    symlink.symlink_to(target)
+
+    path, err = client_mod.inspect_owner_path("link_inside.txt", tmp_path, must_exist=True)
+    assert path == target.resolve()
+    assert err == ""
+
+
 def test_owner_path_missing(client_mod, tmp_path: Path) -> None:
     path, err = client_mod.inspect_owner_path("missing.txt", tmp_path, must_exist=True)
     assert path is None
@@ -45,3 +75,38 @@ def test_unique_download_does_not_clobber(client_mod, tmp_path: Path) -> None:
     dest = client_mod.unique_download_dest(tmp_path, "report.txt")
     assert dest.name != "report.txt"
     assert dest.name.startswith("report")
+
+
+def _owner_paths():
+    spec = importlib.util.spec_from_file_location(
+        "owner_paths_jail_exec", Path(__file__).resolve().parents[2] / "client" / "owner_paths.py"
+    )
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_git_output_outside_home_is_rejected_before_exec(tmp_path: Path) -> None:
+    owner_paths = _owner_paths()
+    outside = tmp_path.parent / "leaked.patch"
+    err = owner_paths.inspect_owner_exec_writes(
+        f"git show --output={outside} HEAD",
+        tmp_path,
+    )
+    assert "outside" in err
+
+
+def test_find_fprint_outside_home_is_rejected_before_exec(tmp_path: Path) -> None:
+    owner_paths = _owner_paths()
+    outside = tmp_path.parent / "listing.txt"
+    err = owner_paths.inspect_owner_exec_writes(f"find . -fprint {outside}", tmp_path)
+    assert "outside" in err
+
+
+def test_git_output_inside_home_is_not_a_jail_error(tmp_path: Path) -> None:
+    owner_paths = _owner_paths()
+    inside = tmp_path / "leaked.patch"
+    assert owner_paths.inspect_owner_exec_writes(f"git show --output={inside} HEAD", tmp_path) == ""
+    assert owner_paths.inspect_owner_exec_writes("git status", tmp_path) == ""
+    assert owner_paths.inspect_owner_exec_writes("find . -name '*.py' -print", tmp_path) == ""

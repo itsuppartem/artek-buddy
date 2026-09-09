@@ -7,6 +7,8 @@ from fastapi import Depends, HTTPException
 
 from artek_buddy.consent import ConsentHub
 from artek_buddy.contracts import (
+    ConsentAckInput,
+    ConsentAckResponse,
     ConsentAnswerInput,
     ConsentFileInput,
     ConsentJob,
@@ -14,7 +16,6 @@ from artek_buddy.contracts import (
     OkResponse,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
 from fastapi import APIRouter
@@ -54,6 +55,24 @@ async def answer_consent(
     return OkResponse(ok=True)
 
 
+@router.post("/v1/consents/{consent_id}/ack")
+async def acknowledge_consent_job(
+    consent_id: str,
+    body: ConsentAckInput | None = None,
+    _actor: str = Depends(require_auth),
+    hub: ConsentHub = Depends(consent),
+) -> ConsentAckResponse:
+    claimed, claim = hub.claim_owner_job(
+        consent_id,
+        claim_capable=bool(body and body.claim_capable),
+    )
+    if claimed:
+        return ConsentAckResponse(ok=True, claim=claim)
+    if hub.get_job(consent_id) is None:
+        raise HTTPException(status_code=404, detail="consent not found")
+    raise HTTPException(status_code=409, detail="owner job is not queued")
+
+
 @router.post("/v1/consents/{consent_id}/file")
 async def upload_consent_file(
     consent_id: str,
@@ -64,7 +83,7 @@ async def upload_consent_file(
     data = b""
     if body.content_base64:
         try:
-            data = base64.b64decode(body.content_base64)
+            data = base64.b64decode(body.content_base64, validate=True)
         except Exception as exc:
             raise HTTPException(status_code=400, detail="invalid content_base64") from exc
     elif body.text is not None:
@@ -73,9 +92,11 @@ async def upload_consent_file(
         raise HTTPException(status_code=400, detail="text or content_base64 required")
     if len(data) > 1_000_000:
         raise HTTPException(status_code=400, detail="file is larger than 1 MB")
-    if not hub.put_owner_file(consent_id, body.name, data):
-        raise HTTPException(status_code=404, detail="consent not found")
-    hub.put_owner_result(
+    if not hub.put_owner_file(consent_id, body.name, data, claim=body.claim):
+        if hub.get_job(consent_id) is None:
+            raise HTTPException(status_code=404, detail="consent not found")
+        raise HTTPException(status_code=409, detail="owner job no longer accepts files")
+    if not hub.put_owner_result(
         consent_id,
         {
             "ok": True,
@@ -85,7 +106,9 @@ async def upload_consent_file(
             "content_base64": body.content_base64,
             "text": body.text,
         },
-    )
+        claim=body.claim,
+    ):
+        raise HTTPException(status_code=409, detail="owner job no longer accepts results")
     return OkResponse(ok=True)
 
 
@@ -97,13 +120,16 @@ async def upload_consent_result(
     hub: ConsentHub = Depends(consent),
 ) -> OkResponse:
     payload = body.model_dump(exclude_none=True)
+    claim = payload.pop("claim", None)
     if body.content_base64:
         try:
-            payload["_data"] = base64.b64decode(body.content_base64)
+            payload["_data"] = base64.b64decode(body.content_base64, validate=True)
         except Exception as exc:
             raise HTTPException(status_code=400, detail="invalid content_base64") from exc
     elif body.text is not None and "_data" not in payload:
         payload["_data"] = body.text.encode()
-    if not hub.put_owner_result(consent_id, payload):
-        raise HTTPException(status_code=404, detail="consent not found")
+    if not hub.put_owner_result(consent_id, payload, claim=claim):
+        if hub.get_job(consent_id) is None:
+            raise HTTPException(status_code=404, detail="consent not found")
+        raise HTTPException(status_code=409, detail="owner job no longer accepts results")
     return OkResponse(ok=True)

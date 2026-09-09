@@ -13,6 +13,7 @@ from artek_buddy.contracts.domain import (
 from artek_buddy.contracts.events import MessageRole
 from artek_buddy.contracts.ids import RunStatus
 from artek_buddy.db.shaping import (
+    is_raw_run_failed,
     isoformat_utc,
     new_id,
     parse_iso,
@@ -72,10 +73,12 @@ class TurnsMixin:
         max_inbox: int = 20,
         blocks: list[dict[str, Any]] | None = None,
         preview: str | None = None,
+        inbox_text: str | None = None,
     ) -> tuple[ThreadMessage, Run, bool]:
         """Atomically start a lead turn or queue behind the current lead."""
         message_blocks = blocks or text_blocks(text)
         preview_text = preview or text
+        inbox_body = inbox_text if inbox_text is not None else text
         with self._conn() as conn:
             with conn.transaction():
                 locked = conn.execute(
@@ -141,10 +144,12 @@ class TurnsMixin:
                     )
                     conn.execute(
                         """
-                        INSERT INTO turn_inbox (id, bot_id, message_id, text, reply_to_id, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s)
+                        INSERT INTO turn_inbox (
+                            id, bot_id, message_id, text, reply_to_id, created_at, kind
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, 'owner')
                         """,
-                        (new_id("inb"), bot.id, msg_id, text, reply_to_id, now),
+                        (new_id("inb"), bot.id, msg_id, inbox_body, reply_to_id, now),
                     )
                     conn.execute(
                         "UPDATE bots SET preview = %s, unread = FALSE, updated_at = %s WHERE id = %s",
@@ -204,11 +209,65 @@ class TurnsMixin:
                         (preview_snippet(preview_text), "running", now, bot.id),
                     )
                     queued_turn = False
+                self._record_message_created(
+                    conn,
+                    bot_id=bot.id,
+                    thread_id=bot.thread_id,
+                    message_id=msg_id,
+                    role="user",
+                    seq=seq,
+                    run_id=run_id,
+                    blocks=message_blocks,
+                )
         user = self._get_message(msg_id)
         run = self._get_run(run_id)
         if user is None or run is None:
             raise RuntimeError("failed to persist turn")
         return self._with_replies([user])[0], run, queued_turn
+
+    def record_worker_stop(
+        self,
+        bot: Bot,
+        *,
+        model_provider: str | None = None,
+        model_id: str | None = None,
+    ) -> Run:
+        now = isoformat_utc()
+        run_id = new_id("run")
+        task_id = new_id("tsk")
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO runs (
+                    id, bot_id, thread_id, task_id, status, trigger,
+                    model_provider, model_id, error, result, started_at, completed_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, 'user',
+                    %s, %s, %s, NULL, %s, %s
+                )
+                """,
+                (
+                    run_id,
+                    bot.id,
+                    bot.thread_id,
+                    task_id,
+                    RunStatus.cancelled.value,
+                    model_provider,
+                    model_id,
+                    "Stopped.",
+                    now,
+                    now,
+                ),
+            )
+            conn.execute(
+                "UPDATE bots SET status = %s, updated_at = %s WHERE id = %s",
+                ("idle", now, bot.id),
+            )
+            conn.commit()
+        run = self._get_run(run_id)
+        if run is None:
+            raise RuntimeError("failed to persist worker stop")
+        return run
 
     def begin_turn(
         self,
@@ -275,6 +334,16 @@ class TurnsMixin:
                     """,
                     (preview_snippet(text), "running", now, bot.id),
                 )
+                self._record_message_created(
+                    conn,
+                    bot_id=bot.id,
+                    thread_id=bot.thread_id,
+                    message_id=msg_id,
+                    role="user",
+                    seq=seq,
+                    run_id=run_id,
+                    blocks=blocks,
+                )
         user = self._get_message(msg_id)
         run = self._get_run(run_id)
         if user is None or run is None:
@@ -305,8 +374,9 @@ class TurnsMixin:
                 ):
                     now = isoformat_utc()
                     body = (text or "").strip() if text else ""
-                    if not body and error and status != RunStatus.cancelled.value:
-                        body = error
+                    err = (error or "").strip()
+                    if body and (body == err or is_raw_run_failed(body)):
+                        body = ""
                     if body:
                         seq = self._lock_next_seq(conn, bot.thread_id)
                         msg_id = new_id("msg")
@@ -325,6 +395,16 @@ class TurnsMixin:
                                 run.id,
                                 now,
                             ),
+                        )
+                        self._record_message_created(
+                            conn,
+                            bot_id=bot.id,
+                            thread_id=bot.thread_id,
+                            message_id=msg_id,
+                            role="bot",
+                            seq=seq,
+                            run_id=run.id,
+                            blocks=blocks,
                         )
                     conn.execute(
                         """
@@ -425,6 +505,9 @@ class TurnsMixin:
             conn.commit()
         return self._run_from_row(row) if row else None
 
+    def get_run(self, run_id: str) -> Run | None:
+        return self._get_run(run_id)
+
     def _run_from_row(self, row: dict[str, Any]) -> Run:
         return Run(
             id=row["id"],
@@ -459,40 +542,49 @@ class TurnsMixin:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                UPDATE runs SET status = 'waiting_input' WHERE id = %s
+                UPDATE runs SET status = 'waiting_input'
+                WHERE id = %s
+                  AND status IN ('queued', 'leased', 'running')
                 RETURNING *
                 """,
                 (run_id,),
             ).fetchone()
+            if row is None:
+                conn.commit()
+                return None
             conn.execute(
                 """
                 UPDATE bots SET status = 'waiting_input', updated_at = %s
-                WHERE id = (SELECT bot_id FROM runs WHERE id = %s)
+                WHERE id = %s
                 """,
-                (now, run_id),
+                (now, row["bot_id"]),
             )
             conn.commit()
-        return self._run_from_row(row) if row else None
+        return self._run_from_row(row)
 
     def mark_run_running(self, run_id: str) -> Run | None:
         now = isoformat_utc()
         with self._conn() as conn:
             row = conn.execute(
                 """
-                UPDATE runs SET status = 'running' WHERE id = %s AND status IN ('waiting_input', 'waiting_takeover')
+                UPDATE runs SET status = 'running'
+                WHERE id = %s AND status IN ('waiting_input', 'waiting_takeover')
                 RETURNING *
                 """,
                 (run_id,),
             ).fetchone()
+            if row is None:
+                conn.commit()
+                return None
             conn.execute(
                 """
                 UPDATE bots SET status = 'running', updated_at = %s
-                WHERE id = (SELECT bot_id FROM runs WHERE id = %s)
+                WHERE id = %s
                 """,
-                (now, run_id),
+                (now, row["bot_id"]),
             )
             conn.commit()
-        return self._run_from_row(row) if row else None
+        return self._run_from_row(row)
 
     def mark_run_waiting_takeover(self, run_id: str) -> Run | None:
         now = isoformat_utc()
@@ -505,7 +597,10 @@ class TurnsMixin:
                 (run_id,),
             ).fetchone()
             conn.execute(
-                "UPDATE bots SET status = 'idle', updated_at = %s WHERE id = (SELECT bot_id FROM runs WHERE id = %s)",
+                """
+                UPDATE bots SET status = 'waiting_takeover', updated_at = %s
+                WHERE id = (SELECT bot_id FROM runs WHERE id = %s)
+                """,
                 (now, run_id),
             )
             conn.commit()

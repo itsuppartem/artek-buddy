@@ -24,6 +24,21 @@ body:
       label: Expected
     validations:
       required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Version and architecture
+      description: Product version (e.g. 0.2.0) and host architecture (x86_64, arm64).
+      placeholder: 0.2.0, Ubuntu 24.04 x86_64
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs / reproduction steps
+      description: Minimal steps to reproduce and redacted logs. Do NOT paste tokens, passwords, or keys.
+    validations:
+      required: false
   - type: textarea
     id: constraints
     attributes:
@@ -49,7 +64,11 @@ body:
       options:
         - backend
         - ui
+        - ui_web
         - live
+        - live_web
+        - quality
+        - scan
         - none
     validations:
       required: true

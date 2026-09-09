@@ -6,6 +6,7 @@ from tests.live.helpers import (
     arm_page,
     bot_row,
     create_named_bot,
+    expect_pairing_mark_inside_card,
     fulfill_json,
     open_bot_menu,
     pair_fresh,
@@ -33,10 +34,21 @@ def test_pairing_form_fields_and_rejected_url(page: Page, client_url: str) -> No
     expect(form).to_be_visible(timeout=20_000)
     expect(form.get_by_test_id("app-mark")).to_be_visible()
     expect(form.locator('img[src="/pairing-mark.png"]')).to_be_visible()
+    expect_pairing_mark_inside_card(page)
+    form.get_by_text("Pairing options", exact=True).click()
     expect(page.get_by_label("Host URL")).to_be_visible()
     expect(page.get_by_label("Pairing code")).to_be_visible()
     expect(page.get_by_label("Device name")).to_have_value("This computer")
     expect(page.get_by_role("button", name="Pair")).to_be_disabled()
+    expect(form.get_by_text("Pair this computer")).to_be_visible()
+    expect(form).to_contain_text(
+        "Create a one-use pairing code on the host. Enter it here, then choose Pair."
+    )
+    expect(form).not_to_contain_text("token")
+    expect(form).not_to_contain_text("mint")
+    expect(page.get_by_test_id("pairing-host-command")).to_contain_text(
+        "docker exec artek-buddy python -m artek_buddy pair"
+    )
 
     page.get_by_placeholder("https://host.example").fill("https://evil.example")
     page.get_by_placeholder("XXXX-XXXX").fill("ABCD-EFGH")
@@ -49,6 +61,7 @@ def test_pairing_rejects_glued_host_url(page: Page, client_url: str) -> None:
     page.goto(client_url)
     form = page.get_by_test_id("pairing")
     expect(form).to_be_visible(timeout=20_000)
+    form.get_by_text("Pairing options", exact=True).click()
     page.get_by_placeholder("https://host.example").fill(
         "http://127.0.0.1:8080http://127.0.0.1:8080"
     )
@@ -72,7 +85,7 @@ def test_pairing_with_device_name_shows_empty_bots(
 
 def test_create_cancel_and_disabled_until_named(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
-    page.get_by_title("New bot").click()
+    page.get_by_role("button", name="New bot").click()
     expect(page.get_by_placeholder("Name this bot")).to_be_visible()
     create = page.get_by_role("button", name="Create", exact=True)
     expect(create).to_be_disabled()
@@ -105,7 +118,7 @@ def test_archive_only_bot_shows_empty_inbox(page: Page, client_url: str, host_ur
 def test_create_does_not_run_on_name_focus(page: Page, client_url: str, host_url: str) -> None:
     name = unique_bot("Focus")
     pair_fresh(page, client_url, host_url)
-    page.get_by_title("New bot").click()
+    page.get_by_role("button", name="New bot").click()
     box = page.get_by_placeholder("Name this bot")
     expect(box).to_be_visible()
     box.click()
@@ -127,12 +140,26 @@ def test_auth_error_repair_returns_to_pairing(page: Page, client_url: str, host_
     expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)
 
 
+def test_workspace_events_auth_error_shows_repair(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    pair_fresh(page, client_url, host_url)
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    fulfill_json(page, "**/v1/events", 401, '{"detail":"invalid token"}')
+    page.reload()
+    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("auth-error")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("pairing")).to_have_count(0)
+    page.get_by_role("button", name="Pair this computer again").click()
+    expect(page.get_by_test_id("pairing")).to_be_visible(timeout=20_000)
+
+
 def test_host_error_retry_clears_banner(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
     expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
     fulfill_json(page, "**/v1/**", 502, '{"detail":"upstream down"}')
     page.reload()
-    card = page.get_by_test_id("host-error")
+    card = page.get_by_test_id("reconnect-banner")
     expect(card).to_be_visible(timeout=20_000)
     page.unroute("**/v1/**")
     if card.is_visible():

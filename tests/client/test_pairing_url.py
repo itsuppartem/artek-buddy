@@ -30,6 +30,7 @@ def test_proxy_origin_must_be_loopback_same_port(client_mod) -> None:
     assert client_mod.proxy_origin_allowed("http://127.0.0.1:80", "same-origin", 7777) is False
     assert client_mod.proxy_origin_allowed("http://evil.example", "same-origin", 7777) is False
     assert client_mod.proxy_origin_allowed("http://127.0.0.1:7777", "cross-site", 7777) is False
+    assert client_mod.proxy_origin_allowed(None, "same-origin", 7777) is True
 
 
 def test_write_text_sets_mode(client_mod, tmp_path: Path) -> None:

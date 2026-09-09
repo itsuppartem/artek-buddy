@@ -16,6 +16,7 @@ log = logging.getLogger("artek_buddy")
 DECISIONS = ("once", "always", "deny")
 LABELS = {"once": "Allow once", "always": "Always", "deny": "Deny"}
 WAIT_SECONDS = 300
+OWNER_QUESTION_WAIT = 300
 OWNER_FILE_WAIT = 90
 OWNER_RESULT_WAIT = 120
 CLASS_BROWSE = "browse"
@@ -24,6 +25,7 @@ CLASS_PAGE = "page_input"
 CLASS_OWNER_READ = "owner_read"
 CLASS_OWNER_WRITE = "owner_write"
 CLASS_OWNER_EXEC = "owner_exec"
+CLASS_CREDENTIAL_EXEC = "credential_exec"
 OWNER_CLASSES = {CLASS_OWNER_READ, CLASS_OWNER_WRITE, CLASS_OWNER_EXEC}
 OWNER_HOME_SCOPE = "~"
 
@@ -42,7 +44,6 @@ _READONLY_COMMANDS = frozenset(
         "egrep",
         "fgrep",
         "rg",
-        "find",
         "wc",
         "which",
         "whereis",
@@ -75,7 +76,7 @@ _READONLY_COMMANDS = frozenset(
     }
 )
 _READONLY_WRAPPERS = frozenset({"timeout", "nice", "nohup", "command", "ionice", "stdbuf", "time"})
-_GIT_READONLY = frozenset(
+_GIT_INSPECT_SUBS = frozenset(
     {
         "status",
         "log",
@@ -89,7 +90,126 @@ _GIT_READONLY = frozenset(
         "rev-list",
     }
 )
-_FIND_WRITE_FLAGS = frozenset({"-delete", "-exec", "-execdir", "-ok", "-okdir"})
+_GIT_GLOBAL_INSPECT = frozenset(
+    {
+        "--no-pager",
+        "--no-color",
+        "--color",
+        "--paginate",
+        "--no-optional-locks",
+    }
+)
+_GIT_REPO_OR_OUTPUT_FLAGS = frozenset(
+    {
+        "--output",
+        "--git-dir",
+        "--work-tree",
+        "--namespace",
+        "--config",
+        "--config-env",
+    }
+)
+_GIT_BRANCH_LIST_FLAGS = frozenset(
+    {
+        "--list",
+        "-a",
+        "--all",
+        "-r",
+        "--remotes",
+        "-v",
+        "-vv",
+        "--verbose",
+        "--no-color",
+        "--color",
+        "--show-current",
+        "-q",
+        "--quiet",
+        "--column",
+        "--no-column",
+        "-i",
+        "--ignore-case",
+        "--abbrev",
+        "--no-abbrev",
+        "--merged",
+        "--no-merged",
+        "--contains",
+        "--no-contains",
+        "--points-at",
+    }
+)
+_GIT_BRANCH_LIST_PREFIXES = ("--sort=", "--format=", "--color=", "--column=", "--abbrev=")
+_FIND_INSPECT_ARITY = {
+    "-print": 0,
+    "-print0": 0,
+    "-ls": 0,
+    "-quit": 0,
+    "-prune": 0,
+    "-true": 0,
+    "-false": 0,
+    "-empty": 0,
+    "-readable": 0,
+    "-writable": 0,
+    "-executable": 0,
+    "-nouser": 0,
+    "-nogroup": 0,
+    "-depth": 0,
+    "-xdev": 0,
+    "-mount": 0,
+    "-noleaf": 0,
+    "-ignore_readdir_race": 0,
+    "-noignore_readdir_race": 0,
+    "-daystart": 0,
+    "-follow": 0,
+    "-L": 0,
+    "-H": 0,
+    "-P": 0,
+    "-not": 0,
+    "-or": 0,
+    "-and": 0,
+    "-o": 0,
+    "-a": 0,
+    "-help": 0,
+    "-version": 0,
+    "-warn": 0,
+    "-nowarn": 0,
+    "-name": 1,
+    "-iname": 1,
+    "-lname": 1,
+    "-ilname": 1,
+    "-path": 1,
+    "-wholename": 1,
+    "-ipath": 1,
+    "-iwholename": 1,
+    "-regex": 1,
+    "-iregex": 1,
+    "-regextype": 1,
+    "-type": 1,
+    "-xtype": 1,
+    "-size": 1,
+    "-user": 1,
+    "-group": 1,
+    "-uid": 1,
+    "-gid": 1,
+    "-perm": 1,
+    "-mtime": 1,
+    "-mmin": 1,
+    "-atime": 1,
+    "-amin": 1,
+    "-ctime": 1,
+    "-cmin": 1,
+    "-used": 1,
+    "-links": 1,
+    "-inum": 1,
+    "-samefile": 1,
+    "-newer": 1,
+    "-anewer": 1,
+    "-cnewer": 1,
+    "-maxdepth": 1,
+    "-mindepth": 1,
+    "-printf": 1,
+    "-fstype": 1,
+    "-context": 1,
+}
 _SAFE_SUBST = re.compile(r"(?:\$\(|`)(pwd|whoami|id|hostname|date|uname)(?:\s+[^)`]*)?(?:\)|`)")
 
 
@@ -97,7 +217,7 @@ def decision_from_label(value: str) -> str | None:
     raw = (value or "").strip().lower()
     if raw in DECISIONS:
         return raw
-    if raw in {"allow once", "once", "this time"}:
+    if raw in {"allow once", "once", "this time", "allow"}:
         return "once"
     if raw in {"always", "allow always"}:
         return "always"
@@ -128,7 +248,7 @@ def owner_scope(path: str) -> str:
 
 
 def owner_command_is_readonly(command: str) -> bool:
-    """True for explore-only shell, like Claude Code's built-in ls/cat/echo set."""
+    """True for explore-only shell: ls/cat/echo, inspect-only git, inspect-only find."""
     text = (command or "").strip()
     if not text or len(text) > 4000:
         return False
@@ -179,16 +299,75 @@ def _readonly_segment(part: str) -> bool:
         return True
     name = rest[0].rsplit("/", 1)[-1]
     if name == "git":
-        flags = {item for item in rest[1:] if item.startswith("-")}
-        sub = next((item for item in rest[1:] if not item.startswith("-")), "")
-        if sub not in _GIT_READONLY:
-            return False
-        if sub == "branch" and flags & {"-d", "-D", "--delete"}:
-            return False
-        return True
-    if name == "find" and any(item in _FIND_WRITE_FLAGS for item in rest[1:]):
-        return False
+        return _git_inspect_ok(rest)
+    if name == "find":
+        return _find_inspect_ok(rest)
     return name in _READONLY_COMMANDS
+
+
+def _git_flag_name(item: str) -> str:
+    return item.split("=", 1)[0]
+
+
+def _git_repo_or_output_flag(item: str) -> bool:
+    if not item.startswith("-"):
+        return False
+    return _git_flag_name(item) in _GIT_REPO_OR_OUTPUT_FLAGS
+
+
+def _git_inspect_ok(tokens: list[str]) -> bool:
+    args = tokens[1:]
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token in _GIT_GLOBAL_INSPECT:
+            index += 1
+            continue
+        if token.startswith("-"):
+            return False
+        break
+    if index >= len(args):
+        return False
+    sub = args[index]
+    if sub not in _GIT_INSPECT_SUBS:
+        return False
+    tail = args[index + 1 :]
+    if any(_git_repo_or_output_flag(item) for item in tail):
+        return False
+    if sub == "branch":
+        return _git_branch_list_only(tail)
+    return True
+
+
+def _git_branch_list_only(tail: list[str]) -> bool:
+    for item in tail:
+        if not item.startswith("-"):
+            return False
+        if item in _GIT_BRANCH_LIST_FLAGS:
+            continue
+        if any(item.startswith(prefix) for prefix in _GIT_BRANCH_LIST_PREFIXES):
+            continue
+        return False
+    return True
+
+
+def _find_inspect_ok(tokens: list[str]) -> bool:
+    index = 1
+    while index < len(tokens):
+        token = tokens[index]
+        if token in {"!", "(", ")", ",", "--"}:
+            index += 1
+            continue
+        if token.startswith("-") and len(token) > 1:
+            arity = _FIND_INSPECT_ARITY.get(token)
+            if arity is None:
+                return False
+            index += 1 + arity
+            if index > len(tokens):
+                return False
+            continue
+        index += 1
+    return True
 
 
 @dataclass
@@ -200,10 +379,26 @@ class ConsentRequest:
     summary: str
     status: str = "pending"
     run_id: str | None = None
+    parent_run_id: str | None = None
     message_id: str | None = None
+    job_status: str | None = None
 
 
-class ConsentHub:
+@dataclass
+class OwnerQuestion:
+    bot_id: str
+    run_id: str
+    thread_id: str
+    waiter: threading.Event
+    message_id: str | None = None
+    answer: str | None = None
+    cancelled: bool = False
+
+
+from artek_buddy.consent_jobs import OwnerJobTransport  # noqa: E402
+
+
+class ConsentHub(OwnerJobTransport):
     """Ask before changing the owner PC or leaving the Pi box. Reads do not prompt."""
 
     def __init__(
@@ -217,15 +412,19 @@ class ConsentHub:
         self.events = events
         self.settings = settings
         self.auto = auto
-        self.last_request_id: str | None = None
         self._lock = threading.Lock()
         self._waiters: dict[str, threading.Event] = {}
         self._decisions: dict[str, str] = {}
         self._files: dict[str, tuple[str, bytes]] = {}
         self._file_waiters: dict[str, threading.Event] = {}
         self._jobs: dict[str, dict[str, Any]] = {}
+        self._job_claims: dict[str, str] = {}
         self._results: dict[str, dict[str, Any]] = {}
         self._result_waiters: dict[str, threading.Event] = {}
+        self._questions: dict[str, OwnerQuestion] = {}
+        self._takeover_waiters: dict[str, dict[str, threading.Event]] = {}
+        self._takeover_results: dict[str, str] = {}
+        self._takeover_released: set[str] = set()
 
     def _mode(self) -> str | None:
         if self.auto in {"allow", "deny"}:
@@ -238,6 +437,18 @@ class ConsentHub:
         if str(getattr(self.settings, "agent_runtime", "") or "") == "scripted":
             return "allow"
         return None
+
+    def _parent_run_id(self, run_id: str | None) -> str | None:
+        if not run_id:
+            return None
+        get_run = getattr(self.store, "get_run", None)
+        if callable(get_run) and get_run(run_id) is not None:
+            return None
+        get_sub = getattr(self.store, "get_subagent", None)
+        if not callable(get_sub):
+            return None
+        found = get_sub(run_id)
+        return getattr(found, "parent_run_id", None) if found is not None else None
 
     def has_grant(
         self, bot_id: str, action_class: str, scope_key: str, device_id: str | None
@@ -264,7 +475,6 @@ class ConsentHub:
             return None
         key = (scope_key or "*").strip() or "*"
         request_id = new_id("cns")
-        self.last_request_id = request_id
         if job:
             self._jobs[request_id] = {**job, "action_class": action_class, "scope_key": key}
         blocks = [
@@ -286,12 +496,14 @@ class ConsentHub:
             request_id,
             bot_id=bot_id,
             run_id=run_id,
+            parent_run_id=self._parent_run_id(run_id),
             thread_id=bot.thread_id,
             message_id=message.id,
             action_class=action_class,
             scope_key=key,
             summary=summary,
             workspace_id=bot.workspace_id,
+            job_status="queued" if job else None,
         )
         waiter = threading.Event()
         with self._lock:
@@ -340,18 +552,17 @@ class ConsentHub:
         detail: str | None = None,
         path: str | None = None,
         job: dict[str, Any] | None = None,
-    ) -> bool:
-        self.last_request_id = None
+    ) -> tuple[bool, str | None]:
         if action_class == CLASS_OWNER_READ:
-            return True
+            return True, None
         key = (scope_key or "*").strip() or "*"
         if self.has_grant(bot_id, action_class, key, device_id):
-            return True
+            return True, None
         mode = self._mode()
         if mode == "allow":
-            return True
+            return True, None
         if mode == "deny":
-            return False
+            return False, None
         request_id = self.offer(
             bot_id=bot_id,
             action_class=action_class,
@@ -364,7 +575,7 @@ class ConsentHub:
             job=job,
         )
         if not request_id:
-            return False
+            return False, None
         with self._lock:
             waiter = self._waiters.get(request_id)
         if waiter is not None:
@@ -375,7 +586,7 @@ class ConsentHub:
                 self.store.mark_run_running(run_id)
             except Exception:
                 log.exception("failed to resume run after consent")
-        return decision in {"once", "always"}
+        return decision in {"once", "always"}, request_id
 
     def answer(
         self, request_id: str, decision: str, device_id: str | None
@@ -397,7 +608,11 @@ class ConsentHub:
             )
         bot = self.store.get_bot(row.bot_id)
         if bot is not None and row.message_id:
-            updated = self.store.answer_message_ask(row.message_id, LABELS.get(picked, picked))
+            updated = self.store.answer_message_ask(
+                row.message_id,
+                LABELS.get(picked, picked),
+                include_consent=True,
+            )
             if updated is not None:
                 self._publish(
                     bot,
@@ -419,204 +634,196 @@ class ConsentHub:
             waiter.wait(timeout)
         return self._decisions.get(request_id, "deny")
 
-    def get_job(self, request_id: str) -> dict[str, Any] | None:
-        row = self.store.get_consent_request(request_id)
-        if row is None:
-            return None
-        job = dict(self._jobs.get(request_id) or {})
-        job.setdefault("id", request_id)
-        job.setdefault("action_class", row.action_class)
-        job.setdefault("scope_key", row.scope_key)
-        job.setdefault("summary", row.summary)
-        job.setdefault("status", row.status)
-        return job
-
-    def put_owner_file(self, request_id: str, name: str, data: bytes) -> bool:
-        row = self.store.get_consent_request(request_id)
-        if row is None or row.action_class != CLASS_OWNER_READ:
+    def begin_question(self, bot_id: str, run_id: str, thread_id: str) -> bool:
+        if not bot_id or not run_id or not thread_id or self.store.get_bot(bot_id) is None:
             return False
         with self._lock:
-            self._files[request_id] = (name, data)
-            waiter = self._file_waiters.get(request_id)
-        if waiter is not None:
-            waiter.set()
+            if run_id in self._questions:
+                return False
+            self._questions[run_id] = OwnerQuestion(
+                bot_id=bot_id,
+                run_id=run_id,
+                thread_id=thread_id,
+                waiter=threading.Event(),
+            )
         return True
 
-    def put_owner_result(self, request_id: str, payload: dict[str, Any]) -> bool:
-        row = self.store.get_consent_request(request_id)
-        if row is None or row.action_class not in OWNER_CLASSES:
-            return False
+    def activate_question(
+        self,
+        run_id: str,
+        message_id: str,
+        question: str,
+    ) -> bool:
         with self._lock:
-            self._results[request_id] = dict(payload)
-            waiter = self._result_waiters.get(request_id)
-            file_waiter = self._file_waiters.get(request_id)
-        if waiter is not None:
-            waiter.set()
-        if file_waiter is not None:
-            file_waiter.set()
+            pending = self._questions.get(run_id)
+            if pending is None or pending.cancelled:
+                return False
+            if pending.message_id not in {None, message_id}:
+                return False
+            pending.message_id = message_id
+            if pending.answer is not None:
+                return True
+            bot = self.store.get_bot(pending.bot_id)
+            if bot is None:
+                self._questions.pop(run_id, None)
+                return False
+            self.store.mark_run_waiting_input(run_id)
+            self._publish(
+                bot,
+                ProductEventType.RUN_WAITING_INPUT,
+                {
+                    "run_id": run_id,
+                    "message_id": message_id,
+                    "text": question,
+                },
+                run_id,
+            )
         return True
 
-    def take_owner_result(self, request_id: str | None) -> dict[str, Any] | None:
-        if not request_id:
-            return None
-        waiter = threading.Event()
-        with self._lock:
-            if request_id in self._results:
-                return self._results.pop(request_id)
-            self._result_waiters[request_id] = waiter
-        waiter.wait(OWNER_RESULT_WAIT)
-        with self._lock:
-            self._result_waiters.pop(request_id, None)
-            return self._results.pop(request_id, None)
-
-    def pull_owner_action(
+    def answer_question(
         self,
-        *,
         bot_id: str,
-        action_class: str,
-        scope_key: str,
-        summary: str,
-        job: dict[str, Any],
-        run_id: str | None,
-        device_id: str | None,
-    ) -> dict[str, Any] | None:
-        _ = device_id
-        bot = self.store.get_bot(bot_id)
-        if bot is None:
+        run_id: str,
+        message_id: str,
+        answer: str,
+    ) -> Any | None:
+        text = (answer or "").strip()
+        if not text:
             return None
-        request_id = new_id("cns")
-        self.last_request_id = request_id
-        self._jobs[request_id] = {**job, "action_class": action_class, "scope_key": scope_key}
-        self.store.create_consent_request(
-            request_id,
-            bot_id=bot_id,
-            run_id=run_id,
-            thread_id=bot.thread_id,
-            message_id=None,
-            action_class=action_class,
-            scope_key=scope_key,
-            summary=summary,
-            workspace_id=bot.workspace_id,
-        )
-        if run_id:
-            try:
-                self.store.mark_run_waiting_input(run_id)
-            except Exception:
-                log.exception("failed to mark waiting_input")
-        payload: dict[str, Any] = {
-            "run_id": run_id,
-            "consent_id": request_id,
-            "text": summary,
-            "action_class": action_class,
-            "auto": True,
-        }
-        for field in ("path", "command", "cwd", "kind"):
-            if job.get(field):
-                payload[field] = job[field]
-        self._publish(bot, ProductEventType.RUN_WAITING_INPUT, payload, run_id)
-        found = self.take_owner_result(request_id)
-        if found is None and action_class == CLASS_OWNER_READ and job.get("kind") != "list":
-            file_found = self.take_owner_file(request_id)
-            if file_found is not None:
-                name, data = file_found
-                found = {"ok": True, "name": name, "bytes": len(data), "_data": data}
-        if run_id:
-            try:
-                self.store.mark_run_running(run_id)
-            except Exception:
-                log.exception("failed to resume run after owner action")
-        return found
-
-    def pull_owner_file(
-        self,
-        *,
-        bot_id: str,
-        path: str,
-        run_id: str | None,
-        device_id: str | None,
-    ) -> tuple[str, bytes] | None:
-        """Always-grant path: no card, ask the paired client to send the file."""
-        request_id = self.start_auto_owner_read(
-            bot_id=bot_id,
-            path=path,
-            run_id=run_id,
-            device_id=device_id,
-        )
-        if not request_id:
-            return None
-        found = self.take_owner_file(request_id)
-        if run_id:
-            try:
-                self.store.mark_run_running(run_id)
-            except Exception:
-                log.exception("failed to resume run after owner file")
-        return found
-
-    def start_auto_owner_read(
-        self,
-        *,
-        bot_id: str,
-        path: str,
-        run_id: str | None,
-        device_id: str | None,
-    ) -> str | None:
-        """Publish the auto job on the caller’s thread (the event loop). Wait separately."""
-        _ = device_id
-        bot = self.store.get_bot(bot_id)
-        if bot is None:
-            return None
-        request_id = new_id("cns")
-        self.last_request_id = request_id
-        self._jobs[request_id] = {
-            "action_class": CLASS_OWNER_READ,
-            "path": path,
-            "kind": "read",
-        }
-        self.store.create_consent_request(
-            request_id,
-            bot_id=bot_id,
-            run_id=run_id,
-            thread_id=bot.thread_id,
-            message_id=None,
-            action_class=CLASS_OWNER_READ,
-            scope_key=owner_scope(path),
-            summary=f"Read {path} from your computer?",
-            workspace_id=bot.workspace_id,
-        )
-        if run_id:
-            try:
-                self.store.mark_run_waiting_input(run_id)
-            except Exception:
-                log.exception("failed to mark waiting_input")
-        self._publish(
-            bot,
-            ProductEventType.RUN_WAITING_INPUT,
-            {
-                "run_id": run_id,
-                "consent_id": request_id,
-                "text": f"Read {path} from your computer?",
-                "action_class": CLASS_OWNER_READ,
-                "path": path,
-                "auto": True,
-            },
-            run_id,
-        )
-        return request_id
-
-    def take_owner_file(self, request_id: str | None) -> tuple[str, bytes] | None:
-        if not request_id:
-            return None
-        waiter = threading.Event()
         with self._lock:
-            if request_id in self._files:
-                return self._files.pop(request_id)
-            if request_id in self._results:
+            pending = self._questions.get(run_id)
+            if pending is None or pending.cancelled or pending.bot_id != bot_id:
                 return None
-            self._file_waiters[request_id] = waiter
-        waiter.wait(OWNER_FILE_WAIT)
+            if pending.message_id is None:
+                message = self.store.get_message_in_thread(pending.thread_id, message_id)
+                if message is None or message.run_id != run_id:
+                    return None
+                pending.message_id = message_id
+            if pending.message_id != message_id or pending.answer is not None:
+                return None
+            updated = self.store.answer_message_ask(message_id, text)
+            if updated is None:
+                return None
+            pending.answer = text
+            self.store.mark_run_running(run_id)
+            bot = self.store.get_bot(bot_id)
+            if bot is not None:
+                self._publish(
+                    bot,
+                    ProductEventType.THREAD_MESSAGE_CREATED,
+                    {"message": updated.model_dump(mode="json")},
+                    run_id,
+                )
+            pending.waiter.set()
+            return updated
+
+    def wait_question(
+        self,
+        run_id: str,
+        timeout: float = OWNER_QUESTION_WAIT,
+    ) -> tuple[str | None, str | None]:
         with self._lock:
-            self._file_waiters.pop(request_id, None)
-            return self._files.pop(request_id, None)
+            pending = self._questions.get(run_id)
+        if pending is None:
+            return None, "The owner question is no longer active."
+        pending.waiter.wait(timeout)
+        with self._lock:
+            current = self._questions.pop(run_id, None)
+            if current is None:
+                return None, "The owner question is no longer active."
+            answer = current.answer
+            cancelled = current.cancelled
+        if answer is not None:
+            return answer, None
+        if cancelled:
+            return None, "The owner question was cancelled."
+        bot = self.store.get_bot(current.bot_id)
+        updated = (
+            self.store.answer_message_ask(current.message_id, "Timed out")
+            if current.message_id
+            else None
+        )
+        self.store.mark_run_running(run_id)
+        if bot is not None and updated is not None:
+            self._publish(
+                bot,
+                ProductEventType.THREAD_MESSAGE_CREATED,
+                {"message": updated.model_dump(mode="json")},
+                run_id,
+            )
+        return None, "The owner did not answer in time."
+
+    def wait_takeover(
+        self,
+        bot_id: str,
+        run_id: str,
+        timeout: float = OWNER_QUESTION_WAIT,
+    ) -> str:
+        if not bot_id or not run_id:
+            return "timeout"
+        waiter = threading.Event()
+        with self._lock:
+            if bot_id in self._takeover_released:
+                self._takeover_released.discard(bot_id)
+                return "released"
+            existing = self._takeover_results.pop(run_id, None)
+            if existing is not None:
+                return existing
+            self._takeover_waiters.setdefault(bot_id, {})[run_id] = waiter
+        waiter.wait(timeout)
+        with self._lock:
+            pending = self._takeover_waiters.get(bot_id)
+            if pending is not None:
+                pending.pop(run_id, None)
+                if not pending:
+                    self._takeover_waiters.pop(bot_id, None)
+            self._takeover_released.discard(bot_id)
+            return self._takeover_results.pop(run_id, "timeout")
+
+    def release_takeovers(self, bot_id: str) -> None:
+        if not bot_id:
+            return
+        to_wake: list[threading.Event] = []
+        with self._lock:
+            pending = self._takeover_waiters.pop(bot_id, {})
+            for run_id, waiter in pending.items():
+                self._takeover_results[run_id] = "released"
+                to_wake.append(waiter)
+            if not pending:
+                self._takeover_released.add(bot_id)
+        for waiter in to_wake:
+            waiter.set()
+
+    def cancel_takeovers(self, run_ids: list[str]) -> None:
+        wanted = set(run_ids)
+        to_wake: list[threading.Event] = []
+        with self._lock:
+            for bot_id, pending in list(self._takeover_waiters.items()):
+                for run_id in list(pending):
+                    if run_id not in wanted:
+                        continue
+                    waiter = pending.pop(run_id)
+                    self._takeover_results[run_id] = "cancelled"
+                    to_wake.append(waiter)
+                if not pending:
+                    self._takeover_waiters.pop(bot_id, None)
+        for waiter in to_wake:
+            waiter.set()
+
+    def abort_question(self, run_id: str) -> None:
+        with self._lock:
+            pending = self._questions.pop(run_id, None)
+        if pending is not None:
+            pending.waiter.set()
+
+    def cancel_questions(self, run_ids: list[str]) -> None:
+        with self._lock:
+            for run_id in run_ids:
+                pending = self._questions.get(run_id)
+                if pending is None:
+                    continue
+                pending.cancelled = True
+                pending.waiter.set()
 
     def _publish(
         self, bot: Any, event_type: ProductEventType, payload: dict[str, Any], run_id: str | None

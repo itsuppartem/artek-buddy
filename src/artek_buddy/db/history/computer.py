@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from artek_buddy.computer.models import ComputerRecord
@@ -71,7 +72,8 @@ class ComputerMixin:
                     home_revision = %s, kind = %s, provider_ref = %s, state = %s,
                     control_holder = %s, control_lease_id = %s, control_lease_expires_at = %s,
                     control_bot_id = %s, execution_run_id = %s, execution_bot_id = %s,
-                    execution_lease_expires_at = %s, sleep_at = %s, updated_at = %s
+                    execution_lease_expires_at = %s, sleep_at = %s, last_input_at = %s,
+                    updated_at = %s
                 WHERE id = %s
                 RETURNING *
                 """,
@@ -88,6 +90,7 @@ class ComputerMixin:
                     record.execution_bot_id,
                     record.execution_lease_expires_at,
                     record.sleep_at,
+                    record.last_input_at,
                     now,
                     record.id,
                 ),
@@ -96,6 +99,136 @@ class ComputerMixin:
         if row is None:
             raise RuntimeError("computer missing")
         return self._computer_from_row(row)
+
+    def save_box_state(self, record: ComputerRecord) -> ComputerRecord:
+        now = isoformat_utc()
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE computers SET
+                    home_revision = %s, kind = %s, provider_ref = %s, state = %s,
+                    execution_run_id = %s, execution_bot_id = %s,
+                    execution_lease_expires_at = %s, sleep_at = %s,
+                    updated_at = %s
+                WHERE id = %s
+                RETURNING *
+                """,
+                (
+                    record.home_revision,
+                    record.kind,
+                    record.provider_ref,
+                    record.state,
+                    record.execution_run_id,
+                    record.execution_bot_id,
+                    record.execution_lease_expires_at,
+                    record.sleep_at,
+                    now,
+                    record.id,
+                ),
+            ).fetchone()
+            conn.commit()
+        if row is None:
+            raise RuntimeError("computer missing")
+        return self._computer_from_row(row)
+
+    def touch_control_input(
+        self,
+        computer_id: str,
+        lease_id: str,
+        last_input_at: str,
+        sleep_at: str,
+    ) -> bool:
+        now = isoformat_utc()
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE computers
+                SET last_input_at = %s, sleep_at = %s, updated_at = %s
+                WHERE id = %s
+                  AND control_lease_id = %s
+                  AND control_holder = 'user'
+                RETURNING id
+                """,
+                (last_input_at, sleep_at, now, computer_id, lease_id),
+            ).fetchone()
+            conn.commit()
+        return row is not None
+
+    def set_control_lease(
+        self,
+        computer_id: str,
+        bot_id: str,
+        lease_id: str,
+        expires_at: str,
+        last_input_at: str,
+    ) -> ComputerRecord | None:
+        now = isoformat_utc()
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE computers
+                SET control_holder = 'user',
+                    control_lease_id = %s,
+                    control_lease_expires_at = %s,
+                    control_bot_id = %s,
+                    last_input_at = %s,
+                    updated_at = %s
+                WHERE id = %s
+                  AND (
+                    control_holder <> 'user'
+                    OR control_lease_id IS NULL
+                    OR control_lease_id = %s
+                  )
+                RETURNING *
+                """,
+                (lease_id, expires_at, bot_id, last_input_at, now, computer_id, lease_id),
+            ).fetchone()
+            conn.commit()
+        return self._computer_from_row(row) if row else None
+
+    def clear_control_lease(
+        self,
+        computer_id: str,
+        *,
+        lease_id: str | None = None,
+        holder: str = "bot",
+    ) -> ComputerRecord | None:
+        now = isoformat_utc()
+        holder = holder if holder in {"bot", "none"} else "bot"
+        with self._conn() as conn:
+            if lease_id:
+                row = conn.execute(
+                    """
+                    UPDATE computers
+                    SET control_holder = %s,
+                        control_lease_id = NULL,
+                        control_lease_expires_at = NULL,
+                        control_bot_id = NULL,
+                        last_input_at = NULL,
+                        updated_at = %s
+                    WHERE id = %s
+                      AND control_lease_id = %s
+                    RETURNING *
+                    """,
+                    (holder, now, computer_id, lease_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    UPDATE computers
+                    SET control_holder = %s,
+                        control_lease_id = NULL,
+                        control_lease_expires_at = NULL,
+                        control_bot_id = NULL,
+                        last_input_at = NULL,
+                        updated_at = %s
+                    WHERE id = %s
+                    RETURNING *
+                    """,
+                    (holder, now, computer_id),
+                ).fetchone()
+            conn.commit()
+        return self._computer_from_row(row) if row else None
 
     def other_bots_using_computer(self, computer_id: str, except_bot_id: str) -> int:
         with self._conn() as conn:
@@ -172,7 +305,7 @@ class ComputerMixin:
                 WHERE b.computer_id = %s
                   AND b.id <> %s
                   AND r.status IN (
-                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
+                    'queued', 'leased', 'running', 'waiting_takeover'
                   )
                 LIMIT 1
                 """,
@@ -199,7 +332,7 @@ class ComputerMixin:
                     JOIN runs r ON r.bot_id = other.id
                     WHERE other.computer_id = c.id
                       AND r.status IN (
-                        'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
+                        'queued', 'leased', 'running', 'waiting_input'
                       )
                   )
                 ORDER BY c.sleep_at ASC
@@ -208,6 +341,29 @@ class ComputerMixin:
             ).fetchall()
             conn.commit()
         return [row["id"] for row in rows]
+
+    def expire_idle_takeovers(self, idle_seconds: int) -> int:
+        cutoff = isoformat_utc(datetime.now(UTC) - timedelta(seconds=max(30, int(idle_seconds))))
+        now = isoformat_utc()
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                UPDATE computers
+                SET control_holder = 'bot',
+                    control_lease_id = NULL,
+                    control_lease_expires_at = NULL,
+                    control_bot_id = NULL,
+                    last_input_at = NULL,
+                    updated_at = %s
+                WHERE state = 'running'
+                  AND control_holder = 'user'
+                  AND COALESCE(last_input_at, updated_at) <= %s
+                RETURNING id
+                """,
+                (now, cutoff),
+            ).fetchall()
+            conn.commit()
+        return len(rows)
 
     def _computer_from_row(self, row: dict[str, Any]) -> ComputerRecord:
         return ComputerRecord(
@@ -233,4 +389,5 @@ class ComputerMixin:
             else None,
             sleep_at=parse_iso(row["sleep_at"]) if row.get("sleep_at") else None,
             updated_at=parse_iso(row["updated_at"]),
+            last_input_at=parse_iso(row["last_input_at"]) if row.get("last_input_at") else None,
         )

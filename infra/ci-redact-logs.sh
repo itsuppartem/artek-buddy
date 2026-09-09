@@ -9,6 +9,7 @@ redact() {
     -e 's/dev_[A-Za-z0-9_-]+/[redacted]/g' \
     -e 's/AGENT_HTTP_TOKEN=[^[:space:]]+/AGENT_HTTP_TOKEN=[redacted]/g' \
     -e 's/CURSOR_API_KEY=[^[:space:]]+/CURSOR_API_KEY=[redacted]/g' \
+    -e 's/COMPOSIO_API_KEY=[^[:space:]]+/COMPOSIO_API_KEY=[redacted]/g' \
     -e 's/MEMORY_DB_PASSWORD=[^[:space:]]+/MEMORY_DB_PASSWORD=[redacted]/g' \
     -e 's/DATABASE_URL=postgresql:[^[:space:]]+/DATABASE_URL=[redacted]/g' \
     -e 's/[A-Z0-9]{4}-[A-Z0-9]{4}/XXXX-XXXX/g'

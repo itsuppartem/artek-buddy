@@ -3,20 +3,25 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, Header, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 
+from artek_buddy.activity import ActivityRecord, parse_activity_cursor
 from artek_buddy.bus import HEARTBEAT, REPLAY_GAP, EventHub
+from artek_buddy.consent import ConsentHub
 from artek_buddy.contracts import (
     ArtifactList,
     AttachmentList,
     AttachmentUploadInput,
+    Bot,
     HostedAttachment,
     OkResponse,
+    Principal,
     ProductEvent,
     ProductEventType,
     Run,
     RunRequest,
+    ThreadAnswerInput,
     ThreadFollowUpInput,
     ThreadMessagePage,
     ThreadSendInput,
@@ -34,7 +39,6 @@ from artek_buddy.runtime import (
     AgentRuntime,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
 from fastapi import APIRouter
@@ -45,9 +49,11 @@ from artek_buddy.http.deps import (
     _require_bot,
     _resolve_bot,
     _snapshot,
+    consent,
     current_app,
     hub,
     require_auth,
+    require_principal,
     runtime,
     store,
 )
@@ -59,6 +65,49 @@ from artek_buddy.http.turns import (
 )
 
 router = APIRouter()
+
+
+def _principal_is_active(history: HistoryStore, principal: Principal) -> bool:
+    if principal.device_id == "host":
+        return True
+    member = history.get_member(principal.member_id)
+    return member is not None and member.state == "active"
+
+
+def _replay_gap_frame(bot: Bot, cursor: str | None) -> str:
+    gap = ProductEvent(
+        id=new_id("evt"),
+        workspace_id=bot.workspace_id,
+        thread_id=bot.thread_id,
+        bot_id=bot.id,
+        seq=0,
+        type=ProductEventType.THREAD_REPLAY_GAP,
+        created_at=isoformat_utc(),
+        payload={"after": cursor, "resync": True},
+    )
+    return f"id: {gap.id}\nevent: {gap.type.value}\ndata: {gap.model_dump_json()}\n\n"
+
+
+def _activity_thread_frame(history: HistoryStore, bot: Bot, record: ActivityRecord) -> str:
+    if record.event_type == "message.created":
+        message_id = record.payload.get("id")
+        message = history._get_message(message_id) if message_id else None
+        if message is not None:
+            event = ProductEvent(
+                id=f"act_{record.seq}",
+                workspace_id=bot.workspace_id,
+                thread_id=bot.thread_id,
+                bot_id=bot.id,
+                seq=record.seq,
+                type=ProductEventType.THREAD_MESSAGE_CREATED,
+                created_at=record.created_at,
+                payload={"message": message.model_dump(mode="json")},
+                run_id=record.payload.get("run_id"),
+            )
+            return (
+                f"id: {record.seq}\nevent: {event.type.value}\ndata: {event.model_dump_json()}\n\n"
+            )
+    return record.to_sse()
 
 
 @router.get("/v1/threads/{bot_id}", dependencies=[Depends(require_auth)])
@@ -93,7 +142,6 @@ async def send_thread_message(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> ThreadSendResult:
-    rt.set_turn_device(actor)
     try:
         bot = _require_bot(history, bot_id)
         hosted = (
@@ -119,7 +167,54 @@ async def send_thread_message(
         trigger=body.trigger,
         reply_to_id=body.reply_to_id,
         attachments=hosted,
+        device_id=actor,
+        idempotency_key=body.idempotency_key,
     )
+
+
+@router.post("/v1/threads/{bot_id}/answer")
+async def answer_thread_question(
+    bot_id: str,
+    body: ThreadAnswerInput,
+    _actor: str = Depends(require_auth),
+    history: HistoryStore = Depends(store),
+    questions: ConsentHub = Depends(consent),
+    events: EventHub = Depends(hub),
+) -> OkResponse:
+    from artek_buddy.bot_credentials import raise_if_pasted_credential
+
+    raise_if_pasted_credential(body.answer)
+    try:
+        bot = _require_bot(history, bot_id)
+        if body.bot_id is not None and body.bot_id != bot.id:
+            raise HTTPException(status_code=404, detail="bot not found")
+        updated = questions.answer_question(bot.id, body.run_id, body.message_id, body.answer)
+        if updated is None:
+            answered = history.answer_automation_ask(
+                bot.id, body.run_id, body.message_id, body.answer
+            )
+            if answered is None:
+                raise HTTPException(status_code=409, detail="question is no longer waiting")
+            message, auto_run = answered
+            _emit(
+                events,
+                bot,
+                ProductEventType.THREAD_MESSAGE_CREATED,
+                {"message": message.model_dump(mode="json")},
+                run_id=body.run_id,
+            )
+            done = (
+                ProductEventType.RUN_CANCELLED
+                if auto_run.state == "cancelled"
+                else ProductEventType.RUN_COMPLETED
+            )
+            _emit(events, bot, done, {}, run_id=body.run_id)
+            if auto_run.state == "queued":
+                history.enqueue_automation_prompt(auto_run)
+            return OkResponse(ok=True)
+        return OkResponse(ok=True)
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
 
 
 @router.post("/v1/threads/{bot_id}/attachments", dependencies=[Depends(require_auth)])
@@ -188,20 +283,42 @@ async def stop_thread(
     bot_id: str,
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
+    rt: AgentRuntime = Depends(runtime),
 ) -> OkResponse:
     try:
         bot = _require_bot(history, bot_id)
+        workers = [
+            item.id
+            for item in history.list_subagents(bot.id)
+            if item.status in {"queued", "running"}
+        ]
+        had_workers = bool(workers)
+        cancelled_ids = history.cancel_active_runs(bot_id)
+        stop_ids = list(dict.fromkeys([*cancelled_ids, *workers]))
+        mark = getattr(rt, "mark_runs_cancelled", None)
+        if callable(mark):
+            mark(stop_ids)
+        question_hub = getattr(current_app().state, "consent", None)
+        if question_hub is not None:
+            question_hub.cancel_questions(stop_ids)
+            cancel_takeovers = getattr(question_hub, "cancel_takeovers", None)
+            if callable(cancel_takeovers):
+                cancel_takeovers(stop_ids)
+            cancel_jobs = getattr(question_hub, "cancel_owner_jobs", None)
+            if callable(cancel_jobs):
+                cancel_jobs(stop_ids)
         _cancel_turns(bot_id)
         service = getattr(current_app().state, "subagents", None)
         if service is not None:
             service.stop_all(bot)
-        cancelled_ids = history.cancel_active_runs(bot_id)
+        if not cancelled_ids and had_workers:
+            cancelled_ids = [history.record_worker_stop(bot).id]
         for run_id in cancelled_ids:
             _emit(
                 events,
                 bot,
                 ProductEventType.RUN_CANCELLED,
-                {"run_id": run_id, "status": "cancelled"},
+                {"run_id": run_id, "status": "cancelled", "error": "Stopped."},
                 run_id=run_id,
             )
     except DatabaseUnavailable as err:
@@ -218,12 +335,11 @@ async def follow_up_thread_message(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> OkResponse:
-    rt.set_turn_device(actor)
     try:
         bot = _require_bot(history, bot_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
-    await _accept_turn(history, rt, events, bot, body.text, trigger="follow_up")
+    await _accept_turn(history, rt, events, bot, body.text, trigger="follow_up", device_id=actor)
     return OkResponse(ok=True)
 
 
@@ -247,12 +363,31 @@ async def mark_thread_unread(bot_id: str, history: HistoryStore = Depends(store)
         raise _db_error(err) from err
 
 
-@router.get("/v1/events", dependencies=[Depends(require_auth)])
+@router.get("/v1/events")
 async def subscribe_workspace_events(
+    after: str | None = Query(default=None),
+    after_sequence: int | None = Query(default=None),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+    principal: Principal = Depends(require_principal),
+    history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> StreamingResponse:
+    after_seq = parse_activity_cursor(after, last_event_id, after_sequence)
+
     async def gen():
+        if after_seq is not None:
+            records, has_gap = history.replay_activity(after_seq=after_seq)
+            if has_gap:
+                yield 'id: 0\nevent: activity.resync\ndata: {"gap":true,"resync":true}\n\n'
+            else:
+                for record in records:
+                    if not _principal_is_active(history, principal):
+                        return
+                    yield record.to_sse()
+
         async for item in events.subscribe_workspace():
+            if not _principal_is_active(history, principal):
+                break
             if item is HEARTBEAT:
                 yield ": keepalive\n\n"
                 continue
@@ -270,10 +405,13 @@ async def subscribe_workspace_events(
     )
 
 
-@router.get("/v1/threads/{bot_id}/events", dependencies=[Depends(require_auth)])
+@router.get("/v1/threads/{bot_id}/events")
 async def subscribe_thread_events(
     bot_id: str,
     after: str | None = Query(default=None),
+    after_sequence: int | None = Query(default=None),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+    principal: Principal = Depends(require_principal),
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> StreamingResponse:
@@ -282,24 +420,33 @@ async def subscribe_thread_events(
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
 
+    after_seq = parse_activity_cursor(after, last_event_id, after_sequence)
+    cursor_label = str(after_sequence) if after_sequence is not None else (after or last_event_id)
+
     async def gen():
-        async for item in events.subscribe(bot_id, after=after):
+        replayed_durable = after_seq is not None
+        if after_seq is not None:
+            records, has_gap = history.replay_activity(after_seq=after_seq, resource=bot_id)
+            if has_gap:
+                yield _replay_gap_frame(bot, cursor_label)
+            else:
+                for record in records:
+                    if not _principal_is_active(history, principal):
+                        return
+                    yield _activity_thread_frame(history, bot, record)
+
+        async for item in events.subscribe(
+            bot_id,
+            after=None if replayed_durable else after,
+            replay=not replayed_durable,
+        ):
+            if not _principal_is_active(history, principal):
+                break
             if item is HEARTBEAT:
                 yield ": keepalive\n\n"
                 continue
             if item is REPLAY_GAP:
-                gap = ProductEvent(
-                    id=new_id("evt"),
-                    workspace_id=bot.workspace_id,
-                    thread_id=bot.thread_id,
-                    bot_id=bot.id,
-                    seq=0,
-                    type=ProductEventType.THREAD_REPLAY_GAP,
-                    created_at=isoformat_utc(),
-                    payload={"after": after},
-                )
-                data = gap.model_dump_json()
-                yield f"id: {gap.id}\nevent: {gap.type.value}\ndata: {data}\n\n"
+                yield _replay_gap_frame(bot, after)
                 continue
             data = item.model_dump_json()
             yield f"id: {item.id}\nevent: {item.type.value}\ndata: {data}\n\n"
@@ -339,12 +486,11 @@ async def create_run(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> Run:
-    rt.set_turn_device(actor)
     try:
         bot = _resolve_bot(history, rt, bot_id=body.bot_id)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
-    result = await _accept_turn(history, rt, events, bot, body.text)
+    result = await _accept_turn(history, rt, events, bot, body.text, device_id=actor)
     if result.run is None:
         raise HTTPException(status_code=500, detail="run missing after send")
     return result.run

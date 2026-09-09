@@ -147,6 +147,16 @@ class MessagesMixin:
                         "UPDATE bots SET preview = %s, unread = TRUE, updated_at = %s WHERE id = %s",
                         (preview_snippet(excerpt), now, bot.id),
                     )
+                self._record_message_created(
+                    conn,
+                    bot_id=bot.id,
+                    thread_id=bot.thread_id,
+                    message_id=msg_id,
+                    role="bot",
+                    seq=seq,
+                    run_id=run_id,
+                    blocks=blocks,
+                )
         message = self._get_message(msg_id)
         if message is None:
             raise RuntimeError("failed to persist bot message")
@@ -175,6 +185,31 @@ class MessagesMixin:
                 """,
                 (artifact_id, bot_id, run_id, name, mime_type, size, storage_path, now),
             )
+            if hasattr(self, "_append_activity_tx"):
+                self._append_activity_tx(
+                    conn,
+                    event_type="artifact.created",
+                    actor="bot",
+                    resource=bot_id,
+                    payload={
+                        "id": artifact_id,
+                        "name": name,
+                        "mime_type": mime_type,
+                        "size": size,
+                    },
+                    device_id=None,
+                    event_version=1,
+                )
+            indexer = getattr(self, "_upsert_search_document_tx", None)
+            if callable(indexer):
+                indexer(
+                    conn,
+                    document_kind="artifact",
+                    resource_id=bot_id,
+                    source_id=artifact_id,
+                    title=name,
+                    body=mime_type,
+                )
             conn.commit()
         return Artifact(
             id=artifact_id,
@@ -250,6 +285,15 @@ class MessagesMixin:
                     "UPDATE bots SET preview = %s, unread = FALSE, updated_at = %s WHERE id = %s",
                     (preview_snippet(text), now, bot.id),
                 )
+                self._record_message_created(
+                    conn,
+                    bot_id=bot.id,
+                    thread_id=bot.thread_id,
+                    message_id=msg_id,
+                    role="user",
+                    seq=seq,
+                    blocks=text_blocks(text),
+                )
         message = self._get_message(msg_id)
         if message is None:
             raise RuntimeError("failed to persist inbox message")
@@ -296,7 +340,13 @@ class MessagesMixin:
                 out.append(message)
         return out
 
-    def answer_message_ask(self, message_id: str, answer: str) -> ThreadMessage | None:
+    def answer_message_ask(
+        self,
+        message_id: str,
+        answer: str,
+        *,
+        include_consent: bool = False,
+    ) -> ThreadMessage | None:
         text = (answer or "").strip()
         if not text:
             return None
@@ -316,13 +366,15 @@ class MessagesMixin:
             next_blocks, changed = answer_ask_blocks(
                 blocks if isinstance(blocks, list) else [],
                 text,
-                include_consent=True,
+                include_consent=include_consent,
             )
-            if changed:
-                conn.execute(
-                    "UPDATE messages SET blocks = %s WHERE id = %s",
-                    (Json(next_blocks), message_id),
-                )
+            if not changed:
+                conn.commit()
+                return None
+            conn.execute(
+                "UPDATE messages SET blocks = %s WHERE id = %s",
+                (Json(next_blocks), message_id),
+            )
             conn.commit()
         return self._get_message(message_id)
 

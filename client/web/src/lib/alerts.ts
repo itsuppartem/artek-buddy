@@ -5,6 +5,7 @@ export type AttentionKind = "replied" | "ask" | "takeover" | "failed";
 
 export type AttentionAlert = {
   kind: AttentionKind;
+  occurrenceId: string;
   botId: string;
   title: string;
   body: string;
@@ -21,7 +22,7 @@ export type BotAlertSnapshot = {
   updatedAt: string;
 };
 
-const busyStatus = new Set(["queued", "leased", "running", "waiting_input", "waiting_takeover"]);
+const watchBackgroundStatus = new Set(["queued", "leased", "running", "waiting_takeover"]);
 
 const urgencyByKind: Record<AttentionKind, AttentionAlert["urgency"]> = {
   replied: "normal",
@@ -38,6 +39,7 @@ function clip(text: string, max = 180): string {
 
 function makeAlert(
   kind: AttentionKind,
+  occurrenceId: string,
   botId: string,
   botName: string,
   body: string,
@@ -52,6 +54,7 @@ function makeAlert(
   };
   return {
     kind,
+    occurrenceId,
     botId,
     title: titles[kind],
     body: clip(body),
@@ -66,18 +69,19 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function pendingAskText(payload: Record<string, unknown>): string | null {
-  const message = asRecord(payload.message) ?? payload;
+function finalReplyText(payload: Record<string, unknown>): string | null {
+  const message = asRecord(payload.message);
+  if (message?.role !== "bot") return null;
   const blocks = message.blocks;
   if (!Array.isArray(blocks)) return null;
+  const texts: string[] = [];
   for (const raw of blocks) {
     const block = asRecord(raw);
-    if (block?.kind !== "ask") continue;
-    if (block.status === "answered") continue;
-    const text = typeof block.text === "string" ? block.text : "";
-    return text || "Choose an option";
+    if (block?.kind !== "text" || typeof block.text !== "string") continue;
+    const text = block.text.trim();
+    if (text) texts.push(text);
   }
-  return null;
+  return texts.length ? texts.join("\n") : null;
 }
 
 export function answeredAskBody(event: ProductEvent): string | null {
@@ -99,11 +103,12 @@ export function attentionFromEvent(event: ProductEvent, botName: string): Attent
   const botId = event.botId;
   const at = event.createdAt;
   if (event.type === "run.completed") {
-    return makeAlert("replied", botId, botName, "", at);
+    const reply = finalReplyText(event.payload);
+    return reply ? makeAlert("replied", event.runId || event.id, botId, botName, reply, at) : null;
   }
   if (event.type === "run.failed") {
     const error = typeof event.payload.error === "string" ? event.payload.error : "";
-    return makeAlert("failed", botId, botName, error, at);
+    return makeAlert("failed", event.runId || event.id, botId, botName, error, at);
   }
   if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
     if (
@@ -114,49 +119,56 @@ export function attentionFromEvent(event: ProductEvent, botName: string): Attent
     }
     const body =
       event.type === "run.waiting_input"
-        ? "The bot is waiting for you."
+        ? typeof event.payload.text === "string"
+          ? event.payload.text
+          : "The bot is waiting for you."
         : "Take control of the computer.";
-    return makeAlert("takeover", botId, botName, body, at);
-  }
-  if (event.type === "thread.ask") {
-    const text =
-      (typeof event.payload.text === "string" && event.payload.text) ||
-      (typeof event.payload.question === "string" && event.payload.question) ||
-      "";
-    return makeAlert("ask", botId, botName, text, at);
-  }
-  if (event.type === "thread.message.created") {
-    const ask = pendingAskText(event.payload);
-    if (ask) return makeAlert("ask", botId, botName, ask, at);
+    return makeAlert(
+      event.type === "run.waiting_input" ? "ask" : "takeover",
+      event.type === "run.waiting_input" && typeof event.payload.messageId === "string"
+        ? event.payload.messageId
+        : event.runId || event.id,
+      botId,
+      botName,
+      body,
+      at,
+    );
   }
   return null;
 }
 
-export function attentionFromBotChange(
-  prev: BotAlertSnapshot,
-  next: BotAlertSnapshot,
+export function attentionFromParkedBot(bot: BotAlertSnapshot): AttentionAlert | null {
+  if (bot.status !== "waiting_takeover") return null;
+  return makeAlert(
+    "takeover",
+    bot.updatedAt,
+    bot.id,
+    bot.name,
+    "Take control of the computer.",
+    bot.updatedAt,
+  );
+}
+
+export function parkedAttentionForView(
+  bots: BotAlertSnapshot[],
+  viewingBotId: string | null,
+  dismissed: ReadonlySet<string>,
+  openedAtMs?: number,
+  freshBotIds?: ReadonlySet<string>,
 ): AttentionAlert | null {
-  if (prev.id !== next.id) return null;
-  const name = next.name;
-  const at = next.updatedAt;
-  if (next.status === "waiting_takeover" && prev.status !== "waiting_takeover") {
-    return makeAlert("takeover", next.id, name, "Take control of the computer.", at);
+  let best: AttentionAlert | null = null;
+  for (const bot of bots) {
+    if (bot.id === viewingBotId) continue;
+    if (openedAtMs != null && !freshBotIds?.has(bot.id)) {
+      const updated = Date.parse(bot.updatedAt);
+      if (Number.isFinite(updated) && updated < openedAtMs) continue;
+    }
+    const alert = attentionFromParkedBot(bot);
+    if (!alert) continue;
+    if (dismissed.has(attentionFingerprint(alert))) continue;
+    if (!best || shouldReplaceAttention(best, alert)) best = alert;
   }
-  if (next.status === "waiting_input" && prev.status !== "waiting_input") {
-    return makeAlert("ask", next.id, name, next.preview, at);
-  }
-  const leftBusy = busyStatus.has(prev.status) && !busyStatus.has(next.status);
-  const becameUnread = next.unread && !prev.unread;
-  if (next.status === "error" && (leftBusy || becameUnread)) {
-    return makeAlert("failed", next.id, name, next.preview, at);
-  }
-  if (leftBusy && next.unread) {
-    return makeAlert("replied", next.id, name, next.preview, at);
-  }
-  if (becameUnread && !busyStatus.has(next.status)) {
-    return makeAlert("replied", next.id, name, next.preview, at);
-  }
-  return null;
+  return best;
 }
 
 export function allowAlert(alert: AttentionAlert, notifyOnFinish: boolean): boolean {
@@ -165,18 +177,102 @@ export function allowAlert(alert: AttentionAlert, notifyOnFinish: boolean): bool
 }
 
 export function attentionFingerprint(
-  alert: Pick<AttentionAlert, "botId" | "kind" | "body">,
+  alert: Pick<AttentionAlert, "botId" | "kind" | "occurrenceId">,
 ): string {
-  return `${alert.botId}:${alert.kind}:${alert.body}`;
+  return `${alert.botId}:${alert.kind}:${alert.occurrenceId}`;
+}
+
+export function shouldConsiderEventForAttention(source: "workspace" | "thread" | "poll"): boolean {
+  return source === "workspace";
+}
+
+export function desktopWindowFocused(input: {
+  gtkActive: boolean | null;
+  pageHidden: boolean;
+  browserFocused: boolean;
+}): boolean {
+  if (input.pageHidden) return false;
+  if (input.gtkActive === null) return input.browserFocused;
+  return input.gtkActive;
 }
 
 export function shouldSendDesktopAlert(input: {
   windowFocused: boolean;
   viewingBotId: string | null;
   alertBotId: string;
+  pageHidden?: boolean;
 }): boolean {
-  if (!input.windowFocused) return true;
-  return input.viewingBotId !== input.alertBotId;
+  if (input.viewingBotId !== input.alertBotId) return true;
+  return input.windowFocused === false || input.pageHidden === true;
+}
+
+export function shouldSendNativeAlert(input: {
+  gtkWindowActive: boolean | null;
+  windowFocused: boolean;
+  viewingBotId: string | null;
+  alertBotId: string;
+  pageHidden?: boolean;
+}): boolean {
+  if (input.viewingBotId !== input.alertBotId) return true;
+  if (input.gtkWindowActive === false) return true;
+  if (input.gtkWindowActive === true) return input.pageHidden === true;
+  return shouldSendDesktopAlert({
+    windowFocused: input.windowFocused,
+    viewingBotId: input.viewingBotId,
+    alertBotId: input.alertBotId,
+    pageHidden: input.pageHidden,
+  });
+}
+
+export function shouldCountThreadRead(input: {
+  viewingBotId: string | null | undefined;
+  chatId: string;
+  windowFocused: boolean;
+  pageHidden: boolean;
+  gtkWindowActive?: boolean | null;
+}): boolean {
+  const focused =
+    input.gtkWindowActive === false
+      ? false
+      : input.gtkWindowActive === true
+        ? true
+        : input.windowFocused;
+  return input.viewingBotId === input.chatId && focused && !input.pageHidden;
+}
+
+export function nativeNotifyTag(botId: string): string {
+  return `artek-buddy:${botId}`;
+}
+
+export function shouldWatchBackgroundBot(
+  status: string,
+  botId: string,
+  viewingBotId: string | null | undefined,
+): boolean {
+  return botId !== viewingBotId && watchBackgroundStatus.has(status);
+}
+
+export function rememberShownAlert(seen: Set<string>, key: string): "show" | "skip" {
+  if (seen.has(key)) return "skip";
+  seen.add(key);
+  return "show";
+}
+
+export function parkedTakeoverKey(botId: string): string {
+  return `${botId}:takeover:parked`;
+}
+
+export function alertKeysToRemember(input: {
+  key: string;
+  fingerprint: string;
+  botId: string;
+  kind: AttentionKind;
+  surfaced: boolean;
+}): string[] {
+  if (!input.surfaced) return [];
+  const keys = [input.key, input.fingerprint];
+  if (input.kind === "takeover") keys.push(parkedTakeoverKey(input.botId));
+  return [...new Set(keys.filter(Boolean))];
 }
 
 const urgencyRank: Record<AttentionAlert["urgency"], number> = {
@@ -185,11 +281,30 @@ const urgencyRank: Record<AttentionAlert["urgency"], number> = {
   critical: 2,
 };
 
+export function shouldClearAttentionForView(
+  attention: AttentionAlert | null,
+  viewingBotId: string | null | undefined,
+): attention is AttentionAlert {
+  return attention != null && viewingBotId === attention.botId;
+}
+
+export function shouldStickDismissOnView(
+  attention: AttentionAlert | null,
+  viewingBotId: string | null | undefined,
+  previousViewingBotId: string | null | undefined,
+): boolean {
+  if (!shouldClearAttentionForView(attention, viewingBotId)) return false;
+  return Boolean(previousViewingBotId && previousViewingBotId !== viewingBotId);
+}
+
 export function shouldReplaceAttention(
   current: AttentionAlert | null,
   next: AttentionAlert,
 ): boolean {
   if (!current) return true;
+  if ((current.kind === "takeover" || current.kind === "ask") && next.kind === "replied") {
+    return false;
+  }
   const delta = urgencyRank[next.urgency] - urgencyRank[current.urgency];
   if (delta !== 0) return delta > 0;
   const nextAt = Date.parse(next.at);

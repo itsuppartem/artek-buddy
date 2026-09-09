@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from artek_buddy.auth import (
     AttemptLimiter,
+    credential_broker_token,
+    derive_credential_broker_token,
+    derive_credential_executor_token,
     derive_supervisor_token,
     host_token_match,
     normalize_pairing_code,
@@ -22,6 +25,16 @@ def test_supervisor_token_is_not_the_host_token() -> None:
     assert derived != host
     assert supervisor_token(host, "") == derived
     assert supervisor_token(host, "explicit-supervisor") == "explicit-supervisor"
+
+
+def test_credential_broker_token_is_domain_separated() -> None:
+    host = "ci-host-token-aabbccddeeff001122334455"
+    derived = derive_credential_broker_token(host)
+    assert derived != host
+    assert derived != derive_supervisor_token(host)
+    assert derived != derive_credential_executor_token(host)
+    assert credential_broker_token(host, "") == derived
+    assert credential_broker_token(host, "explicit-broker") == "explicit-broker"
 
 
 def test_pairing_limiter_blocks_after_limit() -> None:

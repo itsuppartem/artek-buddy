@@ -89,17 +89,19 @@ class EventHub:
         bot_id: str,
         after: str | None = None,
         heartbeat_s: float = 15.0,
+        replay: bool = True,
     ) -> AsyncIterator[ProductEvent | object]:
         queue: asyncio.Queue[ProductEvent] = asyncio.Queue(maxsize=256)
         self._bind_loop()
         self._subs[bot_id].add(queue)
         try:
             yield HEARTBEAT
-            if after and not self.has_event(bot_id, after):
-                yield REPLAY_GAP
-            else:
-                for event in self.replay(bot_id, after=after):
-                    yield event
+            if replay:
+                if after and not self.has_event(bot_id, after):
+                    yield REPLAY_GAP
+                else:
+                    for event in self.replay(bot_id, after=after):
+                        yield event
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=heartbeat_s)

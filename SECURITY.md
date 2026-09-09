@@ -1,6 +1,6 @@
 # Security policy
 
-Artek Buddy is a self-hosted personal agent. Treat the Raspberry Pi host
+Artek Buddy is a self-hosted personal agent. Treat the Linux host
 as the trust boundary: anyone who can call `:8080` with a valid token can
 drive bots, memory, routines, and desktop sandboxes. The written model is
 [THREAT-MODEL.md](THREAT-MODEL.md).
@@ -26,7 +26,7 @@ before posting a write-up.
 
 - A local Cursor agent that can `printenv` inside the **host API container**.
   That process is trusted-equivalent to the host.
-- Abuse of a stolen `AGENT_HTTP_TOKEN` or a paired device token.
+- Abuse of an already-compromised `AGENT_HTTP_TOKEN` or paired device token: an attacker who already holds a valid token using the documented API (bots, memory, sandboxes) is an operator credential compromise, not a product vulnerability. In contrast, any defect where the product itself discloses a token (in logs, traces, GitHub Actions output, client files, or documentation mistakes) is firmly in scope. See [THREAT-MODEL.md](THREAT-MODEL.md).
 - Model output that is wrong, or a bot that follows a malicious prompt
   you gave it on a desktop you control.
 
@@ -49,7 +49,8 @@ before posting a write-up.
 
 ## What CI scans
 
-Dependabot (pip, `client/web` npm, GitHub Actions, Docker bases), CodeQL
+Dependabot (pip, `client/web` npm, GitHub Actions, Docker bases), Dependabot
+alerts and security updates, secret scanning with push protection, CodeQL
 (Python and JavaScript), `pip-audit` and `npm audit --audit-level=high` on
 `test.yml`, Trivy filesystem on `test.yml` (`scan` job), Trivy image on
 `release.yml` after the host image is pushed (CRITICAL, ignore unfixed).

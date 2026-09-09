@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from artek_buddy.auth import supervisor_token
+from artek_buddy.computer.capabilities import ComputerCapabilities
 from artek_buddy.computer.client import FakeSupervisorClient, SupervisorClient
 from artek_buddy.computer.models import ComputerRecord
 from artek_buddy.computer.screen import mint_novnc_url
@@ -47,18 +48,51 @@ def wipe_computer_home(data_dir: Path, home_key: str) -> Path:
     return path
 
 
-class ComputerBusy(Exception):
-    def __init__(self, name: str) -> None:
-        super().__init__(name)
-        self.name = name
-
-
 class ComputerError(Exception):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        category: str = "permanent",
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.category = category
+        self.retryable = retryable or category in {"unavailable", "timeout", "transient"}
+
+    @property
+    def is_transient(self) -> bool:
+        return self.category in {"unavailable", "timeout", "transient"}
+
+    @property
+    def safe_message(self) -> str:
+        from artek_buddy.observe import redact_text
+
+        return redact_text(self.message)
+
+
+class ComputerBusy(ComputerError):
+    def __init__(self, name: str) -> None:
+        super().__init__(name, category="exhausted", retryable=True)
+        self.name = name
 
 
 class ComputerUnavailable(ComputerError):
     """The desktop is supposed to be reachable but the screen proxy cannot mint a URL."""
+
+    def __init__(self, message: str = "computer unavailable") -> None:
+        super().__init__(message, category="unavailable", retryable=True)
+
+
+class ComputerTimeout(ComputerError):
+    def __init__(self, message: str = "computer operation timed out") -> None:
+        super().__init__(message, category="timeout", retryable=True)
+
+
+class ComputerCancelled(ComputerError):
+    def __init__(self, message: str = "computer operation cancelled") -> None:
+        super().__init__(message, category="cancelled", retryable=False)
 
 
 class ComputerService:
@@ -72,6 +106,13 @@ class ComputerService:
         else:
             token = supervisor_token(settings.agent_http_token, settings.sandbox_supervisor_token)
             self.client = SupervisorClient(settings.sandbox_supervisor_url, token)
+        self.capabilities = getattr(self.client, "capabilities", ComputerCapabilities())
+
+    def health(self) -> bool:
+        checker = getattr(self.client, "health", None)
+        if callable(checker):
+            return bool(checker())
+        return True
 
     def home_path(self, record: ComputerRecord) -> Path:
         path = Path(self.settings.agent_data_dir) / "homes" / record.home_key
@@ -81,6 +122,7 @@ class ComputerService:
     def status(self, bot: Bot) -> ComputerStatus:
         record = self.store.get_computer_for_bot(bot)
         record = self._expire_lease(record)
+        record = self._expire_idle_control(record)
         busy = self.store.busy_bot_name(record, bot.id)
         return record.status_for(bot.id, bot.computer_mode, busy)
 
@@ -100,23 +142,23 @@ class ComputerService:
             and self._box_alive(record.provider_ref)
         ):
             record = self._touch(record)
-            self.store.save_computer(record)
+            self.store.save_box_state(record)
             return self.status(bot)
         if record.provider_ref and not self._box_alive(record.provider_ref):
             log.warning("stale computer container %s, reprovisioning", record.provider_ref)
             record.provider_ref = None
         record.state = "booting"
         record.kind = "fake" if self.settings.sandbox_provider == "fake" else "docker"
-        self.store.save_computer(record)
+        self.store.save_box_state(record)
         try:
             box = self.client.provision(bot.id, record.home_key)
             record.provider_ref = box.id
             record.state = "running"
             record = self._touch(record)
-            self.store.save_computer(record)
+            self.store.save_box_state(record)
         except Exception as err:
             record.state = "error"
-            self.store.save_computer(record)
+            self.store.save_box_state(record)
             raise ComputerError(str(err)) from err
         return self.status(bot)
 
@@ -131,17 +173,15 @@ class ComputerService:
                 self.client.stop(record.provider_ref)
             except Exception:
                 log.exception("supervisor stop failed")
+        self.store.clear_control_lease(record.id, holder="none")
+        record = self.store.get_computer_for_bot(bot)
         record.state = "suspended"
-        record.control_holder = "none"
-        record.control_lease_id = None
-        record.control_lease_expires_at = None
-        record.control_bot_id = None
         record.execution_bot_id = None
         record.execution_run_id = None
         record.execution_lease_expires_at = None
         record.sleep_at = None
         record.home_revision = isoformat_utc()
-        self.store.save_computer(record)
+        self.store.save_box_state(record)
         return self.status(bot)
 
     def restart(self, bot: Bot) -> ComputerStatus:
@@ -207,13 +247,15 @@ class ComputerService:
             record.execution_lease_expires_at = None
             changed = True
         if record.control_bot_id == bot_id:
+            self.store.clear_control_lease(record.id, holder="none")
             record.control_holder = "none"
             record.control_lease_id = None
             record.control_lease_expires_at = None
             record.control_bot_id = None
+            record.last_input_at = None
             changed = True
         if changed:
-            self.store.save_computer(record)
+            self.store.save_box_state(record)
         return record
 
     def _destroy_box(self, record: ComputerRecord) -> ComputerRecord:
@@ -228,21 +270,18 @@ class ComputerService:
             log.exception("failed to wipe computer home %s", record.home_key)
         record.provider_ref = None
         record.state = "stopped"
-        record.control_holder = "none"
-        record.control_lease_id = None
-        record.control_lease_expires_at = None
-        record.control_bot_id = None
         record.execution_bot_id = None
         record.execution_run_id = None
         record.execution_lease_expires_at = None
         record.sleep_at = None
         record.home_revision = isoformat_utc()
-        self.store.save_computer(record)
-        return record
+        self.store.clear_control_lease(record.id, holder="none")
+        return self.store.save_box_state(record)
 
     def takeover(self, bot: Bot) -> TakeoverResult:
         record = self.store.get_computer_for_bot(bot)
         record = self._expire_lease(record)
+        record = self._expire_idle_control(record)
         if record.state != "running" or not record.provider_ref:
             raise ComputerError("computer is not running")
         if record.scope == "team" and record.execution_bot_id and record.execution_bot_id != bot.id:
@@ -258,38 +297,30 @@ class ComputerService:
             return TakeoverResult(lease_id=record.control_lease_id, expires_at=expires)
         lease_id = new_id("lease")
         expires_at = isoformat_utc(datetime.now(UTC) + self._takeover_ttl())
-        record.control_holder = "user"
-        record.control_lease_id = lease_id
-        record.control_lease_expires_at = expires_at
-        record.control_bot_id = bot.id
-        record = self._touch(record)
-        self.store.save_computer(record)
+        last_input_at = isoformat_utc()
+        saved = self.store.set_control_lease(record.id, bot.id, lease_id, expires_at, last_input_at)
+        if saved is None:
+            raise ComputerError("take control first")
         return TakeoverResult(lease_id=lease_id, expires_at=expires_at)
 
     def release(self, bot: Bot) -> ComputerStatus:
         record = self.store.get_computer_for_bot(bot)
-        if record.provider_ref and record.control_lease_id:
+        lease_id = record.control_lease_id
+        if record.provider_ref and lease_id:
             try:
-                self.client.screen_mode(record.provider_ref, False, record.control_lease_id)
+                self.client.screen_mode(record.provider_ref, False, lease_id)
             except Exception:
                 log.exception("failed to drop control screen")
-        record.control_holder = "bot"
-        record.control_lease_id = None
-        record.control_lease_expires_at = None
-        record.control_bot_id = None
-        self.store.save_computer(record)
+        self.store.clear_control_lease(record.id, lease_id=lease_id)
         return self.status(bot)
 
     def heartbeat(self, bot: Bot) -> ComputerStatus:
-        record = self.store.get_computer_for_bot(bot)
-        if record.state == "running":
-            record = self._touch(record)
-            self.store.save_computer(record)
         return self.status(bot)
 
     def screen_url(self, bot: Bot) -> ScreenUrlResult:
         record = self.store.get_computer_for_bot(bot)
         record = self._expire_lease(record)
+        record = self._expire_idle_control(record)
         if record.state not in {"running", "booting"} or not record.provider_ref:
             return ScreenUrlResult(url=None)
         if record.kind == "fake" or self.settings.sandbox_provider == "fake":
@@ -312,7 +343,7 @@ class ComputerService:
                 try:
                     record.provider_ref = None
                     record.state = "stopped"
-                    self.store.save_computer(record)
+                    self.store.save_box_state(record)
                     self.boot(bot)
                     record = self.store.get_computer_for_bot(bot)
                     if record.provider_ref:
@@ -328,8 +359,6 @@ class ComputerService:
             raise ComputerUnavailable("screen unavailable")
         secret = self.settings.agent_http_token
         url = mint_novnc_url(secret, "127.0.0.1", int(port), interactive=control_ready)
-        record = self._touch(record)
-        self.store.save_computer(record)
         return ScreenUrlResult(url=url)
 
     def list_files(self, bot: Bot, path: str = "/", hidden: bool = False) -> ComputerFileList:
@@ -403,14 +432,30 @@ class ComputerService:
             size=size,
         )
 
-    def send_input(self, bot: Bot, kind: str, payload: dict[str, Any]) -> None:
+    def send_input(
+        self, bot: Bot, kind: str, payload: dict[str, Any], lease_id: str | None = None
+    ) -> None:
+        if not lease_id:
+            raise ComputerError("take control first")
         record = self.store.get_computer_for_bot(bot)
         record = self._expire_lease(record)
-        if not self._user_has_control(record) or not record.provider_ref:
+        record = self._expire_idle_control(record)
+        if (
+            not self._user_has_control(record)
+            or not record.provider_ref
+            or record.control_lease_id != lease_id
+        ):
             raise ComputerError("take control first")
-        self.client.send_input(record.provider_ref, kind, payload)
-        record = self._touch(record)
-        self.store.save_computer(record)
+        if kind != "activity":
+            self.client.send_input(record.provider_ref, kind, payload)
+        touched = self.store.touch_control_input(
+            record.id,
+            lease_id,
+            isoformat_utc(),
+            isoformat_utc(datetime.now(UTC) + self._idle_ttl()),
+        )
+        if not touched:
+            raise ComputerError("take control first")
 
     def ensure_running(self, bot: Bot) -> ComputerRecord:
         record = self.store.get_computer_for_bot(bot)
@@ -423,7 +468,7 @@ class ComputerService:
             self.boot(bot)
             record = self.store.get_computer_for_bot(bot)
         record = self._touch(record)
-        self.store.save_computer(record)
+        self.store.save_box_state(record)
         return record
 
     def observe(self, bot: Bot, include_image: bool = False) -> dict[str, Any]:
@@ -465,6 +510,9 @@ class ComputerService:
         record = self.ensure_running(bot)
         return self.client.execute(record.provider_ref, command)
 
+    execute = exec_command
+    start = boot
+
     def open_path(self, bot: Bot, path: str) -> dict[str, Any]:
         record = self.ensure_running(bot)
         return self.client.act(record.provider_ref, [{"kind": "open", "path": path}])
@@ -482,7 +530,7 @@ class ComputerService:
         if record.state != "running" or not record.provider_ref:
             return {"ok": True, "closed": name, "state": record.state}
         record = self._touch(record)
-        self.store.save_computer(record)
+        self.store.save_box_state(record)
         return self.client.act(record.provider_ref, [{"kind": "close", "name": name}])
 
     def switch_mode(self, bot: Bot, mode: str) -> Bot:
@@ -515,6 +563,26 @@ class ComputerService:
     def _idle_ttl(self) -> timedelta:
         return timedelta(seconds=max(60, int(self.settings.computer_idle_seconds)))
 
+    def _idle_control_ttl(self) -> timedelta:
+        return timedelta(seconds=max(30, int(self.settings.computer_takeover_idle_seconds)))
+
+    def _expire_idle_control(self, record: ComputerRecord) -> ComputerRecord:
+        if record.control_holder != "user":
+            return record
+        stamp = record.last_input_at or record.updated_at
+        if not stamp:
+            return record
+        last = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        if last + self._idle_control_ttl() > datetime.now(UTC):
+            return record
+        if record.provider_ref and record.control_lease_id:
+            try:
+                self.client.screen_mode(record.provider_ref, False, record.control_lease_id)
+            except Exception:
+                log.exception("failed to idle-release control screen")
+        cleared = self.store.clear_control_lease(record.id, lease_id=record.control_lease_id)
+        return cleared or record
+
     def _user_has_control(self, record: ComputerRecord) -> bool:
         if (
             record.control_holder != "user"
@@ -536,8 +604,7 @@ class ComputerService:
                 self.client.screen_mode(record.provider_ref, False, record.control_lease_id)
             except Exception:
                 log.exception("failed to expire control screen")
-        record.control_holder = "none"
-        record.control_lease_id = None
-        record.control_lease_expires_at = None
-        record.control_bot_id = None
-        return self.store.save_computer(record)
+        cleared = self.store.clear_control_lease(
+            record.id, lease_id=record.control_lease_id, holder="none"
+        )
+        return cleared or record

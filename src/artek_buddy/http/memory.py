@@ -23,7 +23,6 @@ from artek_buddy.memory import (
     export_markdown,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
 from fastapi import APIRouter
@@ -63,6 +62,9 @@ async def create_memory(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> MemoryDocument:
+    from artek_buddy.bot_credentials import raise_if_pasted_credential
+
+    raise_if_pasted_credential(body.content)
     try:
         if body.scope == MemoryScope.bot:
             if not body.bot_id:
@@ -126,6 +128,9 @@ async def update_memory(
     history: HistoryStore = Depends(store),
     events: EventHub = Depends(hub),
 ) -> MemoryDocument:
+    from artek_buddy.bot_credentials import raise_if_pasted_credential
+
+    raise_if_pasted_credential(body.content)
     try:
         document = history.update_memory(document_id, body.content)
         hub = _memory_hub()

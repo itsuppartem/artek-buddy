@@ -25,6 +25,9 @@ class BotsMixin:
             return False
         with self._conn() as conn:
             with conn.transaction():
+                tombstone = getattr(self, "_tombstone_search_resource_tx", None)
+                if callable(tombstone):
+                    tombstone(conn, bot_id)
                 conn.execute(
                     "DELETE FROM memory_entries WHERE scope = 'bot' AND bot_id = %s",
                     (bot_id,),
@@ -49,8 +52,13 @@ class BotsMixin:
                     )
                 else:
                     conn.execute("DELETE FROM memory_documents WHERE bot_id = %s", (bot_id,))
+                conn.execute(
+                    "DELETE FROM bot_asks WHERE from_bot_id = %s OR to_bot_id = %s",
+                    (bot_id, bot_id),
+                )
                 conn.execute("DELETE FROM consent_requests WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM consent_grants WHERE bot_id = %s", (bot_id,))
+                conn.execute("DELETE FROM skill_books WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM routines WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM turn_inbox WHERE bot_id = %s", (bot_id,))
                 conn.execute("DELETE FROM subagents WHERE bot_id = %s", (bot_id,))
@@ -172,6 +180,16 @@ class BotsMixin:
                     bot_id,
                 ),
             ).fetchone()
+            indexer = getattr(self, "_upsert_search_document_tx", None)
+            if callable(indexer) and row is not None:
+                indexer(
+                    conn,
+                    document_kind="bot",
+                    resource_id=bot_id,
+                    source_id=bot_id,
+                    title=new_name,
+                    body=new_title or "",
+                )
             conn.commit()
         updated = self._bot_from_row(row) if row else None
         if updated is not None and computer_mode is not None and new_mode != bot.computer_mode:
@@ -201,12 +219,12 @@ class BotsMixin:
                 rows = conn.execute(
                     """
                     UPDATE runs
-                    SET status = %s, completed_at = %s
+                    SET status = %s, error = %s, completed_at = %s
                     WHERE bot_id = %s
                       AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
                     RETURNING id
                     """,
-                    (RunStatus.cancelled.value, now, bot_id),
+                    (RunStatus.cancelled.value, "Stopped.", now, bot_id),
                 ).fetchall()
                 conn.execute(
                     "UPDATE bots SET status = 'idle', updated_at = %s WHERE id = %s",
@@ -315,6 +333,16 @@ class BotsMixin:
                     """,
                     (thread_id, bot_id, workspace_id, now),
                 )
+                indexer = getattr(self, "_upsert_search_document_tx", None)
+                if callable(indexer):
+                    indexer(
+                        conn,
+                        document_kind="bot",
+                        resource_id=bot_id,
+                        source_id=bot_id,
+                        title=name,
+                        body=title or "",
+                    )
         bot = self.get_bot(bot_id)
         if bot is None:
             raise RuntimeError("failed to create bot")
@@ -342,9 +370,20 @@ class BotsMixin:
         with self._conn() as conn:
             rows = conn.execute(
                 """
-                SELECT * FROM bots
-                WHERE archived_at IS NULL
-                ORDER BY pinned DESC, updated_at DESC, created_at DESC
+                SELECT bots.*,
+                       CASE
+                           WHEN bots.status = 'idle' AND EXISTS (
+                               SELECT 1
+                               FROM subagents
+                               WHERE subagents.bot_id = bots.id
+                                 AND subagents.status IN ('queued', 'running')
+                           )
+                           THEN 'running'
+                           ELSE bots.status
+                       END AS effective_status
+                FROM bots
+                WHERE bots.archived_at IS NULL
+                ORDER BY bots.pinned DESC, bots.updated_at DESC, bots.created_at DESC
                 """
             ).fetchall()
             conn.commit()
@@ -412,7 +451,7 @@ class BotsMixin:
             parent_bot_id=row["parent_bot_id"],
             thread_id=row["thread_id"],
             preview=row["preview"] or "",
-            status=row["status"] or "idle",
+            status=row.get("effective_status") or row["status"] or "idle",
             computer_mode="dedicated" if row["computer_mode"] == "dedicated" else "team",
             cursor_agent_id=row.get("cursor_agent_id"),
             updated_at=parse_iso(row["updated_at"]),

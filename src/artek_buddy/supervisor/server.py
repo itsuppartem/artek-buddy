@@ -4,18 +4,33 @@ import json
 import logging
 import os
 import re
+import secrets
+from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
-from artek_buddy.auth import supervisor_token
+from artek_buddy.auth import (
+    derive_credential_executor_token,
+    host_token_match,
+    supervisor_token,
+)
 from artek_buddy.observe import configure_logging
+from artek_buddy.supervisor.credential_runner import (
+    credential_runner_spec,
+    resolve_credential_home,
+    run_credential_container,
+)
 from artek_buddy.supervisor.desktop_spec import (
     desktop_create_spec,
     inspect_is_hardened,
 )
-from artek_buddy.supervisor.docker_engine import DockerEngine, published_port
+from artek_buddy.supervisor.docker_engine import (
+    DockerEngine,
+    published_port,
+    write_container_file,
+)
 from artek_buddy.supervisor.logic import (
     action_command,
     input_command,
@@ -27,6 +42,17 @@ from artek_buddy.supervisor.logic import (
 log = logging.getLogger("artek_buddy.supervisor")
 
 SAFE_HOME = re.compile(r"^[A-Za-z0-9._-]+$")
+SAFE_BOT = re.compile(r"^bot_[0-9a-f]{16}$")
+SUPERVISOR_ERROR = "supervisor error"
+
+
+def supervisor_authorized(header: str, token: str) -> bool:
+    if not token:
+        return False
+    scheme, _, rest = header.partition(" ")
+    if scheme != "Bearer" or not rest:
+        return False
+    return host_token_match(rest, token)
 
 
 class SupervisorState:
@@ -36,7 +62,14 @@ class SupervisorState:
             os.environ.get("AGENT_HTTP_TOKEN", ""),
             os.environ.get("SANDBOX_SUPERVISOR_TOKEN", ""),
         )
+        self.credential_executor_token = os.environ.get(
+            "CREDENTIAL_EXECUTOR_TOKEN", ""
+        ).strip() or derive_credential_executor_token(os.environ.get("AGENT_HTTP_TOKEN", ""))
         self.image = os.environ.get("COMPUTER_IMAGE", "artek-buddy-computer:local")
+        self.credential_runner_image = os.environ.get(
+            "CREDENTIAL_RUNNER_IMAGE",
+            "artek-buddy:local",
+        )
         self.data_dir = Path(os.environ.get("AGENT_DATA_DIR", "/data"))
 
 
@@ -49,7 +82,7 @@ def container_name(home_key: str) -> str:
 
 
 def home_dir(home_key: str) -> Path:
-    if not SAFE_HOME.match(home_key):
+    if not SAFE_HOME.fullmatch(home_key):
         raise ValueError("invalid home key")
     path = STATE.data_dir / "homes" / home_key
     path.mkdir(parents=True, exist_ok=True)
@@ -75,8 +108,7 @@ class Handler(BaseHTTPRequestHandler):
         log.info(fmt, *args)
 
     def _auth(self) -> bool:
-        header = self.headers.get("Authorization", "")
-        return bool(STATE.token) and header == f"Bearer {STATE.token}"
+        return supervisor_authorized(self.headers.get("Authorization", ""), STATE.token)
 
     def _json(self, status: int, payload: Any) -> None:
         data = json.dumps(payload).encode("utf-8")
@@ -119,10 +151,25 @@ class Handler(BaseHTTPRequestHandler):
         self._json(404, {"error": "not found"})
 
     def do_POST(self) -> None:
+        parts = self._parts()
+        if parts == ["credential-executions"]:
+            if not supervisor_authorized(
+                self.headers.get("Authorization", ""),
+                STATE.credential_executor_token,
+            ):
+                self._json(401, {"error": "unauthorized"})
+                return
+            try:
+                self._credential_execute(self._read())
+            except (TypeError, ValueError):
+                self._json(400, {"error": "invalid credential execution"})
+            except Exception:
+                log.exception("credential runner error")
+                self._json(500, {"error": "credential runner error"})
+            return
         if not self._auth():
             self._json(401, {"error": "unauthorized"})
             return
-        parts = self._parts()
         body = self._read()
         try:
             if parts == ["computers"]:
@@ -162,11 +209,47 @@ class Handler(BaseHTTPRequestHandler):
                 if action == "files":
                     self._files(cid, write=True, body=body)
                     return
-        except Exception as err:
+        except Exception:
             log.exception("supervisor error")
-            self._json(500, {"error": str(err)})
+            self._json(500, {"error": SUPERVISOR_ERROR})
             return
         self._json(404, {"error": "not found"})
+
+    def _credential_execute(self, body: dict[str, Any]) -> None:
+        bot_id = str(body.get("bot_id") or "")
+        home_key = str(body.get("home_key") or "")
+        if not SAFE_BOT.fullmatch(bot_id):
+            raise ValueError("invalid bot id")
+        cwd = str(body.get("cwd") or ".")
+        home, _target = resolve_credential_home(STATE.data_dir, home_key, cwd)
+        raw_env = body.get("injected_env")
+        if not isinstance(raw_env, dict):
+            raise ValueError("invalid execution environment")
+        injected_env = {
+            str(name): str(value)
+            for name, value in raw_env.items()
+            if isinstance(name, str) and isinstance(value, str)
+        }
+        if len(injected_env) != len(raw_env):
+            raise ValueError("invalid execution environment")
+        network = STATE.engine.ensure_network("artek-computers")
+        spec = credential_runner_spec(
+            name=f"artek-credential-runner-{secrets.token_hex(8)}",
+            image=STATE.credential_runner_image,
+            home=home,
+            home_key=home_key,
+            cwd=cwd,
+            command=str(body.get("command") or ""),
+            network=network,
+            injected_env=injected_env,
+        )
+        result = run_credential_container(
+            STATE.engine,
+            spec,
+            timeout_seconds=float(body.get("timeout_seconds") or 30),
+            redacted_secrets=list(injected_env.values()),
+        )
+        self._json(200, asdict(result))
 
     def do_DELETE(self) -> None:
         if not self._auth():
@@ -256,10 +339,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if write and body and "content" in body:
             content = str(body.get("content") or "")
-            code, text = STATE.engine.exec(
-                cid,
-                f"mkdir -p $(dirname {shell_quote(target)}) && cat > {shell_quote(target)} <<'ARTEK_EOF'\n{content}\nARTEK_EOF",
-            )
+            code, text = write_container_file(STATE.engine, cid, target, content.encode("utf-8"))
             self._json(200, {"ok": code == 0, "path": rel, "output": text})
             return
         if write:

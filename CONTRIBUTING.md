@@ -1,6 +1,6 @@
 # Contributing
 
-Artek Buddy is a personal, self-hosted Raspberry Pi agent. The HTTP API is
+Artek Buddy is a personal, self-hosted Linux agent (PC, server, or Raspberry Pi). The HTTP API is
 the product. The first client is a Linux `.deb`.
 
 ## License
@@ -10,21 +10,36 @@ the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 ## How to work
 
-1. Read [README.md](README.md), [CHANGELOG.md](CHANGELOG.md), [SECURITY.md](SECURITY.md), and [THREAT-MODEL.md](THREAT-MODEL.md).
+1. Read [VISION.md](VISION.md) for product invariants and non-goals, [AGENTS.md](AGENTS.md) for repo architecture and CI commands, and review [README.md](README.md), [CHANGELOG.md](CHANGELOG.md), [SECURITY.md](SECURITY.md), and [THREAT-MODEL.md](THREAT-MODEL.md).
 2. Branch from `develop`. Do not commit or push `main`.
 3. Keep JSON on the wire `snake_case`.
 4. Do not add a second model provider. Cursor Cloud is the live runtime.
 5. Do not add a vendor cloud desktop or a laptop sandbox.
 
-CI is `.github/workflows/test.yml`: `quality` (Ruff + mypy + pip-audit), `backend`
+CI is `.github/workflows/test.yml` on PRs into `develop`/`main` and on pushes to those branches: `quality` (Ruff + mypy + pip-audit), `backend`
 (pytest + coverage + `npm audit --audit-level=high`, no Docker desktop), `scan`
-(Trivy filesystem), `ui` (scripted `.deb` window),
-and optional `live` (Grok, needs the Actions secret). CodeQL is
+(Trivy filesystem), `ui` (scripted `.deb` window), `ui_web` (host page
+at iPhone 11 Pro size), and optional `live` / `live_web` (Grok, needs the
+Actions secret). CodeQL is
 `.github/workflows/codeql.yml` (Python + JavaScript). Alerts on a PR are
 work: fix the bug, or name the residual in [THREAT-MODEL.md](THREAT-MODEL.md).
 Do not ignore them as scanner noise. Do not point a runner at the live `:8080` stack or the owner
 Postgres. Do not print `CURSOR_API_KEY`, host tokens, or
 `docker compose config` in Actions — the repo is public.
+
+## Local check command
+
+Run the same quality, backend, and client/web suite locally:
+
+```bash
+make check
+# or directly:
+./scripts/check.sh
+# dry-run to preview commands:
+./scripts/check.sh -n
+```
+
+This command covers the `quality` (Ruff, mypy, pip-audit) and `backend` (pytest, coverage >= 71%, coverage floors, OpenAPI export) checks, as well as `client/web` checks if Node is installed. UI (`ui`, `ui_web`), live model tests (`live`, `live_web`), filesystem scan (`scan`), and `CodeQL` remain CI-only.
 
 Python tool config lives in `pyproject.toml`. Same checks as the `quality` job:
 
@@ -34,6 +49,10 @@ python -m ruff format --check src tests client
 python -m ruff check src tests client
 python -m mypy
 ```
+
+The API suite fails closed on migration and workspace setup errors. Set
+`ARTEK_ALLOW_DB_SKIP=1` locally (ignored when `CI` is set) to skip those tests
+when Postgres is absent. Actions prints pass/fail/skip counts on the job summary.
 
 Window TypeScript (from `client/web`):
 
@@ -52,14 +71,17 @@ Runtime `/docs` stays off. The dump writes `client/web/openapi.json`; `npm run g
 
 GitHub Releases attach `artek-buddy-client_<version>_all.deb` (no baked host URL),
 `SHA256SUMS`, CycloneDX SBOMs, and `install-host.sh` after a `VERSION` bump on
-`main` when `test` on that commit is green (`release.yml` is `workflow_run` on
-`test`). Notes are the changelog section for that version. The `test` workflow
-builds a `.deb` for Playwright; it does not upload that artifact.
+`main` when `test` and CodeQL on that commit are green (`release.yml` is dispatched
+from `main`, not a default-branch `workflow_run`). Dispatch refuses an already
+published tag or GitHub Release. Notes are the changelog section for that version.
+The `test` workflow builds a `.deb` for Playwright; it does not upload that artifact.
 
 You can still build a local package (unreleased tree, or `ARTEK_BAKE_URL=1`):
 
 ```bash
 client/build-deb.sh
+# From Downloads, use dpkg. `apt install ./…` often fails because `_apt`
+# cannot read the home directory.
 sudo dpkg -i artek-buddy-client_<version>_all.deb
 sudo apt-get install -f
 ```
@@ -78,12 +100,44 @@ Build on a machine with Node 22. Install on Debian/Ubuntu. Do not commit `*.deb`
 Daily work is a pull request **into `develop`**. `main` is release-only:
 open `develop` → `main` when shipping. Never push `main` directly.
 New issues can use the GitHub forms (bug, feature, engineering).
-PRs into `main` cannot merge while `backend` or `ui` is red.
+
+### PR titles and conventional commits
+
+PR titles must follow Conventional Commits formatting:
+`<type>(<scope>): <description>` or `<type>: <description>`.
+Valid types: `fix`, `feat`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+The `quality` workflow validates PR titles automatically via `infra/check_pr_title.py`.
+
+### Issue labels and triage
+
+- **Types:** `bug`, `enhancement` (features), `engineering` (quality, CI, security, docs).
+- **Priority:** `P0` (do first, host vulnerabilities), `P1` (high ROI), `P2` (standard milestone work), `P3` (later/polish).
+- **Areas:** `area:host` (FastAPI / supervisor / runtime), `area:client` (Linux `.deb` & web), `area:ci` (Actions, packaging), `area:docs` (documentation), `area:security` (threat model & sandboxing).
+- **Risk tags:** `security` (trust boundary / auth changes), `migration` (database migrations), `api-break` (wire API changes).
+
+PRs into `develop` or `main` cannot merge while any of these checks is red:
+`quality`, `backend`, `ui`, `ui_web`, `scan`, `live_gate`, `analyze (python)`,
+`analyze (javascript-typescript)`, and `CodeQL`. That is rulesets
+**Protect develop** and **Protect main**.
+`live` is not required (it needs the Actions secret; `live_web` is the same
+kind of optional Grok job for the host page; `live_gate` already records
+skipped vs failed). Review
+count is 0; do not push `main` or `develop` directly.
 A merge into `main` that changes `VERSION` publishes a GitHub Release only after
-the **push** `test` run on that commit is green (`release.yml` is `workflow_run`
-on `test`, not a parallel `push`). The computer image is not built in Actions.
-Only the five newest Releases stay; `infra/prune-releases.sh` deletes the rest
-and matching GHCR tags.
+the **push** `test` run **and** CodeQL on that commit are green, then `release.yml`
+is `workflow_dispatch`ed from **that** `main` SHA. Bind prints those CodeQL
+check-run and workflow run ids. Dispatch aborts if the VERSION
+tag or GitHub Release already exists (`force` cannot skip that). GitHub does not
+load this privileged YAML via default-branch `workflow_run`. The Release tag is
+that same SHA (`--verify-tag`); a peel mismatch aborts before GHCR tags move.
+GHCR `VERSION` / `latest` move only after that GitHub Release exists.
+The computer image is not built in Actions.
+The host image is pushed by digest, Trivy-scanned (HIGH and CRITICAL), then
+tagged as the version and `latest` after the GitHub Release exists — same digest,
+no rebuild. A second upload
+of the same Release asset name fails (no `--clobber`). GitHub Releases stay;
+`infra/prune-releases.sh` is a **manual** operator script, not the default
+release path.
 
 - One product version for host and client (`VERSION`,
   `src/artek_buddy/__init__.py`, `client/VERSION`).

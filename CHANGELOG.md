@@ -2,6 +2,226 @@
 
 ## Unreleased
 
+## [0.2.0] - 2026-09-09
+
+This is the **v0.2.0** baseline. GitHub Releases **0.10.23–0.10.27** were the same product line under Debian-style numbering; this cut is the milestone-7 ship. Ships the window that lived on `develop` after **0.10.27**: Today, workspace rail, Work log, Library, phone host page, Models keys in the window, bot-to-bot, connections, playbooks, usage in Work log. Cursor remains the live agent runtime. An HTTP provider key in Models is catalog/check and a one-shot reply, not computer-use.
+
+### Added
+- Model catalog Save keeps variants and parameter ids/values (`0034_model_catalog_extras.sql`). `GET /v1/models` exposes those extras when present and still omits them for id-only rows. A router catalog id is selectable only when the list actually includes it.
+- Host Cursor bridge applies Settings timeouts (`CURSOR_UNARY_TIMEOUT_S`, `CURSOR_STREAM_TIMEOUT_S`, `CURSOR_MAX_RETRIES`) via SDK `with_options`. A timeout finishes as a retryable owner-visible message, not a hang. Read-only RPC retries stay small; a send that already has a run id is not retried.
+- Job-driven worker and routine turns keep a stable host `idempotency_key` (job id, or the worker row id) on the host POST. The local model send omits it: that bridge rejects Idempotency-Key (cloud Send only). Interactive owner Send still omits it.
+- Work log keeps recent runs in this chat (newest first, grouped by parent run) and shows per-turn token counts and an estimated $ from `GET /v1/usage` when present. Show work log stays after complete. No Models spend pane.
+- Persist per-turn token usage (`0033_usage.sql`, `0035_usage_cost.sql`, `GET /v1/usage`, `GET /v1/usage/summary`): input, output, cache, reasoning, total, and an estimated USD (integer micros at write time) for lead and worker product runs. Missing usage or an unknown model omits the estimate, not a failed turn. `usage.recorded` SSE is counts plus that estimate when known. No Models spend pane.
+- Added permission-aware Postgres full-text search (`0031_search_documents.sql`, `GET /v1/search`): GIN `simple` over message text, memory, artifact names, and bot names. The authorized resource set is applied in SQL before `ts_rank`, headline, and limit. Non-owner callers get the same empty page as a miss. The inbox Search box keeps name/preview filter and lists host hits underneath.
+- Extended routines into versioned automations (`0032_automations.sql`): cron still fires, Run is an idempotent manual trigger, an optional approval ask pauses on this host, and edits do not mutate an in-flight snapshot. Dry-run previews the prompt without enqueueing tools.
+- Added a durable Postgres activity log (`0030_activity.sql`) with a workspace-monotonic sequence, same-transaction writes for messages, grants, consent decisions, member/device lifecycle, and artifact metadata, and resumable SSE via `after_sequence` / `Last-Event-ID`. A pruned cursor emits an explicit gap/resync instead of a silent hole. EventHub stays live fan-out only.
+- Added PostgreSQL durable jobs table (`0029_jobs.sql`) claimed via `FOR UPDATE SKIP LOCKED` with lease tracking, heartbeats, exponential backoff with jitter, idempotency keys, routine fire job migration, owner dead-letter inspection endpoint (`GET /v1/jobs/dead`), and CLI tool (`artek-buddy jobs-dead`).
+- Added tamper-evident audit chain in Postgres (`0028_audit.sql`), recording sha256 hash-chained canonical JSON events across member lifecycle, device creation/revocation, grants, and consent decisions, with CLI verification (`artek-buddy audit-verify` / `audit-export`) and `GET /v1/audit` owner endpoint.
+- Bound paired devices to a member actor (`0027_members.sql`), bootstrapping an immutable owner member, migrating unrevoked/existing devices to the owner, updating `GET /v1/me` with member and active devices list, allowing owners to revoke individual devices without deleting the member, and immediately denying authentication and terminating open SSE connections if a member is suspended.
+- Added in-tree performance budget measurement tool `infra/perf_budget.py` and `make perf` recording .deb install, cold window first paint, pairing/resume, large thread fixture load, first scripted SSE event latency, replay of N events, and process RSS in observation mode with secret redaction and sleep calibration.
+- Formalized runtime and computer protocol interfaces (`AgentRuntime`, `ComputerGateway`, `SupervisorGateway`) with explicit capability flags (`RuntimeCapabilities`, `ComputerCapabilities`), error categories (`unavailable`, `timeout`, `cancelled`, `exhausted`, `transient`, `permanent`), secret redaction before API/log surfaces, and conformance tests.
+- Added `VISION.md` (defining core invariants: one trusted host, durable bots, human consent, Team vs Private desktops, small invited group, and explicit non-goals like Kubernetes/Redis/multi-tenant SaaS) and repo-root `AGENTS.md` (read order, architecture map, CI command reference).
+- Covered remaining host-page phone click flows in `ui_web` (`tests/live_web`): Got it dismisses the Home Screen hint (persisting across reloads), standalone mode offers Turn on alerts with permission grant/denial handling, pairing with an invalid code shows a visible error card, New bot cancel returns to the previous context, and the stacked phone navigation shell remains functional in 812×375 landscape orientation.
+- Committed `ENGINEERING.md` (quality gates, coverage ratchets, Compose rationale, risk pointers) and `OPERATIONS.md` (network policy, readiness healthchecks, backup/restore, release process), and streamlined the README first screen with direct architecture and operational links.
+- GitHub PR and issue templates include risk, security boundaries, migration, compatibility, and evidence prompts; added `SUPPORT.md` and `CODE_OF_CONDUCT.md` community governance files.
+- Pull request titles are validated against Conventional Commits in the `quality` CI job using `infra/check_pr_title.py`.
+- Local check runner `scripts/check.sh` and `make check` run the `quality` and `backend` test suite locally with `--help` and `--dry-run`, mapping directly to CI jobs.
+- Library / phone More now has one Appearance control: System follows the OS color scheme, while Light and Dark persist as a device-local override.
+- The paired window now opens on Today: describe an outcome and a hidden workspace routing layer reads every existing bot's profile, activity, and bounded recent context before choosing the bot that owns it. The router is not a pinned bot or a chat. A workspace rail separates Today, Chats, Routines, and Library; Work log keeps worker/tool detail out of the durable conversation.
+- Library groups Connections, Models, selected-bot Memory, and profile/access. Phone More also exposes Routines. Pairing and bot marks use a redrawn navy / sky / cream Cavalier across the `.deb`, host page, PWA, and launcher icons.
+- A background worker can report a short owner-safe step. That text replaces the waiting dots in one in-flight status slot (`please e2e-worker-progress`) instead of appending chat bubbles. No worker card or native alert.
+- Owner jobs have a short client delivery ACK and a separate queued / acknowledged / terminal lifecycle. A new `.deb` claims a job before touching This PC; older clients may still return a result without ACK.
+- The Linux client can opt into SSH connection reuse with `~/.config/artek-buddy/ssh-mux`. Its private ControlMaster socket never changes `~/.ssh/config`; related small remote checks are batched into one SSH session.
+- A replaced Cursor lead session receives one bounded, redacted resume brief with known workspace, path/branch facts, constraints, and the last visible result.
+- Phone desktop overlay only: the remote screen is a pad (drag moves the pointer, tap left click, two fingers right click). Keyboard opens the phone keyboard. The host page clears the iPhone notch (`safe-area-inset-top`) and does not leave a second empty strip under the nav.
+- The same Funnel / tailnet URL serves the window. A phone pairs with a code; the device token stays in an httpOnly cookie. Narrow screens use Today / Chats / Desktop / More (iPhone 11 Pro 375×812). iPhone Add to Home Screen plus Turn on alerts works only while that app is open. This-PC files stay on the Linux `.deb`. CI splits `ui` (`.deb`) from `ui_web` / `live_web`.
+- The owner can keep a published skill for this chat (`install_book` from a public URL after Allow). The stored body is the fetched markdown. The next turn sees names only; the agent calls `open_book` itself when the description matches the task. No Settings form or owner trigger.
+- Models and Plugins Save name a host error instead of staying silent. A row's model is the host default (no second Default list). Cursor exposes reasoning and Fast; Save prefers grok-4.6 extra-high fast when that id is on the list. A Plugins key already on the host at boot shows as Key saved.
+- After an app is connected, the lead and a worker already have that app's tools this turn and call them themselves. The thread shows that app's result as a card. There is no chip above Message.
+- The lead can search catalog apps (`list_apps`) and attach them (`connect_app`) from chat. Connected names ride in the turn. Login URLs open in the owner's browser, not the bot desktop.
+- Plugins pane: paste a host key, search the catalog, connect or disconnect an app. Only connected apps become tools on the next turn. The window never sees a saved full key.
+- A bot can ask another inbox bot by name or id. This chat shows the ask and a card to that chat. The other bot works in its own thread; only its last message comes back so this bot can answer you. Missing, archived, deleted, empty, and self-asks fail closed.
+- Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
+
+### Changed
+- Debian `.deb` `Version` uses epoch 1 (`1:0.2.0`) so `dpkg` can upgrade from 0.10.27. The product number and filename stay `0.2.0`.
+- Stale-run cleanup lists through `client.agents.list_runs`. Owner Stop and listed-run cancel use `run.supports("cancel")` then `cancel()` and do not probe stop/abort. 404 ListRuns stays quiet (#328).
+- Pin the window OpenAPI toolchain's `js-yaml` to 4.3.2 so the backend job's npm audit high gate stays green.
+- Generalized documentation, architecture diagrams, threat models, and scripts to describe any standard Linux host (PC, server, mini PC, or Raspberry Pi) rather than assuming a Raspberry Pi.
+- Tested and verified the interactive consent HTTP contract on Allow once, Always, repeat answers, and consent job results (`POST /v1/consents/{id}/result`), validating base64 inputs and honoring grants across subsequent prompts.
+- CI test workflows publish JUnit XML and coverage reports to GitHub Step Summary with secret redaction, and upload test/coverage XML artifacts without traces.
+- `SECURITY.md` clarifies that token disclosure by the product is in scope, whereas abuse of an already-compromised credential across the normal API is an operator compromise.
+- Chromium on the bot desktop treats Sleep as a clean exit (no Restore tabs bar) and default-allows geolocation, notifications, and camera/mic chrome so page actions are not blocked by those bubbles. File pickers and login still need Take control.
+- Host-page Pair on a Funnel / tailnet URL uses that public origin (`X-Forwarded-Host` / `X-Forwarded-Proto`) and refreshes the page nonce before consume, so a host restart does not leave Pair on **forbidden**. Status advertises that origin. Pairing copy says the code is created on the host.
+- The bot desktop polls the guest below one video frame, briefly coalesces redraw bursts, uses lower-overhead screen encoding, and can use 1.5 CPU. Chromium, Files, Terminal, view-only preview, and lease-bound Take control stay unchanged.
+- Desktop inbox and context panes now have pointer- and keyboard-resizable dividers with persisted widths. Work log collapses long worker briefs into scannable rows, and its run summary is the only trigger.
+- Bot profile & access is the single visible Settings route. Desktop contains only desktop controls, and Connections / Models no longer repeat under the inbox.
+- Scripted E2E prompts live in `runtime/scripted_scenarios.py`. `ScriptedRuntime` still runs them.
+- `ARCHITECTURE.md` matches the running tree: 26 SQL migrations, host-owned `CONNECTIONS_CALLBACK_URL`, and `release.yml` as `workflow_dispatch` on `main`.
+- Owner-job claim, file, and result transport lives in `consent_jobs.py`. Ask-card Allow/Deny stays on `ConsentHub`.
+- Today, Work log, Library, workspace navigation, inbox highlight, host-page banners, and the chat list live in `pages/shell/`. `ShellPage` still composes the window.
+- Turn registry and bot-ask delivery are separate modules. `http.turns` still re-exports the helpers other routers import.
+- Host-page `/local/*` same-origin is scheme + host + port (default ports implied), not only `Origin` netloc vs `Host`.
+- Coverage `fail_under` is 71% (remeasured 2026-09-03). Auth, owner jail, the migration runner, and supervisor write have higher per-file floors so they cannot hide behind the blob.
+- mypy still disables `attr-defined` / `arg-type` / `union-attr` / `assignment` on the host package (295 remaining). Those four codes are on for `auth`, `fs_jail`, and the migration runner (`db.connection`, `db.sql_split`, `db.history.store`).
+- Host page HTML sends CSP (`frame-ancestors 'none'`), `nosniff`, and `Referrer-Policy: no-referrer`. `/local/*` JSON on that origin gets `nosniff` and no-referrer too.
+- Host HTTP routers no longer call `logging.basicConfig` at import. JSON/text format is set only from `configure_logging` at process entry.
+- The Linux `.deb` HTTP handler is split: static window bytes, `/v1`/`/novnc` proxy, and `/local/*` RPC live in separate modules. Public imports stay on `proxy.py`.
+- Biome a11y rules are on for the window. Pairing and shell SVGs, the Message row, file previews, Memory scope, and the bot desktop overlay match those rules.
+- Ruff lint includes bugbear (`B`) and security (`S`). Current hits are per-file baselines, not a global mute. Pytest treats `DeprecationWarning` from the host package and Linux client modules as errors; there is no catch-all ignore.
+- Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
+
+### Fixed
+- Log redaction of postgres URLs no longer uses a backtracking regex (CodeQL `py/polynomial-redos` on `observe.redact_text`).
+- Opening Computer on the Deb hatch no longer jumps the open chat to the top of the transcript.
+- Busy chats keep **Still working:** in one waiting slot under the transcript. The header stays a short Working line and the run summary does not repeat that paragraph.
+- Quota and bad-key Cursor send failures finish with an owner-visible `run-error` instead of a silent dead turn: exhausted quota says to wait and try again; an invalid key says to open Models. A retryable rate limit waits `retry_after` (or a bounded backoff) and retries send once before that message. Busy still uses local force once.
+- The pairing Cavalier mark stays inside the sky hero on Deb and Phone instead of clipping off the card or covering Pair.
+- Phone Today, Chats, and More are real scrollports, and the tab bar sits on the viewport bottom with one home-indicator inset.
+- Streaming worker text no longer fills **Still working:** (`please e2e-worker-essay`). That slot stays the last clipped `report_progress` step (or dots) until the worker is terminal; the finish body is the worker `result`, not `progress`.
+- Window Stop ends the live Cursor run, not only the host row, so the next Send starts a new turn instead of failing with an already-active-run error.
+- A dead Cursor wait no longer bills a second Run via a forced send before recycling the local bridge. The first runtime run is cancelled first; a successful recovery stays silent and a failed recovery says the host retried.
+- The chat lead can attach a downloadable file card again (`send_file`). That tool is no longer worker-only. A desktop-box path under `/home/artek` maps onto that bot's computer home. A host path in a text bubble is not the download.
+- Unchecking Fast now sends Fast off on every Send, not only session create. Composer does not send extra-high reasoning with that flag (that combo billed Fast). The runtime built-in task tool is denied so extra Fast workers cannot start; product workers stay on `spawn_subagent`.
+- Browser workers can call `ask_user` and `request_takeover` on the worker turn (`please e2e-worker-blocked-browser`, `please e2e-worker-park-takeover`). Unknown or empty `browser_act` kinds, and `evaluate` without an expression, return `ok: false` instead of a silent success.
+- Browser actions in `browser_act` support scrolling (`delta_y`, `selector`, `direction`), force clicking with DOM-click fallback for intercepted buttons, and script evaluation; desktop `scroll` in `computer_act` positions the cursor when coordinates are given.
+- Symlinks under the owner home that point outside are now denied by `inspect_owner_path`, closing path escape via symlinks on This-PC tools.
+- An unsupported or 404 ListRuns route during Cursor stale-run cleanup is treated as an unavailable capability without logging an ERROR traceback, while other list/cancel failures remain visible.
+- Desktop container includes color emoji fonts (`fonts-noto-color-emoji`) so emoji glyphs and rich text render predictably without missing characters.
+- Browser actions in `browser_act` select and foreground the active tab or requested URL with bounded CDP connect and step timeouts, preventing wrong-tab interactions and multi-minute supervisor hangs.
+- `computer_observe` attaches screenshots whenever a browser window is active (e.g. Chromium / Google Chrome), preventing visual blindness during desktop mouse and keyboard automation.
+- Bot desktop container allocates 512 MB shared memory (`ShmSize`) and the Chromium launcher uses POSIX shm directly, eliminating `/tmp` tmpfs starvation and renderer Aw Snap crashes on heavy web applications.
+- Remote bot desktop clipboard paste (Ctrl+V) populates guest clipboard and primary selections via xclip and sends clean ctrl+v with cleared modifiers, preventing accidental shortcut triggers (such as opening the GTK file chooser) and keeping right-click Paste active in Chromium.
+- Russian keyboard layout edit shortcuts in the Linux .deb client and web composer: Ctrl+Z undoes and Ctrl+Shift+Z / Ctrl+Y redoes, correctly mapping X11 Cyrillic keysyms and physical KeyZ/KeyY.
+- A takeover request now parks the open run immediately, so the computer card no longer races with stale Working dots and Stop controls.
+- Ctrl+V while controlling the remote desktop now forwards host clipboard text through the active control lease into the focused guest field instead of dropping it at the noVNC frame.
+- The `.deb` now maps physical Ctrl+A/C/X/V/Z/Y editing shortcuts on the Russian Ubuntu layout; text and screenshot paste, selection, copy/cut, undo, and redo no longer depend on Latin key values.
+- A delayed thread snapshot can no longer erase a newer Ask card delivered live; the owner can still answer the same waiting run.
+- Reaching the oldest message now keeps **Beginning of this chat.** through live refreshes and cached chat switches.
+- Unchecking Fast on an idle chat starts a new model session immediately. A live turn still keeps going; the send after it (including a waiting follow-up) is not Fast. New bot already has that session, so the first Send does not open a second one unless Fast or Reasoning changed. Changing those during a live turn writes `This turn keeps going.` into the open chat without dropping Working.
+- Native controls, including Cursor Reasoning and its option list, now use the active theme's surface and foreground instead of an unreadable browser-white combination.
+- Every packaged hicolor size now comes from the same sky-blue Cavalier source; compact launcher and dock slots no longer select leftover black icon files.
+- A token typed in Message for a bot is stored in the private credential-broker volume, stripped from the thread, and listed in Bot profile & access by name and last four. The form starts with one arbitrary name + secret pair instead of hardcoded providers. The Linux `.deb` proxies PUT so Store works from that window. Reset and Team ↔ Private keep secrets; Forget and Delete chat remove them. A worker asks Allow once / Always before a credential-scoped command runs in one disposable, selected-home container. An unlabeled secret still needs a name in Bot profile & access. Memory and a question answer still refuse a paste.
+- Switching chats keeps a bounded in-memory snapshot of recent threads, so the column does not flash empty and Load earlier pages survive a round trip. A first visit shows Loading this chat…
+- Unsent Message text, files, and Reply stay on the chat they belong to. A slow Send in one chat does not disable Send in another; a late failure restores files on the originating chat.
+- Stop UI tests wait for a cancelled turn to settle instead of a 3s sleep. Computer pane open/close no longer swallow a missed click. Loopback unpair is a client RPC test; the window still unpairs via Pair this computer again.
+- Ask-before git/commit/branch/PR/MR/merge restatements map to one standing rule (`please e2e-remember-git-approval`). A later permission to merge without asking revises that card.
+- A status-only ping (`please e2e-worker-status`) posts a short `send_message` acknowledgement before inspect. Inbox and mid-turn steer use the same order. The ping does not start a new plan.
+- Workspace `/v1/events` 401/403 shows Pair again, same as a 401 on send. Background needs-you cannot go silent while the window still looks paired.
+- Live browse Allow/Deny fail the job if the model never shows a consent card. Skip remains only when the secret is absent.
+- Models list/Forget and Plugins status/Remove show a line on failure. Forget and Remove keep the previous key; a failed Plugins status does not stay on Checking.
+- A bot-to-bot reply is marked delivered only in the same transaction as the source follow-up run or inbox item. Overlapping owner send cannot drop that reply.
+- API setup errors (broken migration, workspace) fail the suite in CI. Local skip is `ARTEK_ALLOW_DB_SKIP=1` only. The job summary prints pass/fail/skip counts.
+- An existing `artek-computers` network with inter-container communication on is deleted when unused, or refused if boxes are still attached. ICC off is required, not only on first create.
+- The Linux `.deb` build uses `npm ci`. Host Playwright matches the test pin (1.62.0). Release prints base FROM lines and the host image digest.
+- `/readyz` is 503 when Postgres or the runtime is down. `/health` and `/livez` stay process liveness (200). Compose healthchecks use `/readyz`.
+- A second `install-host.sh` on a clean checkout fetches and checks out that release tag. A dirty tree aborts; `.env` is kept.
+- Supervisor `:7091` compares the bearer with `secrets.compare_digest`. Client 500s are a stable `supervisor error`; engine text stays in the server log.
+- After `send_message`, a different finish body is the next bot message. The same text is not duplicated (`please e2e-send-then-answer` / `please e2e-send-then-repeat`).
+- `python -m artek_buddy worker --once` is the release worker process against host HTTP. CI starts that command; a due routine wakes once and a second pass does not duplicate it.
+- Plugins Connect and `connect_app` send a host-owned HTTPS callback (`CONNECTIONS_CALLBACK_URL`) to the provider. A caller `redirect_url` (window origin, `http`, or another host) cannot become `callback_url`.
+- Named CodeQL residuals keep inline `lgtm` (`py/command-line-injection` on owner-exec, `py/path-injection` on the owner-path join). Secret scanning, push protection, and Dependabot alerts/security updates are on for this repository.
+- `release.yml` Bind prints CodeQL check-run and workflow run ids on the dispatched `main` SHA and fails closed if that `codeql` workflow run is missing or red. There is no automatic `workflow_run` publish.
+- `release.yml` serializes dispatch and moves GHCR `VERSION` / `latest` only after the GitHub Release exists, so a failed Release create cannot retag the installer image.
+- Manual `release.yml` dispatch requires a green push `test` and CodeQL on that `main` SHA. `force` cannot republish an existing tag or GitHub Release; it aborts before registry write.
+- A minimized or tray-hidden Linux `.deb` still raises one native row when the open chat finishes. Iconify / withdrawn now set `window_active` false even if GTK `is-active` stays true.
+- Always is looked up on the frozen turn device, not the last HTTP actor. A second window cannot spend the first window's Always; a host-wide grant is only a row with no device.
+- A late desktop click after Release cannot restore Take control. Input is bound to that lease; a stale save does not rewrite the holder.
+- A worker This-PC auto read stays on the thread snapshot after the lead turn finishes and the window reloads. ACK still claims once; a second window that loses the claim stands down.
+- Owner `git`/`find` that can write (`--output`, `git branch` create/rename, `-fprint` / `-fprintf` / `-fls`) require Allow. Deny does not create the file or branch. A write path outside `$HOME` does not run on the paired client.
+- Privileged `release.yml` is no longer a default-branch `workflow_run`. Publish is `workflow_dispatch` on `main` after green `test` on that SHA; a `release.yml` change that exists only on `develop` does not get the write token.
+- The GitHub Release tag is created at that tested `main` SHA and peeled before GHCR `VERSION` / `latest` move. A missing tag is not taken from default `develop`; `gh release create` uses `--verify-tag`.
+- A background worker that emits no assistant text is no longer treated as idle. Host-owned activity (tool start/finish, sequence, last tool) is what status inspects; a status ping cannot stop or replace that worker, and a stale inspect cannot Stop it. Explicit window Stop still cancels it and admits no new worker tools.
+- Native `.deb` alerts follow GTK `is-active` via loopback `window_active`, not WebKit `hasFocus`. Switching to another app no longer stays silent, and the open chat is not marked read while that window is inactive.
+- Right-click a chat message offers **Copy** for that text. Link rows still have Open in browser and Copy URL.
+- An unfocused Linux `.deb` still raises one native row when the open chat finishes. WebKitGTK does not treat “another app is in front” as a hidden page; GTK `is-active` now drives that, and opening the OS list does not re-notify an already shown event.
+- Guest Files is Thunar without volume watching. Leftover pcmanfm is killed at box start so it does not keep covering the desktop.
+- A long `Remembered:` clock line is a one-row preview. Click it to open that Memory card with the full text.
+- Host-page Take control follows the pointer in use: a desktop browser uses the `.deb` overlay; a phone keeps the pad.
+- Linux `.deb` Ctrl+V attaches a screenshot even when the clipboard also has a `file://` path. Ctrl+Z / Ctrl+Shift+Z undo and redo Message.
+- Plugins Remove still forgets the key after a login tab. An in-flight catalog load no longer puts Key saved back on an empty Search apps list.
+- **Open to connect** on a plugin login card is a real `http(s)` link, so the Linux `.deb` opens the owner browser the same way a markdown link does. Plugins Connect and right-click **Open in browser** still open that browser when `window.open` is dropped.
+- Each inbox chat keeps its own model session. A bot without a stored id no longer inherits the host default (or another chat). Two chats can run at the same time.
+- Connected catalog apps attach as tools on the lead as well as a worker. The window no longer pins a chip above Message after Connect.
+- Re-asserting a standing rule (or a worker calling `remember`) no longer floods the thread with `Remembered:` clock lines. One new fact this turn can print once; a worker save stays in Memory only.
+- Switching away from a chat that parked while it was open still raises «needs you». The window no longer consumes that pill just because you were looking at the speaker (`please e2e-takeover`).
+- Native attention now has one workspace-event source: only a new final reply, failure, owner question, or takeover can alert. Polling, replay, intermediate/status text, and silent completion cannot re-notify an old line. Reading requires the focused chat and withdraws its row; GNOME dismissal alone does not read it. One libnotify object/id is updated per bot, and GTK3 relaunch activates the existing client instead of adding subscribers.
+- A `Remembered:` memory line no longer raises **is asking** (or a finish alert). Auto owner-tool `waiting_input` is not treated as an owner question.
+- GNOME's notification list keeps an **Artek Buddy** row while the client is running. The tray badge was only the window urgency hint; `notify-send` left the bus and GNOME destroyed the matched-app source.
+- The installed Linux client identifies as **Artek Buddy** so the dock and app menu use the packaged mark instead of a generic `artek_buddy.py` gear. The tray looks up that same PNG from the packaged icon directory.
+- The Linux `.deb` sends one native notification for background replies, failures, owner questions, and takeover instead of dropping the event after the in-window banner. Its tray indicator can reopen or quit the client; closing the window hides it to the tray while indicators are supported.
+- A blocked browser task can ask the owner for one concrete step and resume the same `ask_user` call and `run_id`. Answers stay on the card, duplicates are rejected, and timeout is explicit; no site-specific integration is required.
+- A second `.deb` window that loses an owner-job ACK no longer reports that conflict as the winning client's failure. Claim-capable results carry the winning ACK nonce; queued no-ACK results remain compatible. Thread snapshots expose every queued automatic job instead of hiding parallel work behind one id.
+- Clicking a Models chip uses that model. Tan is the host default, not a local pick that still leaves Grok in use.
+- Caps Lock during Take control raises letter case on the bot desktop. The overlay does not swallow that key.
+- Ctrl+V in the Linux WebKit window no longer cancels an empty/deferred clipboard event before ordinary text can reach Message. Image, file, and file-manager-path paste still use the attachment path.
+- Chat links open in the owner's system browser from the `.deb`. Right-clicking a link offers Open in browser, Copy URL, and Reply; URL copy falls back for older WebKit clipboard support.
+- A shorter restatement of an already detailed standing rule no longer revises the same Memory chapter or writes another identical Remembered line.
+- Back-to-back and parallel This-PC calls no longer reuse a process-global consent id. Late owner results are rejected, completed auto jobs are not offered again, and the phone/host page leaves auto jobs for the paired Linux client.
+- A new model session no longer receives the current user send twice in compact history; repeated identical user lines from silent failed runs collapse to one.
+- An instant dead Cursor wait after a good turn cancels that runtime run, then restarts the poisoned local SDK bridge and retries the same send once. A successful recovery stays silent; a failed recovery says the host retried. The host does not open a second billed run while the first handle is still live.
+- Stop on a live turn writes Stopped. A late model complete from that run does not land as a bot bubble.
+- Release keeps the last guest frame on the overlay until the view-only picture loads. Take control from Sleeping names Waking the desktop… instead of a black void.
+- One click on an inbox row opens that chat. A leftover mouse-up or a late inbox fallback does not land on the previous thread.
+- New memory defaults to This bot with a filled scope control. Delete is Remove. Save acknowledgement uses the create/edit buttons, not a shared Saved name.
+- The closed Plugins hatch does not steal the thread wheel or open from the right edge. One Close dismisses.
+- Plugins Search apps stays open on Enter and keeps catalog scroll where the owner left it.
+- Plugins Connect only marks Connected. Leftover mouse-up after Connect does not Send.
+- A queued send is marked Waiting for the host until reconnect, then Sent while offline with local time.
+- Dismiss on a needs-you pill only hides it. The open chat stays put.
+- Ctrl+A in Message selects the draft. It does not Send or duplicate the bubble.
+- Plugins pane waits for host key status before showing the paste field, so a leftover key is not a flash of an empty form.
+- Inbox Search with no matches shows empty copy and a Clear control instead of a blank rack.
+- Escape closes Settings and New bot. Composer text and the guest overlay keep their own Escape.
+- Models Cursor has one commit. Empty providers say to paste a key instead of a dead Use this model.
+- Settings Restart… and Stop… confirm once, same as Reset… and Delete chat….
+- File-card Download and Load earlier look like controls. Owner cards still offer Download; the oldest page leaves a beginning line.
+- Inbox Search marks the matching name or preview text so a snippet hit is obvious.
+- A Shift+Enter newline stays a newline in the sent user bubble.
+- Unread is a named tan circle and a bold row, not a hidden 7px square.
+- Message placeholder truncates a long bot name with an ellipsis instead of clipping mid-word.
+- Plugins Search apps filters the catalog as you type. Enter is not required.
+- Phone file-card Download uses the browser, not a Linux `/local/save-artifact` path.
+- Skill-book procedures and controls stay internal to the agent. Historical skill blocks are hidden and omitted from inbox/reply excerpts; successful install/open/forget no longer persists a card or adds a chip above Message.
+- Plugins Connect on a no-browser catalog app either connects or names the next setup step. It no longer dies on `could not start that connection` with nothing to do.
+- Settings Title keeps the typed role through blur and Save. A host refresh while Edit profile is open no longer empties the field.
+- Routine next-run drops the ISO microsecond fraction and keeps UTC.
+- Settings, Memory, and Routine Save flash **Saved** for about a second, then the form closes. A host error stays under the row.
+- A failed playbook run shows one human **The turn failed.** line — not a raw `run failed: run-` id, YAML, or that same line as a bubble plus a red box.
+- Settings, Memory, Routines, ask/file cards, and the computer overlay use the same `@theme` tokens as pairing and the thread. Traffic lights and guest noVNC pixels stay as they were.
+- Create and Settings ask three different questions: Title is a short role, Description is what the bot is for, and Instructions are standing orders (not labelled Prompt). Create now has that Instructions field too.
+- Auth recovery on the host page says **Pair this phone again**, matching the pairing title. The `.deb` still says **Pair this computer again**.
+- Pairing tells the owner where to get a code and what Pair does. The phone page has no token or host-module command. The `.deb` footer is the README Compose exec.
+- Chat that writes the identity book lists that chapter in Computer → Memory. Owner place/person rows are labeled identity, and a later city replaces the old one on the same card.
+- Phone Close on Computer / Models / Plugins returns to the Chat tab with the thread, not a blank Desktop tab.
+- Phone Take control stays held after a pad drag or tap. The overlay caption is not selectable host text, and **Type on the desktop** is a tappable field in the keyboard strip.
+- Release leaves a live view-only preview (not a black overlay) and the Computer pane matches: Take control, not You have control.
+- Offline and Sleeping **Click to start** boot to a view-only Running preview. Take control stays a separate grant.
+- One standing rule in chat writes one Remembered line and one Memory card. A paraphrase in the same turn, or extract after that turn, does not add a twin.
+- Phone desktop typing reaches the guest as UTF-8, so a Russian keyboard is not dropped.
+- The iPhone home-screen hint sits at the top of the host page so it no longer covers Models, New bot, or the composer.
+- Opening a website on the bot desktop no longer also opens the file manager. `open` treats `HTTPS://` like `https://`, and leftover pcmanfm volume autorun is off.
+- The bot desktop starts fluxbox again. Docker tmpfs `/tmp` is noexec, so the old generated startup script never ran and windows had no toolbar or close buttons.
+- A running desktop opened from the pane shows the live preview. The window fetches the screen URL when the box is already Booting or Running, so a bot-started session is not stuck on the text-only Desktop is running fallback.
+- Long tool work runs in a background worker. The lead stays free for status and corrections, then writes one final result. Worker cards and Started / Finished / Stopped lines stay out of the thread. Composer Stop still cancels workers while the lead is idle.
+- A bot that opens a path on a stopped desktop updates the computer tile to Running without a click. The host publishes `computer.status`; Offline still polls while that turn is live.
+- Reasoning and Fast can be saved while the host already uses that model. The open chat gets a Using line; a live turn keeps going and the next send uses the new default.
+- A parked takeover on another chat keeps being watched so «needs you» still appears if the first switch missed the event. The same-kind debounce does not permanently consume that pill. A chat created in this window is not treated as a leftover park, and opening that chat does not stick Dismiss if the takeover arrived while it was already on screen.
+- A takeover on another chat shows «needs you», not «replied». The bot stays `waiting_takeover` (same idea as `waiting_input`), and the window does not dismiss that banner during the chat switch. If the takeover event arrives while that chat is open, or the thread stream drops it on switch, the other chat still raises the pill from the parked status.
+
+### Changed
+- Local `.deb` builds refuse to overwrite an existing package; `ARTEK_BUILD_SUFFIX` creates a distinct filename and Debian version for manual testing.
+- Memory is a book the bot revises from chat: owner sections (identity, tone, contacts, machines, paths) and this-chat standing rules always ride in the next turn. Work notes still match the request. The 3+4 card caps and 200-character Settings cut no longer drop a weeks-grown book.
+- After a turn that saved a section, the host rewrites that section (default model when a key is set) so a newer fact replaces a contradiction instead of stacking both. The book block in the model prompt is 256 KiB.
+- Send while the host is down parks the user bubble and flushes it when health returns, with a «sent while offline» caption. A reconnect banner replaces the red host-error card.
+- Take control auto-releases after two minutes with no mouse or key. The 15-minute hard lease stays as a cap. A quiet computer sleeps after 15 minutes; an open pane and the 60s heartbeat do not keep it warm. A parked `waiting_takeover` no longer pins the box.
+- Window identity: Cavalier marks, ink/plate/tan tokens, Atkinson + Fraunces + Azeret Mono, labeled New bot / Computer / Settings / Send / Stop. Send is disabled when empty.
+- Release scans the host image digest (HIGH and CRITICAL) before tagging `latest`, refuses `--clobber` on GitHub Release assets, and does not prune old Releases. Client CycloneDX SBOM is the packaged `.deb`.
+- Host FastAPI/Starlette pins no longer need runtime pip-audit ignores. Remaining ignores require a reason and expiry.
+- Host and worker serialize `apply_migrations` with a Postgres advisory lock and store a sha256 per applied file.
+- Supervisor file writes send bytes through the Docker archive API instead of interpolating content into a shell heredoc.
+- Rulesets Protect develop and Protect main require quality, backend, ui, scan, live_gate, and CodeQL analyze. `live` stays optional.
+
 ## [0.10.27] - 2026-08-22
 
 ### Fixed
@@ -639,7 +859,7 @@ Hygiene after the 0.2.0 cutover. Stages 0–2 unchanged.
 
 ## [0.2.0] - 2026-08-17
 
-Stages 0–2.
+Stages 0–2. In-tree cut only (never a GitHub Release). Public tags later used 0.10.x until the 2026-09-09 ship at the top of this file.
 
 - Host on this Raspberry Pi: FastAPI, Cursor runtime, Tailscale Funnel.
 - Shared contracts for bots, threads, messages, and runs.

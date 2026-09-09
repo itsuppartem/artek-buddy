@@ -29,7 +29,7 @@ export function BotAvatar({
         alt=""
         draggable={false}
         className="h-full w-full rounded-[inherit] object-cover"
-        style={{ background: "rgba(11,11,12,0.35)" }}
+        style={{ background: "rgba(22,19,16,0.35)" }}
       />
     </div>
   );

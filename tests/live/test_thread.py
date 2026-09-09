@@ -1,13 +1,22 @@
 from __future__ import annotations
 
+import base64
+import threading
+
 import pytest
 from playwright.sync_api import Page, expect
 from tests.live.helpers import (
     bot_row,
     composer,
     create_named_bot,
+    cut_host,
+    ensure_model,
+    expect_cancelled_turn,
+    expect_stays_absent,
     open_chat,
+    open_settings,
     pair_fresh,
+    restore_host,
     send_message,
     thread_header,
     unique_bot,
@@ -42,6 +51,22 @@ def _named(page: Page, client_url: str, host_url: str, prefix: str) -> str:
     return name
 
 
+def _composer_send(page: Page):
+    return page.get_by_test_id("thread-composer").get_by_role("button", name="Send", exact=True)
+
+
+def test_remembered_line_opens_memory_card(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "RemOpen")
+    send_message(page, "please e2e-remember", name)
+    line = page.get_by_role("button", name="Open in Memory")
+    expect(line).to_be_visible(timeout=15_000)
+    expect(line).to_contain_text("Remembered:")
+    line.click()
+    card = page.locator('[data-testid="memory-doc"][data-memory-focus="1"]')
+    expect(card).to_be_visible(timeout=8_000)
+    expect(card).to_contain_text("Prefers short answers without emoji")
+
+
 def test_thread_blocks_render_and_child_opens_other_chat(
     page: Page, client_url: str, host_url: str
 ) -> None:
@@ -61,6 +86,37 @@ def test_thread_blocks_render_and_child_opens_other_chat(
     child.click()
     expect(thread_header(page)).to_contain_text(E2E_CHILD_NAME, timeout=8_000)
     expect(thread_header(page)).not_to_contain_text(name)
+
+
+def test_ask_other_bot_card_opens_them_then_asker_answers(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    asker = unique_bot("AskWin")
+    knows = unique_bot("KnowsWin")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, knows)
+    create_named_bot(page, asker)
+    send_message(page, f"please e2e-ask-bot {knows} | what city do you know", asker)
+    card = page.get_by_test_id("child-bot-card").filter(has_text=knows).first
+    expect(card).to_be_enabled(timeout=15_000)
+    expect(page.get_by_text(f"Asked {knows}", exact=False)).to_be_visible()
+    card.click()
+    expect(thread_header(page)).to_contain_text(knows, timeout=8_000)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="what city do you know"
+        )
+    ).to_be_visible(timeout=15_000)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="bot"]').filter(
+            has_text="ready to answer"
+        )
+    ).to_be_visible(timeout=15_000)
+    open_chat(page, asker)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="bot"]').filter(has_text="Subotica")
+    ).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("computer-card")).to_have_count(0)
 
 
 def test_open_chat_has_no_replied_banner(page: Page, client_url: str, host_url: str) -> None:
@@ -130,6 +186,123 @@ def test_thread_reply_quote_and_cancel(page: Page, client_url: str, host_url: st
     expect(quoted).to_contain_text("ok")
 
 
+def test_message_right_click_copies_text(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "Clip")
+    page.context.grant_permissions(
+        ["clipboard-read", "clipboard-write"],
+        origin=client_url.rstrip("/"),
+    )
+    send_message(page, "copy this line", name)
+    bubble = page.get_by_test_id("user-text").filter(has_text="copy this line")
+    expect(bubble).to_be_visible(timeout=8_000)
+    bubble.click(button="right", timeout=8_000)
+    menu = page.get_by_role("menu", name="Message actions")
+    expect(menu.get_by_role("menuitem", name="Copy", exact=True)).to_be_visible()
+    expect(menu.get_by_role("menuitem", name="Copy URL")).to_have_count(0)
+    menu.get_by_role("menuitem", name="Copy", exact=True).click()
+    expect(menu.get_by_role("menuitem", name="Copied", exact=True)).to_be_visible()
+    assert page.evaluate("navigator.clipboard.readText()") == "copy this line"
+
+
+def test_markdown_link_opens_and_has_link_actions(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Links")
+    page.context.grant_permissions(
+        ["clipboard-read", "clipboard-write"],
+        origin=client_url.rstrip("/"),
+    )
+    page.context.route(
+        "https://example.com/**",
+        lambda route: route.fulfill(status=200, content_type="text/html", body="docs"),
+    )
+    send_message(page, "please e2e-markdown-preview", name)
+    link = page.get_by_role("link", name="Open docs", exact=True)
+    expect(link).to_have_attribute("href", "https://example.com/artek-buddy", timeout=15_000)
+
+    with page.expect_popup() as opened:
+        link.click()
+    expect(opened.value).to_have_url("https://example.com/artek-buddy")
+    opened.value.close()
+
+    link.click(button="right")
+    menu = page.get_by_role("menu", name="Message actions")
+    expect(menu.get_by_role("menuitem", name="Copy", exact=True)).to_be_visible()
+    expect(menu.get_by_role("menuitem", name="Open in browser", exact=True)).to_be_visible()
+    copy_url = menu.get_by_role("menuitem", name="Copy URL", exact=True)
+    expect(copy_url).to_be_visible()
+    expect(menu.get_by_role("menuitem", name="Reply", exact=True)).to_be_visible()
+    copy_url.click()
+    expect(menu.get_by_role("menuitem", name="URL copied", exact=True)).to_be_visible()
+    assert page.evaluate("navigator.clipboard.readText()") == "https://example.com/artek-buddy"
+
+
+def test_composer_paste_screenshot_attaches_chip(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    _named(page, client_url, host_url, "Paste")
+    box = composer(page)
+    box.click()
+    png_b64 = base64.b64encode(TINY_PNG).decode("ascii")
+    box.evaluate(
+        """(el, b64) => {
+          const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+          const file = new File([bytes], "", { type: "image/png" });
+          const data = new DataTransfer();
+          data.items.add(file);
+          const event = new Event("paste", { bubbles: true, cancelable: true });
+          Object.defineProperty(event, "clipboardData", { value: data });
+          el.dispatchEvent(event);
+        }""",
+        png_b64,
+    )
+    chip = page.get_by_test_id("attach-chip")
+    expect(chip).to_contain_text("screenshot-1.png", timeout=5_000)
+    expect(page.get_by_test_id("attach-preview")).to_be_visible(timeout=5_000)
+    expect(box).to_have_value("")
+
+
+def test_composer_paste_screenshot_with_file_uri_attaches_chip(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    _named(page, client_url, host_url, "ShotUri")
+    box = composer(page)
+    box.click()
+    png_b64 = base64.b64encode(TINY_PNG).decode("ascii")
+    box.evaluate(
+        """(el, b64) => {
+          const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+          const file = new File([bytes], "", { type: "image/png" });
+          const data = new DataTransfer();
+          data.items.add(file);
+          data.setData("text/uri-list", "file:///tmp/Screenshot.png");
+          data.setData("text/plain", "file:///tmp/Screenshot.png");
+          const event = new Event("paste", { bubbles: true, cancelable: true });
+          Object.defineProperty(event, "clipboardData", { value: data });
+          el.dispatchEvent(event);
+        }""",
+        png_b64,
+    )
+    chip = page.get_by_test_id("attach-chip")
+    expect(chip).to_contain_text("screenshot-1.png", timeout=5_000)
+    expect(page.get_by_test_id("attach-preview")).to_be_visible(timeout=5_000)
+    expect(box).to_have_value("")
+
+
+def test_composer_paste_text_does_not_attach(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "TextPaste")
+    box = composer(page)
+    box.click()
+    page.context.grant_permissions(
+        ["clipboard-read", "clipboard-write"],
+        origin=client_url.rstrip("/"),
+    )
+    page.evaluate("navigator.clipboard.writeText('hello from the clipboard')")
+    box.press("Control+V")
+    expect(box).to_have_value("hello from the clipboard")
+    expect(page.get_by_test_id("attach-chip")).to_have_count(0)
+
+
 def test_composer_drop_attaches_chip(page: Page, client_url: str, host_url: str) -> None:
     _named(page, client_url, host_url, "Drop")
     page.get_by_test_id("thread-composer").evaluate(
@@ -166,6 +339,70 @@ def test_composer_shift_enter_and_undo(page: Page, client_url: str, host_url: st
     expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
 
 
+def test_composer_ctrl_z_undoes_the_draft(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Undo")
+    box = composer(page)
+    box.fill("hello undo")
+    expect(box).to_have_value("hello undo")
+    box.press("Control+z")
+    expect(box).to_have_value("")
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
+
+
+def test_composer_ctrl_a_does_not_send(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Select")
+    box = composer(page)
+    draft = "keep this draft"
+    box.fill(draft)
+    expect(box).to_have_value(draft)
+    box.press("Control+a")
+    expect(box).to_have_value(draft)
+    selected = box.evaluate("el => el.selectionEnd - el.selectionStart")
+    assert selected == len(draft)
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(0)
+    box.press("Enter")
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').get_by_test_id(
+        "user-text"
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(bubble).to_have_js_property("textContent", draft)
+    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).to_have_count(1)
+
+
+def test_composer_placeholder_does_not_clip_mid_word(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("ResearchOverflowName")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    box = composer(page)
+    placeholder = box.get_attribute("placeholder") or ""
+    full = f"Message {name}"
+    assert placeholder.startswith("Message ")
+    assert placeholder != "Message Resea"
+    if placeholder != full:
+        assert placeholder.endswith("…")
+        assert not full.startswith(placeholder)
+    else:
+        raise AssertionError(f"long name stayed untruncated: {placeholder}")
+
+
+def test_user_bubble_keeps_shift_enter_newline(page: Page, client_url: str, host_url: str) -> None:
+    _named(page, client_url, host_url, "Break")
+    box = composer(page)
+    box.fill("line one")
+    box.press("Shift+Enter")
+    box.type("line two")
+    expect(box).to_have_value("line one\nline two")
+    box.press("Enter")
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').get_by_test_id(
+        "user-text"
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(bubble).to_have_css("white-space", "pre-wrap")
+    expect(bubble).to_have_js_property("textContent", "line one\nline two")
+
+
 def test_load_earlier_messages(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Older")
     other = unique_bot("Other")
@@ -178,6 +415,40 @@ def test_load_earlier_messages(page: Page, client_url: str, host_url: str) -> No
     expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible(timeout=15_000)
 
 
+def test_download_and_load_earlier_look_like_controls(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Chrome")
+    with page.expect_file_chooser() as chooser:
+        page.get_by_role("button", name="Attach files").click()
+    chooser.value.set_files({"name": "shot.png", "mimeType": "image/png", "buffer": TINY_PNG})
+    expect(page.get_by_test_id("attach-chip")).to_contain_text("shot.png", timeout=5_000)
+    send_message(page, "my shot", name)
+    user_card = (
+        page.locator('[data-testid="thread-message"][data-role="user"]')
+        .filter(has_text="my shot")
+        .get_by_test_id("file-card")
+    )
+    download = user_card.get_by_test_id("file-download")
+    expect(download).to_be_visible(timeout=8_000)
+    expect(download).to_have_accessible_name("Download shot.png")
+    other = unique_bot("Other")
+    send_message(page, "please e2e-load-earlier", name)
+    create_named_bot(page, other)
+    open_chat(page, name)
+    earlier = page.get_by_test_id("load-earlier")
+    expect(earlier).to_be_visible(timeout=15_000)
+    expect(earlier).to_be_enabled(timeout=15_000)
+    expect(earlier).to_have_accessible_name("Load earlier messages")
+    earlier.click()
+    expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible(timeout=15_000)
+    leftover = page.get_by_test_id("load-earlier")
+    if leftover.count() and leftover.first.is_visible():
+        leftover.click()
+        expect(page.get_by_text(f"{E2E_OLDER_PREFIX}00", exact=True)).to_be_visible()
+    expect(page.get_by_test_id("thread-start")).to_contain_text("Beginning of this chat.")
+
+
 def test_ask_options_custom_and_detail(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "Ask")
     send_message(page, "please e2e-ask", name)
@@ -188,8 +459,12 @@ def test_ask_options_custom_and_detail(page: Page, client_url: str, host_url: st
     page.get_by_text("Type custom reply…").click()
     page.get_by_label("Answer").fill("Lisbon")
     page.get_by_role("button", name="Send answer").click()
+    expect(card).to_contain_text("Answered: Lisbon", timeout=8_000)
     expect(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="Lisbon")
+    ).to_have_count(0)
+    expect(
+        page.get_by_test_id("thread").get_by_text("I continued after your help.", exact=True)
     ).to_be_visible(timeout=8_000)
 
 
@@ -202,17 +477,26 @@ def test_ask_free_edit_first(page: Page, client_url: str, host_url: str) -> None
     page.get_by_role("button", name="Edit first").click()
     page.get_by_label("Answer").fill("Sam")
     page.get_by_role("button", name="Send answer").click()
+    expect(card).to_contain_text("Answered: Sam", timeout=8_000)
     expect(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="Sam")
+    ).to_have_count(0)
+    expect(
+        page.get_by_test_id("thread").get_by_text("I continued after your help.", exact=True)
     ).to_be_visible(timeout=8_000)
 
 
 def test_ask_free_send_it(page: Page, client_url: str, host_url: str) -> None:
     name = _named(page, client_url, host_url, "SendIt")
     send_message(page, "please e2e-ask-free", name)
+    card = page.get_by_test_id("ask-card")
     page.get_by_role("button", name="Send it").click()
+    expect(card).to_contain_text("Answered: approved", timeout=8_000)
     expect(
         page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text="approved")
+    ).to_have_count(0)
+    expect(
+        page.get_by_test_id("thread").get_by_text("I continued after your help.", exact=True)
     ).to_be_visible(timeout=8_000)
 
 
@@ -281,10 +565,25 @@ def test_stop_does_not_append_completed_essay(page: Page, client_url: str, host_
     box.press("Enter")
     expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
     page.get_by_test_id("thread-stop").click()
-    expect(page.get_by_test_id("run-error")).to_be_visible(timeout=15_000)
-    page.wait_for_timeout(3_000)
-    expect(page.get_by_test_id("thread").get_by_text("slow done")).to_have_count(0)
+    expect_cancelled_turn(page)
+    expect_stays_absent(page.get_by_test_id("thread").get_by_text("slow done"))
     expect(bot_row(page, name)).not_to_contain_text("slow done")
+
+
+def test_stop_late_complete_shows_stopped_and_drops_model_text(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "LateStop")
+    box = composer(page)
+    box.fill("please e2e-late-complete")
+    expect(box).to_have_value("please e2e-late-complete")
+    box.press("Enter")
+    expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("thread-stop").click()
+    expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
+    expect_cancelled_turn(page)
+    expect_stays_absent(page.get_by_test_id("thread").get_by_text("pong"))
+    expect(bot_row(page, name)).not_to_contain_text("pong")
 
 
 def test_streaming_turn_keeps_last_card_in_view(page: Page, client_url: str, host_url: str) -> None:
@@ -443,18 +742,161 @@ def test_user_stop_during_generate_shows_stopped_and_no_later_card(
     expect(page.get_by_test_id("thread").get_by_text("Generating…")).to_be_visible(timeout=8_000)
     page.get_by_test_id("thread-stop").click()
     expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
-    page.wait_for_timeout(3_000)
-    expect(page.get_by_test_id("file-card")).to_have_count(0)
+    expect_cancelled_turn(page)
+    expect_stays_absent(page.get_by_test_id("file-card"))
 
 
 def test_subagent_stop_while_running(page: Page, client_url: str, host_url: str) -> None:
+    from artek_buddy.runtime.scripted import E2E_WORKER_ACK
+
     name = _named(page, client_url, host_url, "Worker")
-    send_message(page, "please e2e-subagent-hang", name)
-    card = page.get_by_test_id("subagent-card")
-    expect(card).to_be_visible(timeout=15_000)
-    expect(card).to_contain_text("#")
-    card.get_by_role("button", name="Stop").click()
-    expect(card.get_by_role("button", name="Restart")).to_be_visible(timeout=20_000)
+    send_message(page, "please e2e-background-worker-chat", name)
+    thread = page.get_by_test_id("thread")
+    expect(thread.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+    expect(thread.get_by_text("Started Researcher.")).to_have_count(0)
+    expect(composer(page)).to_be_enabled()
+    expect(page.get_by_test_id("typing-indicator")).to_be_visible()
+    page.get_by_test_id("thread-stop").click()
+    expect(page.get_by_test_id("run-error")).to_contain_text("Stopped.", timeout=15_000)
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
+
+
+def test_background_worker_keeps_composer_and_one_summary(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    from artek_buddy.runtime.scripted import (
+        E2E_WORKER_ACK,
+        E2E_WORKER_STATUS,
+        E2E_WORKER_SUMMARY,
+    )
+
+    name = _named(page, client_url, host_url, "BgChat")
+    send_message(page, "please e2e-background-worker-chat", name)
+    thread = page.get_by_test_id("thread")
+    expect(thread.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+    expect(page.get_by_test_id("thread-stop")).to_be_visible()
+    expect(page.get_by_test_id("typing-indicator")).to_be_visible()
+    expect(composer(page)).to_be_enabled()
+    send_message(page, "please e2e-worker-status", name)
+    expect(thread.get_by_text(E2E_WORKER_STATUS)).to_be_visible(timeout=8_000)
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_be_visible(timeout=20_000)
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_have_count(1)
+    expect(thread.get_by_text("blocked work finished")).to_have_count(0)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+
+
+def test_worker_progress_line_without_status_ping(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    from artek_buddy.runtime.scripted import (
+        E2E_WORKER_ACK,
+        E2E_WORKER_PROGRESS_LINE,
+        E2E_WORKER_PROGRESS_LINE_2,
+        E2E_WORKER_SUMMARY,
+    )
+
+    name = _named(page, client_url, host_url, "BgProgress")
+    send_message(page, "please e2e-worker-progress", name)
+    thread = page.get_by_test_id("thread")
+    expect(thread.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
+    status = page.get_by_test_id("typing-indicator")
+    expect(status).to_contain_text(E2E_WORKER_PROGRESS_LINE, timeout=8_000)
+    expect(
+        page.get_by_test_id("thread-pane").get_by_text(E2E_WORKER_PROGRESS_LINE, exact=True)
+    ).to_have_count(1)
+    expect(page.get_by_test_id("thread-header")).not_to_contain_text("Still working")
+    expect(page.get_by_test_id("thread-header")).to_contain_text("Working")
+    expect(page.get_by_test_id("work-summary")).not_to_contain_text("Still working")
+    expect(page.get_by_test_id("work-summary")).to_contain_text("Working on this task")
+    expect(page.get_by_test_id("open-work-log")).to_have_count(1)
+    expect(
+        page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_PROGRESS_LINE)
+    ).to_have_count(0)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+    page.get_by_test_id("open-work-log").click()
+    expect(page.get_by_test_id("work-log-pane")).to_be_visible()
+    expect(page.get_by_test_id("work-log-worker")).to_be_visible()
+    expect(page.get_by_test_id("thread-stop")).to_be_visible()
+    expect(composer(page)).to_be_enabled()
+    expect(status).to_contain_text(E2E_WORKER_PROGRESS_LINE_2, timeout=8_000)
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_be_visible(timeout=20_000)
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_have_count(1)
+    expect(status).to_have_count(0)
+    expect(
+        page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_PROGRESS_LINE)
+    ).to_have_count(0)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+
+
+def test_worker_essay_stays_out_of_still_working(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    from artek_buddy.runtime.scripted import (
+        E2E_WORKER_ACK,
+        E2E_WORKER_ESSAY_MARK,
+        E2E_WORKER_PROGRESS_LINE,
+        E2E_WORKER_SUMMARY,
+    )
+
+    name = _named(page, client_url, host_url, "BgEssay")
+    send_message(page, "please e2e-worker-essay", name)
+    thread = page.get_by_test_id("thread")
+    expect(thread.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
+    status = page.get_by_test_id("typing-indicator")
+    expect(status).to_be_visible(timeout=8_000)
+    expect(status).to_contain_text(E2E_WORKER_PROGRESS_LINE, timeout=8_000)
+    expect(status).not_to_contain_text(E2E_WORKER_ESSAY_MARK)
+    expect(
+        page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_ESSAY_MARK)
+    ).to_have_count(0)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+    expect(page.get_by_test_id("open-work-log")).to_have_count(1)
+    page.get_by_test_id("open-work-log").click()
+    pane = page.get_by_test_id("work-log-pane")
+    expect(pane).to_be_visible()
+    expect(pane).not_to_contain_text(E2E_WORKER_ESSAY_MARK)
+    expect(page.get_by_test_id("work-log-worker")).to_be_visible()
+    expect(page.get_by_test_id("thread-stop")).to_be_visible()
+    expect(composer(page)).to_be_enabled()
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_be_visible(timeout=20_000)
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_have_count(1)
+    expect(status).to_have_count(0)
+    expect(
+        page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_ESSAY_MARK)
+    ).to_have_count(0)
+    expect(page.get_by_test_id("subagent-card")).to_have_count(0)
+
+
+@pytest.mark.timeout(90)
+def test_work_log_keeps_history_across_two_worker_turns(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    from artek_buddy.runtime.scripted import E2E_WORKER_ACK, E2E_WORKER_SUMMARY
+
+    name = _named(page, client_url, host_url, "WorkHist")
+    send_message(page, "please e2e-background-worker-chat", name)
+    thread = page.get_by_test_id("thread")
+    expect(thread.get_by_text(E2E_WORKER_ACK)).to_be_visible(timeout=15_000)
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_be_visible(timeout=20_000)
+    send_message(page, "please e2e-background-worker-chat", name)
+    expect(thread.get_by_text(E2E_WORKER_ACK)).to_have_count(2, timeout=15_000)
+    expect(thread.get_by_text(E2E_WORKER_SUMMARY)).to_have_count(2, timeout=20_000)
+    expect(page.get_by_test_id("open-work-log")).to_have_count(1)
+    page.get_by_test_id("open-work-log").click()
+    pane = page.get_by_test_id("work-log-pane")
+    expect(pane).to_be_visible()
+    expect(page.get_by_test_id("work-log-worker")).to_have_count(2)
+    assert page.get_by_test_id("work-log-run").count() >= 2
+    expect(pane.get_by_text("please e2e-worker-block")).to_have_count(2)
+    expect(page.get_by_test_id("work-log-usage").first).to_contain_text("in", timeout=8_000)
+    page.get_by_label("Close work log").click()
+    expect(pane).to_have_count(0)
+    expect(page.get_by_test_id("open-work-log")).to_have_count(1)
+    page.get_by_test_id("open-work-log").click()
+    expect(page.get_by_test_id("work-log-pane")).to_be_visible()
+    expect(page.get_by_test_id("work-log-worker")).to_have_count(2)
 
 
 def test_takeover_banner_on_other_chat(page: Page, client_url: str, host_url: str) -> None:
@@ -477,12 +919,205 @@ def test_takeover_banner_on_other_chat(page: Page, client_url: str, host_url: st
     expect(banner).to_have_count(0)
 
 
+def test_takeover_banner_after_park_then_switch(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("Need")
+    watcher = unique_bot("Idle")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-takeover")
+    expect(box).to_have_value("please e2e-takeover")
+    box.press("Enter")
+    expect(thread_header(page)).to_contain_text(speaker)
+    expect(bot_row(page, speaker)).to_contain_text("waiting_takeover", timeout=15_000)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    expect(page.get_by_test_id("attention-alert")).to_contain_text(
+        f"{speaker} needs you", timeout=15_000
+    )
+
+
+def test_dismiss_needs_you_after_park_then_switch(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    speaker = unique_bot("ParkA")
+    watcher = unique_bot("ParkB")
+    other = unique_bot("ParkC")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    create_named_bot(page, other)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-takeover")
+    expect(box).to_have_value("please e2e-takeover")
+    box.press("Enter")
+    expect(thread_header(page)).to_contain_text(speaker)
+    expect(bot_row(page, speaker)).to_contain_text("waiting_takeover", timeout=15_000)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    banner = page.get_by_test_id("attention-alert")
+    expect(banner).to_contain_text(f"{speaker} needs you", timeout=15_000)
+    page.get_by_test_id("attention-dismiss").click()
+    expect(banner).to_have_count(0)
+    expect(thread_header(page)).to_contain_text(watcher)
+    open_chat(page, other)
+    expect(thread_header(page)).to_contain_text(other)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+
+
+def test_dismiss_needs_you_keeps_current_chat(page: Page, client_url: str, host_url: str) -> None:
+    speaker = unique_bot("ParkA")
+    watcher = unique_bot("ParkB")
+    other = unique_bot("ParkC")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    create_named_bot(page, other)
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-takeover")
+    expect(box).to_have_value("please e2e-takeover")
+    box.press("Enter")
+    open_chat(page, watcher)
+    expect(thread_header(page)).to_contain_text(watcher)
+    banner = page.get_by_test_id("attention-alert")
+    expect(banner).to_contain_text(f"{speaker} needs you", timeout=15_000)
+    page.get_by_test_id("attention-dismiss").click()
+    expect(banner).to_have_count(0)
+    expect(thread_header(page)).to_contain_text(watcher)
+    expect(thread_header(page)).not_to_contain_text(speaker)
+    expect(thread_header(page)).not_to_contain_text(other)
+    expect(composer(page)).to_have_attribute("placeholder", f"Message {watcher}")
+
+
+def test_deb_background_reply_posts_one_native_notification(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    native_requests = []
+    dismiss_requests = []
+    page.on(
+        "request",
+        lambda request: (
+            native_requests.append(request)
+            if request.url.endswith("/local/notify")
+            else dismiss_requests.append(request)
+            if request.url.endswith("/local/notify-dismiss")
+            else None
+        ),
+    )
+    speaker = unique_bot("Native")
+    watcher = unique_bot("Watch")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    create_named_bot(page, watcher)
+    speaker_id = bot_row(page, speaker).get_attribute("data-bot-id")
+    assert speaker_id
+    open_chat(page, speaker)
+    box = composer(page)
+    box.fill("please e2e-slow")
+    expect(box).to_have_value("please e2e-slow")
+    box.press("Enter")
+    open_chat(page, watcher)
+    expect(bot_row(page, speaker)).to_contain_text("slow done", timeout=15_000)
+
+    assert len(native_requests) == 1
+    assert native_requests[0].post_data_json["title"] == f"{speaker} replied"
+    assert native_requests[0].post_data_json["tag"] == f"artek-buddy:{speaker_id}"
+
+    open_chat(page, speaker)
+    expect(bot_row(page, speaker).get_by_test_id("unread-dot")).to_have_count(0)
+    assert dismiss_requests[-1].post_data_json["tag"] == f"artek-buddy:{speaker_id}"
+
+
+def test_deb_unfocused_open_chat_posts_one_native_notification(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    native_requests = []
+    page.on(
+        "request",
+        lambda request: (
+            native_requests.append(request) if request.url.endswith("/local/notify") else None
+        ),
+    )
+    speaker = unique_bot("Away")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    open_chat(page, speaker)
+    page.evaluate(
+        """() => {
+          if (typeof window.__artekSetWindowActive !== "function") {
+            throw new Error("missing window active hook");
+          }
+          window.__artekSetWindowActive(false);
+        }"""
+    )
+    box = composer(page)
+    box.fill("please e2e-slow")
+    expect(box).to_have_value("please e2e-slow")
+    box.press("Enter")
+    expect(bot_row(page, speaker)).to_contain_text("slow done", timeout=15_000)
+    assert len(native_requests) == 1
+    assert native_requests[0].post_data_json["title"] == f"{speaker} replied"
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+
+
+def test_deb_iconified_open_chat_posts_one_native_notification(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    native_requests = []
+    page.on(
+        "request",
+        lambda request: (
+            native_requests.append(request) if request.url.endswith("/local/notify") else None
+        ),
+    )
+    speaker = unique_bot("Iconify")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, speaker)
+    open_chat(page, speaker)
+
+    def mark_inactive(route) -> None:
+        if route.request.method != "GET":
+            route.continue_()
+            return
+        response = route.fetch()
+        payload = response.json()
+        payload["window_active"] = False
+        route.fulfill(status=response.status, json=payload)
+
+    page.route("**/local/status", mark_inactive)
+    page.evaluate(
+        """() => {
+          if (typeof window.__artekSetWindowActive !== "function") {
+            throw new Error("missing window active hook");
+          }
+          window.__artekSetWindowActive(false);
+        }"""
+    )
+    box = composer(page)
+    box.fill("please e2e-slow")
+    expect(box).to_have_value("please e2e-slow")
+    box.press("Enter")
+    expect(bot_row(page, speaker)).to_contain_text("slow done", timeout=15_000)
+    assert len(native_requests) == 1
+    assert native_requests[0].post_data_json["title"] == f"{speaker} replied"
+    expect(page.get_by_test_id("attention-alert")).to_have_count(0)
+
+
 def test_notify_off_mutes_replied_not_ask(page: Page, client_url: str, host_url: str) -> None:
     speaker = unique_bot("Mute")
     watcher = unique_bot("Hear")
     pair_fresh(page, client_url, host_url)
     create_named_bot(page, speaker)
-    thread_header(page).click()
+    open_settings(page, speaker)
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     page.get_by_test_id("notify-on-finish").uncheck()
     page.get_by_label("Close settings").click()
@@ -525,3 +1160,215 @@ def test_failed_banner_on_other_chat(page: Page, client_url: str, host_url: str)
     expect(thread_header(page)).to_contain_text(watcher)
     page.get_by_test_id("attention-dismiss").click()
     expect(banner).to_have_count(0)
+
+
+def test_offline_send_queues_then_flushes_with_caption(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Offline")
+    ensure_model(page)
+    expect(thread_header(page)).to_contain_text(name)
+    parked = "hello while the host is down"
+    later = "hello after reconnect"
+    cut_host(page)
+    box = composer(page)
+    box.fill(parked)
+    expect(box).to_have_value(parked)
+    box.press("Enter")
+    expect(page.get_by_test_id("reconnect-banner")).to_be_visible(timeout=8_000)
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+        has_text=parked
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("queued-pending")).to_contain_text("Waiting for the host")
+    expect(page.get_by_test_id("offline-sent-caption")).to_have_count(0)
+    expect(box).to_have_value("")
+    restore_host(page)
+    page.get_by_test_id("reconnect-banner").get_by_role("button", name="Retry connection").click()
+    expect(page.get_by_test_id("offline-sent-caption")).to_contain_text(
+        "Sent while offline", timeout=20_000
+    )
+    expect(page.get_by_test_id("queued-pending")).to_have_count(0)
+    expect(page.get_by_test_id("reconnect-banner")).to_have_count(0)
+    box.fill(later)
+    expect(box).to_have_value(later)
+    box.press("Enter")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=later)
+    ).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("offline-sent-caption")).to_have_count(1)
+
+
+def test_queued_send_shows_pending_then_local_caption(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "Queued")
+    ensure_model(page)
+    expect(thread_header(page)).to_contain_text(name)
+    parked = "queued while unreachable"
+    later = "online after the queue"
+    cut_host(page)
+    box = composer(page)
+    box.fill(parked)
+    expect(box).to_have_value(parked)
+    box.press("Enter")
+    bubble = page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+        has_text=parked
+    )
+    expect(bubble).to_be_visible(timeout=8_000)
+    expect(bubble).to_have_attribute("data-queued", "true")
+    pending = page.get_by_test_id("queued-pending")
+    expect(pending).to_be_visible()
+    expect(pending).to_contain_text("Waiting for the host")
+    expect(page.get_by_test_id("offline-sent-caption")).to_have_count(0)
+    restore_host(page)
+    page.get_by_test_id("reconnect-banner").get_by_role("button", name="Retry connection").click()
+    caption = page.get_by_test_id("offline-sent-caption")
+    expect(caption).to_contain_text("Sent while offline", timeout=20_000)
+    expect(caption).to_contain_text("·")
+    expect(pending).to_have_count(0)
+    box.fill(later)
+    expect(box).to_have_value(later)
+    box.press("Enter")
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(has_text=later)
+    ).to_be_visible(timeout=8_000)
+    expect(caption).to_have_count(1)
+
+
+def test_auth_error_send_does_not_queue(page: Page, client_url: str, host_url: str) -> None:
+    name = _named(page, client_url, host_url, "NoQueue")
+    ensure_model(page)
+    expect(thread_header(page)).to_contain_text(name)
+    page.route(
+        "**/v1/threads/**/messages",
+        lambda route: (
+            route.fulfill(
+                status=401,
+                content_type="application/json",
+                body='{"detail":"invalid token"}',
+            )
+            if route.request.method == "POST"
+            else route.continue_()
+        ),
+    )
+    box = composer(page)
+    box.fill("should not queue")
+    expect(box).to_have_value("should not queue")
+    box.press("Enter")
+    expect(page.get_by_test_id("auth-error")).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("reconnect-banner")).to_have_count(0)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="should not queue"
+        )
+    ).to_have_count(0)
+    expect(box).to_have_value("should not queue")
+
+
+def test_unsent_draft_stays_on_the_chat_it_was_typed_in(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    first = unique_bot("DraftA")
+    second = unique_bot("DraftB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    create_named_bot(page, second)
+    open_chat(page, first)
+    box = composer(page)
+    box.fill("keep on A")
+    expect(box).to_have_value("keep on A")
+    open_chat(page, second)
+    expect(composer(page)).to_have_value("")
+    open_chat(page, first)
+    expect(composer(page)).to_have_value("keep on A")
+
+
+def test_in_flight_send_does_not_disable_the_other_chat(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    first = unique_bot("HoldA")
+    second = unique_bot("HoldB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    create_named_bot(page, second)
+    ensure_model(page)
+    open_chat(page, first)
+    release = threading.Event()
+
+    def hold_post(route) -> None:
+        if route.request.method != "POST":
+            route.continue_()
+            return
+        release.wait(timeout=15)
+        route.continue_()
+
+    page.route("**/v1/threads/**/messages", hold_post)
+    box = composer(page)
+    box.fill("hold this send")
+    expect(box).to_have_value("hold this send")
+    box.press("Enter")
+    expect(composer(page)).to_have_value("")
+    expect(_composer_send(page)).to_be_disabled(timeout=5_000)
+    open_chat(page, second)
+    expect(composer(page)).to_have_value("")
+    other = composer(page)
+    other.fill("from B")
+    expect(other).to_have_value("from B")
+    expect(_composer_send(page)).to_be_enabled()
+    release.set()
+    expect(composer(page)).to_have_value("from B")
+    open_chat(page, first)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="hold this send"
+        )
+    ).to_be_visible(timeout=15_000)
+
+
+def test_late_send_failure_keeps_files_on_the_origin_chat(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    first = unique_bot("FailA")
+    second = unique_bot("FailB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    create_named_bot(page, second)
+    ensure_model(page)
+    open_chat(page, first)
+    page.get_by_test_id("thread-composer").evaluate(
+        """el => {
+          const data = new DataTransfer();
+          data.items.add(new File([new Uint8Array([65, 66, 67])], "drop.txt", {type: "text/plain"}));
+          el.dispatchEvent(new DragEvent("drop", {bubbles: true, cancelable: true, dataTransfer: data}));
+        }"""
+    )
+    expect(page.get_by_test_id("attach-chip")).to_contain_text("drop.txt", timeout=5_000)
+    release = threading.Event()
+
+    def fail_post(route) -> None:
+        if route.request.method != "POST":
+            route.continue_()
+            return
+        release.wait(timeout=15)
+        route.fulfill(
+            status=400,
+            content_type="application/json",
+            body='{"detail":"send failed"}',
+        )
+
+    page.route("**/v1/threads/**/messages", fail_post)
+    _composer_send(page).click()
+    expect(page.get_by_test_id("attach-chip")).to_have_count(0, timeout=5_000)
+    open_chat(page, second)
+    expect(page.get_by_test_id("attach-chip")).to_have_count(0)
+    expect(composer(page)).to_have_value("")
+    other = composer(page)
+    other.fill("from B")
+    expect(other).to_have_value("from B")
+    expect(_composer_send(page)).to_be_enabled()
+    release.set()
+    expect(page.get_by_test_id("action-error")).to_be_visible(timeout=8_000)
+    open_chat(page, first)
+    expect(page.get_by_test_id("attach-chip")).to_contain_text("drop.txt", timeout=5_000)
+    expect(page.get_by_test_id("attach-chip")).to_have_count(1)

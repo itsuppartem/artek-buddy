@@ -20,3 +20,5 @@ def test_contained_under_rejects_parent_escape(tmp_path: Path) -> None:
     assert contained_under(root, "x\ny") is None
     assert contained_under(root, "x\x00y") is None
     assert contained_under(root, ".") is None
+    assert contained_under(root, "") is None
+    assert contained_under(root, "bot\\win") is None

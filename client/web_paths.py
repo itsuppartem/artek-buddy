@@ -10,6 +10,7 @@ _KNOWN_TYPES = frozenset(
     {
         "application/javascript",
         "application/json",
+        "application/manifest+json",
         "application/octet-stream",
         "font/woff",
         "font/woff2",
@@ -61,8 +62,18 @@ def web_file_for_request(root: Path, url_path: str) -> Path | None:
     return None
 
 
+_SUFFIX_TYPES = {
+    ".webmanifest": "application/manifest+json",
+}
+
+
 def safe_content_type(path: Path) -> str:
-    guessed = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    suffix = path.suffix.lower()
+    guessed = (
+        _SUFFIX_TYPES.get(suffix)
+        or mimetypes.guess_type(str(path))[0]
+        or "application/octet-stream"
+    )
     cleaned = guessed.replace("\r", "").replace("\n", "")
     if cleaned not in _KNOWN_TYPES:
         return "application/octet-stream"

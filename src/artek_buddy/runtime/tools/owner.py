@@ -12,18 +12,34 @@ from artek_buddy.consent import (
     OWNER_HOME_SCOPE,
     owner_command_is_readonly,
 )
+from artek_buddy.owner_clients import OWNER_WEB_ERROR, has_desktop_owner_client
 from artek_buddy.runtime.tools.common import (
     _with_consent,
 )
 
 
 class OwnerToolsMixin:
+    def _owner_this_pc_ready(self) -> dict[str, Any] | None:
+        store = getattr(self.runtime, "store", None)
+        if store is None or not hasattr(store, "list_devices"):
+            return None
+        try:
+            devices = store.list_devices()
+        except Exception:
+            return None
+        if has_desktop_owner_client(devices):
+            return None
+        return {"ok": False, "error": OWNER_WEB_ERROR}
+
     def _exec_read_owner_file(
         self, args: dict[str, Any], bound_bot_id: str | None
     ) -> dict[str, Any]:
         path = str(args.get("path") or "").strip()
         if not path:
             return {"ok": False, "error": "path is required"}
+        blocked = self._owner_this_pc_ready()
+        if blocked:
+            return blocked
         bot_id, _run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if not bot_id:
             return {"ok": False, "error": "no active bot"}
@@ -87,6 +103,9 @@ class OwnerToolsMixin:
             return {"ok": False, "error": "path is required"}
         if content is None:
             return {"ok": False, "error": "content is required"}
+        blocked = self._owner_this_pc_ready()
+        if blocked:
+            return blocked
         text = content if isinstance(content, str) else str(content)
         if len(text.encode()) > 1_000_000:
             return {"ok": False, "error": "file is larger than 1 MB"}
@@ -94,7 +113,7 @@ class OwnerToolsMixin:
         if not bot_id:
             return {"ok": False, "error": "no active bot"}
         job = {"path": path, "kind": "write", "text": text}
-        denied = self._deny(
+        allowed, request_id = self._consent_gate(
             bot_id,
             CLASS_OWNER_WRITE,
             OWNER_HOME_SCOPE,
@@ -103,8 +122,8 @@ class OwnerToolsMixin:
             path=path,
             job=job,
         )
-        if denied:
-            return denied
+        if not allowed:
+            return {"ok": False, "error": "denied by owner", "denied": True}
         writer = getattr(self.runtime, "owner_file_writer", None)
         if callable(writer):
             try:
@@ -121,6 +140,7 @@ class OwnerToolsMixin:
             scope_key=OWNER_HOME_SCOPE,
             summary=f"Write {path} on your computer?",
             job=job,
+            request_id=request_id,
         )
         if not found:
             return {"ok": False, "error": "no paired client to write that file"}
@@ -138,6 +158,9 @@ class OwnerToolsMixin:
         self, args: dict[str, Any], bound_bot_id: str | None
     ) -> dict[str, Any]:
         path = str(args.get("path") or "~").strip() or "~"
+        blocked = self._owner_this_pc_ready()
+        if blocked:
+            return blocked
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if not bot_id:
             return {"ok": False, "error": "no active bot"}
@@ -178,12 +201,16 @@ class OwnerToolsMixin:
             return {"ok": False, "error": "command is required"}
         if len(command) > 8000:
             return {"ok": False, "error": "command is too long"}
+        blocked = self._owner_this_pc_ready()
+        if blocked:
+            return blocked
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if not bot_id:
             return {"ok": False, "error": "no active bot"}
         job = {"command": command, "cwd": cwd, "kind": "exec"}
+        request_id: str | None = None
         if not owner_command_is_readonly(command):
-            denied = self._deny(
+            allowed, request_id = self._consent_gate(
                 bot_id,
                 CLASS_OWNER_EXEC,
                 OWNER_HOME_SCOPE,
@@ -191,8 +218,8 @@ class OwnerToolsMixin:
                 detail=f"owner_exec: {command}\ncwd: {cwd}",
                 job=job,
             )
-            if denied:
-                return denied
+            if not allowed:
+                return {"ok": False, "error": "denied by owner", "denied": True}
         runner = getattr(self.runtime, "owner_command_runner", None)
         if callable(runner):
             try:
@@ -209,6 +236,7 @@ class OwnerToolsMixin:
             scope_key=OWNER_HOME_SCOPE,
             summary=f"Run `{command}` on your computer?",
             job=job,
+            request_id=request_id,
         )
         if not found:
             return {"ok": False, "error": "no paired client to run that command"}

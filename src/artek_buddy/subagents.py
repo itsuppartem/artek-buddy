@@ -9,8 +9,10 @@ from artek_buddy.contracts.domain import Bot, Subagent
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.db.history import HistoryStore
 from artek_buddy.db.shaping import isoformat_utc, new_id
+from artek_buddy.http.usage_persist import persist_product_usage
 from artek_buddy.memory import format_memory_context, wrap_turn_prompt
 from artek_buddy.runtime import AgentRuntime, ProductStreamEvent, RunRecord
+from artek_buddy.runtime import worker_progress as progress_mod
 from artek_buddy.stream import accumulate
 
 log = logging.getLogger("artek_buddy")
@@ -29,10 +31,18 @@ class SubagentService:
         self.events: EventHub | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
         self.tasks: dict[str, asyncio.Task[Any]] = {}
+        self._wake_lead: Any = None
+        self._cancelled: set[str] = set()
 
-    def bind(self, events: EventHub, loop: asyncio.AbstractEventLoop) -> None:
+    def bind(
+        self,
+        events: EventHub,
+        loop: asyncio.AbstractEventLoop,
+        wake_lead: Any = None,
+    ) -> None:
         self.events = events
         self.loop = loop
+        self._wake_lead = wake_lead
 
     def spawn(self, bot: Bot, name: str, task: str, parent_run_id: str | None = None) -> Subagent:
         task_text = (task or "").strip()
@@ -56,13 +66,49 @@ class SubagentService:
     def list_for(self, bot: Bot) -> list[Subagent]:
         return self.store.list_subagents(bot.id)
 
-    def stop(self, bot: Bot, ref: str) -> Subagent:
+    def is_cancelled(self, sub_id: str) -> bool:
+        if sub_id in self._cancelled:
+            return True
+        found = self.store.get_subagent(sub_id)
+        return found is not None and found.status not in {"queued", "running"}
+
+    def stop(
+        self,
+        bot: Bot,
+        ref: str,
+        *,
+        owner: bool = True,
+        inspected_activity_seq: int | None = None,
+    ) -> Subagent:
         found = self.inspect(bot, ref)
+        if not owner:
+            if found.tool_running:
+                raise SubagentError("worker has a tool in flight")
+            if inspected_activity_seq is None:
+                raise SubagentError("inspect the worker before stop")
+            if int(inspected_activity_seq) != found.activity_seq:
+                raise SubagentError("worker activity advanced since inspect")
+        self._cancelled.add(found.id)
         task = self.tasks.get(found.id)
         if task and not task.done():
             task.cancel()
-        updated = self.store.update_subagent(found.id, status="cancelled", error="stopped")
+        updated = self.store.cancel_subagent_row(
+            found.id,
+            owner=owner,
+            inspected_activity_seq=inspected_activity_seq,
+        )
         if updated is None:
+            live = self.store.get_subagent(found.id)
+            if live is not None and live.status == "cancelled":
+                self._cancelled.add(found.id)
+                return live
+            self._cancelled.discard(found.id)
+            if live is None:
+                raise SubagentError("subagent not found")
+            if not owner:
+                if live.tool_running:
+                    raise SubagentError("worker has a tool in flight")
+                raise SubagentError("worker activity advanced since inspect")
             raise SubagentError("subagent not found")
         self._emit(bot, updated)
         return updated
@@ -90,10 +136,8 @@ class SubagentService:
         updated = self.store.append_clarification(found.id, note)
         if updated is None:
             raise SubagentError("subagent not found")
-        queued = self.store.update_subagent(updated.id, status="queued") or updated
-        self._emit(bot, queued)
-        self._schedule(queued.id, self._run(bot, queued.id, mode="steer"))
-        return queued
+        self._emit(bot, updated)
+        return updated
 
     def stop_all(self, bot: Bot) -> None:
         for item in self.store.list_subagents(bot.id):
@@ -148,6 +192,8 @@ class SubagentService:
                 )
                 or record
             )
+            self.store.record_subagent_activity(sub_id, kind="run_started")
+            record = self.store.get_subagent(sub_id) or record
             self._emit(live, record)
             self.runtime.set_current_turn_context(
                 live.id,
@@ -172,14 +218,17 @@ class SubagentService:
             result = ""
             status = "completed"
             error: str | None = None
+            turn_usage = None
             async for item in self.runtime.stream(
                 prompt,
                 session_id=session_id,
                 bot_id=live.id,
                 role="subagent",
+                idempotency_key=sub_id,
             ):
                 if isinstance(item, RunRecord):
                     result = item.result or draft or ""
+                    turn_usage = item.usage
                     if item.status not in {"finished", "completed"} and not result:
                         result = item.error or f"subagent failed: {item.id}"
                     if item.status in {"cancelled", "canceled"}:
@@ -193,13 +242,17 @@ class SubagentService:
                 if item.type == "thread.message.updated":
                     draft = accumulate(draft, item.payload)
                     if draft:
-                        record = self.store.update_subagent(sub_id, progress=draft) or record
+                        record = self.store.update_subagent(sub_id, thinking=draft) or record
+                        self.store.record_subagent_activity(sub_id, kind="text")
+                        record = self.store.get_subagent(sub_id) or record
                         self._emit(live, record)
             if not result:
                 result = draft or ""
+            persist_product_usage(self.store, self.events, live, sub_id, turn_usage)
             final = self.store.update_subagent(sub_id, status=status, result=result, error=error)
             if final:
                 self._emit(live, final)
+                self._notify_lead(live, final)
         except asyncio.CancelledError:
             current = self.tasks.get(sub_id)
             if current is not None and current is not asyncio.current_task():
@@ -212,11 +265,13 @@ class SubagentService:
             updated = self.store.update_subagent(sub_id, status="cancelled", error="stopped")
             if updated:
                 self._emit(live, updated)
+                self._notify_lead(live, updated)
         except Exception as exc:
             log.exception("subagent %s failed", sub_id)
             updated = self.store.update_subagent(sub_id, status="failed", error=str(exc))
             if updated:
                 self._emit(live, updated)
+                self._notify_lead(live, updated)
         finally:
             self.runtime.clear_active_turn(run_id=sub_id)
 
@@ -227,25 +282,80 @@ class SubagentService:
             "task": record.task,
             "status": record.status,
             "progress": record.progress,
+            "progress_remaining": record.progress_remaining,
             "thinking": record.thinking,
             "result": record.result,
             "index": record.index,
             "error": record.error,
             "clarifications": record.clarifications,
+            "last_activity_at": record.last_activity_at,
+            "activity_seq": record.activity_seq,
+            "last_activity_kind": record.last_activity_kind,
+            "last_tool_name": record.last_tool_name,
+            "tool_running": record.tool_running,
         }
 
     def _emit(self, bot: Bot, record: Subagent) -> None:
-        if self.events is None:
-            return
-        event = ProductEvent(
-            id=new_id("evt"),
-            workspace_id=bot.workspace_id,
-            thread_id=bot.thread_id,
-            bot_id=bot.id,
-            seq=self.events.next_seq(bot.id),
-            type=ProductEventType.THREAD_SUBAGENT,
-            created_at=isoformat_utc(),
-            payload=self.payload(record),
-            run_id=record.parent_run_id,
+        if self.events is not None:
+            event = ProductEvent(
+                id=new_id("evt"),
+                workspace_id=bot.workspace_id,
+                thread_id=bot.thread_id,
+                bot_id=bot.id,
+                seq=self.events.next_seq(bot.id),
+                type=ProductEventType.THREAD_SUBAGENT,
+                created_at=isoformat_utc(),
+                payload=self.payload(record),
+                run_id=record.parent_run_id,
+            )
+            self.events.publish(event)
+
+    def report_progress(
+        self, bot: Bot, sub_id: str, step: str, remaining: Any = None
+    ) -> dict[str, Any]:
+        record = self.store.get_subagent(sub_id)
+        if record is None or record.bot_id != bot.id:
+            return {"ok": False, "error": "subagent not found"}
+        if record.status not in {"queued", "running"}:
+            return {"ok": False, "error": "worker is not running"}
+        current = progress_mod.clip_step(step)
+        leftover = progress_mod.clip_step(remaining or "")
+        if not current:
+            return {"ok": False, "error": "step is required"}
+        self.store.update_subagent(
+            sub_id,
+            progress=current,
+            progress_remaining=leftover,
         )
-        self.events.publish(event)
+        self.store.record_subagent_activity(sub_id, kind="progress")
+        updated = self.store.get_subagent(sub_id) or record
+        self._emit(bot, updated)
+        return {
+            "ok": True,
+            "step": current,
+            "remaining": leftover or None,
+            "posted": False,
+        }
+
+    def _notify_lead(self, bot: Bot, record: Subagent) -> None:
+        if record.status not in {"completed", "failed"}:
+            return
+        excerpt = (record.result or record.error or record.status).strip()[:400]
+        text = (
+            f"A background worker finished.\n"
+            f"name: {record.name}\n"
+            f"status: {record.status}\n"
+            f"result: {excerpt}\n"
+            "Write one concise owner-facing result. Do not repeat the task or reasoning."
+        )
+        try:
+            self.store.enqueue_inbox(bot.id, None, text, kind="worker_result")
+        except Exception:
+            log.exception("failed to enqueue worker result")
+            return
+        wake = self._wake_lead
+        if callable(wake):
+            try:
+                wake(bot)
+            except Exception:
+                log.exception("failed to wake lead after worker")

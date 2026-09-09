@@ -64,6 +64,22 @@ class UpdateBotInput(BaseModel):
     computer_mode: Literal["team", "dedicated"] | None = None
 
 
+class BotAskInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    bot: str = Field(min_length=1, max_length=80)
+    text: str = ""
+
+
+class BotAskResult(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    ok: bool = True
+    to_bot_id: Id
+    to_run_id: Id
+    name: str
+
+
 class BotIdInput(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -98,6 +114,9 @@ class Routine(BaseModel):
     last_run_at: str | None
     next_run_at: str | None
     created_at: str
+    require_approval: bool = False
+    definition_version: int = 1
+    last_run_state: str | None = None
 
 
 class CreateRoutineInput(BaseModel):
@@ -110,6 +129,7 @@ class CreateRoutineInput(BaseModel):
     timezone: str = "UTC"
     notify: bool = True
     active: bool = False
+    require_approval: bool = False
 
 
 class UpdateRoutineInput(BaseModel):
@@ -121,10 +141,27 @@ class UpdateRoutineInput(BaseModel):
     timezone: str | None = None
     notify: bool | None = None
     active: bool | None = None
+    require_approval: bool | None = None
 
 
 class RoutineList(BaseModel):
     routines: list[Routine]
+
+
+class SkillBook(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: Id
+    bot_id: Id
+    name: str
+    slug: str
+    when_to_use: str
+    body: str | None = None
+    updated_at: str
+
+
+class SkillBookList(BaseModel):
+    books: list[SkillBook]
 
 
 class OkResponse(BaseModel):
@@ -208,6 +245,57 @@ class ConnectionCatalogItem(BaseModel):
     no_auth: bool
 
 
+class ConnectionCatalogInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    q: str | None = None
+
+
+class ConnectionCatalog(BaseModel):
+    items: list[ConnectionCatalogItem]
+
+
+class ConnectionList(BaseModel):
+    connections: list[Connection]
+
+
+class BeginConnectionInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    provider: str
+    redirect_url: str
+
+
+class BeginConnectionResult(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    connection: Connection
+    authorization_url: str | None = None
+
+
+class CompleteConnectionInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+
+class ConnectionIdInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    connection_id: Id
+
+
+class ConnectionKeyInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    api_key: str = ""
+
+
+class ConnectionKeyStatus(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    configured: bool
+    last_four: str | None = None
+
+
 class CapabilityInstall(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -247,7 +335,27 @@ class UsageRecord(BaseModel):
     model: str
     input_tokens: int
     output_tokens: int
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    reasoning_tokens: int = 0
+    total_tokens: int = 0
+    estimated_cost_usd: float | None = None
     created_at: str
+
+
+class UsageRecordList(BaseModel):
+    records: list[UsageRecord]
+
+
+class UsageSummary(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    reasoning_tokens: int = 0
+    total_tokens: int = 0
+    estimated_cost_usd: float | None = None
+    runs: int = 0
 
 
 class ComputerStatus(BaseModel):
@@ -258,6 +366,7 @@ class ComputerStatus(BaseModel):
     kind: SandboxKind
     state: Literal["stopped", "booting", "running", "suspended", "error"]
     control_holder: Literal["bot", "user", "none"]
+    control_lease_id: str | None = None
     screen_available: bool
     home_revision: str | None
     busy_bot_name: str | None
@@ -275,6 +384,7 @@ class ComputerInput(BaseModel):
 
     kind: str
     payload: dict[str, Any] = Field(default_factory=dict)
+    lease_id: str
 
 
 class ComputerFilesInput(BaseModel):
@@ -331,10 +441,18 @@ class Subagent(BaseModel):
     task: str
     status: Literal["queued", "running", "completed", "failed", "cancelled"]
     progress: str | None = None
+    progress_remaining: str | None = None
+    progress_posted_at: str | None = None
+    progress_posted_text: str | None = None
     thinking: str | None = None
     result: str | None = None
     error: str | None = None
     clarifications: str | None = None
+    last_activity_at: str | None = None
+    activity_seq: int = 0
+    last_activity_kind: str | None = None
+    last_tool_name: str | None = None
+    tool_running: bool = False
     created_at: str
     updated_at: str
 
@@ -387,6 +505,7 @@ class ThreadSnapshot(BaseModel):
     computer: ComputerStatus
     subagents: list[Subagent] = Field(default_factory=list)
     pending_auto_consent_id: str | None = None
+    pending_auto_consent_ids: list[str] = Field(default_factory=list)
 
 
 class ModelCredential(BaseModel):
@@ -397,6 +516,84 @@ class ModelCredential(BaseModel):
     label: str
     has_key: bool
     is_default: bool
+    last_four: str | None = None
+    error: str | None = None
+
+
+class ModelCredentialList(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    credentials: list[ModelCredential]
+    default_provider: str | None = None
+    default_model: str | None = None
+    default_effort: str | None = None
+    default_fast: bool | None = None
+
+
+class BotCredential(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    provider: str = Field(min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9-]{0,31}$")
+    scope: Literal["this_bot"] = "this_bot"
+    last_four: str
+    updated_at: str
+    env_name: str = ""
+
+
+class BotCredentialList(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    credentials: list[BotCredential]
+
+
+class SaveBotCredentialInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    secret: str = Field(min_length=1, max_length=8000)
+
+
+class ConnectModelInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    provider: str
+    api_key: str | None = None
+
+
+class SetDefaultModelInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    provider: str
+    model: str
+    effort: str | None = None
+    fast: bool | None = None
+    bot_id: Id | None = None
+
+
+class CatalogParamValue(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    value: str
+    display_name: str | None = None
+
+
+class CatalogParameter(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: str
+    values: list[CatalogParamValue] = Field(default_factory=list)
+
+
+class ModelInfo(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: str
+    provider: str
+    variants: list[str] | None = None
+    parameters: list[CatalogParameter] | None = None
+
+
+class ModelListResponse(BaseModel):
+    models: list[ModelInfo]
 
 
 class DeploymentSettings(BaseModel):
@@ -420,19 +617,107 @@ class UpdateDeploymentInput(BaseModel):
     computer_host: Literal["docker", "host"] | None = None
 
 
+class Device(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: Id
+    name: str
+    platform: str
+    created_at: str
+    last_seen_at: str | None = None
+    revoked_at: str | None = None
+    member_id: Id | None = None
+
+
+class Member(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: Id
+    name: str
+    role: str = "owner"
+    state: str = "active"
+    created_at: str
+    updated_at: str
+
+
+class Principal(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    member_id: Id
+    device_id: Id
+    role: str = "owner"
+
+
+class AuditVerificationReport(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    ok: bool
+    total_events: int
+    head_hash: str
+    failed_seq: int | None = None
+    reason: str | None = None
+    events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DeadJob(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: Id
+    job_type: str
+    resource_id: str | None = None
+    idempotency_key: str | None = None
+    state: str = "dead"
+    payload: dict[str, Any] = Field(default_factory=dict)
+    last_error: str | None = None
+    attempts: int = 0
+    max_attempts: int = 5
+    created_at: str
+    updated_at: str
+
+
+class DeadJobList(BaseModel):
+    jobs: list[DeadJob]
+
+
+class DeviceList(BaseModel):
+    devices: list[Device]
+
+
+class CreateDeviceInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    name: str = Field(min_length=1, max_length=80)
+    platform: str = Field(default="linux", max_length=40)
+    pairing_code: str | None = Field(default=None, max_length=32)
+
+
+class DeviceCreated(Device):
+    """Mint response. `token` is shown once and never stored in plaintext."""
+
+    token: str
+
+
+class PairingCode(BaseModel):
+    code: str
+    expires_at: str
+
+
 class Me(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     user_id: Id = "usr_owner"
     email: str = "owner@artek.local"
     name: str = "Owner"
+    role: str = "owner"
     workspace_id: Id = "ws_default"
     is_deployment_owner: bool = True
-    needs_model: bool = False
-    default_provider: str | None = "cursor"
-    default_model: str | None = "grok-4.6"
+    needs_model: bool = True
+    default_provider: str | None = None
+    default_model: str | None = None
     computer_host: Literal["docker", "host"] | None = "docker"
     can_choose_host_computer: bool = True
+    member: Member | None = None
+    devices: list[Device] = Field(default_factory=list)
 
 
 class ExportMemoryItem(BaseModel):
@@ -521,11 +806,24 @@ class ThreadSendInput(BaseModel):
     reply_to_id: Id | None = None
     attachment_ids: list[Id] = Field(default_factory=list)
     attachments: list[ThreadAttachmentInput] = Field(default_factory=list)
+    idempotency_key: str | None = Field(default=None, max_length=120)
 
     @model_validator(mode="after")
     def need_text_or_files(self) -> ThreadSendInput:
         if not self.text.strip() and not self.attachment_ids and not self.attachments:
             raise ValueError("text or attachments required")
+        return self
+
+
+class WorkspaceDispatchInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    text: str = Field(min_length=1, max_length=20000)
+
+    @model_validator(mode="after")
+    def need_text(self) -> WorkspaceDispatchInput:
+        if not self.text.strip():
+            raise ValueError("text required")
         return self
 
 
@@ -551,12 +849,23 @@ class ConsentAnswerInput(BaseModel):
     decision: str = Field(min_length=1)
 
 
+class ConsentAckInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    claim_capable: bool = False
+
+
+class ConsentAckResponse(OkResponse):
+    claim: str | None = None
+
+
 class ConsentFileInput(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     name: str = Field(min_length=1)
     text: str | None = None
     content_base64: str | None = None
+    claim: str | None = None
 
 
 class ConsentJob(BaseModel):
@@ -565,6 +874,7 @@ class ConsentJob(BaseModel):
     id: Id
     action_class: str
     status: str = "pending"
+    job_status: Literal["queued", "acknowledged", "completed", "failed", "timed_out"] | None = None
     path: str | None = None
     command: str | None = None
     cwd: str | None = None
@@ -589,6 +899,7 @@ class ConsentResultInput(BaseModel):
     bytes: int | None = None
     entries: list[dict[str, Any]] | None = None
     error: str | None = None
+    claim: str | None = None
 
 
 class ThreadSendResult(BaseModel):
@@ -604,8 +915,17 @@ class ThreadSendResult(BaseModel):
     queued: bool = False
 
 
+class WorkspaceDispatchResult(BaseModel):
+    bot_id: Id
+    bot_name: str
+    task_id: Id
+    run_id: Id
+    seq: int
+    queued: bool = False
+
+
 class HealthResponse(BaseModel):
-    """GET /health is process liveness. db is additive. No agent identity."""
+    """GET /health and /livez are process liveness. GET /readyz is 503 when db or runtime is down."""
 
     ok: bool
     db: bool | None = None
@@ -628,37 +948,3 @@ class RunRequest(BaseModel):
 
     text: str = Field(min_length=1)
     bot_id: str | None = None
-
-
-class Device(BaseModel):
-    model_config = ConfigDict(extra="ignore", populate_by_name=True)
-
-    id: Id
-    name: str
-    platform: str
-    created_at: str
-    last_seen_at: str | None = None
-    revoked_at: str | None = None
-
-
-class DeviceList(BaseModel):
-    devices: list[Device]
-
-
-class CreateDeviceInput(BaseModel):
-    model_config = ConfigDict(extra="ignore", populate_by_name=True)
-
-    name: str = Field(min_length=1, max_length=80)
-    platform: str = Field(default="linux", max_length=40)
-    pairing_code: str | None = Field(default=None, max_length=32)
-
-
-class DeviceCreated(Device):
-    """Mint response. `token` is shown once and never stored in plaintext."""
-
-    token: str
-
-
-class PairingCode(BaseModel):
-    code: str
-    expires_at: str

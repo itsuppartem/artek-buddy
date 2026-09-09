@@ -1,14 +1,15 @@
 #!/bin/sh
 # One-shot host bring-up from a GitHub Release. No secrets in the script.
-# Fill CURSOR_API_KEY in .env yourself, then run again.
+# A second run on a clean checkout fetches and checks out v$VERSION.
+# A dirty tree aborts. .env is gitignored and kept.
+# A provider key is optional here: paste it in Models after pairing, or set
+# CURSOR_API_KEY in .env to seed the same store.
 set -eu
 
 REPO="${ARTEK_REPO:-https://github.com/itsuppartem/artek-buddy.git}"
 DEST="${ARTEK_HOME:-$HOME/artek-buddy}"
 IMAGE_HOST="${ARTEK_HOST_IMAGE:-ghcr.io/itsuppartem/artek-buddy}"
 IMAGE_COMPUTER="${ARTEK_COMPUTER_IMAGE:-ghcr.io/itsuppartem/artek-buddy-computer}"
-PLACEHOLDER="crsr_your_key_here"
-
 need() {
   command -v "$1" >/dev/null 2>&1 || {
     echo "install $1 first (docker, git, curl, openssl)" >&2
@@ -31,20 +32,31 @@ latest_version() {
   echo "$tag"
 }
 
-key_is_placeholder() {
-  key=$(sed -n 's/^CURSOR_API_KEY=//p' "$1" | tr -d '[:space:]')
-  [ -z "$key" ] || [ "$key" = "$PLACEHOLDER" ]
-}
-
 need git
 need openssl
 VERSION=$(latest_version)
 export ARTEK_VERSION="$VERSION"
+TAG="v$VERSION"
 
-if [ ! -f "$DEST/.env.example" ]; then
-  git clone --depth 1 --branch "v$VERSION" "$REPO" "$DEST"
-fi
+prepare_dest() {
+  if [ -d "$DEST/.git" ]; then
+    if [ -n "$(git -C "$DEST" status --porcelain)" ]; then
+      echo "$DEST has uncommitted changes. Clean the tree or set ARTEK_HOME to an empty directory. Not overwriting." >&2
+      echo "Upgrade after a clean tree: ARTEK_VERSION=$VERSION ARTEK_HOME=$DEST sh infra/install-host.sh" >&2
+      exit 1
+    fi
+    git -C "$DEST" fetch --depth 1 origin "refs/tags/$TAG:refs/tags/$TAG"
+    git -C "$DEST" checkout --detach "$TAG"
+    return
+  fi
+  if [ -e "$DEST" ] && [ -n "$(ls -A "$DEST" 2>/dev/null || true)" ]; then
+    echo "$DEST exists and is not a git checkout. Move it or set ARTEK_HOME." >&2
+    exit 1
+  fi
+  git clone --depth 1 --branch "$TAG" "$REPO" "$DEST"
+}
 
+prepare_dest
 cd "$DEST"
 
 if [ ! -f .env ]; then
@@ -60,13 +72,7 @@ if [ ! -f .env ]; then
   fi
   echo "COMPUTER_IMAGE=$IMAGE_COMPUTER:$VERSION" >>.env
   echo "wrote $DEST/.env (tokens generated)."
-  echo "open that file, set CURSOR_API_KEY=crsr_… from Cursor Dashboard, run this script again."
-  exit 2
-fi
-
-if key_is_placeholder .env; then
-  echo "$DEST/.env still has the placeholder CURSOR_API_KEY. Paste your crsr_ key and re-run." >&2
-  exit 2
+  echo "pair the window and add a key in Models, or set CURSOR_API_KEY in .env to seed Cursor."
 fi
 
 if [ "${ARTEK_INSTALL_SKIP_STACK:-}" = "1" ]; then
@@ -88,7 +94,7 @@ fi
 if docker pull "$COMPUTER_IMAGE"; then
   :
 else
-  echo "computer image missing on GHCR; building it on this Pi"
+  echo "computer image missing on GHCR; building it on this host"
   docker compose --profile build build computer
   export COMPUTER_IMAGE=artek-buddy-computer:local
 fi

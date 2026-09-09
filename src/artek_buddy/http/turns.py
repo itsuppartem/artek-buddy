@@ -7,6 +7,12 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from artek_buddy.apps import format_apps_context
+from artek_buddy.books import format_book_catalog
+from artek_buddy.bot_asks import (
+    ASKED_YOU_MARK,
+    format_other_bots,
+)
 from artek_buddy.bus import EventHub
 from artek_buddy.computer.service import (
     ComputerService,
@@ -14,6 +20,7 @@ from artek_buddy.computer.service import (
 from artek_buddy.contracts import (
     Bot,
     ComputerStatus,
+    MessageRole,
     ProductEvent,
     ProductEventType,
     Run,
@@ -27,7 +34,9 @@ from artek_buddy.db.shaping import (
     blocks_text,
     isoformat_utc,
     new_id,
+    owner_visible_error,
     preview_snippet,
+    text_blocks,
 )
 from artek_buddy.memory import (
     compact_thread_context,
@@ -36,6 +45,7 @@ from artek_buddy.memory import (
     wrap_turn_prompt,
 )
 from artek_buddy.memory_hub import MemoryHub, should_persist_ask
+from artek_buddy.model_catalog import NEEDS_MODEL_TEXT, complete_chat
 from artek_buddy.observe import (
     bind_turn,
     current_request_id,
@@ -50,6 +60,8 @@ from artek_buddy.runtime import (
     RunRecord,
     runtime_kind,
 )
+from artek_buddy.runtime.owner_intent import classify_owner_intent
+from artek_buddy.status_ping import STATUS_PING_GUIDE
 from artek_buddy.stream import accumulate
 from artek_buddy.uploads import (
     UploadError,
@@ -59,14 +71,18 @@ from artek_buddy.uploads import (
     user_file_blocks,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
+from artek_buddy.http.bot_ask_delivery import deliver_bot_ask_reply as _deliver_bot_ask_reply
 from artek_buddy.http.deps import (
     MAX_INBOX,
     _db_error,
     current_app,
 )
+from artek_buddy.http.turn_registry import cancel_turns as _cancel_turns
+from artek_buddy.http.turn_registry import drop_turn as _drop_turn
+from artek_buddy.http.turn_registry import register_turn as _register_turn
+from artek_buddy.http.usage_persist import persist_product_usage
 
 
 def _emit(
@@ -96,9 +112,24 @@ def _emit_remembered(
     bot: Bot,
     text: str,
     run_id: str | None,
+    entry: Any | None = None,
 ) -> None:
     label = f"Remembered: {text}".strip() if text else "Remembered a note"
     _emit(events, bot, ProductEventType.THREAD_META, {"text": label[:160]}, run_id=run_id)
+    payload: dict[str, Any] = {"text": (text or "")[:160]}
+    document_id = getattr(entry, "document_id", None) if entry is not None else None
+    if document_id:
+        payload["document_id"] = document_id
+    scope = getattr(entry, "scope", None) if entry is not None else None
+    if scope:
+        payload["scope"] = scope
+    kind = getattr(entry, "kind", None) if entry is not None else None
+    if kind:
+        payload["kind"] = kind
+    slot = getattr(entry, "slot", None) if entry is not None else None
+    if slot:
+        payload["section"] = slot
+    _emit(events, bot, ProductEventType.MEMORY_REVISED, payload, run_id=run_id)
 
 
 def _emit_computer(events: EventHub, bot: Bot, status: ComputerStatus) -> None:
@@ -163,51 +194,9 @@ def _emit_answered_asks(
                 question=question,
             )
             if entry is not None:
-                _emit_remembered(events, bot, entry.text, run_id)
+                _emit_remembered(events, bot, entry.text, run_id, entry=entry)
         except Exception:
             log.exception("failed to capture ask answer in memory")
-
-
-def _turn_bucket(bot_id: str) -> dict[str, asyncio.Task[Any]]:
-    turns = getattr(current_app().state, "active_turns", None)
-    if turns is None:
-        return {}
-    bucket = turns.get(bot_id)
-    if bucket is None:
-        bucket = {}
-        turns[bot_id] = bucket
-    return bucket
-
-
-def _register_turn(bot_id: str, run_id: str, task: asyncio.Task[Any]) -> None:
-    _turn_bucket(bot_id)[run_id] = task
-
-
-def _drop_turn(bot_id: str, run_id: str) -> None:
-    turns = getattr(current_app().state, "active_turns", None)
-    if not turns:
-        return
-    bucket = turns.get(bot_id)
-    if not bucket:
-        return
-    bucket.pop(run_id, None)
-    if not bucket:
-        turns.pop(bot_id, None)
-
-
-def _cancel_turns(bot_id: str, run_id: str | None = None) -> None:
-    turns = getattr(current_app().state, "active_turns", None)
-    if not turns:
-        return
-    bucket = turns.get(bot_id) or {}
-    if run_id:
-        tasks = [bucket[run_id]] if run_id in bucket else []
-    else:
-        tasks = list(bucket.values())
-        turns.pop(bot_id, None)
-    for task in tasks:
-        if task and not task.done():
-            task.cancel()
 
 
 async def _shutdown_work() -> None:
@@ -231,14 +220,32 @@ async def _shutdown_work() -> None:
         await asyncio.gather(*pending, return_exceptions=True)
 
 
-def _message_excerpt(message: ThreadMessage, limit: int = 400) -> str:
+def _block_dicts(message: ThreadMessage) -> list[dict[str, Any]]:
     raw: list[dict[str, Any]] = []
     for block in message.blocks or []:
         if hasattr(block, "model_dump"):
             raw.append(block.model_dump())
         elif isinstance(block, dict):
             raw.append(block)
-    return preview_snippet(blocks_text(raw), limit)
+    return raw
+
+
+def _message_excerpt(message: ThreadMessage, limit: int = 400) -> str:
+    return preview_snippet(blocks_text(_block_dicts(message)), limit)
+
+
+def _posted_bot_texts(history: HistoryStore, bot: Bot, run_id: str) -> set[str]:
+    posted: set[str] = set()
+    for msg in history.page_messages(bot.thread_id, limit=200).messages:
+        if msg.run_id != run_id or msg.role != MessageRole.bot:
+            continue
+        for block in _block_dicts(msg):
+            if block.get("kind") != "text":
+                continue
+            text = str(block.get("text") or "").strip()
+            if text:
+                posted.add(text)
+    return posted
 
 
 def _ingest_thread_files(
@@ -265,11 +272,24 @@ def _ingest_thread_files(
 
 
 async def _ensure_agent(history: HistoryStore, rt: AgentRuntime, bot: Bot) -> Bot:
-    live_id = await rt.ensure_session(
-        bot.cursor_agent_id,
-        name=bot.name or DEFAULT_BOT_NAME,
-        bot_id=bot.id,
-    )
+    stamp = history.model_fingerprint()
+    live = history.has_active_run(bot.id)
+    mismatch = bool(stamp) and history.applied_model(bot.id) != stamp
+    if mismatch and not live:
+        live_id = await rt.create_session(
+            name=bot.name or DEFAULT_BOT_NAME,
+            persist_default=False,
+            bot_id=bot.id,
+        )
+        history.mark_applied_model(bot.id, stamp)
+    else:
+        live_id = await rt.ensure_session(
+            bot.cursor_agent_id,
+            name=bot.name or DEFAULT_BOT_NAME,
+            bot_id=bot.id,
+        )
+        if stamp and not (mismatch and live):
+            history.mark_applied_model(bot.id, stamp)
     rt.bind_agent_bot(live_id, bot.id)
     if bot.cursor_agent_id != live_id:
         return history.attach_agent(bot.id, live_id)
@@ -361,8 +381,8 @@ def _format_inbox(
 ) -> str:
     lines = [
         "The user sent these messages while you were working. They were not injected mid-turn. Apply them now.",
-        "- If a message asks about progress, status, or a worker (e.g. 'еще делаешь?', 'сверил?', 'как там?'): check the actual state immediately (using inspect_subagent, list_subagents, or shell), give a quick direct update, and if a worker is stuck or failing, stop it (stop_subagent) and finish or fix the task directly.",
-        "- If a message refines or corrects a worker's task: steer it immediately with steer_subagent.",
+        f"- {STATUS_PING_GUIDE} When a step is stored, say that step.",
+        "- If a message refines or corrects a worker's task: steer it immediately with steer_subagent. Keep the same worker id. Do not stop and spawn a replacement.",
         "- If a message gives new substantive parallel tasks: spawn a subagent if appropriate, or execute directly.",
     ]
     for index, item in enumerate(items, start=1):
@@ -377,6 +397,73 @@ def _format_inbox(
     return "\n".join(lines)
 
 
+def _chosen_model_id(history: HistoryStore, rt: AgentRuntime) -> str:
+    default = history.get_default_model()
+    if default is not None:
+        return default[1]
+    return rt.settings.cursor_model
+
+
+def _needs_model_send(
+    history: HistoryStore,
+    events: EventHub,
+    bot: Bot,
+    text: str,
+) -> ThreadSendResult:
+    display = (text or "").strip() or " "
+    user_msg = history.append_user_message(bot, display)
+    notice = history.append_bot_message(bot, [{"kind": "text", "text": NEEDS_MODEL_TEXT}])
+    _emit(
+        events,
+        bot,
+        ProductEventType.THREAD_MESSAGE_CREATED,
+        {"message": user_msg.model_dump(mode="json")},
+    )
+    _emit(
+        events,
+        bot,
+        ProductEventType.THREAD_MESSAGE_CREATED,
+        {"message": notice.model_dump(mode="json")},
+    )
+    return ThreadSendResult(
+        task_id=new_id("task"),
+        run_id=new_id("run"),
+        seq=user_msg.seq,
+        message=user_msg,
+        run=None,
+        queued=False,
+    )
+
+
+async def _turn_stream(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    prompt: str,
+    agent_id: str,
+    bot: Bot,
+    *,
+    idempotency_key: str | None = None,
+):
+    default = history.get_default_model()
+    if runtime_kind(rt.settings) != "scripted" and default and default[0] != "cursor":
+        provider, model = default
+        key = history.raw_key(provider)
+        text = await complete_chat(provider, key, model, prompt) if key else ""
+        yield ProductStreamEvent(
+            "thread.message.updated",
+            {"text": text, "kind": "text", "replace": True},
+        )
+        yield RunRecord(id=new_id("run"), agent_id=agent_id, status="completed", result=text)
+        return
+    async for item in rt.stream(
+        prompt,
+        session_id=agent_id,
+        bot_id=bot.id,
+        idempotency_key=idempotency_key,
+    ):
+        yield item
+
+
 async def _accept_turn(
     history: HistoryStore,
     rt: AgentRuntime,
@@ -386,11 +473,30 @@ async def _accept_turn(
     trigger: str = "user",
     reply_to_id: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
+    model_prompt: str | None = None,
+    device_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> ThreadSendResult:
+    from artek_buddy.bot_credentials import apply_chat_credentials
+
+    credential_store = getattr(rt, "credential_store", None)
+    if credential_store is None:
+        raise HTTPException(status_code=503, detail="credential broker unavailable")
+    text = apply_chat_credentials(credential_store, bot.id, text)
+    try:
+        if history.get_default_model() is None:
+            return _needs_model_send(history, events, bot, text)
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
     bot = await _ensure_agent(history, rt, bot)
     hosted = attachments or []
     display = (text or "").strip()
-    prompt = format_user_turn(display, hosted) if hosted else display
+    stored = display
+    prompt = (
+        model_prompt
+        if model_prompt is not None
+        else (format_user_turn(display, hosted) if hosted else display)
+    )
     try:
         parked = history.waiting_takeover_run(bot.id)
         if parked is not None:
@@ -409,14 +515,23 @@ async def _accept_turn(
                 raise HTTPException(status_code=400, detail="reply target not found")
         user_msg, run, queued = history.begin_or_enqueue_turn(
             bot,
-            prompt,
+            stored if model_prompt is not None else prompt,
             model_provider=runtime_kind(rt.settings),
-            model_id=rt.settings.cursor_model,
+            model_id=_chosen_model_id(history, rt),
             trigger=trigger,
             reply_to_id=reply_msg.id if reply_msg else None,
             max_inbox=MAX_INBOX,
-            blocks=user_file_blocks(display, hosted) if hosted else None,
-            preview=preview_for_upload(display, hosted) if hosted else None,
+            blocks=(
+                text_blocks(stored)
+                if model_prompt is not None
+                else (user_file_blocks(display, hosted) if hosted else None)
+            ),
+            preview=(
+                display
+                if model_prompt is not None
+                else (preview_for_upload(display, hosted) if hosted else None)
+            ),
+            inbox_text=prompt,
         )
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
@@ -476,6 +591,8 @@ async def _accept_turn(
             attach_agent=True,
             reply=reply_msg,
             inbox_items=inbox_items,
+            device_id=device_id,
+            idempotency_key=idempotency_key,
         ),
         name=f"turn-{run.id}",
     )
@@ -494,10 +611,26 @@ async def _run_turn(
     attach_agent: bool = True,
     reply: ThreadMessage | None = None,
     inbox_items: list[dict[str, str | None]] | None = None,
+    device_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> None:
+    remembered = None
+    getter = getattr(rt, "device_for_run", None)
+    if callable(getter):
+        remembered = getter(run.id)
     rt.clear_active_turn(run_id=run.id)
     agent_id = session_id or bot.cursor_agent_id
-    rt.set_current_turn_context(bot.id, run.id, bot.thread_id, agent_id=agent_id, role="lead")
+    rt.set_current_turn_context(
+        bot.id,
+        run.id,
+        bot.thread_id,
+        agent_id=agent_id,
+        role="lead",
+        device_id=device_id or remembered,
+    )
+    set_intent = getattr(rt, "set_owner_intent", None)
+    if callable(set_intent):
+        set_intent(run.id, classify_owner_intent(text))
     request_id = current_request_id() or mint_request_id()
     bind_turn(
         run.id,
@@ -511,9 +644,18 @@ async def _run_turn(
     reply_text = ""
     error: str | None = None
     status = "failed"
+    turn_usage = None
+    if ASKED_YOU_MARK in (text or ""):
+        try:
+            history.bind_pending_ask_run(bot.id, run.id)
+        except Exception:
+            log.exception("failed to bind asked turn %s", run.id)
     try:
         page = history.page_messages(bot.thread_id, limit=40)
-        thread_context = compact_thread_context(page.messages)
+        thread_context = compact_thread_context(page.messages, exclude_run_id=run.id)
+        session_resume = (
+            rt.build_session_resume(bot.id) if rt.consume_session_fresh(agent_id) else None
+        )
         inbox_context = _format_inbox(history, bot, inbox_items) if inbox_items else None
         memory_prompt = wrap_turn_prompt(
             text,
@@ -528,8 +670,14 @@ async def _run_turn(
             subagent_context=format_subagent_context(history.list_subagents(bot.id)),
             thread_context=thread_context,
             inbox_context=inbox_context,
+            other_bots=format_other_bots(history.list_bots(), bot.id),
+            books_context=format_book_catalog(history.list_skill_books(bot.id)),
+            apps_context=format_apps_context(history),
+            session_resume=session_resume,
         )
-        async for item in rt.stream(memory_prompt, session_id=agent_id, bot_id=bot.id):
+        async for item in _turn_stream(
+            history, rt, memory_prompt, agent_id, bot, idempotency_key=idempotency_key
+        ):
             if isinstance(item, RunRecord):
                 if attach_agent and item.agent_id and item.agent_id != bot.cursor_agent_id:
                     bot = history.attach_agent(bot.id, item.agent_id)
@@ -538,10 +686,11 @@ async def _run_turn(
                     rt.bind_agent_bot(item.agent_id, bot.id)
                 status = product_run_status(item.status)
                 reply_text = item.result or draft or ""
+                turn_usage = item.usage
                 if status != "completed":
-                    error = item.error or f"run failed: {item.id}"
-                    if not reply_text:
-                        reply_text = error
+                    error = owner_visible_error(item.error, item.id)
+                    if not reply_text or reply_text.strip() == error:
+                        reply_text = ""
                 continue
             if not isinstance(item, ProductStreamEvent):
                 continue
@@ -590,15 +739,25 @@ async def _run_turn(
         unbind_turn(run.id)
 
     has_sent = rt.has_sent_message_in_turn(run.id)
+    has_terminal = rt.has_sent_terminal_message_in_turn(run.id)
     rt.clear_active_turn(run_id=run.id)
 
     if status == "cancelled":
         reply_text = ""
+    elif status != "completed":
+        error = owner_visible_error(error, run.id)
+        if has_sent or not reply_text or reply_text.strip() == error:
+            reply_text = ""
+    elif has_terminal:
+        reply_text = ""
     elif has_sent:
-        reply_text = error if status != "completed" else ""
+        body = (reply_text or "").strip()
+        if not body or body in _posted_bot_texts(history, bot, run.id):
+            reply_text = ""
     elif not reply_text:
-        reply_text = draft or error or ""
+        reply_text = draft or ""
 
+    persist_product_usage(history, events, bot, run.id, turn_usage)
     try:
         bot_msg, finished = history.finish_turn(bot, run, reply_text, status, error=error)
     except DatabaseUnavailable:
@@ -611,6 +770,12 @@ async def _run_turn(
             run_id=run.id,
         )
         return
+
+    persist_status = getattr(finished.status, "value", None) or str(finished.status)
+    if persist_status == "cancelled":
+        status = "cancelled"
+        error = finished.error or "Stopped."
+        bot_msg = None
 
     if bot_msg is not None:
         _emit(
@@ -629,17 +794,25 @@ async def _run_turn(
         events,
         bot,
         final_type,
-        {"run": finished.model_dump(mode="json"), "error": error},
+        {
+            "run": finished.model_dump(mode="json"),
+            "error": error,
+            "message": bot_msg.model_dump(mode="json") if bot_msg is not None else None,
+        },
         run_id=finished.id,
     )
     if status == "completed":
         hub = _memory_hub(rt)
         if hub is not None:
             try:
-                for entry in hub.extract_after_turn(text, run.id, bot.id):
-                    _emit_remembered(events, bot, entry.text, run.id)
+                for entry in await hub.revise_after_turn(text, run.id, bot.id):
+                    _emit_remembered(events, bot, entry.text, run.id, entry=entry)
             except Exception:
                 log.exception("failed to extract memory after turn")
+    try:
+        await _deliver_bot_ask_reply(history, rt, events, bot, finished, status, error, reply_text)
+    except Exception:
+        log.exception("failed to return asked reply from %s", bot.id)
     if status != "cancelled":
         await _kick_inbox(history, rt, events, bot)
 
@@ -652,10 +825,11 @@ async def _kick_inbox(
 ) -> None:
     try:
         live = history.get_bot(bot.id) or bot
+        live = await _ensure_agent(history, rt, live)
         claimed = history.claim_inbox_follow_up(
             live,
             model_provider=runtime_kind(rt.settings),
-            model_id=rt.settings.cursor_model,
+            model_id=_chosen_model_id(history, rt),
         )
     except Exception:
         log.exception("failed to claim inbox")

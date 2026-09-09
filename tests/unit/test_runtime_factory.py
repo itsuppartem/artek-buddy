@@ -2,17 +2,42 @@ from __future__ import annotations
 
 import pytest
 
+from artek_buddy.bot_asks import ASKED_YOU_MARK
 from artek_buddy.config import Settings
-from artek_buddy.runtime.factory import open_runtime, runtime_kind
+from artek_buddy.memory import wrap_turn_prompt
+from artek_buddy.runtime.factory import launch_cursor_bridge, open_runtime, runtime_kind
 from artek_buddy.runtime.scripted import (
     E2E_ASK_FREE_QUESTION,
     E2E_CARD_VALUE,
     E2E_CHILD_ARCHIVED,
     E2E_FAIL_ERROR,
+    E2E_GIT_APPROVAL,
+    E2E_GIT_BAN,
+    E2E_GIT_MR,
     E2E_HANG_S,
+    E2E_LEAD_OWNER_SSH,
     E2E_META_TEXT,
     E2E_OLDER_COUNT,
+    E2E_OWNER_HELP_ANSWER,
+    E2E_OWNER_HELP_QUESTION,
+    E2E_SEND_ANSWER,
+    E2E_SEND_PARAPHRASE,
+    E2E_SEND_TEASER,
+    E2E_SEND_TERMINAL,
     E2E_SUBAGENT_NAME,
+    E2E_WORKER_ACK,
+    E2E_WORKER_BLOCK_S,
+    E2E_WORKER_ESSAY,
+    E2E_WORKER_ESSAY_HOLD_S,
+    E2E_WORKER_ESSAY_MARK,
+    E2E_WORKER_PROGRESS_LINE,
+    E2E_WORKER_PROGRESS_RESULT,
+    E2E_WORKER_PROGRESS_STEP,
+    E2E_WORKER_RESULT,
+    E2E_WORKER_STATUS,
+    E2E_WORKER_STEER_ACK,
+    E2E_WORKER_SUMMARY,
+    E2E_WORKER_TAKEOVER_RESULT,
     steps_for_prompt,
 )
 from artek_buddy.runtime.types import AgentRuntimeError
@@ -33,21 +58,35 @@ def test_runtime_kind_defaults_and_scripted() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unknown_runtime_and_missing_cursor_key() -> None:
+async def test_unknown_runtime_and_cursor_boots_without_key(tmp_path) -> None:
     with pytest.raises(AgentRuntimeError, match="unknown"):
         async with open_runtime(_settings("nope")):
             pass
-    with pytest.raises(AgentRuntimeError, match="CURSOR_API_KEY"):
-        async with open_runtime(_settings("cursor", key="")):
-            pass
+    empty = Settings(
+        agent_http_token="ci-host-token-aabbccddeeff001122334455",
+        agent_runtime="cursor",
+        cursor_api_key="",
+        sandbox_provider="fake",
+        agent_data_dir=str(tmp_path / "data"),
+        agent_cwd=str(tmp_path / "cwd"),
+    )
+    async with open_runtime(empty) as runtime:
+        assert runtime.default_agent_id
 
 
 def test_scripted_fail_and_default_steps() -> None:
     fail = steps_for_prompt("please e2e-fail now")
     assert fail[-1].status == "failed"
     assert fail[-1].error == E2E_FAIL_ERROR
+    raw = steps_for_prompt("please e2e-fail-raw now")
+    assert raw[-1].status == "failed"
+    assert raw[-1].error == "run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a"
     ok = steps_for_prompt("plain hello")
     assert ok[-1].status == "completed" or ok[-1].result == "ok"
+    late = steps_for_prompt("please e2e-late-complete")
+    assert late[0].delay_s == 2.5
+    assert late[0].ignore_cancel is True
+    assert late[-1].result == "pong"
 
 
 def test_scripted_thread_prompts_force_window_blocks() -> None:
@@ -71,9 +110,9 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     )
 
     free = steps_for_prompt("please e2e-ask-free")
-    assert free[0].blocks is not None
-    assert free[0].blocks[0]["text"] == E2E_ASK_FREE_QUESTION
-    assert not free[0].blocks[0].get("actions")
+    assert free[0].tool == "ask_user"
+    assert free[0].args["question"] == E2E_ASK_FREE_QUESTION
+    assert "options" not in free[0].args
 
     hang = steps_for_prompt("please e2e-hang now")
     assert hang[0].delay_s == E2E_HANG_S
@@ -82,16 +121,254 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert worker[0].tool == "spawn_subagent"
     assert worker[0].args["name"] == E2E_SUBAGENT_NAME
 
+    dispatched = steps_for_prompt("please e2e-background-worker-chat")
+    assert dispatched[0].tool == "spawn_subagent"
+    assert dispatched[0].args["task"] == "please e2e-worker-block"
+    assert dispatched[1].result == E2E_WORKER_ACK
+    blocked = steps_for_prompt("please e2e-worker-block")
+    assert blocked[1].delay_s == E2E_WORKER_BLOCK_S
+    assert blocked[-1].result == E2E_WORKER_RESULT
+    status = steps_for_prompt("please e2e-worker-status")
+    assert status[0].tool == "send_message"
+    assert status[0].args.get("text") == E2E_WORKER_STATUS
+    assert status[1].tool == "inspect_subagent"
+    assert status[-1].result == E2E_WORKER_STATUS
+    activity = steps_for_prompt("please e2e-worker-activity-no-text")
+    assert activity[0].tool == "spawn_subagent"
+    assert activity[0].args["task"] == "please e2e-worker-tools-no-text"
+    worker_read = steps_for_prompt("please e2e-worker-auto-read")
+    assert worker_read[0].tool == "spawn_subagent"
+    assert worker_read[0].args["task"] == "please e2e-consent-auto-read"
+    assert worker_read[1].result == E2E_WORKER_ACK
+    credential = steps_for_prompt("please e2e-credential-command")
+    assert credential[0].tool == "spawn_subagent"
+    assert credential[0].args["task"] == "please e2e-credential-worker"
+    credential_worker = steps_for_prompt("please e2e-credential-worker")
+    assert credential_worker[0].tool == "run_credential_scoped_command"
+    assert credential_worker[0].require_ok is True
+    assert "REGISTRY_TOKEN" in credential_worker[0].args["command"]
+    progress = steps_for_prompt("please e2e-worker-progress")
+    assert progress[0].tool == "spawn_subagent"
+    assert progress[0].args["task"] == "please e2e-worker-progress-run"
+    run = steps_for_prompt("please e2e-worker-progress-run")
+    assert run[0].tool == "report_progress"
+    assert run[0].args["step"] == E2E_WORKER_PROGRESS_STEP
+    assert run[-1].result == E2E_WORKER_PROGRESS_RESULT
+    essay_lead = steps_for_prompt("please e2e-worker-essay")
+    assert essay_lead[0].tool == "spawn_subagent"
+    assert essay_lead[0].args["task"] == "please e2e-worker-essay-run"
+    essay_run = steps_for_prompt("please e2e-worker-essay-run")
+    assert essay_run[0].tool == "report_progress"
+    assert essay_run[0].args["step"] == E2E_WORKER_PROGRESS_STEP
+    assert any(
+        step.event
+        and step.event[0] == "thread.message.updated"
+        and E2E_WORKER_ESSAY_MARK in str(step.event[1].get("text") or "")
+        for step in essay_run
+    )
+    assert essay_run[-2].delay_s == E2E_WORKER_ESSAY_HOLD_S
+    assert essay_run[-1].result == E2E_WORKER_ESSAY
+    assert len(E2E_WORKER_ESSAY) > 200
+    assert E2E_WORKER_ESSAY_MARK not in E2E_WORKER_PROGRESS_LINE
+    lead_ssh = steps_for_prompt("please e2e-lead-owner-ssh")
+    assert lead_ssh[0].tool == "run_owner_command"
+    assert lead_ssh[-1].result == E2E_LEAD_OWNER_SSH
+    tools_only = steps_for_prompt("please e2e-worker-tools-no-text")
+    assert sum(1 for step in tools_only if step.tool == "list_subagents") == 20
+    false_idle = steps_for_prompt("please e2e-worker-false-idle")
+    assert false_idle[0].tool == "inspect_subagent"
+    assert false_idle[1].tool == "stop_subagent"
+    stale = steps_for_prompt("please e2e-worker-stale-stop")
+    assert stale[1].args.get("inspected_activity_seq") == 0
+    steered = steps_for_prompt("please e2e-worker-steer use path B")
+    assert steered[0].tool == "steer_subagent"
+    assert steered[-1].result == E2E_WORKER_STEER_ACK
+    done = steps_for_prompt("A background worker finished.\nresult: blocked work finished")
+    assert done[0].result == E2E_WORKER_SUMMARY
+    essay_notify = wrap_turn_prompt(
+        (
+            "A background worker finished.\n"
+            "name: WorkerEssay\n"
+            "status: completed\n"
+            f"result: {E2E_WORKER_ESSAY.strip()[:400]}\n"
+            "Write one concise owner-facing result. Do not repeat the task or reasoning."
+        ),
+        None,
+        role="lead",
+    )
+    assert "\n\n" in E2E_WORKER_ESSAY
+    assert steps_for_prompt(essay_notify)[0].result == E2E_WORKER_SUMMARY
+    inbox_follow_up = (
+        "The user sent these messages while you were working. "
+        "They were not injected mid-turn. Apply them now.\n"
+        "1. "
+        "A background worker finished.\n"
+        "name: WorkerEssay\n"
+        "status: completed\n"
+        f"result: {E2E_WORKER_ESSAY.strip()[:400]}\n"
+        "Write one concise owner-facing result. Do not repeat the task or reasoning."
+    )
+    assert "\n\n" in inbox_follow_up
+    assert steps_for_prompt(inbox_follow_up)[0].result == E2E_WORKER_SUMMARY
+
+    ask = steps_for_prompt("please e2e-ask-bot KnowsPeer | what city do you know")
+    assert ask[0].tool == "message_bot"
+    assert ask[0].args["bot"] == "KnowsPeer"
+    assert ask[0].args["text"] == "what city do you know"
+
+    plugin = steps_for_prompt("please e2e-plugin-docs")
+    assert plugin[0].tool == "docs_read"
+    asked = steps_for_prompt("please use Docs")
+    assert asked[0].tool == "docs_read"
+    listed = steps_for_prompt("please e2e-list-apps")
+    assert listed[0].tool == "list_apps"
+    assert listed[0].args.get("q") == "docs"
+    attached = steps_for_prompt("please e2e-connect-docs")
+    assert attached[0].tool == "connect_app"
+    assert attached[0].args.get("slug") == "docs"
+    mail = steps_for_prompt("please e2e-connect-mail")
+    assert mail[0].tool == "connect_app"
+    assert mail[0].args.get("slug") == "mail"
+    twice = steps_for_prompt("please e2e-remember-twice")
+    assert twice[0].tool == "remember"
+    assert twice[1].tool == "remember"
+    assert twice[0].args.get("content") != twice[1].args.get("content")
+    git_rule = steps_for_prompt("please e2e-remember-git-approval")
+    assert [step.tool for step in git_rule[:3]] == ["remember", "remember", "remember"]
+    assert git_rule[0].args.get("content") == E2E_GIT_APPROVAL
+    assert git_rule[1].args.get("content") == E2E_GIT_MR
+    assert git_rule[2].args.get("content") == E2E_GIT_BAN
+    thrice = steps_for_prompt("please e2e-remember-same-thrice")
+    assert [step.tool for step in thrice[:3]] == ["remember", "remember", "remember"]
+    worker_remember = steps_for_prompt("please e2e-background-worker-remember")
+    assert worker_remember[0].tool == "spawn_subagent"
+    assert worker_remember[0].args.get("task") == "please e2e-worker-remember-rule"
+    rule = steps_for_prompt("please e2e-worker-remember-rule")
+    assert rule[0].tool == "remember"
+
+    city = steps_for_prompt("please e2e-identity-city NoviSadTok")
+    assert city[0].tool == "remember"
+    assert city[0].args.get("content") == "Lives in NoviSadTok"
+    assert city[0].args.get("kind") == "place"
+    assert city[0].args.get("section") == "identity"
+
+    taught = steps_for_prompt("please e2e-install-book")
+    assert taught[0].consent is not None
+    assert taught[1].tool == "install_book"
+    assert taught[1].args.get("url")
+    ran = steps_for_prompt("please run Invoice")
+    assert ran[0].tool == "open_book"
+    assert ran[0].args["name"] == "Invoice"
+    dropped = steps_for_prompt("please e2e-forget-book")
+    assert dropped[0].tool == "forget_book"
+
     older = steps_for_prompt("please e2e-load-earlier")
     assert len([step for step in older if step.blocks]) == E2E_OLDER_COUNT
 
     takeover = steps_for_prompt("please e2e-takeover")
-    assert takeover[0].event is not None
-    assert takeover[0].event[0] == "computer.takeover.requested"
+    assert takeover[0].tool == "request_takeover"
+    assert not any(step.result == "need you" for step in takeover)
 
     parked = steps_for_prompt("please e2e-park-takeover")
     assert parked[0].tool == "request_takeover"
     assert "Pass the site check" in parked[0].args["reason"]
 
+    worker_ask = steps_for_prompt("please e2e-worker-blocked-browser")
+    assert worker_ask[0].tool == "spawn_subagent"
+    assert worker_ask[0].args["task"] == "please e2e-worker-ask"
+    ask_run = steps_for_prompt("please e2e-worker-ask")
+    assert ask_run[0].tool == "ask_user"
+    assert ask_run[0].args["question"] == E2E_OWNER_HELP_QUESTION
+    assert ask_run[-1].result == E2E_OWNER_HELP_ANSWER
+
+    worker_hold = steps_for_prompt("please e2e-worker-park-takeover")
+    assert worker_hold[0].tool == "spawn_subagent"
+    assert worker_hold[0].args["task"] == "please e2e-worker-desk-hold"
+    hold_run = steps_for_prompt("please e2e-worker-desk-hold")
+    assert hold_run[0].tool == "request_takeover"
+    assert hold_run[-1].result == E2E_WORKER_TAKEOVER_RESULT
+
     released = steps_for_prompt("The owner released the desktop. Continue the same task.")
     assert released[0].result == "continuing after takeover"
+
+    teaser = steps_for_prompt("please e2e-send-then-answer")
+    assert teaser[0].tool == "send_message"
+    assert teaser[0].args.get("text") == E2E_SEND_TEASER
+    assert teaser[0].args.get("terminal") is False
+    assert teaser[-1].result == E2E_SEND_ANSWER
+    terminal = steps_for_prompt("please e2e-send-terminal")
+    assert terminal[0].tool == "send_message"
+    assert terminal[0].args.get("text") == E2E_SEND_TERMINAL
+    assert terminal[0].args.get("terminal") is True
+    assert terminal[-1].result == E2E_SEND_PARAPHRASE
+    same = steps_for_prompt("please e2e-send-then-repeat")
+    assert same[0].tool == "send_message"
+    assert same[0].args.get("text") == E2E_SEND_TEASER
+    assert same[-1].result == E2E_SEND_TEASER
+
+
+def test_scripted_send_message_steps_make_terminal_choice_explicit() -> None:
+    expected = {
+        ASKED_YOU_MARK: [True],
+        "please e2e-close-browser": [False],
+        "please e2e-worker-status": [False],
+        "open wikipedia": [False, True],
+        "attractions, weather in parallel": [False, False, True],
+        "please e2e-send-then-repeat": [False],
+        "please e2e-send-then-answer": [False],
+        "please e2e-send-terminal": [True],
+        "please e2e-generate-image-fail": [False],
+        "please e2e-generate-image": [False],
+    }
+    for prompt, choices in expected.items():
+        sent = [step for step in steps_for_prompt(prompt) if step.tool == "send_message"]
+        assert [step.args.get("terminal") for step in sent] == choices
+
+
+@pytest.mark.asyncio
+async def test_launch_cursor_bridge_applies_settings_timeouts(tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.closed = 0
+            self.options: dict[str, object] | None = None
+
+        def with_options(self, **kwargs: object) -> FakeClient:
+            captured.update(kwargs)
+            view = FakeClient()
+            view.options = dict(kwargs)
+            return view
+
+        async def aclose(self) -> None:
+            self.closed += 1
+
+    owner = FakeClient()
+
+    async def fake_launch(*, workspace: str) -> FakeClient:
+        captured["workspace"] = workspace
+        return owner
+
+    settings = Settings(
+        agent_http_token="ci-host-token-aabbccddeeff001122334455",
+        agent_runtime="cursor",
+        cursor_api_key="ci-cursor-key",
+        sandbox_provider="fake",
+        agent_cwd=str(tmp_path / "cwd"),
+        cursor_unary_timeout_s=12.5,
+        cursor_stream_timeout_s=34.0,
+        cursor_max_retries=2,
+    )
+    client = await launch_cursor_bridge(settings, launcher=fake_launch)
+    assert captured["workspace"] == str(tmp_path / "cwd")
+    assert captured["unary_timeout"] == 12.5
+    assert captured["stream_timeout"] == 34.0
+    assert captured["max_retries"] == 2
+    assert client.options == {
+        "unary_timeout": 12.5,
+        "stream_timeout": 34.0,
+        "max_retries": 2,
+    }
+    await client.aclose()
+    assert owner.closed == 1
+    assert client.closed == 0

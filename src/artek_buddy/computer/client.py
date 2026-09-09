@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
 
+from artek_buddy.computer.capabilities import ComputerCapabilities
+
 
 @dataclass
 class SandboxBox:
@@ -23,6 +25,21 @@ class SupervisorClient:
         self.base = base.rstrip("/")
         self.token = token
         self.timeout = timeout
+        self.capabilities = ComputerCapabilities(
+            team_desktop=True,
+            private_desktop=True,
+            screen_preview=True,
+            interactive_input=True,
+            file_transfer=True,
+            direct_execution=True,
+        )
+
+    def health(self) -> bool:
+        try:
+            res = self._request("GET", "/health")
+            return bool(res.get("ok", True))
+        except Exception:
+            return False
 
     def _request(
         self,
@@ -112,6 +129,17 @@ class FakeSupervisorClient:
     def __init__(self) -> None:
         self.boxes: dict[str, dict[str, Any]] = {}
         self.calls: list[tuple[str, Any]] = []
+        self.capabilities = ComputerCapabilities(
+            team_desktop=True,
+            private_desktop=True,
+            screen_preview=False,
+            interactive_input=True,
+            file_transfer=True,
+            direct_execution=True,
+        )
+
+    def health(self) -> bool:
+        return True
 
     def provision(self, bot_id: str, home_key: str) -> SandboxBox:
         cid = f"fake-{home_key}"

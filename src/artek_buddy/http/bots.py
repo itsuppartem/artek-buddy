@@ -6,6 +6,9 @@ from pathlib import Path
 
 from fastapi import Depends, HTTPException, Query
 
+from artek_buddy.bot_asks import BotAskError, normalize_question, resolve_ask
+from artek_buddy.bot_credentials import BotCredentialStore, CredentialStoreError
+from artek_buddy.bus import EventHub
 from artek_buddy.computer.service import (
     ComputerBusy,
     ComputerError,
@@ -13,6 +16,8 @@ from artek_buddy.computer.service import (
 )
 from artek_buddy.contracts import (
     Bot,
+    BotAskInput,
+    BotAskResult,
     BotList,
     CreateBotInput,
     OkResponse,
@@ -30,17 +35,19 @@ from artek_buddy.runtime import (
 )
 from artek_buddy.subagents import SubagentError
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
 from fastapi import APIRouter
 
+from artek_buddy.http.bot_ask_delivery import launch_bot_ask as _launch_bot_ask
 from artek_buddy.http.deps import (
     _computer_http,
     _db_error,
     _require_bot,
     computers,
+    credentials,
     current_app,
+    hub,
     require_auth,
     runtime,
     store,
@@ -82,7 +89,7 @@ async def create_bot(
     rt: AgentRuntime = Depends(runtime),
     history: HistoryStore = Depends(store),
 ) -> Bot:
-    agent_id = await rt.create_session(name=body.name, persist_default=True)
+    agent_id = await rt.create_session(name=body.name, persist_default=False)
     try:
         bot = history.create_bot(
             name=body.name,
@@ -95,6 +102,9 @@ async def create_bot(
             cursor_agent_id=agent_id,
         )
         rt.bind_agent_bot(agent_id, bot.id)
+        stamp = history.model_fingerprint()
+        if stamp:
+            history.mark_applied_model(bot.id, stamp)
         return bot
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
@@ -112,6 +122,9 @@ async def duplicate_bot(
         duplicated = history.duplicate_bot(bot_id)
         attached = history.attach_agent(duplicated.id, agent_id)
         rt.bind_agent_bot(agent_id, attached.id)
+        stamp = history.model_fingerprint()
+        if stamp:
+            history.mark_applied_model(attached.id, stamp)
         return attached
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
@@ -232,6 +245,37 @@ async def set_bot_computer(
         raise _db_error(err) from err
 
 
+@router.post("/v1/bots/{bot_id}/asks", dependencies=[Depends(require_auth)])
+async def ask_other_bot(
+    bot_id: str,
+    body: BotAskInput,
+    history: HistoryStore = Depends(store),
+    rt: AgentRuntime = Depends(runtime),
+    events: EventHub = Depends(hub),
+) -> BotAskResult:
+    from artek_buddy.bot_credentials import raise_if_pasted_credential
+
+    raise_if_pasted_credential(body.text)
+    try:
+        source = _require_bot(history, bot_id)
+        dest = resolve_ask(history, source, body.text, body.bot)
+        sent = await _launch_bot_ask(
+            history,
+            rt,
+            events,
+            source,
+            dest,
+            normalize_question(body.text),
+            None,
+            post_card=True,
+        )
+    except BotAskError as err:
+        raise HTTPException(status_code=err.status, detail=err.detail) from err
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    return BotAskResult(ok=True, to_bot_id=dest.id, to_run_id=sent.run_id, name=dest.name)
+
+
 @router.post("/v1/bots/{bot_id}/archive", dependencies=[Depends(require_auth)])
 async def archive_bot(bot_id: str, history: HistoryStore = Depends(store)) -> OkResponse:
     try:
@@ -259,11 +303,19 @@ async def remove_bot(
     delete_memories: bool = Query(default=False),
     history: HistoryStore = Depends(store),
     boxes: ComputerService = Depends(computers),
+    vault: BotCredentialStore = Depends(credentials),
 ) -> OkResponse:
     try:
         bot = history.get_bot(bot_id)
         if bot is None:
             raise HTTPException(status_code=404, detail="bot not found")
+        try:
+            vault.forget_bot(bot.id)
+        except CredentialStoreError as err:
+            raise HTTPException(
+                status_code=503,
+                detail="credential broker unavailable",
+            ) from err
         _cancel_turns(bot.id)
         service = getattr(current_app().state, "subagents", None)
         if service is not None:

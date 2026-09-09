@@ -1,16 +1,31 @@
 name: release
 
 # Publishes the GitHub Release, clean .deb, and host GHCR image.
-# Does not run on push. It starts only after the `test` workflow succeeds
-# on a push to main (or a manual Force run from main). A red PR into main
-# cannot merge: ruleset "Protect main" requires jobs backend and ui.
+# GitHub would load a workflow_run file from the default branch (develop),
+# so this workflow is not started that way. YAML comes from the branch chosen
+# at dispatch; the job runs only for refs/heads/main, so a develop-only
+# change never receives the write token.
+# A red PR into main cannot merge: ruleset "Protect main" requires quality,
+# backend, ui, ui_web, scan, live_gate, analyze (python),
+# analyze (javascript-typescript), and CodeQL. live is not required.
+# Protect develop uses the same checks.
 # The computer image is not built here: Chromium under QEMU hangs the job.
 # install-host.sh pulls it when present, otherwise builds on the Pi.
+# Host image: push by digest, Trivy HIGH+CRITICAL on that digest, then tag
+# VERSION and latest (same digest, no rebuild) only after the GitHub Release
+# exists. The GitHub Release tag is created at github.sha and peeled before
+# those GHCR tags move, so a missing tag is not taken from default develop.
+# gh release create uses --verify-tag.
+# A second upload of the same Release asset name fails. Do not prune GitHub
+# Releases from this workflow.
+# Dispatch requires a green push test and CodeQL on github.sha (analyze
+# (python), analyze (javascript-typescript), and the check named CodeQL).
+# Bind prints check_run_id and codeql_run_id for that SHA. There is no
+# automatic workflow_run publish.
+# force can retry an unpublished VERSION; it cannot skip an existing tag
+# or GitHub Release. An emergency override is a separate Environment, not
+# that boolean.
 on:
-  workflow_run:
-    workflows: [test]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       force:
@@ -18,7 +33,13 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 permissions:
+  actions: read
+  checks: read
   contents: write
   packages: write
   id-token: write
@@ -26,21 +47,95 @@ permissions:
 
 jobs:
   release:
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
-      || (
-        github.event_name == 'workflow_run'
-        && github.event.workflow_run.conclusion == 'success'
-        && github.event.workflow_run.event == 'push'
-        && github.event.workflow_run.head_branch == 'main'
-      )
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Bind release to one main SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          TEST_SHA="$RELEASE_SHA"
+          echo "workflow_sha=$WORKFLOW_SHA"
+          echo "released_sha=$RELEASE_SHA"
+          echo "test_sha=$TEST_SHA"
+          test -n "$WORKFLOW_SHA"
+          test -n "$RELEASE_SHA"
+          test "$WORKFLOW_SHA" = "$RELEASE_SHA"
+          test "$TEST_SHA" = "$RELEASE_SHA"
+          git fetch origin main
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main
+          MATCHES="$(gh run list --commit "$RELEASE_SHA" --workflow test --event push --limit 30 \
+            --json conclusion,headBranch --jq \
+            '[.[] | select(.headBranch=="main" and .conclusion=="success")] | length')"
+          test "$MATCHES" != "0"
+          ROWS="$(mktemp)"
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/check-runs?per_page=100" \
+            --jq '.check_runs[] | [.id, .name, .status, .conclusion, (.completed_at // "")] | @tsv' \
+            > "$ROWS"
+          python3 - "$ROWS" "$RELEASE_SHA" <<'PY'
+          import sys
+
+          path, sha = sys.argv[1], sys.argv[2]
+          required = (
+              "analyze (python)",
+              "analyze (javascript-typescript)",
+              "CodeQL",
+          )
+          best: dict[str, tuple[str, str, str, str]] = {}
+          with open(path, encoding="utf-8") as fh:
+              for line in fh:
+                  parts = line.rstrip("\n").split("\t")
+                  if len(parts) < 5:
+                      continue
+                  run_id, name, status, conclusion, completed = parts[:5]
+                  if name not in required:
+                      continue
+                  prev = best.get(name)
+                  if prev is None or completed >= prev[3]:
+                      best[name] = (run_id, status, conclusion, completed)
+          missing = [name for name in required if name not in best]
+          if missing:
+              print(f"missing checks on {sha}: {missing}", file=sys.stderr)
+              sys.exit(1)
+          for name in required:
+              run_id, status, conclusion, _completed = best[name]
+              print(f"check name={name} check_run_id={run_id} status={status} conclusion={conclusion}")
+              if status != "completed" or conclusion != "success":
+                  print(f"required check not green: {name}", file=sys.stderr)
+                  sys.exit(1)
+          PY
+          CODEQL_JSON="$(gh run list --commit "$RELEASE_SHA" --workflow codeql --limit 30 \
+            --json databaseId,conclusion,status,event,headBranch)"
+          echo "$CODEQL_JSON" | python3 -c '
+          import json, sys
+          green = False
+          for run in json.load(sys.stdin):
+              print(
+                  "codeql_run_id={databaseId} status={status} conclusion={conclusion} "
+                  "event={event} headBranch={headBranch}".format(
+                      databaseId=run.get("databaseId"),
+                      status=run.get("status"),
+                      conclusion=run.get("conclusion") or "",
+                      event=run.get("event"),
+                      headBranch=run.get("headBranch"),
+                  )
+              )
+              if run.get("headBranch") == "main" and run.get("conclusion") == "success":
+                  green = True
+          if not green:
+              print("missing green codeql workflow run on main for this SHA", file=sys.stderr)
+              sys.exit(1)
+          '
 
       - name: Detect VERSION bump
         id: ver
@@ -55,6 +150,25 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
           echo "VERSION new=$NEW old=${OLD:-none} force=${FORCE:-false}"
+
+      - name: Refuse a published VERSION
+        if: steps.ver.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.ver.outputs.new }}"
+          test -n "$TAG"
+          test "$TAG" != "v"
+          if git ls-remote --exit-code origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "refusing to reuse existing tag $TAG (force cannot skip)" >&2
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "refusing to replace existing GitHub Release $TAG (force cannot skip)" >&2
+            exit 1
+          fi
+          echo "unpublished $TAG"
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: steps.ver.outputs.changed == 'true'
@@ -81,49 +195,65 @@ jobs:
           PY
           cp infra/install-host.sh install-host.sh
 
-      - name: SBOM client (CycloneDX)
+      - name: Unpack client .deb for SBOM
+        if: steps.ver.outputs.changed == 'true'
+        run: |
+          mkdir -p "${{ runner.temp }}/artek-client-deb"
+          dpkg-deb -x \
+            "artek-buddy-client_${{ steps.ver.outputs.new }}_all.deb" \
+            "${{ runner.temp }}/artek-client-deb"
+
+      - name: SBOM client .deb (CycloneDX)
         if: steps.ver.outputs.changed == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
-          scan-ref: client
+          scan-ref: ${{ runner.temp }}/artek-client-deb
           format: cyclonedx
           output: sbom-client.cdx.json
           exit-code: "0"
           trivyignores: .trivyignore
 
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
         if: steps.ver.outputs.changed == 'true'
 
-      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
         if: steps.ver.outputs.changed == 'true'
 
-      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         if: steps.ver.outputs.changed == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push host image
+      - name: Push host image digest
         if: steps.ver.outputs.changed == 'true'
         id: image
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}
-            ghcr.io/itsuppartem/artek-buddy:latest
+          outputs: type=image,name=ghcr.io/itsuppartem/artek-buddy,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Record toolchain
+        if: steps.ver.outputs.changed == 'true'
+        run: |
+          {
+            echo "## Toolchain"
+            echo "- Host image digest: \`${{ steps.image.outputs.digest }}\`"
+            echo "- Playwright (host requirements): \`$(grep -E '^playwright=' requirements.txt)\`"
+            echo "- Dockerfile FROM:"
+            grep -E '^FROM ' Dockerfile infra/computer/Dockerfile | sed 's/^/  - /'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Trivy host image
         if: steps.ver.outputs.changed == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}
-          severity: CRITICAL
+          image-ref: ghcr.io/itsuppartem/artek-buddy@${{ steps.image.outputs.digest }}
+          severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
           format: table
@@ -134,11 +264,38 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}
+          image-ref: ghcr.io/itsuppartem/artek-buddy@${{ steps.image.outputs.digest }}
           format: cyclonedx
           output: sbom-host.cdx.json
           exit-code: "0"
           trivyignores: .trivyignore
+
+      - name: Point release tag at the tested SHA
+        if: steps.ver.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.ver.outputs.new }}"
+          test -n "$RELEASE_SHA"
+          test -n "$TAG"
+          if git show-ref --verify --quiet "refs/tags/${TAG}"; then
+            :
+          elif git ls-remote --exit-code origin "refs/tags/${TAG}" >/dev/null; then
+            git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          else
+            git tag "$TAG" "$RELEASE_SHA"
+            set +x
+            AUTH="$(printf 'x-access-token:%s' "$GH_TOKEN" | openssl base64 -A)"
+            git config --local "http.https://github.com/.extraheader" "AUTHORIZATION: basic ${AUTH}"
+            git push origin "refs/tags/${TAG}"
+          fi
+          PEELED="$(git rev-parse "${TAG}^{}")"
+          echo "tag=$TAG"
+          echo "tag_sha=$PEELED"
+          echo "released_sha=$RELEASE_SHA"
+          test "$PEELED" = "$RELEASE_SHA"
 
       - name: Attest client .deb
         if: steps.ver.outputs.changed == 'true'
@@ -171,7 +328,9 @@ jobs:
         if: steps.ver.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
           TAG="v${{ steps.ver.outputs.new }}"
           ASSETS=(
             "artek-buddy-client_${{ steps.ver.outputs.new }}_all.deb"
@@ -181,18 +340,26 @@ jobs:
             install-host.sh
           )
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "${ASSETS[@]}" --clobber
-            gh release edit "$TAG" --notes-file RELEASE_NOTES.md
-            echo "updated assets on $TAG"
-            exit 0
+            echo "refusing to replace existing GitHub Release $TAG" >&2
+            exit 1
           fi
           gh release create "$TAG" \
+            --verify-tag \
             --title "$TAG" \
             --notes-file RELEASE_NOTES.md \
             "${ASSETS[@]}"
+          PEELED="$(git rev-parse "${TAG}^{}")"
+          echo "tag_sha=$PEELED"
+          echo "released_sha=$RELEASE_SHA"
+          test "$PEELED" = "$RELEASE_SHA"
 
-      - name: Keep five GitHub Releases
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTEK_RELEASE_KEEP: "5"
-        run: infra/prune-releases.sh
+      - name: Promote scanned host image
+        if: steps.ver.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.image.outputs.digest }}"
+          test -n "$DIGEST"
+          docker buildx imagetools create \
+            --tag "ghcr.io/itsuppartem/artek-buddy:${{ steps.ver.outputs.new }}" \
+            --tag "ghcr.io/itsuppartem/artek-buddy:latest" \
+            "ghcr.io/itsuppartem/artek-buddy@${DIGEST}"

@@ -1,2 +1,3 @@
-# Solo maintainer. Not a required-review gate: develop is not branch-protected.
+# Solo maintainer. Review count is 0. Merge still requires the CI checks
+# named in CONTRIBUTING (rulesets Protect develop and Protect main).
 * @itsuppartem

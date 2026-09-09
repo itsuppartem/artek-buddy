@@ -14,6 +14,7 @@ _CLIENT_DIR = Path(__file__).resolve().parent
 if str(_CLIENT_DIR) not in sys.path:
     sys.path.insert(0, str(_CLIENT_DIR))
 
+from notifications import _desktop_dismiss as _desktop_dismiss
 from notifications import _desktop_notify as _desktop_notify
 from owner_paths import _owner_path_status as _owner_path_status
 from owner_paths import inspect_owner_path as inspect_owner_path
@@ -21,10 +22,13 @@ from owner_paths import resolve_owner_path as resolve_owner_path
 from owner_paths import unique_download_dest as unique_download_dest
 from pairing import _load_token, _load_url, _log
 from pairing import pairing_url_allowed as pairing_url_allowed
+from proxy import local_rpc_origin_allowed as local_rpc_origin_allowed
+from proxy import proxy_host_allowed as proxy_host_allowed
 from proxy import proxy_origin_allowed as proxy_origin_allowed
 from proxy import serve
 from window import open_window
 from window_chrome import bundled_icon_path as bundled_icon_path
+from window_chrome import identify_desktop_app as identify_desktop_app
 
 
 def main() -> None:

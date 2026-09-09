@@ -5,8 +5,15 @@ from pathlib import Path
 
 from owner_paths import owner_downloads_dir
 
+DESKTOP_ID = "artek-buddy"
+DESKTOP_WM_CLASS = "Artek Buddy"
+
 _WINDOW_LOCK = threading.Lock()
 _GTK_WINDOWS: list[object] = []
+_WINDOW_ACTIVE: bool | None = None
+
+# Gdk.WindowState in GTK3: WITHDRAWN = 1<<0, ICONIFIED = 1<<1.
+_GDK_CONCEALED = (1 << 0) | (1 << 1)
 
 
 def _has_gtk_window() -> bool:
@@ -80,6 +87,53 @@ def bundled_icon_path() -> Path | None:
     return None
 
 
+def icon_theme_path() -> Path | None:
+    icon = bundled_icon_path()
+    return icon.parent if icon is not None else None
+
+
+def identify_desktop_app(
+    *,
+    glib: object | None = None,
+    gdk: object | None = None,
+    gtk: object | None = None,
+) -> None:
+    """Bind this process to the installed Artek Buddy launcher and icon."""
+    if glib is None or gdk is None or gtk is None:
+        try:
+            from gi.repository import Gdk as gdk_mod
+            from gi.repository import GLib as glib_mod
+            from gi.repository import Gtk as gtk_mod
+        except Exception:
+            return
+        glib = glib or glib_mod
+        gdk = gdk or gdk_mod
+        gtk = gtk or gtk_mod
+    prgname = getattr(glib, "set_prgname", None)
+    if callable(prgname):
+        prgname(DESKTOP_ID)
+    app_name = getattr(glib, "set_application_name", None)
+    if callable(app_name):
+        app_name(DESKTOP_WM_CLASS)
+    wm_class = getattr(gdk, "set_program_class", None)
+    if callable(wm_class):
+        wm_class(DESKTOP_WM_CLASS)
+    window_type = getattr(gtk, "Window", None)
+    icon = bundled_icon_path()
+    from_file = getattr(window_type, "set_default_icon_from_file", None)
+    if icon is not None and callable(from_file):
+        try:
+            from_file(str(icon))
+        except Exception:
+            pass
+    icon_name = getattr(window_type, "set_default_icon_name", None)
+    if callable(icon_name):
+        try:
+            icon_name(DESKTOP_ID)
+        except Exception:
+            pass
+
+
 def notify_icon_args() -> list[str]:
     icon = bundled_icon_path()
     if icon is not None:
@@ -115,11 +169,75 @@ def _register_window(window: object) -> None:
 
 
 def _unregister_window(window: object) -> None:
+    global _WINDOW_ACTIVE
     with _WINDOW_LOCK:
         try:
             _GTK_WINDOWS.remove(window)
         except ValueError:
             pass
+        if not _GTK_WINDOWS:
+            _WINDOW_ACTIVE = None
+
+
+def gtk_window_active() -> bool | None:
+    """GTK-thread cache. Safe to read from the loopback HTTP worker."""
+    with _WINDOW_LOCK:
+        if not _GTK_WINDOWS:
+            return None
+        return _WINDOW_ACTIVE
+
+
+def remember_window_active(active: bool) -> None:
+    global _WINDOW_ACTIVE
+    with _WINDOW_LOCK:
+        _WINDOW_ACTIVE = bool(active)
+
+
+def _as_state_bits(state: object) -> int:
+    if isinstance(state, int) and not isinstance(state, bool):
+        return state
+    value = getattr(state, "value", None)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    try:
+        return int(state)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
+
+
+def _gdk_window_state(window: object, event: object | None) -> object | None:
+    if event is not None and hasattr(event, "new_window_state"):
+        return event.new_window_state
+    getter = getattr(window, "get_window", None)
+    if not callable(getter):
+        return None
+    try:
+        gdk_window = getter()
+    except Exception:
+        return None
+    if gdk_window is None:
+        return None
+    get_state = getattr(gdk_window, "get_state", None)
+    if not callable(get_state):
+        return None
+    try:
+        return get_state()
+    except Exception:
+        return None
+
+
+def _gtk_window_looking(window: object, event: object | None = None) -> bool:
+    """True when the GTK window is mapped, visible, and focused."""
+    state = _gdk_window_state(window, event)
+    if state is not None and _as_state_bits(state) & _GDK_CONCEALED:
+        return False
+    is_active = getattr(window, "is_active", None)
+    if not callable(is_active):
+        return True
+    try:
+        return bool(is_active())
+    except Exception:
+        return True
 
 
 def _apply_urgency(urgent: bool) -> None:
@@ -149,7 +267,56 @@ def _on_focus_in(*_args: object) -> bool:
     return False
 
 
-def _on_gtk_active(window: object, *_args: object) -> None:
-    is_active = getattr(window, "is_active", None)
-    if callable(is_active) and is_active():
-        _apply_urgency(False)
+def window_active_script(active: bool) -> str:
+    flag = "true" if active else "false"
+    return (
+        "if (typeof window.__artekSetWindowActive === 'function') {"
+        f" window.__artekSetWindowActive({flag}); "
+        "}"
+    )
+
+
+def _run_active_script(view: object, script: str) -> None:
+    runner = getattr(view, "run_javascript", None)
+    if not callable(runner):
+        runner = getattr(view, "evaluate_javascript", None)
+    if not callable(runner):
+        return
+    try:
+        runner(script, None, None, None)
+    except TypeError:
+        try:
+            runner(script)
+        except Exception:
+            return
+    except Exception:
+        return
+
+
+def bind_window_active(view: object, window: object) -> None:
+    def push(*args: object) -> bool:
+        event = args[1] if len(args) > 1 else None
+        looking = _gtk_window_looking(window, event)
+        remember_window_active(looking)
+        if looking:
+            _apply_urgency(False)
+        _run_active_script(view, window_active_script(looking))
+        return False
+
+    connect_w = getattr(window, "connect", None)
+    if callable(connect_w):
+        connect_w("notify::is-active", push)
+        for name in ("focus-out-event", "focus-in-event", "window-state-event"):
+            try:
+                connect_w(name, push)
+            except Exception:
+                continue
+    connect_v = getattr(view, "connect", None)
+    if not callable(connect_v):
+        return
+    for name in ("load-changed", "load-finished"):
+        try:
+            connect_v(name, push)
+            break
+        except Exception:
+            continue

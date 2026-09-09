@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-# Pi 5 (typically 8 GiB) may run the host stack plus Team and one Private box.
+# One active Pi 5 desktop needs headroom for Chromium and screen transport.
 # No User: live browse canary had no chromium process after Allow as uid 1000.
 DESKTOP_MEMORY_BYTES = 1536 * 1024 * 1024
-DESKTOP_NANO_CPUS = 1_000_000_000
+DESKTOP_NANO_CPUS = 1_500_000_000
 DESKTOP_PIDS_LIMIT = 512
-DESKTOP_SHM_SIZE = 256 * 1024 * 1024
-DESKTOP_TMPFS_OPTS = "rw,nosuid,nodev,size=256m,mode=1777"
+DESKTOP_SHM_SIZE = 512 * 1024 * 1024
+# Docker still mounts tmpfs noexec unless the flag is named. Keep it explicit:
+# start.sh must launch fluxbox from /usr, not a +x script on /tmp.
+DESKTOP_TMPFS_OPTS = "rw,noexec,nosuid,nodev,size=256m,mode=1777"
 DESKTOP_CAP_DROP = ["ALL"]
 DESKTOP_SECURITY_OPT = ["no-new-privileges:true"]
 
@@ -26,7 +28,7 @@ def desktop_create_spec(
         "name": name,
         "Image": image,
         "Hostname": name,
-        "Env": ["DISPLAY=:1", "HOME=/home/artek"],
+        "Env": ["DISPLAY=:1", "HOME=/home/artek", "LANG=C.UTF-8"],
         "Labels": {
             "artek.managed": "true",
             "artek.bot_id": bot_id,

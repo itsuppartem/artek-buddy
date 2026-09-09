@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import json
 from typing import Any
 
 from artek_buddy.consent import (
@@ -7,7 +9,9 @@ from artek_buddy.consent import (
     browse_origin,
 )
 from artek_buddy.runtime.tools.common import (
+    BROWSER_ACT_PAGE_KINDS,
     PAGE_KINDS,
+    _normalize_browser_actions,
     _playwright_browser_command,
     _with_consent,
     emit_computer_event,
@@ -25,6 +29,11 @@ class ComputerToolsMixin:
             return {"ok": False, "error": "bot not found"}
         return bot, bot_id
 
+    def _publish_computer(self, bot: Any) -> None:
+        if self.runtime.events is None or self.runtime.computers is None:
+            return
+        emit_computer_event(self.runtime.events, bot, self.runtime.computers.status(bot))
+
     def _exec_computer_observe(
         self, args: dict[str, Any], bound_bot_id: str | None
     ) -> dict[str, Any]:
@@ -33,9 +42,11 @@ class ComputerToolsMixin:
             return found
         bot, _bot_id = found
         try:
-            return self.runtime.computers.observe(
+            result = self.runtime.computers.observe(
                 bot, include_image=bool(args.get("include_image"))
             )
+            self._publish_computer(bot)
+            return result
         except Exception as exc:
             log.exception("computer_observe failed")
             return {"ok": False, "error": str(exc)}
@@ -71,11 +82,13 @@ class ComputerToolsMixin:
             if denied:
                 return denied
         try:
-            return self.runtime.computers.act(
+            result = self.runtime.computers.act(
                 bot,
                 actions,
                 return_observe=bool(args.get("return_observe")),
             )
+            self._publish_computer(bot)
+            return result
         except Exception as exc:
             log.exception("computer_act failed")
             return {"ok": False, "error": str(exc)}
@@ -89,11 +102,14 @@ class ComputerToolsMixin:
         if not isinstance(actions, list) or not actions:
             return {"ok": False, "error": "actions must be a non-empty list"}
         origin = self._page_origin(actions, str(args.get("origin") or ""))
+        _, error = _normalize_browser_actions(actions)
+        if error:
+            return {"ok": False, "error": error}
         needs_page = False
         for item in actions:
             if not isinstance(item, dict):
                 continue
-            kind = str(item.get("kind") or "")
+            kind = str(item.get("kind") or "").lower()
             target = str(item.get("url") or item.get("path") or item.get("uri") or "")
             site = browse_origin(target)
             if site:
@@ -105,7 +121,7 @@ class ComputerToolsMixin:
                 )
                 if denied:
                     return denied
-            if kind in {"fill", "type", "click", "press", "submit", "key"}:
+            if kind in BROWSER_ACT_PAGE_KINDS:
                 needs_page = True
         if needs_page:
             denied = self._deny_page(_bot_id, origin)
@@ -114,14 +130,24 @@ class ComputerToolsMixin:
         runner = getattr(self.runtime.computers, "browser_act", None)
         if callable(runner):
             try:
-                return runner(bot, actions)
+                result = runner(bot, actions)
+                self._publish_computer(bot)
+                return result
             except Exception as exc:
                 log.exception("browser_act failed")
                 return {"ok": False, "error": str(exc)}
         exec_fn = getattr(self.runtime.computers, "exec_command", None)
         if callable(exec_fn):
             try:
-                return exec_fn(bot, _playwright_browser_command(actions))
+                result = exec_fn(bot, _playwright_browser_command(actions))
+                self._publish_computer(bot)
+                if isinstance(result, dict) and "output" in result:
+                    raw = str(result.get("output") or "").strip()
+                    with contextlib.suppress(ValueError, TypeError):
+                        parsed = json.loads(raw)
+                        if isinstance(parsed, dict):
+                            return parsed
+                return result
             except Exception as exc:
                 log.exception("browser_act exec failed")
                 return {"ok": False, "error": str(exc)}
@@ -129,7 +155,7 @@ class ComputerToolsMixin:
         for item in actions:
             if not isinstance(item, dict):
                 continue
-            kind = str(item.get("kind") or "")
+            kind = str(item.get("kind") or "").lower()
             if kind == "goto":
                 url = str(item.get("url") or item.get("path") or "")
                 if url:
@@ -138,10 +164,14 @@ class ComputerToolsMixin:
                 mapped.append({"kind": "type", "text": str(item.get("text") or "")})
             elif kind == "press":
                 mapped.append({"kind": "key", "key": str(item.get("key") or "Return")})
+            elif kind == "scroll":
+                mapped.append(item)
             elif kind in {"click", "submit"}:
                 mapped.append({"kind": "key", "key": "Return"} if kind == "submit" else item)
         try:
-            return self.runtime.computers.act(bot, mapped or actions)
+            result = self.runtime.computers.act(bot, mapped or actions)
+            self._publish_computer(bot)
+            return result
         except Exception as exc:
             log.exception("browser_act fallback failed")
             return {"ok": False, "error": str(exc)}
@@ -166,8 +196,7 @@ class ComputerToolsMixin:
                 return denied
         try:
             res = self.runtime.computers.open_path(bot, path)
-            if self.runtime.events is not None:
-                emit_computer_event(self.runtime.events, bot, self.runtime.computers.status(bot))
+            self._publish_computer(bot)
             if (
                 isinstance(res, dict)
                 and origin
@@ -200,8 +229,7 @@ class ComputerToolsMixin:
                 return denied
         try:
             res = self.runtime.computers.launch_app(bot, app_name, uri=uri)
-            if self.runtime.events is not None:
-                emit_computer_event(self.runtime.events, bot, self.runtime.computers.status(bot))
+            self._publish_computer(bot)
             if (
                 isinstance(res, dict)
                 and origin
@@ -223,8 +251,7 @@ class ComputerToolsMixin:
             return {"ok": False, "error": "application name is required"}
         try:
             res = self.runtime.computers.close_app(bot, app_name)
-            if self.runtime.events is not None:
-                emit_computer_event(self.runtime.events, bot, self.runtime.computers.status(bot))
+            self._publish_computer(bot)
             return res
         except Exception as exc:
             log.exception("close_app failed")
@@ -251,4 +278,16 @@ class ComputerToolsMixin:
                 self.runtime.on_takeover_requested(bot_id, run_id)
             except Exception:
                 log.exception("takeover callback failed")
+        ctx = self._resolve_turn(bound_bot_id)
+        hub = getattr(self.runtime, "consent", None)
+        wait = getattr(hub, "wait_takeover", None) if hub is not None else None
+        if ctx is not None and ctx.role == "subagent" and callable(wait):
+            outcome = wait(bot_id, run_id)
+            if outcome != "released":
+                error = (
+                    "The owner cancelled takeover."
+                    if outcome == "cancelled"
+                    else "The owner did not release in time."
+                )
+                return {"ok": False, "waiting": True, "reason": reason, "error": error}
         return {"ok": True, "waiting": True, "reason": reason}

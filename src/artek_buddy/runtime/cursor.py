@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 from cursor_sdk import (
+    AgentBusyError,
     AgentOptions,
     AsyncClient,
     CursorAgentError,
@@ -14,45 +16,164 @@ from cursor_sdk import (
     LocalAgentOptions,
     ModelParameterValue,
     ModelSelection,
+    NotFoundError,
+    UnsupportedRunOperationError,
 )
 
 from artek_buddy.config import Settings
+from artek_buddy.model_catalog import catalog_entry
 from artek_buddy.runtime.base import RuntimeBase
+from artek_buddy.runtime.capabilities import RuntimeCapabilities
+from artek_buddy.runtime.cursor_errors import (
+    log_cursor_agent_error,
+    map_cursor_agent_error,
+    rate_limit_wait_seconds,
+    should_retry_rate_limit,
+)
 from artek_buddy.runtime.cursor_wait import (
+    current_product_run_id,
+    dead_wait_owner_error,
     describe_cursor_wait,
+    log_cursor_turn_runs,
     log_cursor_wait,
     note_auth_failures,
+    send_local_options,
+    should_retry_dead_wait,
 )
+from artek_buddy.runtime.token_usage import extract_token_usage
 from artek_buddy.runtime.tools import ProductTools
-from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord
+from artek_buddy.runtime.types import AgentRuntimeError, ProductStreamEvent, RunRecord, ToolTurnBox
 from artek_buddy.stream import map_cursor_event
 
 log = logging.getLogger("artek_buddy")
+
+# Runtime-native workers ignore Fast off. Product workers use spawn_subagent.
+CURSOR_DISALLOWED_BUILTIN = ("task",)
+
+
+@dataclass
+class _SendAttempt:
+    run: Any
+    agent_id: str
+    streamed: int
+    events: list[ProductStreamEvent]
+    mapped: str
+    text: str | None
+    error: str | None
+    duration_s: float
+    usage: Any = None
+
+
+def _is_agent_busy_error(exc: BaseException) -> bool:
+    message = getattr(exc, "message", None)
+    text = str(message if message is not None else exc).lower()
+    return "already has active run" in text
 
 
 async def _cancel_cursor_run(run: Any) -> None:
     if run is None:
         return
-    for name in ("cancel", "stop", "abort"):
-        fn = getattr(run, name, None)
-        if not callable(fn):
-            continue
+    supports = getattr(run, "supports", None)
+    if callable(supports):
         try:
-            result = fn()
-            if asyncio.iscoroutine(result):
-                await result
+            if not supports("cancel"):
+                return
         except Exception:
-            log.exception("cursor run %s failed", name)
+            log.exception("cursor run supports(cancel) failed")
+            return
+    cancel = getattr(run, "cancel", None)
+    if not callable(cancel):
         return
+    try:
+        result = cancel()
+        if asyncio.iscoroutine(result):
+            await result
+    except UnsupportedRunOperationError:
+        log.debug("cursor run cancel unsupported id=%s", getattr(run, "id", None))
+    except Exception:
+        log.exception("cursor run cancel failed")
 
 
-def build_model(settings: Settings) -> ModelSelection:
+async def _cancel_listed_cursor_run(run: Any, agents: Any, agent_id: str) -> bool:
+    """Cancel a listed stale run: supports('cancel') then cancel(), else agents.cancel_run."""
+    supports = getattr(run, "supports", None)
+    if callable(supports):
+        try:
+            allowed = supports("cancel")
+        except Exception:
+            log.exception("cursor run supports(cancel) failed")
+            return False
+        if not allowed:
+            return False
+    cancel = getattr(run, "cancel", None)
+    if callable(cancel):
+        result = cancel()
+        if asyncio.iscoroutine(result):
+            await result
+        return True
+    cancel_run = getattr(agents, "cancel_run", None)
+    rid = getattr(run, "id", None) or getattr(run, "run_id", None)
+    if callable(cancel_run) and rid:
+        await cancel_run(str(rid), agent_id=agent_id)
+        return True
+    return False
+
+
+async def _release_cursor_run(run: Any) -> None:
+    """Cancel a live handle when supported, then wait so a retry send is not a second bill."""
+    if run is None:
+        return
+    await _cancel_cursor_run(run)
+    wait = getattr(run, "wait", None)
+    if not callable(wait):
+        return
+    try:
+        result = wait()
+        if asyncio.iscoroutine(result):
+            await result
+    except Exception:
+        log.debug("cursor run wait after cancel failed", exc_info=True)
+
+
+def _effort_allowed(model_id: str, allowed_params: set[str] | None) -> bool:
+    if allowed_params:
+        return "effort" in allowed_params
+    return not (model_id or "").lower().startswith("composer")
+
+
+def build_model(
+    settings: Settings,
+    model_id: str | None = None,
+    effort: str | None = None,
+    fast: bool | None = None,
+    allowed_params: set[str] | None = None,
+) -> ModelSelection:
     params: list[ModelParameterValue] = []
-    if settings.cursor_model_effort:
-        params.append(ModelParameterValue(id="effort", value=settings.cursor_model_effort))
-    if settings.cursor_model_fast:
-        params.append(ModelParameterValue(id="fast", value="true"))
-    return ModelSelection(id=settings.cursor_model, params=params)
+    chosen_id = model_id or settings.cursor_model
+    effort_value = effort if effort else settings.cursor_model_effort
+    use_fast = settings.cursor_model_fast if fast is None else bool(fast)
+    if effort_value and _effort_allowed(chosen_id, allowed_params):
+        params.append(ModelParameterValue(id="effort", value=effort_value))
+    params.append(ModelParameterValue(id="fast", value="true" if use_fast else "false"))
+    return ModelSelection(id=chosen_id, params=params)
+
+
+def _is_unsupported_list_runs(exc: BaseException) -> bool:
+    if isinstance(exc, (NotFoundError, UnsupportedRunOperationError)):
+        return True
+    status = getattr(exc, "status", None) or getattr(exc, "status_code", None)
+    if status == 404:
+        return True
+    resp = getattr(exc, "response", None)
+    if resp is not None and getattr(resp, "status_code", None) == 404:
+        return True
+    code = str(getattr(exc, "code", "") or "").lower()
+    if code in {"not_found", "unsupported_run_operation", "unimplemented", "not_implemented"}:
+        return True
+    msg = str(exc).lower()
+    return "404" in msg and (
+        "not found" in msg or "route" in msg or "endpoint" in msg or "unsupported" in msg
+    )
 
 
 class CursorRuntime(RuntimeBase):
@@ -62,16 +183,65 @@ class CursorRuntime(RuntimeBase):
         settings: Settings,
         store: Any | None = None,
         computers: Any | None = None,
+        *,
+        bridge_launcher: Callable[[], Awaitable[AsyncClient]] | None = None,
     ) -> None:
         super().__init__(settings, store=store, computers=computers)
+        self.capabilities = RuntimeCapabilities(
+            streaming=True,
+            cancellation=True,
+            subagents=True,
+            computer=True,
+            memory=True,
+            models_catalog=True,
+        )
         self.client = client
-        self.model = build_model(settings)
+        self._bridge_launcher = bridge_launcher
+        self._bridge_condition = asyncio.Condition()
+        self._bridge_epoch = 0
+        self._bridge_restart_pending = False
+        self._bridge_users = 0
         self._locks: dict[str, asyncio.Lock] = {}
+        self._stream_locks: dict[str, asyncio.Lock] = {}
         self._auth_fails = 0
         self.bridge_recycles = 0
+        self._catalog_param_ids: dict[str, set[str]] = {}
 
-    def _custom_tools(self, bot_id: str | None = None, role: str = "lead") -> dict[str, CustomTool]:
+    def health(self) -> bool:
+        return self.client is not None
+
+    def model_selection(self) -> ModelSelection:
+        model_id = self.settings.cursor_model
+        effort = None
+        fast = None
+        if self.store is not None:
+            try:
+                default = self.store.get_default_model()
+                effort, fast = self.store.get_model_params()
+            except Exception:
+                default = None
+            if default and default[0] == "cursor" and default[1]:
+                model_id = default[1]
+        return build_model(
+            self.settings,
+            model_id,
+            effort=effort,
+            fast=fast,
+            allowed_params=self._catalog_param_ids.get(model_id),
+        )
+
+    @property
+    def model(self) -> ModelSelection:
+        return self.model_selection()
+
+    def _custom_tools(
+        self,
+        bot_id: str | None = None,
+        role: str = "lead",
+        box: ToolTurnBox | None = None,
+    ) -> dict[str, CustomTool]:
         registry = ProductTools(self)
+        holder = box or ToolTurnBox()
         tools: dict[str, CustomTool] = {}
         for spec in registry.specs(role):
 
@@ -80,8 +250,14 @@ class CursorRuntime(RuntimeBase):
                 context: Any,
                 *,
                 name: str = spec.name,
+                bound_box: ToolTurnBox = holder,
             ) -> dict[str, Any]:
-                return registry.execute(name, args, bound_bot_id=bot_id)
+                frozen = bound_box.turn
+                if frozen is None and bound_box.agent_id:
+                    frozen = self.resolve_turn(bot_id, agent_id=bound_box.agent_id)
+                if frozen is None:
+                    frozen = self.resolve_turn(bot_id)
+                return registry.execute(name, args, bound_bot_id=bot_id, turn=frozen)
 
             tools[spec.name] = CustomTool(
                 execute=execute,
@@ -90,26 +266,55 @@ class CursorRuntime(RuntimeBase):
             )
         return tools
 
-    def _local(self, bot_id: str | None = None, role: str = "lead") -> LocalAgentOptions:
-        return LocalAgentOptions(
+    def _local(
+        self,
+        bot_id: str | None = None,
+        role: str = "lead",
+        box: ToolTurnBox | None = None,
+    ) -> tuple[ToolTurnBox, LocalAgentOptions]:
+        holder = box or ToolTurnBox()
+        return holder, LocalAgentOptions(
             cwd=self.home_cwd(bot_id),
-            custom_tools=self._custom_tools(bot_id, role=role),
+            custom_tools=self._custom_tools(bot_id, role=role, box=holder),
         )
 
-    def _agent_options(self, bot_id: str | None = None, role: str = "lead") -> AgentOptions:
-        # resume() JSON-encodes options. A raw dict with a live
-        # LocalAgentOptions is not serializable; AgentOptions.to_json() is.
-        return AgentOptions(
+    def _agent_options(
+        self,
+        bot_id: str | None = None,
+        role: str = "lead",
+        *,
+        name: str | None = None,
+    ) -> tuple[ToolTurnBox, AgentOptions]:
+        box, local = self._local(bot_id, role=role)
+        return box, AgentOptions(
             api_key=self.settings.cursor_api_key,
             model=self.model,
-            local=self._local(bot_id, role=role),
+            local=local,
+            name=name,
+            disallowed_tools=list(CURSOR_DISALLOWED_BUILTIN),
         )
 
     async def start(self) -> None:
         self._ensure_dirs()
         models = await self.client.models.list()
-        ids = [model.id for model in models]
+        entries: list[dict[str, Any]] = []
+        catalog_params: dict[str, set[str]] = {}
+        for model in models:
+            entry = catalog_entry(model)
+            if entry is None:
+                continue
+            entries.append(entry)
+            catalog_params[str(entry["id"])] = {
+                str(param["id"]) for param in entry.get("parameters") or []
+            }
+        ids = [str(item["id"]) for item in entries]
+        self._catalog_param_ids = catalog_params
         log.info("catalog models: %s", ", ".join(ids))
+        if self.store is not None:
+            try:
+                self.store.replace_catalog("cursor", entries)
+            except Exception:
+                log.exception("failed to persist Cursor catalog")
         if self.settings.cursor_model not in ids:
             raise AgentRuntimeError(
                 f"model {self.settings.cursor_model!r} is not available for this key: {ids}"
@@ -126,19 +331,36 @@ class CursorRuntime(RuntimeBase):
         bot_id: str | None = None,
         role: str = "lead",
     ) -> str:
-        agent = await self.client.agents.create(
-            model=self.model,
-            api_key=self.settings.cursor_api_key,
-            name=name,
-            local=self._local(bot_id, role=role),
-        )
+        await self._enter_bridge()
+        try:
+            return await self._create_session(name, persist_default, bot_id, role)
+        finally:
+            await self._leave_bridge()
+
+    async def _create_session(
+        self,
+        name: str,
+        persist_default: bool,
+        bot_id: str | None,
+        role: str,
+    ) -> str:
+        box, options = self._agent_options(bot_id, role, name=name)
+        agent = await self.client.agents.create(options)
         self._agents[agent.agent_id] = agent
         self._locks[agent.agent_id] = asyncio.Lock()
         self.bind_agent_bot(agent.agent_id, bot_id)
+        self.register_tool_box(agent.agent_id, box)
+        if role == "lead":
+            self.mark_session_fresh(agent.agent_id)
         if persist_default or self.default_agent_id is None:
             self.default_agent_id = agent.agent_id
             self._save_state(agent.agent_id)
-        log.info("created agent %s", agent.agent_id)
+        log.info(
+            "created agent %s role=%s model=%s",
+            agent.agent_id,
+            role,
+            self.model.to_json(),
+        )
         return agent.agent_id
 
     async def ensure_session(
@@ -148,33 +370,43 @@ class CursorRuntime(RuntimeBase):
         bot_id: str | None = None,
         role: str = "lead",
     ) -> str:
+        await self._enter_bridge()
+        try:
+            return await self._ensure_session(agent_id, name, bot_id, role)
+        finally:
+            await self._leave_bridge()
+
+    async def _ensure_session(
+        self,
+        agent_id: str | None,
+        name: str,
+        bot_id: str | None,
+        role: str,
+    ) -> str:
+        if self.session_foreign_to_bot(agent_id, bot_id):
+            return await self._create_session(name, False, bot_id, role)
         if agent_id and agent_id in self._agents:
             return agent_id
         if agent_id:
             try:
-                agent = await self.client.agents.resume(
-                    agent_id, self._agent_options(bot_id, role=role)
-                )
+                box, options = self._agent_options(bot_id, role=role)
+                agent = await self.client.agents.resume(agent_id, options)
                 live_id = agent.agent_id or agent_id
+                if self.session_foreign_to_bot(live_id, bot_id):
+                    return await self._create_session(name, False, bot_id, role)
                 self._agents[live_id] = agent
                 self._locks.setdefault(live_id, asyncio.Lock())
                 self.bind_agent_bot(live_id, bot_id)
+                self.register_tool_box(live_id, box)
                 log.info("resumed agent %s", live_id)
                 return live_id
             except Exception:
                 log.exception("resume failed, creating a new agent")
-        elif self.default_agent_id:
-            return await self.ensure_session(
-                self.default_agent_id,
-                name=name,
-                bot_id=bot_id,
-                role=role,
-            )
-        return await self.create_session(
-            name=name,
-            persist_default=self.default_agent_id is None,
-            bot_id=bot_id,
-            role=role,
+        return await self._create_session(
+            name,
+            self.default_agent_id is None,
+            bot_id,
+            role,
         )
 
     async def _agent(
@@ -183,7 +415,12 @@ class CursorRuntime(RuntimeBase):
         bot_id: str | None = None,
         role: str = "lead",
     ) -> tuple[str, Any, asyncio.Lock]:
-        agent_id = await self.ensure_session(session_id, bot_id=bot_id, role=role)
+        agent_id = await self._ensure_session(
+            session_id,
+            "artek-buddy",
+            bot_id,
+            role,
+        )
         self.bind_agent_bot(agent_id, bot_id)
         agent = self._agents.get(agent_id)
         if agent is None:
@@ -191,24 +428,244 @@ class CursorRuntime(RuntimeBase):
         lock = self._locks.setdefault(agent_id, asyncio.Lock())
         return agent_id, agent, lock
 
-    async def _recycle_dead_agent(self, burned_id: str, bot_id: str | None) -> str:
-        log.warning("recycling cursor agent %s after consecutive auth errors", burned_id)
-        self._agents.pop(burned_id, None)
-        self._locks.pop(burned_id, None)
-        self._auth_fails = 0
-        self.bridge_recycles += 1
-        live = await self.create_session(
-            name="artek-buddy",
-            persist_default=True,
-            bot_id=bot_id,
-            role="lead",
-        )
-        if bot_id and self.store is not None and hasattr(self.store, "attach_agent"):
+    async def _close_agent(self, agent: Any) -> None:
+        close = getattr(agent, "close", None)
+        if not callable(close):
+            return
+        try:
+            result = close()
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception:
+            log.exception("failed to close cursor agent")
+
+    async def _enter_bridge(self) -> int:
+        async with self._bridge_condition:
+            while self._bridge_restart_pending:
+                await self._bridge_condition.wait()
+            self._bridge_users += 1
+            return self._bridge_epoch
+
+    async def _leave_bridge(self) -> None:
+        async with self._bridge_condition:
+            self._bridge_users = max(0, self._bridge_users - 1)
+            self._bridge_condition.notify_all()
+
+    async def _restart_bridge(
+        self,
+        expected_epoch: int,
+        agent_id: str,
+        bot_id: str | None,
+        role: str,
+    ) -> tuple[str, Any, int]:
+        """Replace the SDK process after active turns drain, then resume this chat."""
+        owns_restart = False
+        async with self._bridge_condition:
+            while self._bridge_restart_pending and self._bridge_epoch == expected_epoch:
+                await self._bridge_condition.wait()
+            if self._bridge_epoch == expected_epoch:
+                self._bridge_restart_pending = True
+                while self._bridge_users:
+                    await self._bridge_condition.wait()
+                owns_restart = True
+            else:
+                self._bridge_users += 1
+                current_epoch = self._bridge_epoch
+
+        if not owns_restart:
             try:
-                self.store.attach_agent(bot_id, live)
+                live = await self._ensure_session(agent_id, "artek-buddy", bot_id, role)
+                return live, self._agents[live], current_epoch
             except Exception:
-                log.exception("failed to attach recycled agent")
-        return live
+                await self._leave_bridge()
+                raise
+
+        if self._bridge_launcher is None:
+            async with self._bridge_condition:
+                self._bridge_restart_pending = False
+                self._bridge_condition.notify_all()
+            raise AgentRuntimeError("Cursor bridge cannot be restarted")
+
+        try:
+            log.warning("restarting cursor bridge after dead wait agent_id=%s", agent_id)
+            old_agents = list({id(agent): agent for agent in self._agents.values()}.values())
+            self._agents.clear()
+            for old_agent in old_agents:
+                await self._close_agent(old_agent)
+            await self.client.aclose()
+            self.client = await self._bridge_launcher()
+            live = await self._ensure_session(agent_id, "artek-buddy", bot_id, role)
+            if live != agent_id:
+                self.default_agent_id = live
+                self._save_state(live)
+                if bot_id and self.store is not None and hasattr(self.store, "attach_agent"):
+                    self.store.attach_agent(bot_id, live)
+        except Exception:
+            async with self._bridge_condition:
+                self._bridge_restart_pending = False
+                self._bridge_condition.notify_all()
+            raise
+
+        async with self._bridge_condition:
+            self._bridge_epoch += 1
+            current_epoch = self._bridge_epoch
+            self._bridge_users += 1
+            self._bridge_restart_pending = False
+            self._auth_fails = 0
+            self.bridge_recycles += 1
+            self._bridge_condition.notify_all()
+        return live, self._agents[live], current_epoch
+
+    async def aclose(self) -> None:
+        async with self._bridge_condition:
+            while self._bridge_restart_pending:
+                await self._bridge_condition.wait()
+            self._bridge_restart_pending = True
+            while self._bridge_users:
+                await self._bridge_condition.wait()
+        try:
+            agents = list({id(agent): agent for agent in self._agents.values()}.values())
+            self._agents.clear()
+            for agent in agents:
+                await self._close_agent(agent)
+            await self.client.aclose()
+        finally:
+            async with self._bridge_condition:
+                self._bridge_restart_pending = False
+                self._bridge_condition.notify_all()
+
+    async def _cancel_stale_runs(self, agent_id: str) -> None:
+        agents = getattr(self.client, "agents", None)
+        list_runs = getattr(agents, "list_runs", None)
+        if not callable(list_runs):
+            return
+        try:
+            listed = await list_runs(agent_id, limit=8)
+        except Exception as exc:
+            if _is_unsupported_list_runs(exc):
+                log.debug("cursor bridge does not support list_runs for %s", agent_id)
+                return
+            log.exception("failed to list cursor runs for %s", agent_id)
+            return
+        items = getattr(listed, "items", None)
+        if items is None:
+            items = []
+        for run in items:
+            status = str(
+                getattr(run, "status", "")
+                or getattr(getattr(run, "snapshot", None), "status", "")
+                or ""
+            ).lower()
+            if "running" not in status:
+                continue
+            rid = getattr(run, "id", None) or getattr(run, "run_id", None)
+            if not rid:
+                continue
+            try:
+                if await _cancel_listed_cursor_run(run, agents, agent_id):
+                    log.warning("cancelled stale cursor run %s on %s", rid, agent_id)
+            except Exception:
+                log.exception("failed to cancel stale cursor run %s", rid)
+
+    async def _send_with_limit_retry(
+        self,
+        agent: Any,
+        prompt: str,
+        cwd: str,
+        *,
+        force: bool,
+        idempotency_key: str | None = None,
+    ) -> Any:
+        """Call send() only. One rate-limit retry if send raised before a run started."""
+        options = send_local_options(
+            cwd, force=force, model=self.model, idempotency_key=idempotency_key
+        )
+        retried = False
+        while True:
+            try:
+                return await agent.send(prompt, options)
+            except (CursorAgentError, TimeoutError) as err:
+                if isinstance(err, AgentBusyError) or _is_agent_busy_error(err):
+                    raise
+                if should_retry_rate_limit(err, retried=retried):
+                    wait_s = rate_limit_wait_seconds(err, 0)
+                    log.warning(
+                        "cursor rate limited; waiting %.3fs then retrying once "
+                        "retryable=%s request_id=%s",
+                        wait_s,
+                        getattr(err, "is_retryable", None),
+                        getattr(err, "request_id", None),
+                    )
+                    await asyncio.sleep(wait_s)
+                    retried = True
+                    continue
+                log_cursor_agent_error(err)
+                raise map_cursor_agent_error(err) from err
+
+    async def _attempt_send(
+        self,
+        agent: Any,
+        agent_id: str,
+        prompt: str,
+        cwd: str,
+        *,
+        force: bool,
+        live_run: list[Any],
+        idempotency_key: str | None = None,
+    ) -> _SendAttempt:
+        events: list[ProductStreamEvent] = []
+        streamed = 0
+        run = await self._send_with_limit_retry(
+            agent, prompt, cwd, force=force, idempotency_key=idempotency_key
+        )
+        live_run.clear()
+        live_run.append(run)
+        log.info("run started run_id=%s agent_id=%s force=%s", run.id, agent_id, force)
+        async for event in run.events():
+            mapped_events = map_cursor_event(event)
+            if mapped_events:
+                streamed += 1
+            for typ, payload in mapped_events:
+                events.append(ProductStreamEvent(type=typ, payload=payload))
+        text = ""
+        status = "unknown"
+        waited = time.monotonic()
+        result = None
+        try:
+            result = await run.wait()
+            text = getattr(result, "result", None) or ""
+            status = str(getattr(result, "status", "unknown"))
+        except Exception:
+            log.exception("wait after stream failed")
+        duration_s = time.monotonic() - waited
+        if not text:
+            try:
+                text = await run.text()
+            except Exception:
+                text = ""
+        mapped, wait_text, wait_error = describe_cursor_wait(result, run)
+        if wait_text:
+            text = wait_text
+        log_cursor_wait(
+            str(getattr(run, "id", "")),
+            agent_id,
+            status,
+            duration_s,
+            wait_error,
+        )
+        model_id = str(getattr(self.model, "id", None) or self.settings.cursor_model or "")
+        usage = extract_token_usage(result, run, provider="cursor", model=model_id)
+        return _SendAttempt(
+            run=run,
+            agent_id=agent_id,
+            streamed=streamed,
+            events=events,
+            mapped=mapped,
+            text=text or None,
+            error=wait_error,
+            duration_s=duration_s,
+            usage=usage,
+        )
 
     async def stream(
         self,
@@ -216,85 +673,166 @@ class CursorRuntime(RuntimeBase):
         session_id: str | None = None,
         bot_id: str | None = None,
         role: str = "lead",
+        *,
+        idempotency_key: str | None = None,
     ) -> AsyncIterator[ProductStreamEvent | RunRecord]:
-        agent_id, agent, lock = await self._agent(session_id, bot_id=bot_id, role=role)
-        cwd = self.home_cwd(bot_id or self.resolve_turn_context()[0])
-        self.last_prompt = prompt
-        async with lock:
-            run = None
+        lock_key = session_id or f"{role}:{bot_id or 'default'}"
+        stream_lock = self._stream_locks.setdefault(lock_key, asyncio.Lock())
+        async with stream_lock:
+            bridge_epoch = await self._enter_bridge()
+            bridge_held = True
+            live_run: list[Any] = []
+            force = False
+            forced_once = False
+            bridge_restarted_once = False
+            sdk_run_ids: list[str] = []
+            retry_reason: str | None = None
             try:
-                run = await agent.send(prompt, {"local": {"force": True, "cwd": cwd}})
-                log.info("run started run_id=%s agent_id=%s", run.id, agent_id)
-                async for event in run.events():
-                    for typ, payload in map_cursor_event(event):
-                        yield ProductStreamEvent(type=typ, payload=payload)
-                text = ""
-                status = "unknown"
-                waited = time.monotonic()
-                result = None
-                try:
-                    result = await run.wait()
-                    text = getattr(result, "result", None) or ""
-                    status = str(getattr(result, "status", "unknown"))
-                except Exception:
-                    log.exception("wait after stream failed")
-                duration_s = time.monotonic() - waited
-                if not text:
+                agent_id, agent, _lock = await self._agent(session_id, bot_id=bot_id, role=role)
+                self._stream_locks.setdefault(agent_id, stream_lock)
+                cwd = self.home_cwd(bot_id or self.resolve_turn_context()[0])
+                self.last_prompt = prompt
+                while True:
+                    await self._cancel_stale_runs(agent_id)
                     try:
-                        text = await run.text()
-                    except Exception:
-                        text = ""
-                mapped, wait_text, wait_error = describe_cursor_wait(result, run)
-                if wait_text:
-                    text = wait_text
-                error_code = wait_error
-                log_cursor_wait(
-                    str(getattr(run, "id", "")),
-                    agent_id,
-                    status,
-                    duration_s,
-                    error_code,
-                )
-                self._auth_fails, recycle = note_auth_failures(
-                    self._auth_fails,
-                    status=mapped,
-                    error=error_code,
-                    duration_s=duration_s,
-                )
-                if recycle:
-                    await self._recycle_dead_agent(agent_id, bot_id)
-                yield RunRecord(
-                    id=str(getattr(run, "id", "")),
-                    agent_id=agent_id,
-                    status=mapped,
-                    result=text or None,
-                    error=None if mapped == "completed" else error_code,
-                )
-            except CursorAgentError as err:
-                log.error(
-                    "run did not start: %s retryable=%s request_id=%s",
-                    err.message,
-                    err.is_retryable,
-                    getattr(err, "request_id", None),
-                )
-                raise AgentRuntimeError(
-                    err.message,
-                    retryable=bool(err.is_retryable),
-                    request_id=getattr(err, "request_id", None),
-                ) from err
-            except asyncio.CancelledError:
-                await _cancel_cursor_run(run)
+                        attempt = await self._attempt_send(
+                            agent,
+                            agent_id,
+                            prompt,
+                            cwd,
+                            force=force,
+                            live_run=live_run,
+                            idempotency_key=idempotency_key,
+                        )
+                    except (AgentBusyError, CursorAgentError) as err:
+                        if not (isinstance(err, AgentBusyError) or _is_agent_busy_error(err)):
+                            raise
+                        if forced_once:
+                            raise
+                        log.warning(
+                            "cursor agent busy; retrying send with force on %s",
+                            agent_id,
+                        )
+                        force = True
+                        forced_once = True
+                        retry_reason = "agent_busy"
+                        continue
+                    run_id = str(getattr(attempt.run, "id", "") or "")
+                    if run_id:
+                        sdk_run_ids.append(run_id)
+                    for event in attempt.events:
+                        yield event
+                    self._auth_fails, recycle = note_auth_failures(
+                        self._auth_fails,
+                        status=attempt.mapped,
+                        error=attempt.error,
+                        duration_s=attempt.duration_s,
+                    )
+                    if attempt.mapped == "completed":
+                        yield RunRecord(
+                            id=run_id,
+                            agent_id=agent_id,
+                            status=attempt.mapped,
+                            result=attempt.text,
+                            error=None,
+                            usage=attempt.usage,
+                        )
+                        return
+                    retry_dead = should_retry_dead_wait(
+                        streamed=attempt.streamed,
+                        status=attempt.mapped,
+                        error=attempt.error,
+                        duration_s=attempt.duration_s,
+                    )
+                    if retry_dead and not bridge_restarted_once:
+                        retry_reason = "dead_wait"
+                        log.warning(
+                            "dead cursor wait; cancelling run %s before bridge recycle on %s",
+                            run_id,
+                            agent_id,
+                        )
+                        await _release_cursor_run(attempt.run)
+                        live_run.clear()
+                        await self._leave_bridge()
+                        bridge_held = False
+                        agent_id, agent, bridge_epoch = await self._restart_bridge(
+                            bridge_epoch,
+                            agent_id,
+                            bot_id,
+                            role,
+                        )
+                        bridge_held = True
+                        self._stream_locks.setdefault(agent_id, stream_lock)
+                        resume = (
+                            self.build_session_resume(bot_id)
+                            if self.consume_session_fresh(agent_id)
+                            else None
+                        )
+                        if resume:
+                            prompt = f"{resume}\n\n{prompt}"
+                            self.last_prompt = prompt
+                        force = False
+                        bridge_restarted_once = True
+                        continue
+                    if recycle and not bridge_restarted_once:
+                        await _release_cursor_run(attempt.run)
+                        live_run.clear()
+                        await self._leave_bridge()
+                        bridge_held = False
+                        agent_id, agent, bridge_epoch = await self._restart_bridge(
+                            bridge_epoch,
+                            agent_id,
+                            bot_id,
+                            role,
+                        )
+                        bridge_held = True
+                        self._stream_locks.setdefault(agent_id, stream_lock)
+                        bridge_restarted_once = True
+                    error_code = dead_wait_owner_error(
+                        attempt.error, recycle or bridge_restarted_once
+                    )
+                    yield RunRecord(
+                        id=run_id,
+                        agent_id=agent_id,
+                        status=attempt.mapped,
+                        result=attempt.text,
+                        error=error_code,
+                        usage=attempt.usage,
+                    )
+                    return
+            except AgentBusyError:
+                log.warning("cursor agent still busy after force retry")
                 raise
+            except (CursorAgentError, TimeoutError) as err:
+                live_id = getattr(live_run[0], "id", None) if live_run else None
+                log_cursor_agent_error(err, run_id=live_id)
+                raise map_cursor_agent_error(err) from err
+            except asyncio.CancelledError:
+                # 3.11+ keeps the task cancelled until uncancel(); run.cancel() must still await.
+                current = asyncio.current_task()
+                if current is not None:
+                    current.uncancel()
+                await _cancel_cursor_run(live_run[0] if live_run else None)
+                raise
+            finally:
+                if sdk_run_ids or retry_reason:
+                    log_cursor_turn_runs(
+                        current_product_run_id(self, bot_id),
+                        sdk_run_ids,
+                        retry_reason,
+                    )
+                if bridge_held:
+                    await self._leave_bridge()
 
     async def list_models(self) -> list[dict[str, Any]]:
-        models = await self.client.models.list()
-        payload: list[dict[str, Any]] = []
-        for model in models:
-            item: dict[str, Any] = {"id": model.id}
-            variants = getattr(model, "variants", None)
-            if variants:
-                item["variants"] = [
-                    getattr(variant, "id", None) or str(variant) for variant in variants
-                ]
-            payload.append(item)
-        return payload
+        await self._enter_bridge()
+        try:
+            models = await self.client.models.list()
+            payload: list[dict[str, Any]] = []
+            for model in models:
+                entry = catalog_entry(model)
+                if entry is not None:
+                    payload.append(entry)
+            return payload
+        finally:
+            await self._leave_bridge()

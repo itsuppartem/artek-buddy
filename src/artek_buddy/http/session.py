@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import Depends
 
 from artek_buddy.contracts import (
     DeploymentSettings,
     Me,
+    Principal,
     SessionRequest,
     SessionResponse,
     UpdateDeploymentInput,
@@ -21,7 +21,6 @@ from artek_buddy.runtime import (
     AgentRuntime,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
 from fastapi import APIRouter
@@ -29,16 +28,12 @@ from fastapi import APIRouter
 from artek_buddy.http.deps import (
     _db_error,
     require_auth,
+    require_principal,
     runtime,
     store,
 )
 
 router = APIRouter()
-
-
-@router.get("/v1/models", dependencies=[Depends(require_auth)])
-async def list_models(rt: AgentRuntime = Depends(runtime)) -> dict[str, Any]:
-    return {"models": await rt.list_models()}
 
 
 @router.get("/v1/session", dependencies=[Depends(require_auth)])
@@ -71,9 +66,28 @@ async def create_session(
     return SessionResponse(agent_id=agent_id, bot_id=bot.id, thread_id=bot.thread_id)
 
 
-@router.get("/v1/me", dependencies=[Depends(require_auth)])
-async def get_me() -> Me:
-    return Me()
+@router.get("/v1/me")
+async def get_me(
+    principal: Principal = Depends(require_principal),
+    history: HistoryStore = Depends(store),
+) -> Me:
+    try:
+        member = history.get_member(principal.member_id) or history.get_owner_member()
+        devices = history.list_devices(member_id=member.id)
+        default = history.get_default_model()
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    return Me(
+        user_id="usr_owner",
+        name=member.name,
+        role=member.role,
+        is_deployment_owner=(member.role == "owner"),
+        needs_model=default is None,
+        default_provider=default[0] if default else None,
+        default_model=default[1] if default else None,
+        member=member,
+        devices=[d for d in devices if d.revoked_at is None],
+    )
 
 
 @router.get("/v1/deployment", dependencies=[Depends(require_auth)])

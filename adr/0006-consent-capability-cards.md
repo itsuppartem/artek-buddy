@@ -14,9 +14,11 @@ owner needs to allow a site without allowing `rm` on the laptop.
 
 Consent is per class: `browse`, `desktop_input`, `page_input`, `owner_read`,
 `owner_write`, `owner_exec`. The thread shows **Allow once / Always / Deny**.
-Always is scoped to that bot and class (owner write/exec cover later writes
-and commands on that PC). Read-only owner shell (`ls`, `cat`, …) does not
-ask. Auto owner-read of files still happens without a card.
+Always is scoped to that bot, the answering device, and class (owner
+write/exec cover later writes and commands on that PC from that Deb).
+A grant with no device (host token) is host-wide for that bot and class.
+Read-only owner shell (`ls`, `cat`, …) does not ask. Auto owner-read of
+files still happens without a card.
 
 Desktop tools wait on the card before the supervisor exec. The host token
 never appears in the page.

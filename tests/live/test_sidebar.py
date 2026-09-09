@@ -8,8 +8,11 @@ from tests.live.helpers import (
     bot_row,
     composer,
     create_named_bot,
+    hold_thread_snapshot_gets,
     open_bot_menu,
     open_chat,
+    open_models,
+    open_plugins,
     pair_fresh,
     send_message,
     thread_header,
@@ -27,12 +30,15 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
 
     pair_fresh(page, client_url, host_url)
 
-    page.get_by_title("New bot").click()
+    page.get_by_role("button", name="New bot").click()
     expect(page.get_by_placeholder("Name this bot")).to_be_visible()
+    page.get_by_test_id("create-cancel").click()
 
-    page.get_by_text("Plugins", exact=True).click()
-    expect(page.get_by_text("Plugins ship with a later stage.")).to_be_visible()
-    page.get_by_text("You", exact=True).click()
+    open_plugins(page)
+    expect(page.get_by_test_id("plugins-pane")).to_be_visible()
+    page.get_by_role("button", name="Close Plugins").click()
+    open_models(page)
+    expect(page.get_by_test_id("models-pane")).to_be_visible()
     expect(page.get_by_text("Bot Settings")).to_have_count(0)
 
     create_named_bot(page, alpha, title=f"notes about cats {token}")
@@ -64,13 +70,13 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
     page.get_by_role("menuitem", name="Unpin").click()
     expect(bot_row(page, alpha).get_by_title("Pinned")).to_have_count(0)
     open_bot_menu(page, alpha)
-    page.get_by_role("menuitem", name="Mark as Unread").click()
+    page.get_by_role("menuitem", name="Mark as unread").click()
     expect(bot_row(page, alpha).get_by_test_id("unread-dot")).to_be_visible()
     open_bot_menu(page, alpha)
-    page.get_by_role("menuitem", name="Mark as Read").click()
+    page.get_by_role("menuitem", name="Mark as read").click()
     expect(bot_row(page, alpha).get_by_test_id("unread-dot")).to_have_count(0)
     open_bot_menu(page, alpha)
-    page.get_by_role("menuitem", name="Edit Profile").click()
+    page.get_by_role("menuitem", name="Edit profile").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     open_bot_menu(page, alpha)
     page.get_by_role("menuitem", name="Duplicate").click()
@@ -93,7 +99,7 @@ def test_sidebar_search_menu_archive_and_delete(page: Page, client_url: str, hos
     # restore() navigates to Bravo. Open Alpha settings from the row menu.
     bot_row(page, alpha).click()
     open_bot_menu(page, alpha)
-    page.get_by_role("menuitem", name="Edit Profile").click()
+    page.get_by_role("menuitem", name="Edit profile").click()
     expect(page.get_by_text("Bot Settings")).to_be_visible()
     page.get_by_role("button", name="Delete chat…").click()
     page.get_by_role("button", name="Cancel").click()
@@ -143,6 +149,57 @@ def test_switch_bots_keeps_header_and_thread(page: Page, client_url: str, host_u
     assert first_box["y"] < second_box["y"]
 
 
+def test_unread_mark_is_named_and_visible(page: Page, client_url: str, host_url: str) -> None:
+    name = unique_bot("Unread")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    open_bot_menu(page, name)
+    page.get_by_role("menuitem", name="Mark as unread").click()
+    row = bot_row(page, name)
+    pin = row.get_by_test_id("unread-dot")
+    expect(pin).to_be_visible()
+    expect(pin).to_have_accessible_name("Unread")
+    expect(row).to_have_accessible_name(f"Open chat {name} (unread)")
+
+
+def test_inbox_search_marks_preview_hit(page: Page, client_url: str, host_url: str) -> None:
+    token = uuid.uuid4().hex[:8]
+    lead = unique_bot("Lead")
+    other = unique_bot("Other")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, lead, title=f"notes about cats {token}")
+    create_named_bot(page, other, title="shipping desk")
+    search = page.get_by_placeholder("Search")
+    search.fill(token)
+    row = bot_row(page, lead)
+    expect(row).to_have_count(1)
+    expect(bot_row(page, other)).to_have_count(0)
+    expect(row.get_by_test_id("inbox-hit")).to_have_text(token)
+    expect(row.get_by_test_id("bot-preview")).to_contain_text(token)
+
+
+def test_inbox_search_no_match_shows_empty_and_clear(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("Seek")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    expect(bot_row(page, name)).to_have_count(1)
+    search = page.get_by_placeholder("Search")
+    search.fill("zzz-no-match")
+    expect(bot_row(page, name)).to_have_count(0)
+    empty = page.get_by_test_id("inbox-search-empty")
+    expect(empty).to_be_visible()
+    expect(empty).to_contain_text("No chats or messages match")
+    expect(empty).to_contain_text("Clear Search")
+    clearer = page.get_by_role("button", name="Clear Search")
+    expect(clearer).to_be_visible()
+    clearer.click()
+    expect(search).to_have_value("")
+    expect(empty).to_have_count(0)
+    expect(bot_row(page, name)).to_have_count(1)
+
+
 def test_switch_during_stream_keeps_chat(page: Page, client_url: str, host_url: str) -> None:
     first = unique_bot("LiveA")
     second = unique_bot("LiveB")
@@ -176,9 +233,127 @@ def test_switch_never_blanks_thread(page: Page, client_url: str, host_url: str) 
     send_message(page, "other chat", second)
     open_chat(page, first)
     expect(page.get_by_test_id("thread-composer")).to_be_visible()
-    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).not_to_have_count(0)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="stay visible"
+        )
+    ).to_be_visible()
     open_chat(page, second)
     expect(thread_header(page)).to_contain_text(second)
-    expect(page.get_by_test_id("thread-composer")).to_be_visible()
-    expect(page.locator('[data-testid="thread-message"][data-role="user"]')).not_to_have_count(0)
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="other chat"
+        )
+    ).to_be_visible()
+    with hold_thread_snapshot_gets(page) as held:
+        open_chat(page, first)
+        expect(thread_header(page)).to_contain_text(first)
+        expect(page.get_by_test_id("thread-composer")).to_be_visible()
+        expect(page.get_by_test_id("thread-loading")).to_have_count(0)
+        expect(
+            page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+                has_text="stay visible"
+            )
+        ).to_be_visible()
+        expect(
+            page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+                has_text="other chat"
+            )
+        ).to_have_count(0)
+        assert held.wait(timeout=10), "snapshot GET was never held"
+        expect(
+            page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+                has_text="stay visible"
+            )
+        ).to_be_visible()
     expect(page.get_by_test_id("empty-bots")).to_have_count(0)
+
+
+def test_switch_keeps_loaded_earlier_page(page: Page, client_url: str, host_url: str) -> None:
+    first = unique_bot("HistA")
+    second = unique_bot("HistB")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    send_message(page, "please e2e-load-earlier", first)
+    create_named_bot(page, second)
+    send_message(page, "other chat", second)
+    open_chat(page, first)
+    earlier = page.get_by_test_id("load-earlier")
+    expect(earlier).to_be_visible(timeout=15_000)
+    earlier.click()
+    expect(page.get_by_text("e2e-old-00", exact=True)).to_be_visible(timeout=15_000)
+    open_chat(page, second)
+    expect(thread_header(page)).to_contain_text(second)
+    open_chat(page, first)
+    expect(thread_header(page)).to_contain_text(first)
+    expect(page.get_by_text("e2e-old-00", exact=True)).to_be_visible()
+
+
+def test_uncached_chat_shows_loading_not_a_blank_thread(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    first = unique_bot("LoadA")
+    extras = [unique_bot("LoadB"), unique_bot("LoadC"), unique_bot("LoadD")]
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, first)
+    send_message(page, "stay visible", first)
+    for name in extras:
+        create_named_bot(page, name)
+        open_chat(page, name)
+    open_chat(page, extras[-1])
+    expect(thread_header(page)).to_contain_text(extras[-1])
+    with hold_thread_snapshot_gets(page) as held:
+        open_chat(page, first)
+        expect(thread_header(page)).to_contain_text(first)
+        expect(page.get_by_test_id("thread-loading")).to_be_visible()
+        expect(page.get_by_test_id("thread-loading")).to_contain_text("Loading this chat")
+        expect(
+            page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+                has_text="stay visible"
+            )
+        ).to_have_count(0)
+        assert held.is_set() or held.wait(timeout=10), "snapshot GET was never held"
+    expect(
+        page.locator('[data-testid="thread-message"][data-role="user"]').filter(
+            has_text="stay visible"
+        )
+    ).to_be_visible(timeout=15_000)
+    expect(page.get_by_test_id("thread-loading")).to_have_count(0)
+
+
+def test_inbox_row_click_opens_that_chat(page: Page, client_url: str, host_url: str) -> None:
+    lead = unique_bot("Lead")
+    research = unique_bot("Research")
+    park = unique_bot("Park")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, lead)
+    create_named_bot(page, research)
+    create_named_bot(page, park)
+    open_chat(page, research)
+    expect(thread_header(page)).to_contain_text(research)
+    bot_row(page, lead).click()
+    expect(thread_header(page)).to_contain_text(lead)
+    expect(bot_row(page, lead)).to_have_attribute("aria-current", "page")
+    expect(composer(page)).to_be_visible()
+    open_chat(page, park)
+    expect(thread_header(page)).to_contain_text(park)
+    bot_row(page, lead).click()
+    expect(thread_header(page)).to_contain_text(lead)
+    expect(bot_row(page, lead)).to_have_attribute("aria-current", "page")
+    expect(thread_header(page)).not_to_contain_text(research)
+    expect(thread_header(page)).not_to_contain_text(park)
+
+
+def test_inbox_host_search_opens_matching_chat(page: Page, client_url: str, host_url: str) -> None:
+    token = uuid.uuid4().hex[:8]
+    name = unique_bot("Fts")
+    phrase = f"unique-fts-{token}"
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    send_message(page, phrase, name)
+    search = page.get_by_placeholder("Search")
+    search.fill(phrase)
+    hit = page.get_by_test_id("search-hit").filter(has_text=name)
+    expect(hit).to_be_visible(timeout=8_000)
+    hit.click()
+    expect(thread_header(page)).to_contain_text(name)

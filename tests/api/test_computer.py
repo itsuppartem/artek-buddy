@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from tests.api.helpers import create_bot
+import asyncio
+import threading
+import time
+
+import httpx
+import pytest
+from tests.api.helpers import consent_id_from_thread, create_bot, wait_run_status
 
 
 def test_computer_boot_stop_on_fake(client, auth_header) -> None:
@@ -136,7 +142,7 @@ def test_computer_input_needs_takeover(client, auth_header) -> None:
     denied = client.post(
         f"/v1/computer/{bot_id}/input",
         headers=auth_header,
-        json={"kind": "key", "payload": {"text": "a"}},
+        json={"kind": "key", "payload": {"text": "a"}, "lease_id": "lease_missing"},
     )
     assert denied.status_code == 400
     taken = client.post(f"/v1/computer/{bot_id}/takeover", headers=auth_header)
@@ -144,7 +150,11 @@ def test_computer_input_needs_takeover(client, auth_header) -> None:
     typed = client.post(
         f"/v1/computer/{bot_id}/input",
         headers=auth_header,
-        json={"kind": "key", "payload": {"text": "a"}},
+        json={
+            "kind": "key",
+            "payload": {"text": "a"},
+            "lease_id": taken.json()["lease_id"],
+        },
     )
     assert typed.status_code == 200
     beat = client.post(f"/v1/computer/{bot_id}/heartbeat", headers=auth_header)
@@ -230,21 +240,22 @@ def test_caps_lock_reaches_sandbox_display(client, auth_header) -> None:
     denied = client.post(
         f"/v1/computer/{bot_id}/input",
         headers=auth_header,
-        json={"kind": "key", "payload": {"key": "Caps_Lock"}},
+        json={"kind": "key", "payload": {"key": "Caps_Lock"}, "lease_id": "lease_missing"},
     )
     assert denied.status_code == 400
     taken = client.post(f"/v1/computer/{bot_id}/takeover", headers=auth_header)
     assert taken.status_code == 200
+    lease_id = taken.json()["lease_id"]
     caps = client.post(
         f"/v1/computer/{bot_id}/input",
         headers=auth_header,
-        json={"kind": "key", "payload": {"key": "CapsLock"}},
+        json={"kind": "key", "payload": {"key": "CapsLock"}, "lease_id": lease_id},
     )
     assert caps.status_code == 200
     typed = client.post(
         f"/v1/computer/{bot_id}/input",
         headers=auth_header,
-        json={"kind": "key", "payload": {"text": "abc"}},
+        json={"kind": "key", "payload": {"text": "abc"}, "lease_id": lease_id},
     )
     assert typed.status_code == 200
     bot = app.state.store.get_bot(bot_id)
@@ -272,3 +283,146 @@ def test_startup_does_not_respawn_xterm_when_browser_is_up(client, auth_header) 
 def test_computer_requires_auth(client) -> None:
     response = client.get("/v1/computer/bot_missing")
     assert response.status_code == 401
+
+
+def test_open_path_from_stopped_emits_computer_status(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "WakeBox", computer_mode="dedicated")["id"]
+    before = client.get(f"/v1/computer/{bot_id}", headers=auth_header)
+    assert before.status_code == 200
+    assert before.json()["state"] == "stopped"
+
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "e2e-wake-computer"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    snap = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input")
+    consent_id = consent_id_from_thread(snap)
+    allowed = client.post(
+        f"/v1/consents/{consent_id}",
+        headers=auth_header,
+        json={"decision": "always"},
+    )
+    assert allowed.status_code == 200
+
+    deadline = time.time() + 8.0
+    types: list[str] = []
+    while time.time() < deadline:
+        types = [
+            event.type.value if hasattr(event.type, "value") else str(event.type)
+            for event in client.app.state.hub.replay(bot_id)
+        ]
+        if "computer.status" in types:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"no computer.status in {types}")
+
+    after = client.get(f"/v1/computer/{bot_id}", headers=auth_header)
+    assert after.status_code == 200
+    assert after.json()["state"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_computer_input_does_not_block_the_event_loop(
+    client, auth_header, monkeypatch
+) -> None:
+    from artek_buddy.main import app
+
+    bot_id = create_bot(client, auth_header, "LoopBox", computer_mode="dedicated")["id"]
+    assert client.post(f"/v1/computer/{bot_id}/boot", headers=auth_header).status_code == 200
+    taken = client.post(f"/v1/computer/{bot_id}/takeover", headers=auth_header)
+    assert taken.status_code == 200
+
+    real = app.state.computers.send_input
+
+    def slow_send_input(bot, kind, payload, lease_id=None):
+        time.sleep(0.45)
+        return real(bot, kind, payload, lease_id)
+
+    monkeypatch.setattr(app.state.computers, "send_input", slow_send_input)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as session:
+        started = time.monotonic()
+        typing = asyncio.create_task(
+            session.post(
+                f"/v1/computer/{bot_id}/input",
+                headers=auth_header,
+                json={
+                    "kind": "clipboard",
+                    "payload": {"text": "hello"},
+                    "lease_id": taken.json()["lease_id"],
+                },
+            )
+        )
+        await asyncio.sleep(0.05)
+        health = await session.get("/health")
+        waited = time.monotonic() - started
+        assert health.status_code == 200
+        assert waited < 0.25, f"health waited {waited:.2f}s behind a 0.45s input"
+        typed = await typing
+        assert typed.status_code == 200
+
+
+def test_computer_input_without_lease_id_is_422(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "LeaseBody", computer_mode="dedicated")["id"]
+    assert client.post(f"/v1/computer/{bot_id}/boot", headers=auth_header).status_code == 200
+    taken = client.post(f"/v1/computer/{bot_id}/takeover", headers=auth_header)
+    assert taken.status_code == 200
+    missing = client.post(
+        f"/v1/computer/{bot_id}/input",
+        headers=auth_header,
+        json={"kind": "key", "payload": {"text": "a"}},
+    )
+    assert missing.status_code == 422
+
+
+def test_late_input_save_does_not_resurrect_released_lease(
+    client, auth_header, monkeypatch
+) -> None:
+    from artek_buddy.main import app
+
+    bot_id = create_bot(client, auth_header, "StaleLease", computer_mode="dedicated")["id"]
+    assert client.post(f"/v1/computer/{bot_id}/boot", headers=auth_header).status_code == 200
+    taken = client.post(f"/v1/computer/{bot_id}/takeover", headers=auth_header)
+    assert taken.status_code == 200
+    lease_id = taken.json()["lease_id"]
+    boxes = app.state.computers
+    real_client_send = boxes.client.send_input
+    entered = threading.Event()
+    gate = threading.Event()
+
+    def blocked_send(provider_ref: str, kind: str, payload: dict) -> dict:
+        entered.set()
+        assert gate.wait(10)
+        return real_client_send(provider_ref, kind, payload)
+
+    monkeypatch.setattr(boxes.client, "send_input", blocked_send)
+    status_codes: list[int] = []
+
+    def type_away() -> None:
+        typed = client.post(
+            f"/v1/computer/{bot_id}/input",
+            headers=auth_header,
+            json={"kind": "key", "payload": {"text": "x"}, "lease_id": lease_id},
+        )
+        status_codes.append(typed.status_code)
+
+    worker = threading.Thread(target=type_away)
+    worker.start()
+    assert entered.wait(10)
+    released = client.post(f"/v1/computer/{bot_id}/release", headers=auth_header)
+    assert released.status_code == 200
+    gate.set()
+    worker.join(10)
+    assert not worker.is_alive()
+    bot = app.state.store.get_bot(bot_id)
+    record = app.state.store.get_computer_for_bot(bot)
+    assert record.control_holder != "user"
+    assert record.control_lease_id is None
+    after = client.get(f"/v1/computer/{bot_id}", headers=auth_header)
+    assert after.status_code == 200
+    assert after.json()["control_holder"] != "user"

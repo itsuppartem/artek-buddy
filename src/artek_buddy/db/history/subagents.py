@@ -15,6 +15,10 @@ from artek_buddy.db.shaping import (
 
 log = logging.getLogger("artek_buddy")
 
+ACTIVITY_KINDS = frozenset(
+    {"run_started", "tool_started", "tool_finished", "text", "clarification", "progress"}
+)
+
 
 class SubagentsMixin:
     def create_subagent(
@@ -59,6 +63,21 @@ class SubagentsMixin:
         if found is None:
             raise RuntimeError("failed to persist subagent")
         return found
+
+    def bot_latest_progress_posted_at(self, bot_id: str) -> str | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT MAX(progress_posted_at) AS posted_at
+                FROM subagents
+                WHERE bot_id = %s
+                """,
+                (bot_id,),
+            ).fetchone()
+            conn.commit()
+        if row is None or row.get("posted_at") is None:
+            return None
+        return parse_iso(row["posted_at"])
 
     def get_subagent(self, subagent_id: str) -> Subagent | None:
         with self._conn() as conn:
@@ -129,6 +148,9 @@ class SubagentsMixin:
         status: str | None = None,
         cursor_agent_id: str | None = None,
         progress: str | None = None,
+        progress_remaining: str | None = None,
+        progress_posted_at: str | None = None,
+        progress_posted_text: str | None = None,
         thinking: str | None = None,
         result: str | None = None,
         error: str | None = None,
@@ -146,6 +168,15 @@ class SubagentsMixin:
         if progress is not None:
             assignments.append("progress = %s")
             values.append(progress)
+        if progress_remaining is not None:
+            assignments.append("progress_remaining = %s")
+            values.append(progress_remaining)
+        if progress_posted_at is not None:
+            assignments.append("progress_posted_at = %s")
+            values.append(progress_posted_at)
+        if progress_posted_text is not None:
+            assignments.append("progress_posted_text = %s")
+            values.append(progress_posted_text)
         if thinking is not None:
             assignments.append("thinking = %s")
             values.append(thinking)
@@ -160,9 +191,17 @@ class SubagentsMixin:
             values.append(clarifications)
         if clear_output:
             assignments.append("progress = NULL")
+            assignments.append("progress_remaining = NULL")
+            assignments.append("progress_posted_at = NULL")
+            assignments.append("progress_posted_text = NULL")
             assignments.append("thinking = NULL")
             assignments.append("result = NULL")
             assignments.append("error = NULL")
+            assignments.append("last_activity_at = NULL")
+            assignments.append("activity_seq = 0")
+            assignments.append("last_activity_kind = NULL")
+            assignments.append("last_tool_name = NULL")
+            assignments.append("tool_running = FALSE")
         values.append(subagent_id)
         with self._conn() as conn:
             row = conn.execute(
@@ -184,10 +223,26 @@ class SubagentsMixin:
             task=row["task"],
             status=row["status"],
             progress=row.get("progress"),
+            progress_remaining=row.get("progress_remaining"),
+            progress_posted_at=(
+                parse_iso(row["progress_posted_at"]) if row.get("progress_posted_at") else None
+            ),
+            progress_posted_text=row.get("progress_posted_text"),
             thinking=row.get("thinking"),
             result=row.get("result"),
             error=row.get("error"),
             clarifications=row.get("clarifications"),
+            last_activity_at=(
+                parse_iso(row["last_activity_at"]) if row.get("last_activity_at") else None
+            ),
+            activity_seq=(
+                int(row["activity_seq"] or 0) if row.get("activity_seq") is not None else 0
+            ),
+            last_activity_kind=row.get("last_activity_kind"),
+            last_tool_name=row.get("last_tool_name"),
+            tool_running=(
+                bool(row["tool_running"]) if row.get("tool_running") is not None else False
+            ),
             created_at=parse_iso(row["created_at"]),
             updated_at=parse_iso(row["updated_at"]),
         )
@@ -201,4 +256,96 @@ class SubagentsMixin:
             return None
         previous = (found.clarifications or "").strip()
         merged = f"{previous}\n{note}".strip() if previous else note
-        return self.update_subagent(subagent_id, clarifications=merged)
+        updated = self.update_subagent(subagent_id, clarifications=merged)
+        if updated is not None:
+            self.record_subagent_activity(subagent_id, kind="clarification")
+            return self.get_subagent(subagent_id)
+        return updated
+
+    def take_new_clarifications(self, subagent_id: str) -> str | None:
+        found = self.get_subagent(subagent_id)
+        if found is None:
+            return None
+        blob = found.clarifications or ""
+        seen: dict[str, int] = getattr(self, "_clarification_seen", None) or {}
+        if not hasattr(self, "_clarification_seen"):
+            self._clarification_seen = seen
+        prior = seen.get(subagent_id, 0)
+        if len(blob) <= prior:
+            return None
+        note = blob[prior:].strip()
+        seen[subagent_id] = len(blob)
+        return note or None
+
+    def record_subagent_activity(
+        self,
+        subagent_id: str,
+        *,
+        kind: str,
+        tool_name: str | None = None,
+        tool_running: bool | None = None,
+    ) -> Subagent | None:
+        if kind not in ACTIVITY_KINDS:
+            return self.get_subagent(subagent_id)
+        name = (tool_name or "").strip()[:80] or None
+        now = isoformat_utc()
+        assignments = [
+            "updated_at = %s",
+            "last_activity_at = %s",
+            "activity_seq = activity_seq + 1",
+            "last_activity_kind = %s",
+        ]
+        values: list[Any] = [now, now, kind]
+        if name is not None:
+            assignments.append("last_tool_name = %s")
+            values.append(name)
+        if tool_running is not None:
+            assignments.append("tool_running = %s")
+            values.append(tool_running)
+        values.append(subagent_id)
+        with self._conn() as conn:
+            row = conn.execute(
+                f"""
+                UPDATE subagents SET {", ".join(assignments)}
+                WHERE id = %s AND status IN ('queued', 'running')
+                RETURNING *
+                """,
+                values,
+            ).fetchone()
+            conn.commit()
+        return self._subagent_from_row(row) if row else None
+
+    def cancel_subagent_row(
+        self,
+        subagent_id: str,
+        *,
+        owner: bool,
+        inspected_activity_seq: int | None,
+    ) -> Subagent | None:
+        now = isoformat_utc()
+        if owner:
+            query = """
+                UPDATE subagents
+                SET status = 'cancelled', error = 'stopped', tool_running = FALSE,
+                    updated_at = %s
+                WHERE id = %s AND status IN ('queued', 'running')
+                RETURNING *
+            """
+            params: tuple[Any, ...] = (now, subagent_id)
+        else:
+            if inspected_activity_seq is None:
+                return None
+            query = """
+                UPDATE subagents
+                SET status = 'cancelled', error = 'stopped', tool_running = FALSE,
+                    updated_at = %s
+                WHERE id = %s AND status IN ('queued', 'running')
+                  AND tool_running IS NOT TRUE
+                  AND activity_seq = %s
+                RETURNING *
+            """
+            params = (now, subagent_id, int(inspected_activity_seq))
+        with self._conn() as conn:
+            row = conn.execute(query, params).fetchone()
+            conn.commit()
+        return self._subagent_from_row(row) if row else None

@@ -35,7 +35,7 @@ def blocks_text(blocks: Iterable[Any] | None) -> str:
         if not isinstance(block, dict):
             continue
         kind = block.get("kind")
-        if kind in {"text", "meta", "progress", "computer"}:
+        if kind in {"text", "meta", "progress", "computer", "plugin"}:
             value = block.get("text")
             if value:
                 parts.append(str(value))
@@ -53,27 +53,19 @@ def blocks_text(blocks: Iterable[Any] | None) -> str:
 def strip_markdown(text: str) -> str:
     if not text:
         return ""
-    # Remove code blocks
-    s = re.sub(r"```[\s\S]*?```", "", text)
-    # Remove inline code
-    s = re.sub(r"`([^`]+)`", r"\1", s)
-    # Remove images ![alt](url) -> alt
-    s = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", s)
-    # Remove links [text](url) -> text
-    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
-    # Remove bold/italic: ***text***, **text**, *text*, ___text___, __text__, _text_
-    s = re.sub(r"(\*{1,3}|_{1,3})([^*_]+?)\1", r"\2", s)
-    # Remove strikethrough ~~text~~
-    s = re.sub(r"~~([^~]+)~~", r"\1", s)
-    # Remove header markers #, ##, ### at line starts
+    # Cap first so a long ask or user line cannot backtrack through these patterns.
+    s = text[:4000]
+    s = re.sub(r"```[\s\S]{0,2000}?```", "", s)
+    s = re.sub(r"`([^`]{1,400})`", r"\1", s)
+    s = re.sub(r"!\[([^\]\n]{0,200})\]\([^)\n]{1,400}\)", r"\1", s)
+    s = re.sub(r"\[([^\]\n]{1,200})\]\([^)\n]{1,400}\)", r"\1", s)
+    s = re.sub(r"(\*{1,3}|_{1,3})([^*_\n]{1,400})\1", r"\2", s)
+    s = re.sub(r"~~([^~\n]{1,400})~~", r"\1", s)
     s = re.sub(r"(?m)^#{1,6}\s+", "", s)
-    # Remove blockquotes >
     s = re.sub(r"(?m)^>\s*", "", s)
-    # Remove list bullets (*, -, +, 1.) at line starts
     s = re.sub(r"(?m)^(?:\s*[-*+]|\s*\d+\.)\s+", "", s)
-    # Remove HTML tags; repeat so nested leftovers cannot survive one pass.
     for _ in range(8):
-        nxt = re.sub(r"<[^>]*>", "", s)
+        nxt = re.sub(r"<[^>\n]{0,256}>", "", s)
         if nxt == s:
             break
         s = nxt
@@ -127,6 +119,26 @@ def product_run_status(sdk_status: str | None) -> str:
     if value in {"cancelled", "canceled"}:
         return "cancelled"
     return "failed"
+
+
+TURN_FAILED = "The turn failed."
+_RAW_RUN_FAILED = re.compile(r"^run failed: run-[0-9a-f-]+$", re.IGNORECASE)
+
+
+def is_raw_run_failed(text: str | None) -> bool:
+    return bool(_RAW_RUN_FAILED.match((text or "").strip()))
+
+
+def owner_visible_error(raw: str | None, run_id: str = "") -> str:
+    """Owner-facing run error. Never a raw `run failed: run-<uuid>` line."""
+    text = (raw or "").strip()
+    if not text:
+        return TURN_FAILED
+    if run_id and text == f"run failed: {run_id}":
+        return TURN_FAILED
+    if is_raw_run_failed(text) or text.startswith("run failed: run-"):
+        return TURN_FAILED
+    return text
 
 
 def isoformat_utc(value: datetime | None = None) -> str:

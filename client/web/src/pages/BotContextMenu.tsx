@@ -56,7 +56,7 @@ export function BotContextMenu({
       <div
         role="menu"
         aria-label={`Actions for ${bot.name}`}
-        className="fixed z-10 w-[264px] rounded-[18px] border border-[#343438] bg-[#1A1A1D] p-2 shadow-[0_24px_60px_rgba(0,0,0,.62)]"
+        className="fixed z-10 w-[264px] rounded-[12px] border border-hairline bg-plate p-2"
         style={{ left: Math.max(margin, left), top: Math.max(margin, top) }}
       >
         <MenuItem
@@ -67,13 +67,13 @@ export function BotContextMenu({
         />
         <MenuItem
           icon={<ReadStatusIcon unread={bot.unread} />}
-          label={bot.unread ? "Mark as Read" : "Mark as Unread"}
+          label={bot.unread ? "Mark as read" : "Mark as unread"}
           onSelect={onToggleUnread}
         />
-        <div className="my-1 border-t border-[#343438]" />
-        <MenuItem icon={<EditIcon />} label="Edit Profile" onSelect={onEdit} />
+        <div className="my-1 border-t border-hairline" />
+        <MenuItem icon={<EditIcon />} label="Edit profile" onSelect={onEdit} />
         <MenuItem icon={<DuplicateIcon />} label="Duplicate" onSelect={onDuplicate} />
-        <div className="my-1 border-t border-[#343438]" />
+        <div className="my-1 border-t border-hairline" />
         <MenuItem icon={<ArchiveIcon />} label="Archive" onSelect={onArchive} />
         <MenuItem icon={<TrashIcon />} label="Delete" tone="danger" onSelect={onDelete} />
       </div>
@@ -99,8 +99,8 @@ function MenuItem({
       ref={buttonRef}
       type="button"
       role="menuitem"
-      className={`flex w-full items-center gap-3 rounded-[11px] px-3 py-2.5 text-left text-[15px] outline-none hover:bg-[#29292D] focus-visible:bg-[#29292D] ${
-        tone === "danger" ? "text-[#FF5364]" : "text-[#ECECEE]"
+      className={`flex w-full items-center gap-3 rounded-[8px] px-3 py-2.5 text-left text-[15px] hover:bg-raised focus-visible:bg-raised ${
+        tone === "danger" ? "text-danger" : "text-paper"
       }`}
       onClick={onSelect}
     >
@@ -119,12 +119,11 @@ const iconProps = {
   strokeWidth: 1.8,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
-  "aria-hidden": true,
 };
 
 function PinIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z" />
     </svg>
   );
@@ -132,7 +131,7 @@ function PinIcon() {
 
 function EditIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
     </svg>
@@ -141,7 +140,7 @@ function EditIcon() {
 
 function ReadStatusIcon({ unread }: { unread: boolean }) {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
       {unread ? <circle cx="18" cy="5" r="3" fill="currentColor" stroke="none" /> : null}
     </svg>
@@ -150,7 +149,7 @@ function ReadStatusIcon({ unread }: { unread: boolean }) {
 
 function DuplicateIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <rect x="8" y="8" width="12" height="12" rx="2" />
       <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
     </svg>
@@ -159,7 +158,7 @@ function DuplicateIcon() {
 
 function TrashIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <path d="M3 6h18M8 6V4h8v2m-9 0 1 15h8l1-15M10 10v7m4-7v7" />
     </svg>
   );
@@ -167,7 +166,7 @@ function TrashIcon() {
 
 function ArchiveIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps} aria-hidden="true">
       <path d="M4 7h16v13H4zM3 4h18v3H3zM9 11h6" />
     </svg>
   );

@@ -91,8 +91,19 @@ class MemoryMixin:
                             now,
                         ),
                     )
+                    indexer = getattr(self, "_upsert_search_document_tx", None)
+                    if callable(indexer):
+                        indexer(
+                            conn,
+                            document_kind="memory",
+                            resource_id=bot_id or workspace_id,
+                            source_id=document_id,
+                            title=path_value,
+                            body=content,
+                        )
             except UniqueViolation as err:
                 raise MemoryConflict("memory document already exists") from err
+            conn.commit()
         return MemoryDocument(
             id=document_id,
             scope=scope_value,
@@ -237,7 +248,7 @@ class MemoryMixin:
                     UPDATE memory_documents
                     SET content = %s, revision = %s, updated_at = %s
                     WHERE id = %s
-                    RETURNING id, scope, bot_id, path, content, revision, updated_at
+                    RETURNING id, scope, bot_id, workspace_id, path, content, revision, updated_at
                     """,
                     (content, revision, now, document_id),
                 ).fetchone()
@@ -258,6 +269,18 @@ class MemoryMixin:
                         now,
                     ),
                 )
+                indexer = getattr(self, "_upsert_search_document_tx", None)
+                if callable(indexer) and row is not None:
+                    indexer(
+                        conn,
+                        document_kind="memory",
+                        resource_id=str(
+                            row["bot_id"] or row["workspace_id"] or DEFAULT_WORKSPACE_ID
+                        ),
+                        source_id=document_id,
+                        title=str(row["path"] or ""),
+                        body=content,
+                    )
         document = self._memory_from_row(row) if row else None
         if document is not None:
             linked = self.find_entry_by_document(document.id)
@@ -275,6 +298,9 @@ class MemoryMixin:
                 """,
                 (isoformat_utc(), document_id),
             )
+            tombstone = getattr(self, "_tombstone_search_source_tx", None)
+            if callable(tombstone):
+                tombstone(conn, "memory", document_id)
             row = conn.execute(
                 "DELETE FROM memory_documents WHERE id = %s RETURNING id",
                 (document_id,),

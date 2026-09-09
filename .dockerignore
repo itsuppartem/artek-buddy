@@ -5,3 +5,6 @@ data
 __pycache__
 *.pyc
 README.md
+client/web/node_modules
+client/web/dist
+workspace

@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import time
 
-from tests.api.helpers import create_bot, message_texts, wait_run, wait_run_status
+from tests.api.helpers import (
+    create_bot,
+    message_texts,
+    wait_pending_auto_jobs,
+    wait_run,
+    wait_run_status,
+    wait_thread_has,
+)
 
 
 def test_scripted_turn_happy(client, auth_header) -> None:
@@ -22,6 +29,29 @@ def test_scripted_turn_happy(client, auth_header) -> None:
     assert "bot" in roles
 
 
+def test_completed_event_carries_only_the_new_final_message(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "NotifyFinal")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "hello"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    wait_run(client, auth_header, bot_id, run_id)
+    completed = [
+        event
+        for event in client.app.state.hub.replay(bot_id)
+        if event.type.value == "run.completed" and event.run_id == run_id
+    ]
+    assert len(completed) == 1
+    message = completed[0].payload["message"]
+    assert message["role"] == "bot"
+    assert any(
+        block.get("kind") == "text" and block.get("text") == "ok" for block in message["blocks"]
+    )
+
+
 def test_scripted_turn_fail(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "ScriptedFail")["id"]
     sent = client.post(
@@ -34,7 +64,29 @@ def test_scripted_turn_fail(client, auth_header) -> None:
     assert payload.get("queued") is not True
     snap = wait_run(client, auth_header, bot_id, payload["run_id"])
     assert snap["run"]["status"] == "failed"
-    assert snap["run"].get("error")
+    assert snap["run"].get("error") == "scripted fail"
+    assert "run failed: run-" not in (snap["run"].get("error") or "")
+    assert "scripted fail" not in message_texts(snap)
+
+
+def test_scripted_turn_fail_raw_id_is_human(client, auth_header) -> None:
+    from artek_buddy.db.shaping import TURN_FAILED
+    from artek_buddy.runtime.scripted import E2E_FAIL_RAW_ERROR
+
+    bot_id = create_bot(client, auth_header, "ScriptedFailRaw")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-fail-raw now"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "failed"
+    assert snap["run"].get("error") == TURN_FAILED
+    assert E2E_FAIL_RAW_ERROR not in (snap["run"].get("error") or "")
+    blob = "\n".join(message_texts(snap))
+    assert "run failed: run-" not in blob
+    assert E2E_FAIL_RAW_ERROR not in blob
 
 
 def test_send_without_auth_is_401(client) -> None:
@@ -109,6 +161,48 @@ def test_stop_does_not_complete_cancelled_body(client, auth_header) -> None:
     assert later.status_code == 200
     assert later.json()["run"]["status"] == "cancelled"
     assert E2E_SLOW_ANSWER not in message_texts(later.json())
+
+
+def test_stop_late_complete_shows_stopped_and_drops_model_text(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_LATE_COMPLETE
+
+    bot_id = create_bot(client, auth_header, "StopLate")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-late-complete"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    stopped = client.post(f"/v1/threads/{bot_id}/stop", headers=auth_header)
+    assert stopped.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, run_id)
+    assert snap["run"]["status"] == "cancelled"
+    assert snap["run"]["error"] == "Stopped."
+    assert E2E_LATE_COMPLETE not in message_texts(snap)
+    time.sleep(3)
+    later = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert later.status_code == 200
+    assert later.json()["run"]["status"] == "cancelled"
+    assert later.json()["run"]["error"] == "Stopped."
+    assert E2E_LATE_COMPLETE not in message_texts(later.json())
+
+
+def test_e2e_takeover_parks_waiting_takeover(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "TakeoverPark")["id"]
+    parked = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-takeover"},
+    )
+    assert parked.status_code == 200
+    run_id = parked.json()["run_id"]
+    snap = wait_run_status(client, auth_header, bot_id, run_id, "waiting_takeover")
+    assert snap["run"]["status"] == "waiting_takeover"
+    listed = client.get(f"/v1/bots/{bot_id}", headers=auth_header)
+    assert listed.status_code == 200
+    assert listed.json()["status"] == "waiting_takeover"
+    assert "need you" not in message_texts(snap)
 
 
 def test_send_while_waiting_takeover_starts_turn(client, auth_header) -> None:
@@ -225,6 +319,44 @@ def test_turn_prompt_includes_thread_not_only_last_line(client, auth_header) -> 
     assert prompt.strip() != "continue"
 
 
+def test_new_session_gets_one_resume_brief_from_existing_thread(client, auth_header) -> None:
+    from artek_buddy.main import app
+
+    bot_id = create_bot(client, auth_header, "ResumeBrief")["id"]
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "the current branch is feature/rpc"},
+    )
+    assert first.status_code == 200
+    wait_run(client, auth_header, bot_id, first.json()["run_id"])
+    bot = app.state.store.get_bot(bot_id)
+    assert bot is not None
+    assert bot.cursor_agent_id
+    app.state.runtime.mark_session_fresh(bot.cursor_agent_id)
+
+    resumed = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "continue"},
+    )
+    assert resumed.status_code == 200
+    wait_run(client, auth_header, bot_id, resumed.json()["run_id"])
+    prompt = _last_prompt()
+    assert "<session_resume>" in prompt
+    assert "tool history from the replaced session is unavailable" in prompt
+    assert "the current branch is feature/rpc" in prompt
+
+    next_turn = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "continue once more"},
+    )
+    assert next_turn.status_code == 200
+    wait_run(client, auth_header, bot_id, next_turn.json()["run_id"])
+    assert "<session_resume>" not in _last_prompt()
+
+
 def test_follow_up_starts_a_new_turn(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "Follow")["id"]
     sent = client.post(
@@ -296,6 +428,7 @@ def test_auto_owner_read_exposes_pending_consent(client, auth_header) -> None:
     body = job.json()
     assert body["action_class"] == "owner_read"
     assert body["path"] == "notes.txt"
+    assert body["job_status"] == "queued"
     uploaded = client.post(
         f"/v1/consents/{pending}/file",
         headers=auth_header,
@@ -304,6 +437,223 @@ def test_auto_owner_read_exposes_pending_consent(client, auth_header) -> None:
     assert uploaded.status_code == 200
     finished = wait_run(client, auth_header, bot_id, run_id)
     assert finished["run"]["status"] == "completed"
+    completed = client.get(f"/v1/consents/{pending}", headers=auth_header)
+    assert completed.status_code == 200
+    assert completed.json()["job_status"] == "completed"
+
+
+def test_ask_user_answer_resumes_the_same_run_once(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "OwnerHelp")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-blocked-browser"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    waiting = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input", timeout=5)
+    pending = [
+        (message, block)
+        for message in waiting["messages"]
+        for block in message["blocks"]
+        if block.get("kind") == "ask"
+        and block.get("status") == "pending"
+        and not block.get("consent_id")
+    ]
+    assert len(pending) == 1
+    message, _block = pending[0]
+
+    answered = client.post(
+        f"/v1/threads/{bot_id}/answer",
+        headers=auth_header,
+        json={
+            "run_id": run_id,
+            "message_id": message["id"],
+            "answer": "I completed the step",
+        },
+    )
+    assert answered.status_code == 200, answered.text
+    duplicate = client.post(
+        f"/v1/threads/{bot_id}/answer",
+        headers=auth_header,
+        json={
+            "run_id": run_id,
+            "message_id": message["id"],
+            "answer": "second answer",
+        },
+    )
+    assert duplicate.status_code == 409
+
+    finished = wait_run(client, auth_header, bot_id, run_id)
+    assert finished["run"]["id"] == run_id
+    assert finished["run"]["status"] == "completed"
+    answered_message = next(item for item in finished["messages"] if item["id"] == message["id"])
+    answered_block = next(
+        block for block in answered_message["blocks"] if block.get("kind") == "ask"
+    )
+    assert answered_block["status"] == "answered"
+    assert answered_block["answer"] == "I completed the step"
+    assert any(
+        block.get("kind") == "text" and "continued after your help" in block.get("text", "")
+        for item in finished["messages"]
+        for block in item["blocks"]
+    )
+
+
+def test_thread_snapshot_exposes_every_pending_auto_owner_job(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "ParallelAutoRead")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "e2e-consent-auto-read"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    waiting = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input", timeout=5)
+    first_id = waiting["pending_auto_consent_id"]
+    assert first_id
+
+    store = client.app.state.store
+    bot = store.get_bot(bot_id)
+    assert bot is not None
+    second_id = "cns_parallel_snapshot"
+    store.create_consent_request(
+        second_id,
+        bot_id=bot_id,
+        run_id=run_id,
+        thread_id=bot.thread_id,
+        message_id=None,
+        action_class="owner_read",
+        scope_key="~",
+        summary="List ~ on your computer?",
+        workspace_id=bot.workspace_id,
+        job_status="queued",
+    )
+
+    snapshot = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert snapshot.status_code == 200
+    assert set(snapshot.json()["pending_auto_consent_ids"]) == {first_id, second_id}
+    assert store.finish_consent_job(second_id, "completed")
+    uploaded = client.post(
+        f"/v1/consents/{first_id}/result",
+        headers=auth_header,
+        json={"ok": True, "text": "notes from owner"},
+    )
+    assert uploaded.status_code == 200
+    assert wait_run(client, auth_header, bot_id, run_id)["run"]["status"] == "completed"
+
+
+def test_worker_auto_owner_job_survives_thread_reload(client, auth_header) -> None:
+    """A worker This-PC read must remain on snapshot after the lead run completes (#361)."""
+    from artek_buddy.runtime.scripted import E2E_WORKER_ACK, E2E_WORKER_SUMMARY
+
+    bot_id = create_bot(client, auth_header, "WorkerAutoReload")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-worker-auto-read"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    lead = wait_run(client, auth_header, bot_id, run_id)
+    assert lead["run"]["status"] == "completed"
+    assert E2E_WORKER_ACK in message_texts(lead)
+
+    snap = wait_pending_auto_jobs(client, auth_header, bot_id)
+    consent_id = snap["pending_auto_consent_id"]
+    assert consent_id
+    assert consent_id in snap["pending_auto_consent_ids"]
+    job = client.get(f"/v1/consents/{consent_id}", headers=auth_header)
+    assert job.status_code == 200
+    body = job.json()
+    assert body["action_class"] == "owner_read"
+    assert body["job_status"] == "queued"
+    stored = client.app.state.store.get_consent_request(consent_id)
+    assert stored is not None
+    assert stored.run_id != run_id
+    assert stored.parent_run_id == run_id
+
+    claimed = client.post(
+        f"/v1/consents/{consent_id}/ack",
+        headers=auth_header,
+        json={"claim_capable": True},
+    )
+    assert claimed.status_code == 200
+    claim = claimed.json().get("claim")
+    assert isinstance(claim, str) and claim
+    duplicate = client.post(f"/v1/consents/{consent_id}/ack", headers=auth_header)
+    assert duplicate.status_code == 409
+    loser = client.post(
+        f"/v1/consents/{consent_id}/result",
+        headers=auth_header,
+        json={"ok": False, "error": "no paired client"},
+    )
+    assert loser.status_code == 409
+    uploaded = client.post(
+        f"/v1/consents/{consent_id}/file",
+        headers=auth_header,
+        json={"name": "notes.txt", "text": "notes from owner", "claim": claim},
+    )
+    assert uploaded.status_code == 200
+    done = wait_thread_has(client, auth_header, bot_id, E2E_WORKER_SUMMARY, timeout=20)
+    workers = [
+        item for item in (done.get("subagents") or []) if item.get("name") == "WorkerAutoRead"
+    ]
+    assert workers and workers[0]["status"] == "completed"
+    assert "got notes" in (workers[0].get("result") or "")
+    finished = client.get(f"/v1/consents/{consent_id}", headers=auth_header)
+    assert finished.status_code == 200
+    assert finished.json()["job_status"] == "completed"
+    final_snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert final_snap.status_code == 200
+    assert final_snap.json()["pending_auto_consent_id"] is None
+
+
+def test_auto_owner_job_ack_is_single_claim_and_rejects_loser_result(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "AutoAck")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "e2e-consent-auto-read"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    snap = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input", timeout=5)
+    consent_id = snap["pending_auto_consent_id"]
+    assert consent_id
+
+    claimed = client.post(
+        f"/v1/consents/{consent_id}/ack",
+        headers=auth_header,
+        json={"claim_capable": True},
+    )
+    assert claimed.status_code == 200
+    claim = claimed.json().get("claim")
+    assert isinstance(claim, str) and claim
+    duplicate = client.post(f"/v1/consents/{consent_id}/ack", headers=auth_header)
+    assert duplicate.status_code == 409
+    acknowledged = client.get(f"/v1/consents/{consent_id}", headers=auth_header)
+    assert acknowledged.status_code == 200
+    assert acknowledged.json()["job_status"] == "acknowledged"
+
+    loser = client.post(
+        f"/v1/consents/{consent_id}/result",
+        headers=auth_header,
+        json={"ok": False, "error": "owner read failed"},
+    )
+    assert loser.status_code == 409
+    uploaded = client.post(
+        f"/v1/consents/{consent_id}/result",
+        headers=auth_header,
+        json={"ok": True, "text": "notes from owner", "claim": claim},
+    )
+    assert uploaded.status_code == 200
+
+    finished = wait_run(client, auth_header, bot_id, run_id)
+    assert finished["run"]["status"] == "completed"
+    final_snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert final_snap.status_code == 200
+    assert final_snap.json()["pending_auto_consent_id"] is None
 
 
 def _computer_blocks(payload: dict) -> list[dict]:
@@ -440,6 +790,138 @@ def test_single_auth_error_does_not_recycle_the_bridge(client, auth_header) -> N
     done = wait_run(client, auth_header, bot_id, nxt.json()["run_id"])
     assert done["run"]["status"] == "completed"
     assert app.state.runtime.bridge_recycles == 0
+
+
+def test_dead_wait_retries_same_send(client, auth_header) -> None:
+    from artek_buddy.main import app
+    from artek_buddy.runtime.cursor_wait import DEAD_WAIT_NEXT_STEP
+
+    bot_id = create_bot(client, auth_header, "WaitDead")["id"]
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "hello"},
+    )
+    assert first.status_code == 200
+    done = wait_run(client, auth_header, bot_id, first.json()["run_id"])
+    assert done["run"]["status"] == "completed"
+    assert app.state.runtime.bridge_recycles == 0
+    dead = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-dead-wait"},
+    )
+    assert dead.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, dead.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    assert not snap["run"].get("error")
+    assert DEAD_WAIT_NEXT_STEP not in (snap["run"].get("error") or "")
+    assert "Send again" not in "\n".join(message_texts(snap))
+    assert "ok" in message_texts(snap)
+    assert app.state.runtime.bridge_recycles == 1
+
+
+def test_dead_wait_stuck_still_fails_once(client, auth_header) -> None:
+    from artek_buddy.main import app
+    from artek_buddy.runtime.cursor_wait import DEAD_WAIT_NEXT_STEP
+
+    bot_id = create_bot(client, auth_header, "WaitStuck")["id"]
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "hello"},
+    )
+    assert first.status_code == 200
+    wait_run(client, auth_header, bot_id, first.json()["run_id"])
+    stuck = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-dead-wait-stuck"},
+    )
+    assert stuck.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, stuck.json()["run_id"])
+    assert snap["run"]["status"] == "failed"
+    assert snap["run"].get("error") == DEAD_WAIT_NEXT_STEP
+    assert "Send again" in (snap["run"].get("error") or "")
+    assert app.state.runtime.bridge_recycles == 1
+    nxt = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "hello"},
+    )
+    assert nxt.status_code == 200
+    recovered = wait_run(client, auth_header, bot_id, nxt.json()["run_id"])
+    assert recovered["run"]["status"] == "completed"
+    assert "ok" in message_texts(recovered)
+
+
+def test_distinct_finish_after_send_message_is_kept(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_SEND_ANSWER, E2E_SEND_TEASER
+
+    bot_id = create_bot(client, auth_header, "SendThenAnswer")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-send-then-answer"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    assert snap.get("run") and not snap["run"].get("error")
+    texts = message_texts(snap)
+    assert texts.count(E2E_SEND_TEASER) == 1
+    assert texts.count(E2E_SEND_ANSWER) == 1
+    assert texts.index(E2E_SEND_TEASER) < texts.index(E2E_SEND_ANSWER)
+
+    reloaded = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert reloaded.status_code == 200
+    again = message_texts(reloaded.json())
+    assert again.count(E2E_SEND_TEASER) == 1
+    assert again.count(E2E_SEND_ANSWER) == 1
+    assert again.index(E2E_SEND_TEASER) < again.index(E2E_SEND_ANSWER)
+
+
+def test_terminal_send_message_suppresses_paraphrased_finish(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_SEND_PARAPHRASE, E2E_SEND_TERMINAL
+
+    bot_id = create_bot(client, auth_header, "SendTerminal")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-send-terminal"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    assert not snap["run"].get("error")
+    bot_messages = [message for message in snap["messages"] if message["role"] == "bot"]
+    assert len(bot_messages) == 1
+    assert message_texts({"messages": bot_messages}) == [E2E_SEND_TERMINAL]
+    assert E2E_SEND_PARAPHRASE not in message_texts(snap)
+
+    reloaded = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+    assert reloaded.status_code == 200
+    persisted = reloaded.json()
+    bot_messages = [message for message in persisted["messages"] if message["role"] == "bot"]
+    assert len(bot_messages) == 1
+    assert message_texts({"messages": bot_messages}) == [E2E_SEND_TERMINAL]
+    assert E2E_SEND_PARAPHRASE not in message_texts(persisted)
+
+
+def test_identical_finish_after_send_message_is_not_duplicated(client, auth_header) -> None:
+    from artek_buddy.runtime.scripted import E2E_SEND_TEASER
+
+    bot_id = create_bot(client, auth_header, "SendThenRepeat")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-send-then-repeat"},
+    )
+    assert sent.status_code == 200
+    snap = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert snap["run"]["status"] == "completed"
+    texts = message_texts(snap)
+    assert texts.count(E2E_SEND_TEASER) == 1
 
 
 def test_completed_run_does_not_recycle_the_bridge(client, auth_header) -> None:

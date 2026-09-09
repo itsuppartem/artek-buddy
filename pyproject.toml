@@ -4,32 +4,36 @@ build-backend = "hatchling.build"
 
 [project]
 name = "artek-buddy"
-version = "0.10.27"
-description = "Self-hosted AI agent host for a Raspberry Pi"
+version = "0.2.0"
+description = "Self-hosted AI agent host for Linux (PC, server, or Raspberry Pi)"
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "Apache-2.0" }
 authors = [{ name = "itsuppartem" }]
 dependencies = [
-    "cursor-sdk==1.0.28",
-    "fastapi==0.116.1",
-    "uvicorn[standard]==0.35.0",
-    "pydantic-settings==2.10.1",
+    "cursor-sdk==1.0.30",
+    "fastapi==0.141.1",
+    "starlette==1.6.0",
+    "uvicorn[standard]==0.52.4",
+    "pydantic-settings==2.15.0",
     "psycopg[binary,pool]==3.3.4",
-    "playwright>=1.40.0",
+    "playwright==1.62.0",
 ]
+
+[project.scripts]
+artek-buddy = "artek_buddy.__main__:main"
 
 [project.optional-dependencies]
 dev = [
-    "pytest==8.4.1",
-    "pytest-asyncio==1.1.0",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
     "httpx==0.28.1",
-    "playwright==1.55.0",
-    "pytest-playwright==0.7.0",
+    "playwright==1.62.0",
+    "pytest-playwright==0.9.0",
     "pytest-timeout==2.4.0",
     "pytest-cov==7.1.0",
-    "hypothesis==6.165.10",
-    "ruff==0.16.4",
+    "hypothesis==6.167.0",
+    "ruff==0.16.5",
     "mypy==2.3.1",
     "pip-audit==2.10.1",
 ]
@@ -47,6 +51,8 @@ select = [
     "F",
     "I",
     "UP",
+    "B",
+    "S",
 ]
 ignore = [
     "E501",
@@ -55,8 +61,42 @@ ignore = [
     "UP042",
 ]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI injects these as default arguments; they are not mutable-default bugs.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.params.Depends",
+    "fastapi.params.Query",
+    "fastapi.params.Header",
+    "fastapi.params.Cookie",
+]
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["F841"]
+# Baseline 2026-09-03 (#151): drop a code here when that file is cleaned.
+"tests/**" = ["F841", "S101", "S105", "S106", "S108", "S310", "S602", "S603", "S607"]
+"client/clipboard_image.py" = ["S110"]
+"client/notifications.py" = ["S110", "S603"]
+"client/owner_paths.py" = ["S105"]
+"client/proxy_rpc.py" = ["S602", "S604"]
+"client/ssh_mux.py" = ["S108", "S603"]
+"client/window.py" = ["S110"]
+"client/window_chrome.py" = ["S110", "S112"]
+"src/artek_buddy/book_fetch.py" = ["S310"]
+"src/artek_buddy/computer/client.py" = ["S310"]
+"src/artek_buddy/computer/proxy.py" = ["S110", "S310"]
+"src/artek_buddy/config.py" = ["S104"]
+"src/artek_buddy/db/history/memory.py" = ["S608"]
+"src/artek_buddy/db/history/store.py" = ["S110"]
+"src/artek_buddy/db/history/subagents.py" = ["S608"]
+"src/artek_buddy/http/connections.py" = ["S110"]
+"src/artek_buddy/memory_gateway.py" = ["S310"]
+"src/artek_buddy/supervisor/desktop_spec.py" = ["S108"]
+"src/artek_buddy/supervisor/logic.py" = ["S105", "S108"]
+"src/artek_buddy/supervisor/server.py" = ["S108", "S110"]
+"src/artek_buddy/worker.py" = ["S310"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["artek_buddy"]
@@ -67,9 +107,28 @@ mypy_path = "src"
 packages = ["artek_buddy"]
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
-# Baseline 2026-08-22: 205 errors, almost all mixin/Protocol attr-defined.
-# Tighten these codes in a later PR; do not silently re-enable a failing tree.
+# Baseline 2026-09-03: 295 errors with these four codes re-enabled
+# (268 attr-defined, 15 arg-type, 7 union-attr, 5 assignment). Almost all
+# remaining attr-defined are HistoryStore mixins (`_conn`) and runtime tool
+# Protocol attributes. client/ is not in `packages`.
 disable_error_code = [
+    "attr-defined",
+    "arg-type",
+    "union-attr",
+    "assignment",
+]
+
+[[tool.mypy.overrides]]
+# #142: auth, owner jail, and the migration runner are clean for the
+# globally disabled codes. quality fails if these modules regress.
+module = [
+    "artek_buddy.auth",
+    "artek_buddy.fs_jail",
+    "artek_buddy.db.connection",
+    "artek_buddy.db.sql_split",
+    "artek_buddy.db.history.store",
+]
+enable_error_code = [
     "attr-defined",
     "arg-type",
     "union-attr",
@@ -80,10 +139,28 @@ disable_error_code = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
-    "live: installed .deb against an ephemeral compose stack",
-    "model: Cursor/Grok turn (needs CURSOR_API_KEY; skipped on the ui job)",
+    "live: Playwright against an ephemeral compose stack (.deb --serve or host page)",
+    "model: Cursor/Grok turn (needs CURSOR_API_KEY; skipped on the ui and ui_web jobs)",
+    "no_model_seed: do not attach a default model for this API test",
 ]
-filterwarnings = ["ignore::DeprecationWarning"]
+filterwarnings = [
+    "error::DeprecationWarning:artek_buddy",
+    "error::DeprecationWarning:artek_buddy_client",
+    "error::DeprecationWarning:clipboard_image",
+    "error::DeprecationWarning:notifications",
+    "error::DeprecationWarning:owner_paths",
+    "error::DeprecationWarning:pairing",
+    "error::DeprecationWarning:proxy",
+    "error::DeprecationWarning:proxy_common",
+    "error::DeprecationWarning:proxy_rpc",
+    "error::DeprecationWarning:proxy_static",
+    "error::DeprecationWarning:proxy_upstream",
+    "error::DeprecationWarning:ssh_mux",
+    "error::DeprecationWarning:tray",
+    "error::DeprecationWarning:web_paths",
+    "error::DeprecationWarning:window",
+    "error::DeprecationWarning:window_chrome",
+]
 addopts = "-q --tb=short"
 timeout = 60
 timeout_method = "thread"
@@ -96,5 +173,15 @@ omit = ["*/tests/*"]
 [tool.coverage.report]
 skip_empty = true
 show_missing = false
-# Measured 2026-08-22 on backend (unit+api+client, --cov-branch): TOTAL 56%.
-fail_under = 56
+# Measured 2026-09-03 on backend (unit+api+client, --cov-branch): TOTAL 71%.
+fail_under = 71
+
+# coverage.py has one global fail_under. Module floors are enforced in the
+# backend job from this table (#143).
+[tool.artek.coverage_floors]
+"src/artek_buddy/auth.py" = 100
+"src/artek_buddy/fs_jail.py" = 80
+"src/artek_buddy/db/connection.py" = 100
+"src/artek_buddy/db/sql_split.py" = 75
+"src/artek_buddy/db/history/store.py" = 80
+"src/artek_buddy/supervisor/logic.py" = 60

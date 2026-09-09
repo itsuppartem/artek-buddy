@@ -35,6 +35,7 @@
       const url = `${protocol}://${window.location.host}${prefix}${path}`;
       const rfb = new RFB(document.getElementById("screen"), url);
       rfb.viewOnly = flag("view_only");
+      rfb.compressionLevel = 1;
       rfb.scaleViewport = true;
       rfb.clipViewport = false;
       const CAPS = 0xffe5;
@@ -48,6 +49,12 @@
           if (event.key !== "CapsLock") return;
           event.preventDefault();
           if (typeof rfb.sendKey === "function") rfb.sendKey(CAPS, "CapsLock", false);
+        });
+        window.addEventListener("paste", (event) => {
+          const text = event.clipboardData?.getData("text/plain");
+          if (text && typeof rfb.clipboardPasteFrom === "function") {
+            rfb.clipboardPasteFrom(text);
+          }
         });
       }
     </script>

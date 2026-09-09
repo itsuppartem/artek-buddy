@@ -8,6 +8,7 @@ import type {
   ThreadMessagePage,
   ThreadSnapshot,
 } from "../types";
+import { isRawRunFailed } from "./run-error";
 
 const computerStates = new Set<ComputerStatus["state"]>([
   "stopped",
@@ -26,17 +27,20 @@ export function mergeThreadSnapshot(
 ): ThreadSnapshot {
   if (!prev || prev.threadId !== next.threadId) return mergeSubagentCards(next, prev);
   const seen = new Set(next.messages.map((message) => message.id));
-  const older = preserveLoadedHistory
-    ? prev.messages.filter((message) => !seen.has(message.id) && !isLive(message.id))
-    : [];
+  const retained = prev.messages.filter(
+    (message) =>
+      !seen.has(message.id) &&
+      !isLive(message.id) &&
+      (preserveLoadedHistory || message.seq > next.cursor),
+  );
   const live = isActiveRun(next.run?.status)
     ? prev.messages.filter((message) => isLive(message.id) && !seen.has(message.id))
     : [];
-  if (!older.length && !live.length) return mergeSubagentCards(next, prev);
+  if (!retained.length && !live.length) return mergeSubagentCards(next, prev);
   return mergeSubagentCards(
     {
       ...next,
-      messages: [...older, ...next.messages, ...live].sort((a, b) => a.seq - b.seq),
+      messages: [...retained, ...next.messages, ...live].sort((a, b) => a.seq - b.seq),
     },
     prev,
   );
@@ -98,6 +102,29 @@ export function reduceThreadSnapshot(
       pendingAutoConsentId: autoId,
     };
   }
+  if (event.type === "computer.takeover.requested") {
+    const run = prev.run;
+    const runId = event.runId || run?.id || "";
+    return {
+      ...prev,
+      cursor: event.seq,
+      run: run
+        ? { ...run, id: event.runId || run.id, status: "waiting_takeover" }
+        : {
+            id: runId,
+            botId: prev.botId,
+            threadId: prev.threadId,
+            taskId: "",
+            status: "waiting_takeover",
+            trigger: "user",
+            modelProvider: "",
+            modelId: "",
+            startedAt: new Date().toISOString(),
+            completedAt: null,
+            error: null,
+          },
+    };
+  }
   if (
     event.type === "run.completed" ||
     event.type === "run.failed" ||
@@ -142,6 +169,9 @@ export function reduceThreadSnapshot(
     return { ...prev, cursor: event.seq, messages: replaceLive(prev.messages, streaming) };
   }
   if (event.type === "thread.message.updated") {
+    if (prev.run?.status === "cancelled") {
+      return { ...prev, cursor: event.seq };
+    }
     const liveId = liveMessageId("stream", event.runId);
     const text = progressText(event.payload, liveText(prev.messages, liveId));
     const streaming: ThreadMessage = {
@@ -157,6 +187,15 @@ export function reduceThreadSnapshot(
   }
   if (event.type === "thread.message.created") {
     const raw = asRecord(event.payload.message) ?? event.payload;
+    const createdRunId = str(raw.runId) || event.runId;
+    if (
+      prev.run?.status === "cancelled" &&
+      createdRunId === prev.run.id &&
+      raw.role !== "user" &&
+      raw.role !== "system"
+    ) {
+      return { ...prev, cursor: event.seq };
+    }
     const blocks = normalizeBlocks(raw.blocks) ?? textBlocks(raw);
     if (!blocks.length) return { ...prev, cursor: event.seq };
     const replyTo = asReply(raw.replyTo ?? raw.reply_to);
@@ -173,7 +212,7 @@ export function reduceThreadSnapshot(
     };
     const without = prev.messages.filter((message) => {
       if (message.id === next.id) return false;
-      if (next.role === "user") return true;
+      if (next.role === "user" || !next.runId) return true;
       return !isLiveForRun(message, next.runId);
     });
     return { ...prev, cursor: event.seq, messages: [...without, next] };
@@ -203,6 +242,7 @@ export function reduceThreadSnapshot(
     const index = num(event.payload.index) || null;
     const clarifications =
       event.payload.clarifications != null ? str(event.payload.clarifications) : null;
+    const remainingRaw = event.payload.progress_remaining ?? event.payload.progressRemaining;
     const next: ThreadMessage = {
       id: `subagent:${agentId}`,
       threadId: event.threadId,
@@ -226,7 +266,19 @@ export function reduceThreadSnapshot(
       createdAt: event.createdAt,
     };
     const without = prev.messages.filter((message) => message.id !== next.id);
-    return { ...prev, cursor: event.seq, messages: [...without, next] };
+    return {
+      ...prev,
+      cursor: event.seq,
+      messages: [...without, next],
+      subagents: upsertSubagent(prev, event, {
+        agentId,
+        name,
+        task,
+        status,
+        progress,
+        remainingRaw,
+      }),
+    };
   }
   if (event.type === "bot.spawned") {
     const botId = str(event.payload.bot_id) || str(event.payload.botId) || str(event.id);
@@ -256,12 +308,18 @@ export function reduceComputerStatus(
 ): ComputerStatus | null {
   if (!prev || !isComputerStatusEvent(event)) return prev;
   if (event.type === "computer.takeover.granted") {
-    return { ...prev, controlHolder: "user" };
+    const lease = event.payload.leaseId ?? event.payload.lease_id;
+    return {
+      ...prev,
+      controlHolder: "user",
+      controlLeaseId: typeof lease === "string" ? lease : prev.controlLeaseId,
+    };
   }
   if (event.type === "computer.takeover.released" || event.type === "computer.takeover.requested") {
     return {
       ...prev,
       controlHolder: event.type === "computer.takeover.requested" ? "none" : "bot",
+      controlLeaseId: null,
     };
   }
   const status = event.payload.status ?? event.payload.state;
@@ -282,6 +340,12 @@ export function reduceComputerStatus(
   }
   if (holder === "user" || holder === "bot" || holder === "none") {
     next.controlHolder = holder;
+  }
+  const lease = event.payload.controlLeaseId ?? event.payload.control_lease_id;
+  if (holder === "bot" || holder === "none") {
+    next.controlLeaseId = null;
+  } else if (lease === null || typeof lease === "string") {
+    next.controlLeaseId = lease as string | null;
   }
   if (typeof event.payload.screenAvailable === "boolean") {
     next.screenAvailable = event.payload.screenAvailable;
@@ -384,16 +448,121 @@ export function isHiddenLiveDraft(message: ThreadMessage): boolean {
   return isLiveMessageId(message.id);
 }
 
+export function canAnswerOwnerPrompt(
+  message: ThreadMessage,
+  run: { id: string; status: string } | null | undefined,
+): boolean {
+  const pendingConsent = message.blocks.some(
+    (block) =>
+      block.kind === "ask" && Boolean(block.consentId) && (block.status ?? "pending") === "pending",
+  );
+  if (pendingConsent) {
+    return true;
+  }
+  const pendingQuestion = message.blocks.some(
+    (block) =>
+      block.kind === "ask" && !block.consentId && (block.status ?? "pending") === "pending",
+  );
+  return (
+    pendingQuestion &&
+    (run?.status === "running" || run?.status === "waiting_input") &&
+    Boolean(message.runId) &&
+    message.runId === run.id
+  );
+}
+
 export function isToolNoise(message: ThreadMessage): boolean {
   if (message.id.startsWith("tool:") || message.id.startsWith("comp:")) return true;
+  if (message.id.startsWith("subagent:")) return true;
+  if (message.blocks.length > 0 && message.blocks.every((block) => block.kind === "subagent")) {
+    return true;
+  }
   if (message.blocks.length > 0 && message.blocks.every((block) => block.kind === "computer")) {
     return message.blocks.every((block) => !("text" in block && String(block.text || "").trim()));
   }
   return false;
 }
 
+export function isRawRunFailedMessage(message: ThreadMessage): boolean {
+  if (message.role !== "bot") return false;
+  if (message.blocks.length === 0) return false;
+  const texts: string[] = [];
+  for (const block of message.blocks) {
+    if (block.kind !== "text" || !("text" in block)) return false;
+    texts.push(String(block.text || "").trim());
+  }
+  return texts.length > 0 && texts.every((text) => isRawRunFailed(text));
+}
+
 function isLive(id: string): boolean {
   return isLiveMessageId(id);
+}
+
+function optionalStr(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value == null) return null;
+  return str(value) || null;
+}
+
+function upsertSubagent(
+  prev: ThreadSnapshot,
+  event: ProductEvent,
+  patch: {
+    agentId: string;
+    name: string;
+    task: string;
+    status: NonNullable<Extract<MessageBlock, { kind: "subagent" }>["status"]>;
+    progress: string | null;
+    remainingRaw: unknown;
+  },
+): Subagent[] {
+  const existing = (prev.subagents ?? []).find((row) => row.id === patch.agentId);
+  const seqRaw = event.payload.activity_seq ?? event.payload.activitySeq;
+  const remaining =
+    patch.remainingRaw === undefined
+      ? (existing?.progressRemaining ?? null)
+      : (optionalStr(patch.remainingRaw) ?? null);
+  const lastActivityAt =
+    str(event.payload.last_activity_at) ||
+    str(event.payload.lastActivityAt) ||
+    existing?.lastActivityAt ||
+    event.createdAt;
+  const row: Subagent = {
+    id: patch.agentId,
+    botId: existing?.botId || prev.botId,
+    threadId: existing?.threadId || event.threadId,
+    parentRunId: existing?.parentRunId || event.runId || null,
+    cursorAgentId: existing?.cursorAgentId ?? null,
+    index: num(event.payload.index) || existing?.index || 0,
+    name: patch.name,
+    task: patch.task || existing?.task || "",
+    status: patch.status,
+    progress: patch.progress,
+    progressRemaining: remaining,
+    progressPostedAt: existing?.progressPostedAt ?? null,
+    progressPostedText: existing?.progressPostedText ?? null,
+    thinking:
+      event.payload.thinking === undefined
+        ? (existing?.thinking ?? null)
+        : (optionalStr(event.payload.thinking) ?? null),
+    result:
+      event.payload.result === undefined
+        ? (existing?.result ?? null)
+        : (optionalStr(event.payload.result) ?? null),
+    error: existing?.error ?? null,
+    clarifications:
+      event.payload.clarifications === undefined
+        ? (existing?.clarifications ?? null)
+        : (optionalStr(event.payload.clarifications) ?? null),
+    lastActivityAt,
+    activitySeq: typeof seqRaw === "number" ? seqRaw : (existing?.activitySeq ?? 0),
+    lastActivityKind: existing?.lastActivityKind ?? null,
+    lastToolName: existing?.lastToolName ?? null,
+    toolRunning: existing?.toolRunning ?? false,
+    createdAt: existing?.createdAt || event.createdAt,
+    updatedAt: event.createdAt,
+  };
+  return [...(prev.subagents ?? []).filter((item) => item.id !== patch.agentId), row];
 }
 
 function isLiveForRun(message: ThreadMessage, runId?: string | null): boolean {

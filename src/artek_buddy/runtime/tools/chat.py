@@ -5,6 +5,13 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from artek_buddy.bot_asks import (
+    BotAskError,
+    asked_card_blocks,
+    normalize_question,
+    resolve_ask,
+)
+from artek_buddy.bot_credentials import PASTED_CREDENTIAL_DETAIL, looks_like_pasted_credential
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.db.shaping import isoformat_utc, new_id
 from artek_buddy.runtime.tools.common import (
@@ -13,6 +20,7 @@ from artek_buddy.runtime.tools.common import (
     _is_under,
     _safe_filename,
     log,
+    map_desktop_home_path,
 )
 
 
@@ -22,6 +30,8 @@ class ChatToolsMixin:
         path = str(args.get("path") or "").strip()
         if not content:
             return {"ok": False, "error": "content cannot be empty"}
+        if looks_like_pasted_credential(content):
+            return {"ok": False, "error": PASTED_CREDENTIAL_DETAIL}
         bot_id, run_id, thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         forget = bool(args.get("forget"))
         kind = str(args.get("kind") or "preference")
@@ -36,7 +46,18 @@ class ChatToolsMixin:
             try:
                 if forget:
                     removed = hub.forget(content, bot_id=bot_id)
-                    return {"ok": True, "forgotten": removed}
+                    if removed:
+                        self._remember_meta(
+                            args,
+                            bound_bot_id,
+                            f"Forgot: {content}" if content else "Forgot a saved note",
+                            fact=content,
+                        )
+                        self._publish_memory_revised(
+                            bound_bot_id,
+                            {"forgotten": True, "text": content[:160]},
+                        )
+                    return {"ok": True, "forgotten": removed, "saved": False}
                 entry = hub.capture(
                     content,
                     kind=kind,
@@ -45,16 +66,34 @@ class ChatToolsMixin:
                     source="remember",
                     run_id=run_id,
                     thread_id=thread_id,
-                    slot=str(args.get("slot") or "") or None,
+                    slot=str(args.get("section") or args.get("slot") or "") or None,
                 )
                 if entry is None:
                     return {"ok": True, "saved": False}
+                self._remember_meta(
+                    args,
+                    bound_bot_id,
+                    f"Remembered: {entry.text}".strip() or "Remembered a note",
+                    fact=entry.text,
+                )
+                self._publish_memory_revised(
+                    bound_bot_id,
+                    {
+                        "document_id": entry.document_id,
+                        "scope": entry.scope,
+                        "kind": entry.kind,
+                        "section": entry.slot,
+                        "text": (entry.text or "")[:160],
+                    },
+                )
                 return {
                     "ok": True,
+                    "saved": True,
                     "entry_id": entry.id,
                     "document_id": entry.document_id,
                     "scope": entry.scope,
                     "kind": entry.kind,
+                    "section": entry.slot,
                 }
             except Exception as exc:
                 log.exception("failed to save memory in remember tool")
@@ -78,6 +117,22 @@ class ChatToolsMixin:
                     source_run_id=run_id,
                     source_thread_id=thread_id,
                 )
+                self._remember_meta(
+                    args,
+                    bound_bot_id,
+                    f"Remembered: {content}".strip() or "Remembered a note",
+                    fact=content,
+                )
+                self._publish_memory_revised(
+                    bound_bot_id,
+                    {
+                        "document_id": doc.id,
+                        "path": doc.path,
+                        "revision": doc.revision,
+                        "scope": doc.scope.value if hasattr(doc.scope, "value") else str(doc.scope),
+                        "text": content[:160],
+                    },
+                )
                 return {
                     "ok": True,
                     "document_id": doc.id,
@@ -90,11 +145,59 @@ class ChatToolsMixin:
                 return {"ok": False, "error": str(exc)}
         return {"ok": True, "saved": False}
 
+    def _publish_memory_revised(self, bound_bot_id: str | None, payload: dict[str, Any]) -> None:
+        bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+        if self.runtime.events is None or self.runtime.store is None or not bot_id:
+            return
+        bot = self.runtime.store.get_bot(bot_id)
+        if bot is None:
+            return
+        event = ProductEvent(
+            id=new_id("evt"),
+            workspace_id=bot.workspace_id,
+            thread_id=bot.thread_id,
+            bot_id=bot.id,
+            seq=self.runtime.events.next_seq(bot.id),
+            type=ProductEventType.MEMORY_REVISED,
+            created_at=isoformat_utc(),
+            payload=payload,
+            run_id=run_id,
+        )
+        self.runtime.events.publish(event)
+
+    def _remember_meta(
+        self,
+        args: dict[str, Any],
+        bound_bot_id: str | None,
+        text: str,
+        fact: str | None = None,
+    ) -> None:
+        if getattr(self.runtime, "resolve_turn_role", lambda: "lead")() == "subagent":
+            return
+        label = (text or "Remembered a note").strip()[:160]
+        if not label:
+            return
+        hub = getattr(self.runtime, "memory", None)
+        if hub is not None:
+            _bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+            announce = getattr(hub, "should_announce_remembered", None)
+            if callable(announce) and not announce(run_id, fact or label):
+                return
+        self._append_bot_blocks(
+            args,
+            bound_bot_id,
+            [{"kind": "meta", "text": label}],
+            mark_sent=False,
+        )
+
     def _append_bot_blocks(
         self,
         args: dict[str, Any],
         bound_bot_id: str | None,
         blocks: list[dict[str, Any]],
+        *,
+        mark_sent: bool = True,
+        terminal: bool = False,
     ) -> dict[str, Any]:
         bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
         if self.runtime.store is None or not bot_id:
@@ -104,7 +207,8 @@ class ChatToolsMixin:
             return {"ok": False, "error": "bot not found"}
         try:
             msg = self.runtime.store.append_bot_message(bot, blocks, run_id=run_id)
-            self.runtime.mark_message_sent(run_id)
+            if mark_sent:
+                self.runtime.mark_message_sent(run_id, terminal=terminal)
             if self.runtime.events is not None:
                 event = ProductEvent(
                     id=new_id("evt"),
@@ -122,11 +226,47 @@ class ChatToolsMixin:
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
 
+    def _exec_message_bot(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
+        dest_ref = str(args.get("bot") or args.get("name") or "").strip()
+        bot_id, run_id, _thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+        store = self.runtime.store
+        if store is None or not bot_id:
+            return {"ok": False, "error": "store is not available"}
+        source = store.get_bot(bot_id)
+        if source is None:
+            return {"ok": False, "error": "bot not found"}
+        try:
+            question = normalize_question(str(args.get("text") or args.get("message") or ""))
+            dest = resolve_ask(store, source, question, dest_ref)
+        except BotAskError as err:
+            return {"ok": False, "error": err.detail}
+        posted = self._append_bot_blocks(args, bound_bot_id, asked_card_blocks(dest, question))
+        if not posted.get("ok"):
+            return posted
+        starter = getattr(self.runtime, "on_bot_ask", None)
+        if starter is None:
+            return {"ok": False, "error": "cannot start the other bot"}
+        try:
+            starter(source.id, dest.id, question, run_id)
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+        return {
+            "ok": True,
+            "asked": dest.name,
+            "to_bot_id": dest.id,
+            "waiting": True,
+        }
+
     def _exec_send_message(self, args: dict[str, Any], bound_bot_id: str | None) -> dict[str, Any]:
+        if "terminal" not in args or not isinstance(args["terminal"], bool):
+            return {"ok": False, "error": "terminal is required and must be a boolean"}
+        terminal = args["terminal"]
         text = str(args.get("text") or args.get("message") or "").strip()
         if not text:
             return {"ok": False, "error": "text is required"}
         raw_options = args.get("options")
+        if terminal and isinstance(raw_options, list) and raw_options:
+            return {"ok": False, "error": "send_message with options cannot be terminal"}
         if isinstance(raw_options, list) and raw_options:
             actions = [
                 {"id": f"opt_{i + 1}", "label": str(opt)} for i, opt in enumerate(raw_options)
@@ -142,7 +282,22 @@ class ChatToolsMixin:
             ]
         else:
             blocks = [{"kind": "text", "text": text}]
-        return self._append_bot_blocks(args, bound_bot_id, blocks)
+        posted = self._append_bot_blocks(
+            args,
+            bound_bot_id,
+            blocks,
+            terminal=terminal,
+        )
+        if not posted.get("ok"):
+            return posted
+        posted["terminal"] = terminal
+        posted["owner_instruction"] = (
+            "This complete reply is already posted. Do not repeat or paraphrase it in the "
+            "turn finish; end the turn without another owner-facing answer."
+            if terminal
+            else "This was an interim update. Continue the task and provide a distinct final answer."
+        )
+        return posted
 
     def _agent_file_roots(self, bot_id: str | None) -> list[Path]:
         roots: list[Path] = []
@@ -157,8 +312,10 @@ class ChatToolsMixin:
         text = str(raw or "").strip()
         if not text:
             return None
-        path = Path(text)
         roots = self._agent_file_roots(bot_id)
+        home = roots[0] if roots else Path(self.runtime.home_cwd(bot_id))
+        text = map_desktop_home_path(text, home)
+        path = Path(text)
         candidates: list[Path] = []
         if path.is_absolute():
             candidates.append(path)
@@ -250,8 +407,8 @@ class ChatToolsMixin:
         if not question:
             return {"ok": False, "error": "question is required"}
         raw_options = args.get("options") or []
-        if not isinstance(raw_options, list) or not raw_options:
-            return {"ok": False, "error": "options list is required"}
+        if not isinstance(raw_options, list):
+            return {"ok": False, "error": "options must be a list"}
         actions = [{"id": f"opt_{i + 1}", "label": str(opt)} for i, opt in enumerate(raw_options)]
         detail = str(args.get("detail") or "").strip() or None
         blocks = [
@@ -260,7 +417,24 @@ class ChatToolsMixin:
                 "text": question,
                 "detail": detail,
                 "status": "pending",
-                "actions": actions,
+                "actions": actions or None,
             }
         ]
-        return self._append_bot_blocks(args, bound_bot_id, blocks)
+        bot_id, run_id, thread_id = self.runtime.resolve_turn_context(bound_bot_id)
+        hub = getattr(self.runtime, "consent", None)
+        if hub is None or not bot_id or not run_id or not thread_id:
+            return {"ok": False, "error": "owner questions are not available"}
+        if not hub.begin_question(bot_id, run_id, thread_id):
+            return {"ok": False, "error": "another owner question is already waiting"}
+        posted = self._append_bot_blocks(args, bound_bot_id, blocks, mark_sent=False)
+        message_id = str(posted.get("message_id") or "")
+        if not posted.get("ok") or not message_id:
+            hub.abort_question(run_id)
+            return posted
+        if not hub.activate_question(run_id, message_id, question):
+            hub.abort_question(run_id)
+            return {"ok": False, "error": "could not wait for the owner's answer"}
+        answer, error = hub.wait_question(run_id)
+        if answer is None:
+            return {"ok": False, "error": error or "owner question failed"}
+        return {"ok": True, "message_id": message_id, "answer": answer}

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+from http.cookies import CookieError, SimpleCookie
 
-from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, WebSocket
 
 from artek_buddy.auth import host_token_match
+from artek_buddy.bot_credentials import BotCredentialStore
 from artek_buddy.bus import EventHub
 from artek_buddy.computer.service import (
     ComputerBusy,
@@ -16,6 +18,7 @@ from artek_buddy.config import Settings
 from artek_buddy.consent import ConsentHub
 from artek_buddy.contracts import (
     Bot,
+    Principal,
     ThreadMessagePage,
     ThreadSnapshot,
 )
@@ -28,7 +31,6 @@ from artek_buddy.runtime import (
     AgentRuntime,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("artek_buddy")
 
 
@@ -68,6 +70,16 @@ def consent() -> ConsentHub:
     return hub
 
 
+def credentials() -> BotCredentialStore:
+    broker = getattr(current_app().state, "credential_store", None)
+    if broker is None:
+        raise HTTPException(status_code=503, detail="credential broker unavailable")
+    return broker
+
+
+COOKIE_NAME = "artek_device"
+
+
 def _bearer(authorization: str | None) -> str | None:
     if not authorization or not authorization.startswith("Bearer "):
         return None
@@ -75,16 +87,49 @@ def _bearer(authorization: str | None) -> str | None:
     return token or None
 
 
+def _cookie_named(header: str | None, name: str) -> str | None:
+    if not header:
+        return None
+    jar = SimpleCookie()
+    try:
+        jar.load(header)
+    except CookieError:
+        return None
+    morsel = jar.get(name)
+    if morsel is None:
+        return None
+    value = (morsel.value or "").strip()
+    return value or None
+
+
+def _actor_token(
+    authorization: str | None,
+    device_cookie: str | None,
+    host_secret: str,
+) -> tuple[str | None, str | None]:
+    token = _bearer(authorization)
+    if token is not None and host_token_match(token, host_secret):
+        return ("host", None)
+    cookie = (device_cookie or "").strip() or None
+    if cookie and host_token_match(cookie, host_secret):
+        cookie = None
+    token = token or cookie
+    if token is None:
+        return (None, None)
+    return ("device", token)
+
+
 async def require_auth(
     authorization: str | None = Header(default=None),
+    device_cookie: str | None = Cookie(default=None, alias=COOKIE_NAME),
     cfg: Settings = Depends(settings),
     history: HistoryStore = Depends(store),
 ) -> str:
-    token = _bearer(authorization)
+    kind, token = _actor_token(authorization, device_cookie, cfg.agent_http_token)
+    if kind == "host":
+        return "host"
     if token is None:
         raise HTTPException(status_code=401, detail="missing bearer token")
-    if host_token_match(token, cfg.agent_http_token):
-        return "host"
     try:
         device = history.lookup_device_token(token)
     except DatabaseUnavailable as err:
@@ -92,6 +137,35 @@ async def require_auth(
     if device is None:
         raise HTTPException(status_code=403, detail="invalid token")
     return device.id
+
+
+async def require_principal(
+    authorization: str | None = Header(default=None),
+    device_cookie: str | None = Cookie(default=None, alias=COOKIE_NAME),
+    cfg: Settings = Depends(settings),
+    history: HistoryStore = Depends(store),
+) -> Principal:
+    kind, token = _actor_token(authorization, device_cookie, cfg.agent_http_token)
+    if kind == "host":
+        owner = history.get_owner_member()
+        return Principal(member_id=owner.id, device_id="host", role=owner.role)
+    if token is None:
+        raise HTTPException(status_code=401, detail="missing bearer token")
+    try:
+        principal = history.lookup_principal(token)
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+    if principal is None:
+        raise HTTPException(status_code=403, detail="invalid token")
+    return principal
+
+
+async def require_owner(
+    principal: Principal = Depends(require_principal),
+) -> Principal:
+    if principal.role != "owner":
+        raise HTTPException(status_code=403, detail="owner role required")
+    return principal
 
 
 async def require_host(
@@ -108,11 +182,16 @@ async def require_host(
 async def _authorize_websocket(websocket: WebSocket) -> str:
     cfg: Settings = websocket.app.state.settings
     history: HistoryStore = websocket.app.state.store
-    token = _bearer(websocket.headers.get("authorization"))
+    cookie = _cookie_named(websocket.headers.get("cookie"), COOKIE_NAME)
+    kind, token = _actor_token(
+        websocket.headers.get("authorization"),
+        cookie,
+        cfg.agent_http_token,
+    )
+    if kind == "host":
+        return "host"
     if token is None:
         raise HTTPException(status_code=401, detail="missing bearer token")
-    if host_token_match(token, cfg.agent_http_token):
-        return "host"
     try:
         device = history.lookup_device_token(token)
     except DatabaseUnavailable as err:
@@ -173,11 +252,25 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
         status = record.status_for(bot.id, bot.computer_mode, history.busy_bot_name(record, bot.id))
     run = history.latest_run(bot.id)
     pending = None
-    run_status = getattr(getattr(run, "status", None), "value", None) or getattr(
-        run, "status", None
-    )
-    if run is not None and run_status == "waiting_input":
-        pending = history.pending_auto_consent_id(bot.id, run.id)
+    pending_ids: list[str] = []
+    scope: list[str] = []
+    if run is not None and run.id:
+        scope.append(run.id)
+    subs = sorted(history.list_subagents(bot.id), key=lambda item: item.index)
+    for sub in subs:
+        if sub.status in {"queued", "running"}:
+            scope.append(sub.id)
+            if sub.parent_run_id:
+                scope.append(sub.parent_run_id)
+    seen: set[str] = set()
+    unique_scope: list[str] = []
+    for item in scope:
+        if item and item not in seen:
+            seen.add(item)
+            unique_scope.append(item)
+    if unique_scope:
+        pending_ids = history.pending_auto_consent_ids(bot.id, unique_scope)
+        pending = pending_ids[-1] if pending_ids else None
     return ThreadSnapshot(
         bot_id=bot.id,
         thread_id=bot.thread_id,
@@ -186,16 +279,24 @@ def _snapshot(history: HistoryStore, bot: Bot) -> ThreadSnapshot:
         older_cursor=page.older_cursor,
         run=run,
         computer=status,
-        subagents=sorted(history.list_subagents(bot.id), key=lambda item: item.index),
+        subagents=subs,
         pending_auto_consent_id=pending,
+        pending_auto_consent_ids=pending_ids,
     )
 
 
 def _computer_http(err: Exception) -> HTTPException:
-    if isinstance(err, ComputerBusy):
-        return HTTPException(status_code=409, detail=f"{err.name} is using the computer")
-    if isinstance(err, ComputerUnavailable):
-        return HTTPException(status_code=502, detail=str(err) or "screen unavailable")
+    safe = getattr(err, "safe_message", None) or str(err)
+    cat = getattr(err, "category", None)
+    if isinstance(err, ComputerBusy) or cat == "exhausted":
+        name = getattr(err, "name", "Another bot")
+        return HTTPException(status_code=409, detail=f"{name} is using the computer")
+    if isinstance(err, ComputerUnavailable) or cat == "unavailable":
+        return HTTPException(status_code=502, detail=safe or "screen unavailable")
+    if cat == "timeout":
+        return HTTPException(status_code=504, detail=safe)
+    if cat == "cancelled":
+        return HTTPException(status_code=499, detail=safe)
     if isinstance(err, ComputerError):
-        return HTTPException(status_code=400, detail=str(err))
-    return HTTPException(status_code=500, detail=str(err))
+        return HTTPException(status_code=400, detail=safe)
+    return HTTPException(status_code=500, detail=safe)
