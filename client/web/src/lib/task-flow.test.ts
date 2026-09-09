@@ -157,4 +157,13 @@ describe("task-first routing", () => {
     expect(merged[0].attentionReason).toBe("none");
     expect(merged[0].executionState).toBe("running");
   });
+
+  it("drops a bot the host no longer lists", () => {
+    const current = [
+      bot({ id: "gone", name: "Bravo" }),
+      bot({ id: "keep", name: "Alpha", stateVersion: 2 }),
+    ];
+    const incoming = [bot({ id: "keep", name: "Alpha", stateVersion: 2 })];
+    expect(mergeBotList(current, incoming).map((row) => row.id)).toEqual(["keep"]);
+  });
 });

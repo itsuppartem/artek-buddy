@@ -833,10 +833,10 @@ export function ShellPage() {
         markOpenThreadRead(viewing);
       }
     }
-    for (const item of list) discardedBotIds.current.delete(item.id);
     const archivedList = await api.bots.listArchived().catch(() => [] as Bot[]);
     setBots((prev) => {
-      const merged = mergeBotList(prev, list);
+      const incoming = list.filter((item) => !discardedBotIds.current.has(item.id));
+      const merged = mergeBotList(prev, incoming);
       const next = hostDownRef.current ? markConnectionLost(merged) : merged;
       prevBotsRef.current = new Map(next.map((item) => [item.id, item]));
       botsRef.current = next;

@@ -77,17 +77,10 @@ export function applyBotProjection<T extends TodayBot>(current: T, incoming: Par
 
 export function mergeBotList(current: Bot[], incoming: Bot[]): Bot[] {
   const prev = new Map(current.map((bot) => [bot.id, bot]));
-  const seen = new Set<string>();
-  const out: Bot[] = [];
-  for (const bot of incoming) {
-    seen.add(bot.id);
+  return incoming.map((bot) => {
     const old = prev.get(bot.id);
-    out.push(old ? applyBotProjection(old, bot) : bot);
-  }
-  for (const bot of current) {
-    if (!seen.has(bot.id)) out.push(bot);
-  }
-  return out;
+    return old ? applyBotProjection(old, bot) : bot;
+  });
 }
 
 export function markConnectionLost(bots: Bot[]): Bot[] {
