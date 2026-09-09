@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Added
-- Job-driven worker and routine sends pass a stable `idempotency_key` (job id, or the worker row id) on the model `send`. Interactive owner Send omits it.
+- Job-driven worker and routine turns keep a stable host `idempotency_key` (job id, or the worker row id) on the host POST. The local model send omits it: that bridge rejects Idempotency-Key (cloud Send only). Interactive owner Send still omits it.
 - Work log keeps recent runs in this chat (newest first, grouped by parent run) and shows per-turn token counts from `GET /v1/usage` when present. Show work log stays after complete. No Models spend pane.
 - Persist per-turn token usage (`0033_usage.sql`, `GET /v1/usage`, `GET /v1/usage/summary`): input, output, cache, reasoning, and total for lead and worker product runs. Missing usage is omitted, not a failed turn. Counts-only `usage.recorded` SSE. No Models spend pane.
 - Added permission-aware Postgres full-text search (`0031_search_documents.sql`, `GET /v1/search`): GIN `simple` over message text, memory, artifact names, and bot names. The authorized resource set is applied in SQL before `ts_rank`, headline, and limit. Non-owner callers get the same empty page as a miss. The inbox Search box keeps name/preview filter and lists host hits underneath.

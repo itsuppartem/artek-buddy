@@ -343,7 +343,7 @@ async def test_dead_wait_exhausted_error_says_host_retried(tmp_path, caplog) -> 
 
 
 @pytest.mark.asyncio
-async def test_job_send_includes_idempotency_key_including_force_retry(tmp_path) -> None:
+async def test_job_send_omits_local_idempotency_key_including_force_retry(tmp_path) -> None:
     agent = _BusyAgent(
         "agent-job",
         [_Run("run-ok", status="finished", result="ok")],
@@ -366,13 +366,14 @@ async def test_job_send_includes_idempotency_key_including_force_retry(tmp_path)
     model = runtime.model.to_json()
     cwd = {"cwd": str(tmp_path / "workspace")}
     assert agent.send_options == [
-        {"local": cwd, "model": model, "idempotency_key": "job_ab12cd34"},
+        {"local": cwd, "model": model},
         {
             "local": {**cwd, "force": True},
             "model": model,
-            "idempotency_key": "job_ab12cd34",
         },
     ]
+    for options in agent.send_options:
+        assert "idempotency_key" not in options
 
 
 @pytest.mark.asyncio
@@ -395,7 +396,7 @@ async def test_interactive_send_omits_idempotency_key(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_job_send_keeps_idempotency_key_after_bridge_restart(tmp_path) -> None:
+async def test_job_stream_omits_local_idempotency_key_after_bridge_restart(tmp_path) -> None:
     first_agent = _Agent("agent-old", [_Run("run-dead", status="error")])
     resumed_agent = _Agent("agent-old", [_Run("run-recovered", status="finished", result="ok")])
 
@@ -420,5 +421,5 @@ async def test_job_send_keeps_idempotency_key_after_bridge_restart(tmp_path) -> 
     terminal = output[-1]
     assert isinstance(terminal, RunRecord)
     assert terminal.status == "completed"
-    assert first_agent.send_options[0]["idempotency_key"] == "job_ab12cd34"
-    assert resumed_agent.send_options[0]["idempotency_key"] == "job_ab12cd34"
+    assert "idempotency_key" not in first_agent.send_options[0]
+    assert "idempotency_key" not in resumed_agent.send_options[0]
