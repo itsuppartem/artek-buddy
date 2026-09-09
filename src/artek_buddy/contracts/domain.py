@@ -339,6 +339,7 @@ class UsageRecord(BaseModel):
     cache_write_tokens: int = 0
     reasoning_tokens: int = 0
     total_tokens: int = 0
+    estimated_cost_usd: float | None = None
     created_at: str
 
 
@@ -353,6 +354,7 @@ class UsageSummary(BaseModel):
     cache_write_tokens: int = 0
     reasoning_tokens: int = 0
     total_tokens: int = 0
+    estimated_cost_usd: float | None = None
     runs: int = 0
 
 

@@ -10,7 +10,11 @@ from artek_buddy.http.deps import _db_error, _require_bot, require_auth, store
 router = APIRouter()
 
 
-@router.get("/v1/usage", dependencies=[Depends(require_auth)])
+@router.get(
+    "/v1/usage",
+    dependencies=[Depends(require_auth)],
+    response_model_exclude_none=True,
+)
 async def list_usage(
     bot_id: str | None = Query(default=None),
     run_id: str | None = Query(default=None),
@@ -24,7 +28,11 @@ async def list_usage(
         raise _db_error(err) from err
 
 
-@router.get("/v1/usage/summary", dependencies=[Depends(require_auth)])
+@router.get(
+    "/v1/usage/summary",
+    dependencies=[Depends(require_auth)],
+    response_model_exclude_none=True,
+)
 async def usage_summary(
     bot_id: str | None = Query(default=None),
     run_id: str | None = Query(default=None),

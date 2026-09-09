@@ -3183,6 +3183,8 @@ export interface components {
             cache_write_tokens: number;
             /** Created At */
             created_at: string;
+            /** Estimated Cost Usd */
+            estimated_cost_usd?: number | null;
             /** Id */
             id: string;
             /** Input Tokens */
@@ -3223,6 +3225,8 @@ export interface components {
              * @default 0
              */
             cache_write_tokens: number;
+            /** Estimated Cost Usd */
+            estimated_cost_usd?: number | null;
             /**
              * Input Tokens
              * @default 0

@@ -21,6 +21,7 @@ export type WorkLogUsage = {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   totalTokens: number;
+  estimatedCostUsd?: number | null;
 };
 
 export type WorkLogGroup = {
@@ -77,6 +78,11 @@ export function groupWorkLogRuns(
   }));
 }
 
+export function formatEstimatedUsd(usd?: number | null): string | null {
+  if (usd == null || !Number.isFinite(usd)) return null;
+  return `$${usd.toFixed(2)}`;
+}
+
 export function formatRunUsage(usage?: WorkLogUsage | null): string | null {
   if (!usage) return null;
   const parts = [
@@ -87,6 +93,8 @@ export function formatRunUsage(usage?: WorkLogUsage | null): string | null {
   if (usage.cacheReadTokens > 0 || usage.cacheWriteTokens > 0) {
     parts.splice(2, 0, `${usage.cacheReadTokens + usage.cacheWriteTokens} cache`);
   }
+  const dollars = formatEstimatedUsd(usage.estimatedCostUsd);
+  if (dollars) parts.push(dollars);
   return parts.join(" · ");
 }
 
@@ -98,6 +106,7 @@ export function usageFromRecords(
     cacheReadTokens?: number;
     cacheWriteTokens?: number;
     totalTokens: number;
+    estimatedCostUsd?: number | null;
   }>,
 ): Record<string, WorkLogUsage> {
   const out: Record<string, WorkLogUsage> = {};
@@ -110,6 +119,7 @@ export function usageFromRecords(
       cacheReadTokens: row.cacheReadTokens ?? 0,
       cacheWriteTokens: row.cacheWriteTokens ?? 0,
       totalTokens: row.totalTokens,
+      estimatedCostUsd: row.estimatedCostUsd,
     };
   }
   return out;

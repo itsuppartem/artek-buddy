@@ -4594,6 +4594,17 @@
             "title": "Created At",
             "type": "string"
           },
+          "estimated_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Usd"
+          },
           "id": {
             "minLength": 1,
             "title": "Id",
@@ -4678,6 +4689,17 @@
             "default": 0,
             "title": "Cache Write Tokens",
             "type": "integer"
+          },
+          "estimated_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Usd"
           },
           "input_tokens": {
             "default": 0,
