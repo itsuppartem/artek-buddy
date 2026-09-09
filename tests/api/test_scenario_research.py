@@ -18,9 +18,7 @@ def _bot_file_blocks(snap: dict) -> list[dict]:
     ]
 
 
-def test_scenario_research_allow_posts_brief_with_required_sections(
-    client, auth_header
-) -> None:
+def test_scenario_research_allow_posts_brief_with_required_sections(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "ScenarioResearchAllow")["id"]
     sent = client.post(
         f"/v1/threads/{bot_id}/messages",
