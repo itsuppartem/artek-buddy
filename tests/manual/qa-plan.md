@@ -51,6 +51,21 @@ Mint three bots for the run. Names can differ; they must be distinct:
 
 ---
 
+## 0a. First-user recipe (saved research brief)
+
+Named job: [SCENARIOS.md](../../SCENARIOS.md). Use **Research** (Private). Live Cursor: paste the assignment from that page. Scripted host: `please e2e-scenario-research`.
+
+| Check | Deb | Phone |
+| --- | --- | --- |
+| Models already has a Cursor key (or the scripted host ignores Models) | [ ] | [ ] |
+| Send the assignment / `please e2e-scenario-research` → Allow / Deny card names `docs.python.org` (or the scripted origin) **before** a file appears | [ ] | [ ] |
+| **Allow** → one markdown file card; Download saves it; the file has **Answer**, **Sources**, and **Unknowns** | [ ] | [ ] |
+| **Deny** (second run or a fresh bot) → no file card | [ ] | [ ] |
+| A second assignment in the same chat produces another usable file without re-explaining the recipe | [ ] | [ ] |
+| This-PC was not asked to write under `$HOME` | [ ] | — |
+
+---
+
 ## 1. Today, navigation, and visual system
 
 | Check | Deb | Phone |
@@ -630,6 +645,7 @@ Out of this pass: remaining collaboration after automations (#157 grants, Team m
 
 If time is short, in this order:
 
+0. **§0a First-user recipe** in Research: paste [SCENARIOS.md](../../SCENARIOS.md) (live Cursor) or `please e2e-scenario-research`. Allow → Downloadable brief with Answer / Sources / Unknowns. Deny → no file
 1. **§1 Today + rail + resizable panes + Library + System/Light/Dark + compact Work log**. Switch the OS theme once; on a scripted host use `please e2e-worker-progress` / `please e2e-worker-essay`
 2. **§2 Models**
 3. **§3 Memory book** (New memory defaults to This bot; Remove, not Outdated). Click a long Remembered line → that Memory card. Same rule thrice / worker remember → one Remembered line or none from the worker. `please e2e-remember-git-approval` stays one card; `please e2e-remember-git-free` revises it

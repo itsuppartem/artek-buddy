@@ -22,6 +22,18 @@ E2E_CLOSE_STATUS = "Closing Chromium"
 E2E_SLOW_ANSWER = "slow done"
 E2E_LATE_COMPLETE = "pong"
 E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C. [Open docs](https://example.com/artek-buddy)"
+E2E_SCENARIO_RESEARCH_ORIGIN = "https://docs.python.org"
+E2E_SCENARIO_RESEARCH_FILE = "python-313-brief.md"
+E2E_SCENARIO_RESEARCH_BODY = (
+    "# Python 3.13 for a FastAPI service\n\n"
+    "## Answer\n"
+    "Free-threaded builds and removed deprecated modules are the headline. "
+    "Confirm the ASGI stack against the official notes.\n\n"
+    "## Sources\n"
+    "- https://docs.python.org/3/whatsnew/3.13.html\n\n"
+    "## Unknowns\n"
+    "- Whether this host's pinned FastAPI version already declares 3.13 support\n"
+)
 E2E_ASK_QUESTION = "Which city?"
 E2E_ASK_FREE_QUESTION = "What should I call you?"
 E2E_OWNER_HELP_QUESTION = "I cannot continue in the browser. Please complete the blocked step."
@@ -241,6 +253,22 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
         ]
     if "e2e-plugin-docs" in hay or "please use docs" in hay:
         return [scripted_tool("docs_read"), scripted_finish("")]
+    if "e2e-scenario-research" in hay:
+        return [
+            scripted_consent(
+                action_class=CLASS_BROWSE,
+                scope_key=E2E_SCENARIO_RESEARCH_ORIGIN,
+                summary=f"Open {E2E_SCENARIO_RESEARCH_ORIGIN} on the remote desktop?",
+                detail=f"browse: {E2E_SCENARIO_RESEARCH_ORIGIN}",
+            ),
+            scripted_tool(
+                "send_file",
+                path=E2E_SCENARIO_RESEARCH_FILE,
+                content=E2E_SCENARIO_RESEARCH_BODY,
+                text="Saved research brief.",
+            ),
+            scripted_finish(""),
+        ]
     if "e2e-list-apps" in hay:
         return [
             scripted_tool("list_apps", q="docs"),

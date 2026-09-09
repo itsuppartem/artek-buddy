@@ -6,7 +6,7 @@
 
 Self-hosted **AI agent host** for a Linux machine (PC, server, mini PC, or Raspberry Pi): isolated Linux computer-use sandboxes, a Debian `.deb` client, FastAPI + Postgres, and **your** Cursor quota (`cursor-sdk` → Grok / Composer). Not a hosted Grok bot and not a vendor cloud VM.
 
-Quickstart: [Install & Pair](#bring-it-up) · [Architecture](ARCHITECTURE.md) · [Threat Model](THREAT-MODEL.md) · [Engineering](ENGINEERING.md) · [Operations](OPERATIONS.md) · [Changelog](CHANGELOG.md)
+Quickstart: [Install & Pair](#bring-it-up) · [First-user scenario](SCENARIOS.md) · [Architecture](ARCHITECTURE.md) · [Threat Model](THREAT-MODEL.md) · [Engineering](ENGINEERING.md) · [Operations](OPERATIONS.md) · [Changelog](CHANGELOG.md)
 
 Python 3.13 · FastAPI · PostgreSQL 16 · Docker · Xvfb / Chromium / noVNC · React / TypeScript · Playwright · GitHub Actions · Tailscale · Apache-2.0
 
@@ -94,6 +94,8 @@ If you searched for a self-hosted Grok bot, a Cursor agent host, or computer-use
 - **Keep a playbook for this chat.** Saved steps load into a later turn; a failed run shows a human error, not a raw run id.
 
 Typical uses include: a morning briefing routine, a research bot that opens sources on its desktop after you Allow the site, a project assistant that remembers repository conventions, a bot that reads a notes file from your PC, a long-running task delegated to workers, or a desktop automation task where you take over only for the final human step.
+
+The named first-user job is a **saved research brief**: one public page, Allow on the bot desktop, a markdown file you can Download, with Answer / Sources / Unknowns. Copy the assignment from [SCENARIOS.md](SCENARIOS.md). Scripted hosts: `please e2e-scenario-research`.
 
 ### Team vs Private computer
 
