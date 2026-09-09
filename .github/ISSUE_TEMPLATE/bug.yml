@@ -28,8 +28,8 @@ body:
     id: environment
     attributes:
       label: Version and architecture
-      description: Product version (e.g. 0.10.28) and host architecture (x86_64, arm64).
-      placeholder: 0.10.28, Ubuntu 24.04 x86_64
+      description: Product version (e.g. 0.2.0) and host architecture (x86_64, arm64).
+      placeholder: 0.2.0, Ubuntu 24.04 x86_64
     validations:
       required: false
   - type: textarea

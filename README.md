@@ -261,8 +261,8 @@ Verify a downloaded Release:
 
 ```bash
 sha256sum -c SHA256SUMS
-gh attestation verify artek-buddy-client_0.10.28_all.deb --repo itsuppartem/artek-buddy
-gh attestation verify oci://ghcr.io/itsuppartem/artek-buddy:0.10.28 --repo itsuppartem/artek-buddy
+gh attestation verify artek-buddy-client_0.2.0_all.deb --repo itsuppartem/artek-buddy
+gh attestation verify oci://ghcr.io/itsuppartem/artek-buddy:0.2.0 --repo itsuppartem/artek-buddy
 ```
 
 Attestations exist on Releases published after this landed. Older tags have checksums only. The computer image is **not** built in Actions (QEMU Chromium hangs); `install-host.sh` builds it on the host when GHCR has no tag.
@@ -291,9 +291,11 @@ On the desktop PC:
 ```bash
 # From Downloads, use dpkg. `apt install ./…` often fails because `_apt`
 # cannot read the home directory.
-sudo dpkg -i artek-buddy-client_0.10.28_all.deb
+sudo dpkg -i artek-buddy-client_0.2.0_all.deb
 sudo apt-get install -f
 ```
+
+The filename is `0.2.0`. Debian metadata is `1:0.2.0` so this upgrades a machine that still has 0.10.27.
 
 `apt-get install -f` pulls: `python3`, `python3-gi`, `gir1.2-gtk-3.0`, WebKitGTK, `gir1.2-ayatanaappindicator3-0.1`, `gir1.2-notify-0.7`, `xdg-utils`, and `libnotify-bin`.
 
@@ -349,7 +351,7 @@ The worker (`artek-buddy-worker`) wakes due routines through the same `threads.s
 
 ## Version
 
-`0.10.28` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
+`0.2.0` — one number, see `VERSION`. License: [Apache-2.0](LICENSE). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md) (work on `develop`; `main` is pull-request only). How to report a vuln: [SECURITY.md](SECURITY.md).
 
 Do not commit secrets, packaged clients (`*.deb`), `data/`, `docs/`, Funnel hostnames, local compose (`docker-compose.local.yml`), or local tooling.
 

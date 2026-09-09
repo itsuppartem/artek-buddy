@@ -116,9 +116,12 @@ fi
 EOF
 chmod 755 "$DEBIAN/postinst"
 
+# Epoch 1: GitHub Releases used 0.10.x. Product version is 0.2.0, which
+# dpkg would treat as older than 0.10.27 without an epoch. Filename and
+# VERSION stay 0.2.0; only the Debian control field carries the epoch.
 cat > "$DEBIAN/control" <<EOF
 Package: $NAME
-Version: $VERSION
+Version: 1:$VERSION
 Section: utils
 Priority: optional
 Architecture: all
