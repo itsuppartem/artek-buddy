@@ -13,3 +13,10 @@ CVE-2026-2229
 # not a Go module client (no `go get` of attacker-controlled module paths).
 CVE-2026-56864
 CVE-2026-56865
+
+# Official python:3.13-slim SBOM still lists setuptools 70.3.0 and msgpack 1.1.2
+# on the language "Python" row. site-packages is setuptools 84 / msgpack 1.2.2
+# (Trivy inventory 0 on those dist-info). The host does not run setup.py or
+# Unpacker reuse on attacker bytes.
+CVE-2025-47273
+GHSA-6v7p-g79w-8964
