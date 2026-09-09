@@ -48,7 +48,7 @@ _INCOMING_ID = re.compile(r"^[A-Za-z0-9._-]{8,80}$")
 _BEARER = re.compile(r"(?i)(bearer)\s+\S+")
 _NOVNC = re.compile(r"/novnc/\S+")
 _HOME = re.compile(r"/home/[^/\s]+")
-_PG = re.compile(r"(postgres(?:ql)?://[^:/]+:)[^@\s]+(@)")
+_PG_SCHEMES = ("postgresql://", "postgres://")
 _DEVICE = re.compile(r"\bdev_[A-Za-z0-9_-]{16,}\b")
 _PAIRING = re.compile(
     rf"\b[{re.escape(PAIRING_ALPHABET)}]{{4}}-[{re.escape(PAIRING_ALPHABET)}]{{4}}\b"
@@ -146,6 +146,54 @@ def _secrets() -> list[str]:
     return found
 
 
+def _redact_postgres_urls(text: str) -> str:
+    """Redact user:password@ in postgres URLs without a backtracking regex.
+
+    CodeQL py/polynomial-redos flags `(postgres(?:ql)?://[^:/]+:)[^@\\s]+(@)`
+    on log lines. A left-to-right scan is linear in len(text).
+    """
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        hit = -1
+        scheme = ""
+        for candidate in _PG_SCHEMES:
+            found = text.find(candidate, i)
+            if found < 0:
+                continue
+            longer = found == hit and len(candidate) > len(scheme)
+            if hit < 0 or found < hit or longer:
+                hit = found
+                scheme = candidate
+        if hit < 0:
+            out.append(text[i:])
+            break
+        out.append(text[i:hit])
+        user_start = hit + len(scheme)
+        colon = text.find(":", user_start)
+        at = text.find("@", user_start)
+        user = text[user_start:colon] if 0 <= colon < at else ""
+        password = text[colon + 1 : at] if colon >= 0 and at > colon else ""
+        if (
+            colon < 0
+            or at < 0
+            or colon >= at
+            or not user
+            or "/" in user
+            or not password
+            or any(ch.isspace() for ch in password)
+        ):
+            out.append(scheme)
+            i = user_start
+            continue
+        out.append(text[hit : colon + 1])
+        out.append("[redacted]")
+        out.append("@")
+        i = at + 1
+    return "".join(out)
+
+
 def redact_text(text: str) -> str:
     if not text:
         return text
@@ -156,7 +204,7 @@ def redact_text(text: str) -> str:
     out = _BEARER.sub(r"\1 [redacted]", out)
     out = _NOVNC.sub("/novnc/[redacted]", out)
     out = _HOME.sub("/home/[user]", out)
-    out = _PG.sub(r"\1[redacted]\2", out)
+    out = _redact_postgres_urls(out)
     out = _DEVICE.sub("dev_[redacted]", out)
     return _PAIRING.sub("[redacted]", out)
 
