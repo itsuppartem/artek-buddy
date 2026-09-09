@@ -7,16 +7,18 @@ from cursor_sdk import AgentBusyError, CursorAgentError
 from artek_buddy.db.shaping import TURN_FAILED, owner_visible_error
 from artek_buddy.runtime.cursor_errors import (
     CURSOR_KEY_INVALID_TEXT,
+    CURSOR_TIMEOUT_TEXT,
     QUOTA_EXHAUSTED_TEXT,
     is_auth_failure,
     is_rate_limited,
+    is_timeout,
     map_cursor_agent_error,
     parse_retry_after,
     rate_limit_wait_seconds,
     sdk_error_retryable,
     should_retry_rate_limit,
 )
-from artek_buddy.runtime.types import AgentRuntimeExhausted
+from artek_buddy.runtime.types import AgentRuntimeExhausted, AgentRuntimeTimeout
 
 
 def test_owner_visible_error_keeps_quota_and_auth_copy() -> None:
@@ -83,3 +85,19 @@ def test_non_retryable_rate_limit_maps_to_exhausted_without_retry() -> None:
     assert mapped.retryable is True
     assert mapped.message == QUOTA_EXHAUSTED_TEXT
     assert sdk_error_retryable(err) is False
+
+
+def test_api_timeout_maps_to_retryable_owner_copy() -> None:
+    from cursor_sdk import APITimeoutError
+
+    err = APITimeoutError("request timed out", request_id="req-to")
+    assert is_timeout(err) is True
+    assert is_rate_limited(err) is False
+    assert should_retry_rate_limit(err, retried=False) is False
+    mapped = map_cursor_agent_error(err)
+    assert isinstance(mapped, AgentRuntimeTimeout)
+    assert mapped.retryable is True
+    assert mapped.message == CURSOR_TIMEOUT_TEXT
+    assert mapped.request_id == "req-to"
+    assert owner_visible_error(mapped.message) == CURSOR_TIMEOUT_TEXT
+    assert owner_visible_error(mapped.message) != TURN_FAILED

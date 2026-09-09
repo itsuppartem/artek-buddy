@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Host Cursor bridge applies Settings timeouts (`CURSOR_UNARY_TIMEOUT_S`, `CURSOR_STREAM_TIMEOUT_S`, `CURSOR_MAX_RETRIES`) via SDK `with_options`. A timeout finishes as a retryable owner-visible message, not a hang. Read-only RPC retries stay small; a send that already has a run id is not retried.
 - Job-driven worker and routine turns keep a stable host `idempotency_key` (job id, or the worker row id) on the host POST. The local model send omits it: that bridge rejects Idempotency-Key (cloud Send only). Interactive owner Send still omits it.
 - Work log keeps recent runs in this chat (newest first, grouped by parent run) and shows per-turn token counts from `GET /v1/usage` when present. Show work log stays after complete. No Models spend pane.
 - Persist per-turn token usage (`0033_usage.sql`, `GET /v1/usage`, `GET /v1/usage/summary`): input, output, cache, reasoning, and total for lead and worker product runs. Missing usage is omitted, not a failed turn. Counts-only `usage.recorded` SSE. No Models spend pane.

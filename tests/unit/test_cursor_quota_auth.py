@@ -12,9 +12,15 @@ from artek_buddy.db.shaping import TURN_FAILED, owner_visible_error
 from artek_buddy.runtime.cursor import CursorRuntime
 from artek_buddy.runtime.cursor_errors import (
     CURSOR_KEY_INVALID_TEXT,
+    CURSOR_TIMEOUT_TEXT,
     QUOTA_EXHAUSTED_TEXT,
 )
-from artek_buddy.runtime.types import AgentRuntimeError, AgentRuntimeExhausted, RunRecord
+from artek_buddy.runtime.types import (
+    AgentRuntimeError,
+    AgentRuntimeExhausted,
+    AgentRuntimeTimeout,
+    RunRecord,
+)
 
 
 class _Run:
@@ -210,6 +216,18 @@ def make_permanent() -> BaseException:
     )
 
 
+def make_timeout(*, request_id: str = "req-timeout") -> BaseException:
+    cls = _sdk_type("APITimeoutError") or CursorAgentError
+    return _make_sdk_error(
+        cls,
+        "request timed out",
+        status=408,
+        retry_after=None,
+        is_retryable=True,
+        request_id=request_id,
+    )
+
+
 def _runtime(tmp_path, agent: _Agent) -> CursorRuntime:
     settings = Settings(
         agent_http_token="ci-host-token-aabbccddeeff001122334455",
@@ -391,3 +409,44 @@ async def test_rate_limit_after_send_began_does_not_start_a_second_run(
     assert caught.value.message == QUOTA_EXHAUSTED_TEXT
     assert len(agent.send_options) == 1
     assert instant_sleep == []
+
+
+@pytest.mark.asyncio
+async def test_send_timeout_before_run_is_not_retried(tmp_path, instant_sleep) -> None:
+    agent = _Agent("agent-send-timeout", [make_timeout(request_id="req-send-to")])
+    runtime = _runtime(tmp_path, agent)
+
+    with pytest.raises(AgentRuntimeTimeout) as caught:
+        await _consume(runtime, agent.agent_id)
+
+    err = caught.value
+    assert err.message == CURSOR_TIMEOUT_TEXT
+    assert err.retryable is True
+    assert err.request_id == "req-send-to"
+    assert owner_visible_error(err.message) == CURSOR_TIMEOUT_TEXT
+    assert len(agent.send_options) == 1
+    assert instant_sleep == []
+
+
+@pytest.mark.asyncio
+async def test_timeout_after_run_starts_does_not_start_a_second_run(
+    tmp_path, instant_sleep, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("ERROR", logger="artek_buddy")
+    agent = _Agent(
+        "agent-stream-timeout",
+        [_RunRaisesOnEvents("run-to", make_timeout(request_id="req-stream-to"))],
+    )
+    runtime = _runtime(tmp_path, agent)
+
+    with pytest.raises(AgentRuntimeTimeout) as caught:
+        await _consume(runtime, agent.agent_id)
+
+    assert caught.value.message == CURSOR_TIMEOUT_TEXT
+    assert len(agent.send_options) == 1
+    assert instant_sleep == []
+    line = caplog.text
+    assert "cursor timeout" in line
+    assert "req-stream-to" in line
+    assert "run-to" in line
+    assert "ci-cursor-key" not in line
