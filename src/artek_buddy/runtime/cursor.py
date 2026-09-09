@@ -545,9 +545,12 @@ class CursorRuntime(RuntimeBase):
         cwd: str,
         *,
         force: bool,
+        idempotency_key: str | None = None,
     ) -> Any:
         """Call send() only. One rate-limit retry if send raised before a run started."""
-        options = send_local_options(cwd, force=force, model=self.model)
+        options = send_local_options(
+            cwd, force=force, model=self.model, idempotency_key=idempotency_key
+        )
         retried = False
         while True:
             try:
@@ -579,10 +582,13 @@ class CursorRuntime(RuntimeBase):
         *,
         force: bool,
         live_run: list[Any],
+        idempotency_key: str | None = None,
     ) -> _SendAttempt:
         events: list[ProductStreamEvent] = []
         streamed = 0
-        run = await self._send_with_limit_retry(agent, prompt, cwd, force=force)
+        run = await self._send_with_limit_retry(
+            agent, prompt, cwd, force=force, idempotency_key=idempotency_key
+        )
         live_run.clear()
         live_run.append(run)
         log.info("run started run_id=%s agent_id=%s force=%s", run.id, agent_id, force)
@@ -638,6 +644,8 @@ class CursorRuntime(RuntimeBase):
         session_id: str | None = None,
         bot_id: str | None = None,
         role: str = "lead",
+        *,
+        idempotency_key: str | None = None,
     ) -> AsyncIterator[ProductStreamEvent | RunRecord]:
         lock_key = session_id or f"{role}:{bot_id or 'default'}"
         stream_lock = self._stream_locks.setdefault(lock_key, asyncio.Lock())
@@ -659,7 +667,13 @@ class CursorRuntime(RuntimeBase):
                     await self._cancel_stale_runs(agent_id)
                     try:
                         attempt = await self._attempt_send(
-                            agent, agent_id, prompt, cwd, force=force, live_run=live_run
+                            agent,
+                            agent_id,
+                            prompt,
+                            cwd,
+                            force=force,
+                            live_run=live_run,
+                            idempotency_key=idempotency_key,
                         )
                     except (AgentBusyError, CursorAgentError) as err:
                         if not (isinstance(err, AgentBusyError) or _is_agent_busy_error(err)):

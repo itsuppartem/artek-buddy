@@ -107,6 +107,14 @@ def test_send_local_options_omits_force_unless_asked() -> None:
     assert forced == {"local": {"cwd": "/data/homes/bot", "force": True}}
 
 
+def test_send_local_options_includes_job_idempotency_key() -> None:
+    keyed = send_local_options("/data/homes/bot", idempotency_key="job_ab12cd34")
+    assert keyed["idempotency_key"] == "job_ab12cd34"
+    assert send_local_options("/data/homes/bot", idempotency_key="") == {
+        "local": {"cwd": "/data/homes/bot"}
+    }
+
+
 def test_should_retry_dead_wait_only_when_instant_and_silent() -> None:
     from artek_buddy.db.shaping import TURN_FAILED
 

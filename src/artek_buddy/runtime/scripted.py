@@ -169,7 +169,10 @@ class ScriptedRuntime(RuntimeBase):
         session_id: str | None = None,
         bot_id: str | None = None,
         role: str = "lead",
+        *,
+        idempotency_key: str | None = None,
     ) -> AsyncIterator[ProductStreamEvent | RunRecord]:
+        del idempotency_key
         agent_id = await self.ensure_session(session_id, bot_id=bot_id, role=role)
         self.bind_agent_bot(agent_id, bot_id)
         self.last_prompt = prompt

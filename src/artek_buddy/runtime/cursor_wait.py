@@ -81,6 +81,7 @@ def send_local_options(
     *,
     force: bool = False,
     model: Any | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """Local send options. `force` expires a stuck run; do not set it on every send."""
     local: dict[str, Any] = {"cwd": cwd}
@@ -90,6 +91,8 @@ def send_local_options(
     if model is not None:
         to_json = getattr(model, "to_json", None)
         payload["model"] = to_json() if callable(to_json) else model
+    if idempotency_key:
+        payload["idempotency_key"] = idempotency_key
     return payload
 
 

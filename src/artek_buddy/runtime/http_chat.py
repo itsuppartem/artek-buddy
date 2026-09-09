@@ -90,7 +90,10 @@ class HttpChatRuntime(RuntimeBase):
         session_id: str | None = None,
         bot_id: str | None = None,
         role: str = "lead",
+        *,
+        idempotency_key: str | None = None,
     ) -> AsyncIterator[ProductStreamEvent | RunRecord]:
+        del idempotency_key
         agent_id = await self.ensure_session(session_id, bot_id=bot_id, role=role)
         default = self.store.get_default_model() if self.store is not None else None
         text = ""

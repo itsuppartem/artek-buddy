@@ -224,6 +224,7 @@ class SubagentService:
                 session_id=session_id,
                 bot_id=live.id,
                 role="subagent",
+                idempotency_key=sub_id,
             ):
                 if isinstance(item, RunRecord):
                     result = item.result or draft or ""
