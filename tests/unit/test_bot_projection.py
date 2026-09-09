@@ -41,6 +41,7 @@ def test_preview_question_does_not_create_attention() -> None:
     assert bot.attention_reason == "none"
     assert bot.execution_state == "completed"
     assert bot.result_id == "run_done"
+    assert bot.result_status == "completed"
     assert "question" in bot.preview.lower()
 
 
@@ -49,9 +50,16 @@ def test_waiting_input_without_a_pending_card_is_not_a_decision() -> None:
     assert execution_state_for("idle", active_run_status="waiting_input") == "waiting"
 
 
-def test_unknown_status_is_not_working() -> None:
-    assert execution_state_for("working") == "unknown"
-    assert execution_state_for("mystery") == "unknown"
+def test_idle_last_failed_run_is_failed_not_completed() -> None:
+    assert execution_state_for("idle", result_status="failed") == "failed"
+    assert execution_state_for("idle", result_status="cancelled") == "cancelled"
+    assert execution_state_for("idle", result_status="completed") == "completed"
+
+
+def test_idle_with_no_runs_is_not_completed() -> None:
+    assert execution_state_for("idle") == "unknown"
+    assert execution_state_for("sleeping") == "unknown"
+    assert execution_state_for("") == "unknown"
 
 
 def test_consent_ask_and_takeover_map_without_preview() -> None:

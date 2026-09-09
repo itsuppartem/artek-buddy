@@ -100,6 +100,57 @@ describe("TodayView", () => {
     expect(html).toContain("Preview trap");
   });
 
+  it("marks last-known cards without treating them as failed", () => {
+    const html = renderToStaticMarkup(
+      createElement(TodayView, {
+        botsReady: true,
+        bots: [
+          bot({
+            id: "run",
+            name: "Research desk",
+            status: "running",
+            executionState: "running",
+            attentionReason: "none",
+            connectionState: "last_known",
+            preview: "Reading source 3",
+          }),
+        ],
+        onOpenBot: vi.fn(),
+        onStartTask: vi.fn(),
+        onOpenRoutines: vi.fn(),
+        onCreateBot: vi.fn(),
+      }),
+    );
+    expect(html).toContain("Last known");
+    expect(html).toContain("Research desk");
+    expect(html).toContain("In progress");
+    expect(html).not.toContain("Failed");
+  });
+
+  it("keeps unread failed work out of Ready for you", () => {
+    const html = renderToStaticMarkup(
+      createElement(TodayView, {
+        botsReady: true,
+        bots: [
+          bot({
+            id: "fail",
+            name: "Broken helper",
+            unread: true,
+            preview: "could not finish",
+            executionState: "failed",
+            attentionReason: "none",
+            resultStatus: "failed",
+          }),
+        ],
+        onOpenBot: vi.fn(),
+        onStartTask: vi.fn(),
+        onOpenRoutines: vi.fn(),
+        onCreateBot: vi.fn(),
+      }),
+    );
+    expect(html).not.toContain("Broken helper");
+  });
+
   it("does not mistake loading for an empty workspace", () => {
     const loading = renderToStaticMarkup(
       createElement(TodayView, {

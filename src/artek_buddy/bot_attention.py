@@ -22,12 +22,8 @@ _STATUS_TO_EXECUTION: dict[str, ExecutionState] = {
     "completed": "completed",
     "failed": "failed",
     "cancelled": "cancelled",
-    "idle": "completed",
-    "sleeping": "completed",
-    "suspended": "completed",
-    "done": "completed",
-    "": "completed",
 }
+_IDLE_BOT_STATUSES = frozenset({"idle", "sleeping", "suspended", "done", ""})
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,11 +49,14 @@ def execution_state_for(
         if mapped is not None:
             return mapped
         return "unknown"
-    mapped = _STATUS_TO_EXECUTION.get((bot_status or "").strip().lower())
-    if mapped is not None:
-        return mapped
     if result_status in TERMINAL_RUN_STATUSES:
         return _STATUS_TO_EXECUTION[result_status]
+    key = (bot_status or "").strip().lower()
+    if key in _IDLE_BOT_STATUSES:
+        return "unknown"
+    mapped = _STATUS_TO_EXECUTION.get(key)
+    if mapped is not None:
+        return mapped
     return "unknown"
 
 
@@ -112,6 +111,9 @@ def project_bot(
             "pending_ask_id": facts.pending_ask_id,
             "takeover_run_id": takeover_id,
             "result_id": facts.result_id,
+            "result_status": (
+                facts.result_status if facts.result_status in TERMINAL_RUN_STATUSES else None
+            ),
         }
     )
 

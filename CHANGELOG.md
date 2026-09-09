@@ -4,7 +4,7 @@
 
 ### Added
 - Named first-user recipe: a saved research brief from one public page ([SCENARIOS.md](SCENARIOS.md)). Scripted `please e2e-scenario-research` covers Allow → downloadable file with Answer / Sources / Unknowns, and Deny → no file.
-- Today groups bots from host `execution_state`, `attention_reason`, and `connection_state` on `GET /v1/bots`. Unread preview words such as “question” no longer create **Needs your decision**. A late snapshot with an older `state_version` does not undo an accepted decision. A dropped link is last-known, not a failed run.
+- Today groups bots from host `execution_state`, `attention_reason`, and `connection_state` on `GET /v1/bots`. Unread preview words such as “question” no longer create **Needs your decision**. A late snapshot with an older `state_version` does not undo an accepted decision. A dropped link stays on Today and shows last-known state, not a failed run. Helper idle is not completed; unread failed/stopped work is not Ready.
 
 ### Fixed
 - OPERATIONS.md backup/restore includes the `credential-data` volume and `.env` broker tokens. A tar of `data`/`workspace` plus `pg_dump` is not a complete host copy.

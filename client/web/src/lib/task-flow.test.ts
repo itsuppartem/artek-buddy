@@ -4,8 +4,12 @@ import {
   applyBotProjection,
   botTaskStage,
   botTaskStages,
+  executionFromStatus,
   markConnectionLost,
   mergeBotList,
+  threadHeaderLabel,
+  workLogLatestFallback,
+  workSummaryCopy,
 } from "./task-flow";
 
 function bot(partial: Partial<Bot> & Pick<Bot, "id">): Bot {
@@ -72,7 +76,7 @@ describe("task-first routing", () => {
         unread: false,
         preview: "Sleeping",
         attentionReason: "none",
-        executionState: "completed",
+        executionState: "unknown",
       }),
     ).toBe("recent");
   });
@@ -100,8 +104,34 @@ describe("task-first routing", () => {
         attentionReason: "none",
         executionState: "running",
         resultId: "run_old",
+        resultStatus: "completed",
       }),
     ).toEqual(["working", "ready"]);
+  });
+
+  it("does not put unread failed or cancelled work in Ready", () => {
+    expect(
+      botTaskStage({
+        id: "fail",
+        status: "idle",
+        unread: true,
+        preview: "could not finish",
+        attentionReason: "none",
+        executionState: "failed",
+        resultStatus: "failed",
+      }),
+    ).toBe("recent");
+    expect(
+      botTaskStage({
+        id: "stop",
+        status: "idle",
+        unread: true,
+        preview: "stopped",
+        attentionReason: "none",
+        executionState: "cancelled",
+        resultStatus: "cancelled",
+      }),
+    ).toBe("recent");
   });
 
   it("ignores a late snapshot with an older state version", () => {
@@ -165,5 +195,25 @@ describe("task-first routing", () => {
     ];
     const incoming = [bot({ id: "keep", name: "Alpha", stateVersion: 2 })];
     expect(mergeBotList(current, incoming).map((row) => row.id)).toEqual(["keep"]);
+  });
+
+  it("keeps a pending local create when a full list omits it", () => {
+    const pending = bot({ id: "fresh", name: "Just made" });
+    const listed = bot({ id: "keep", name: "Alpha" });
+    const merged = mergeBotList([pending, listed], [listed], ["fresh"]);
+    expect(merged.map((row) => row.id)).toEqual(["keep", "fresh"]);
+  });
+
+  it("maps idle without a last run to unknown, not completed", () => {
+    expect(executionFromStatus("idle")).toBe("unknown");
+    expect(executionFromStatus("sleeping")).toBe("unknown");
+  });
+
+  it("labels cancelled work as stopped, not complete", () => {
+    expect(threadHeaderLabel("cancelled", "none", "Mail")).toBe("Stopped");
+    expect(workSummaryCopy("cancelled", "none").title).toBe("Stopped by you");
+    expect(workLogLatestFallback("cancelled")).toBe("Stopped by you.");
+    expect(workLogLatestFallback("failed")).toBe("This run failed.");
+    expect(workLogLatestFallback("")).toBe("No run in this chat yet.");
   });
 });

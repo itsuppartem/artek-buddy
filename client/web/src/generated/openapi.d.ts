@@ -1815,6 +1815,8 @@ export interface components {
             preview: string;
             /** Result Id */
             result_id?: string | null;
+            /** Result Status */
+            result_status?: ("completed" | "failed" | "cancelled") | null;
             /**
              * State Version
              * @default 0

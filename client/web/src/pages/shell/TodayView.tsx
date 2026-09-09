@@ -209,6 +209,7 @@ function TaskSection({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-bold text-paper">{bot.name}</span>
                 <span className="mt-1 block truncate text-[12px] text-mute">
+                  {bot.connectionState === "last_known" ? "Last known · " : ""}
                   {bot.preview || bot.title}
                 </span>
               </span>

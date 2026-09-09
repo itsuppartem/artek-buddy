@@ -50,6 +50,7 @@ class Bot(BaseModel):
     pending_ask_id: str | None = None
     takeover_run_id: str | None = None
     result_id: str | None = None
+    result_status: Literal["completed", "failed", "cancelled"] | None = None
 
 
 class CreateBotInput(BaseModel):

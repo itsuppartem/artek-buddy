@@ -33,6 +33,7 @@ def test_unread_preview_with_question_is_not_a_decision(client, auth_header) -> 
     assert row["unread"] is True
     assert row["attention_reason"] == "none"
     assert row["execution_state"] == "completed"
+    assert row["result_status"] == "completed"
     assert row["connection_state"] == "live"
     assert row["pending_consent_id"] is None
     assert row["pending_ask_id"] is None
@@ -175,3 +176,47 @@ def test_late_list_snapshot_does_not_undo_accepted_decision(client, auth_header)
     assert merged.attention_reason == "none"
     assert merged.state_version == current.state_version
     assert merged.pending_consent_id is None
+
+
+def test_new_bot_is_not_completed(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "NeverRan")["id"]
+    row = _bot_row(client, auth_header, bot_id)
+    assert row["execution_state"] == "unknown"
+    assert row["result_id"] is None
+    assert row["result_status"] is None
+    assert row["attention_reason"] == "none"
+
+
+def test_idle_after_failed_run_stays_failed(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "FailToday")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-fail"},
+    )
+    assert sent.status_code == 200
+    finished = wait_run(client, auth_header, bot_id, sent.json()["run_id"])
+    assert finished["run"]["status"] == "failed"
+    row = _bot_row(client, auth_header, bot_id)
+    assert row["execution_state"] == "failed"
+    assert row["result_status"] == "failed"
+    assert row["attention_reason"] == "none"
+
+
+def test_idle_after_stop_stays_cancelled(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "StopToday")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    wait_run_status(client, auth_header, bot_id, run_id, "running")
+    stopped = client.post(f"/v1/threads/{bot_id}/stop", headers=auth_header)
+    assert stopped.status_code == 200, stopped.text
+    wait_run(client, auth_header, bot_id, run_id)
+    row = _bot_row(client, auth_header, bot_id)
+    assert row["execution_state"] == "cancelled"
+    assert row["result_status"] == "cancelled"
+    assert row["attention_reason"] == "none"

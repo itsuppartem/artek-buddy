@@ -15,6 +15,8 @@ export type AttentionReason = "approval" | "clarification" | "takeover" | "recov
 
 export type ConnectionState = "live" | "last_known";
 
+export type ResultStatus = "completed" | "failed" | "cancelled";
+
 export type TodayBot = {
   id: string;
   unread: boolean;
@@ -25,10 +27,10 @@ export type TodayBot = {
   connectionState?: ConnectionState | null;
   stateVersion?: number | null;
   resultId?: string | null;
+  resultStatus?: ResultStatus | null;
 };
 
 const activeExecution = new Set<ExecutionState>(["queued", "running", "waiting"]);
-const resultExecution = new Set<ExecutionState>(["completed", "failed", "cancelled"]);
 
 const statusExecution: Record<string, ExecutionState> = {
   queued: "queued",
@@ -40,15 +42,28 @@ const statusExecution: Record<string, ExecutionState> = {
   completed: "completed",
   failed: "failed",
   cancelled: "cancelled",
-  idle: "completed",
-  sleeping: "completed",
-  suspended: "completed",
-  done: "completed",
-  "": "completed",
 };
 
 export function executionFromStatus(status: string): ExecutionState {
-  return statusExecution[(status || "").toLocaleLowerCase()] ?? "unknown";
+  const key = (status || "").toLocaleLowerCase();
+  if (key === "idle" || key === "sleeping" || key === "suspended" || key === "done" || key === "") {
+    return "unknown";
+  }
+  return statusExecution[key] ?? "unknown";
+}
+
+function lastUsableOutcome(bot: TodayBot, execution: ExecutionState): ResultStatus | null {
+  if (
+    bot.resultStatus === "completed" ||
+    bot.resultStatus === "failed" ||
+    bot.resultStatus === "cancelled"
+  ) {
+    return bot.resultStatus;
+  }
+  if (execution === "completed" || execution === "failed" || execution === "cancelled") {
+    return execution;
+  }
+  return null;
 }
 
 export function botTaskStages(bot: TodayBot): BotTaskStage[] {
@@ -57,9 +72,10 @@ export function botTaskStages(bot: TodayBot): BotTaskStage[] {
   const stages: BotTaskStage[] = [];
   if (attention !== "none") stages.push("decision");
   else if (activeExecution.has(execution)) stages.push("working");
-  const hasResult = Boolean(bot.resultId) || resultExecution.has(execution);
-  if (bot.unread && hasResult && stages[0] === "working") stages.push("ready");
-  else if (bot.unread && stages.length === 0) stages.push("ready");
+  const outcome = lastUsableOutcome(bot, execution);
+  const usableUnread = bot.unread && outcome === "completed";
+  if (usableUnread && stages[0] === "working") stages.push("ready");
+  else if (usableUnread && stages.length === 0) stages.push("ready");
   if (!stages.length) stages.push("recent");
   return stages;
 }
@@ -75,14 +91,117 @@ export function applyBotProjection<T extends TodayBot>(current: T, incoming: Par
   return { ...current, ...incoming };
 }
 
-export function mergeBotList(current: Bot[], incoming: Bot[]): Bot[] {
+export function mergeBotList(
+  current: Bot[],
+  incoming: Bot[],
+  pendingIds: Iterable<string> = [],
+): Bot[] {
+  const pending = new Set(pendingIds);
   const prev = new Map(current.map((bot) => [bot.id, bot]));
-  return incoming.map((bot) => {
+  const seen = new Set(incoming.map((bot) => bot.id));
+  const out = incoming.map((bot) => {
     const old = prev.get(bot.id);
     return old ? applyBotProjection(old, bot) : bot;
   });
+  for (const bot of current) {
+    if (!seen.has(bot.id) && pending.has(bot.id)) out.push(bot);
+  }
+  return out;
 }
 
 export function markConnectionLost(bots: Bot[]): Bot[] {
   return bots.map((bot) => ({ ...bot, connectionState: "last_known" as const }));
+}
+
+export function threadHeaderLabel(
+  runStatus: string | undefined,
+  attention: AttentionReason | null | undefined,
+  title: string | undefined,
+): string {
+  if (runStatus === "cancelled") return "Stopped";
+  if (runStatus === "failed") return "Failed";
+  if (
+    runStatus === "waiting_input" ||
+    runStatus === "waiting_takeover" ||
+    (attention && attention !== "none")
+  ) {
+    return "Needs you";
+  }
+  if (runStatus === "running" || runStatus === "queued" || runStatus === "leased") return "Working";
+  if (runStatus === "completed") return "Ready";
+  return title?.trim() || "No work yet";
+}
+
+export function workSummaryCopy(
+  runStatus: string | undefined,
+  attention: AttentionReason | null | undefined,
+): { title: string; detail: string; tone: "parked" | "busy" | "failed" | "cancelled" | "done" } {
+  if (
+    runStatus === "waiting_takeover" ||
+    runStatus === "waiting_input" ||
+    (attention && attention !== "none")
+  ) {
+    return {
+      title: "Needs your decision",
+      detail: "Open the computer or answer the request to continue.",
+      tone: "parked",
+    };
+  }
+  if (runStatus === "cancelled") {
+    return {
+      title: "Stopped by you",
+      detail: "The conversation keeps the result and decisions.",
+      tone: "cancelled",
+    };
+  }
+  if (runStatus === "failed") {
+    return {
+      title: "Task failed",
+      detail: "The conversation keeps the result and decisions.",
+      tone: "failed",
+    };
+  }
+  if (runStatus === "running" || runStatus === "queued" || runStatus === "leased") {
+    return {
+      title: "Working on this task",
+      detail: "The conversation keeps the result and decisions.",
+      tone: "busy",
+    };
+  }
+  if (runStatus === "completed") {
+    return {
+      title: "Task is complete",
+      detail: "The conversation keeps the result and decisions.",
+      tone: "done",
+    };
+  }
+  return {
+    title: "You can give a first assignment",
+    detail: "The conversation keeps the result and decisions.",
+    tone: "done",
+  };
+}
+
+export function workLogLatestFallback(runStatus?: string): string {
+  if (runStatus === "cancelled") return "Stopped by you.";
+  if (runStatus === "failed") return "This run failed.";
+  if (runStatus === "waiting_input" || runStatus === "waiting_takeover") {
+    return "Waiting for you.";
+  }
+  if (runStatus === "running" || runStatus === "queued" || runStatus === "leased") {
+    return "Work is still going.";
+  }
+  if (runStatus === "completed") return "This run completed.";
+  if (!runStatus) return "No run in this chat yet.";
+  return "Last known action is unavailable.";
+}
+
+export function workLogRunStatusLabel(runStatus?: string, current = false): string {
+  if (runStatus === "cancelled") return "stopped";
+  if (runStatus === "failed") return "failed";
+  if (runStatus === "waiting_input" || runStatus === "waiting_takeover") return "waiting";
+  if (runStatus === "running" || runStatus === "queued" || runStatus === "leased") return "running";
+  if (runStatus === "completed") return "completed";
+  if (current) return "latest";
+  return runStatus || "no run";
 }

@@ -601,6 +601,22 @@
             ],
             "title": "Result Id"
           },
+          "result_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Status"
+          },
           "state_version": {
             "default": 0,
             "title": "State Version",

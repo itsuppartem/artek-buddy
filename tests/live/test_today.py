@@ -28,3 +28,28 @@ def test_today_uses_host_attention_not_preview_words(
     decision = today.locator('[data-task-stage="decision"]')
     expect(decision).to_contain_text(speaker, timeout=15_000)
     expect(decision).not_to_contain_text(trap)
+
+
+def test_stopped_run_is_not_complete_on_chat_or_today(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = unique_bot("StopToday")
+    pair_fresh(page, client_url, host_url)
+    create_named_bot(page, name)
+    send_message(page, "please e2e-slow now", name)
+    expect(page.get_by_test_id("thread-stop")).to_be_visible(timeout=8_000)
+    page.get_by_test_id("thread-stop").click()
+    header = page.get_by_test_id("thread-header")
+    expect(header).to_contain_text("Stopped", timeout=15_000)
+    expect(header).not_to_contain_text("Ready")
+    summary = page.get_by_test_id("work-summary")
+    expect(summary).to_contain_text("Stopped by you")
+    expect(summary).not_to_contain_text("Task is complete")
+    page.get_by_test_id("open-work-log").click()
+    log = page.get_by_test_id("work-log-pane")
+    expect(log).to_contain_text("Stopped by you")
+    expect(log).not_to_contain_text("This run finished")
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Today").click()
+    today = page.get_by_test_id("today-view")
+    expect(today).to_be_visible(timeout=8_000)
+    expect(today.locator('[data-task-stage="ready"]')).not_to_contain_text(name)

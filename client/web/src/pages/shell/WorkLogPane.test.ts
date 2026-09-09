@@ -183,7 +183,22 @@ describe("WorkLogPane", () => {
       }),
     );
     expect(html).not.toContain("work-log-usage");
-    expect(html).toContain("This run finished.");
+    expect(html).toContain("This run completed.");
+  });
+
+  it("does not call a cancelled run finished", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkLogPane, {
+        botName: "Research desk",
+        runId: "run-stop",
+        runStatus: "cancelled",
+        workers: [],
+        onClose: vi.fn(),
+      }),
+    );
+    expect(html).toContain("Stopped by you.");
+    expect(html).not.toContain("This run finished.");
+    expect(html).not.toContain("Task is complete");
   });
 
   it("clamps a long progress dump to a short line", () => {
