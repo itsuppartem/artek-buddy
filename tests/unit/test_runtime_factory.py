@@ -5,7 +5,7 @@ import pytest
 from artek_buddy.bot_asks import ASKED_YOU_MARK
 from artek_buddy.config import Settings
 from artek_buddy.memory import wrap_turn_prompt
-from artek_buddy.runtime.factory import open_runtime, runtime_kind
+from artek_buddy.runtime.factory import launch_cursor_bridge, open_runtime, runtime_kind
 from artek_buddy.runtime.scripted import (
     E2E_ASK_FREE_QUESTION,
     E2E_CARD_VALUE,
@@ -323,3 +323,52 @@ def test_scripted_send_message_steps_make_terminal_choice_explicit() -> None:
     for prompt, choices in expected.items():
         sent = [step for step in steps_for_prompt(prompt) if step.tool == "send_message"]
         assert [step.args.get("terminal") for step in sent] == choices
+
+
+@pytest.mark.asyncio
+async def test_launch_cursor_bridge_applies_settings_timeouts(tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.closed = 0
+            self.options: dict[str, object] | None = None
+
+        def with_options(self, **kwargs: object) -> FakeClient:
+            captured.update(kwargs)
+            view = FakeClient()
+            view.options = dict(kwargs)
+            return view
+
+        async def aclose(self) -> None:
+            self.closed += 1
+
+    owner = FakeClient()
+
+    async def fake_launch(*, workspace: str) -> FakeClient:
+        captured["workspace"] = workspace
+        return owner
+
+    settings = Settings(
+        agent_http_token="ci-host-token-aabbccddeeff001122334455",
+        agent_runtime="cursor",
+        cursor_api_key="ci-cursor-key",
+        sandbox_provider="fake",
+        agent_cwd=str(tmp_path / "cwd"),
+        cursor_unary_timeout_s=12.5,
+        cursor_stream_timeout_s=34.0,
+        cursor_max_retries=2,
+    )
+    client = await launch_cursor_bridge(settings, launcher=fake_launch)
+    assert captured["workspace"] == str(tmp_path / "cwd")
+    assert captured["unary_timeout"] == 12.5
+    assert captured["stream_timeout"] == 34.0
+    assert captured["max_retries"] == 2
+    assert client.options == {
+        "unary_timeout": 12.5,
+        "stream_timeout": 34.0,
+        "max_retries": 2,
+    }
+    await client.aclose()
+    assert owner.closed == 1
+    assert client.closed == 0

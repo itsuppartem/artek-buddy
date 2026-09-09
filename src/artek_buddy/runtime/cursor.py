@@ -555,7 +555,7 @@ class CursorRuntime(RuntimeBase):
         while True:
             try:
                 return await agent.send(prompt, options)
-            except CursorAgentError as err:
+            except (CursorAgentError, TimeoutError) as err:
                 if isinstance(err, AgentBusyError) or _is_agent_busy_error(err):
                     raise
                 if should_retry_rate_limit(err, retried=retried):
@@ -774,8 +774,9 @@ class CursorRuntime(RuntimeBase):
             except AgentBusyError:
                 log.warning("cursor agent still busy after force retry")
                 raise
-            except CursorAgentError as err:
-                log_cursor_agent_error(err)
+            except (CursorAgentError, TimeoutError) as err:
+                live_id = getattr(live_run[0], "id", None) if live_run else None
+                log_cursor_agent_error(err, run_id=live_id)
                 raise map_cursor_agent_error(err) from err
             except asyncio.CancelledError:
                 # 3.11+ keeps the task cancelled until uncancel(); run.cancel() must still await.

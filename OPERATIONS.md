@@ -114,6 +114,21 @@ When testing releases or observing performance metrics on physical hardware (suc
    - All output is automatically scrubbed of sensitive secrets or tokens.
 3. Use `--calibrate-sleep <seconds>` to verify measurement sensitivity when benchmarking timing changes.
 
+## Cursor client timeouts
+
+After `AsyncClient.launch_bridge`, the host applies `with_options` so a flaky WAN
+cannot wait on the SDK's implicit defaults. These knobs are host Settings
+(`CURSOR_*` env). Timeouts become a retryable `AgentRuntimeTimeout` ("The model
+timed out. Send again.") with `request_id` / SDK `run_id` in the log, never the
+API key. `CURSOR_MAX_RETRIES` only applies to idempotent unary reads (catalog,
+ping). A send that already has a run id is not retried.
+
+| Env | Default | Meaning |
+| --- | --- | --- |
+| `CURSOR_UNARY_TIMEOUT_S` | `60` | Seconds for catalog, session, and send RPCs |
+| `CURSOR_STREAM_TIMEOUT_S` | `600` | Seconds for one run's event stream |
+| `CURSOR_MAX_RETRIES` | `1` | Extra attempts for those read-only RPCs |
+
 ## Activity log retention
 
 The `activity` table is a workspace-monotonic SSE cursor (see #159), not the audit chain.

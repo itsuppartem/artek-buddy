@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     cursor_model: str = "grok-4.6"
     cursor_model_effort: str = "xhigh"
     cursor_model_fast: bool = True
+    cursor_unary_timeout_s: float = 60.0
+    cursor_stream_timeout_s: float = 600.0
+    cursor_max_retries: int = 1
     composio_api_key: str = ""
     connections_callback_url: str = "https://host.example/v1/connections/callback"
     agent_cwd: str = "/workspace"
@@ -42,6 +45,20 @@ class Settings(BaseSettings):
     credential_broker_token: str = ""
     consent_auto: str = ""
     log_format: str = ""
+
+    @field_validator("cursor_unary_timeout_s", "cursor_stream_timeout_s")
+    @classmethod
+    def require_positive_cursor_timeout(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("must be greater than 0")
+        return value
+
+    @field_validator("cursor_max_retries")
+    @classmethod
+    def require_nonnegative_cursor_retries(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("must be 0 or greater")
+        return value
 
 
 def get_settings() -> Settings:

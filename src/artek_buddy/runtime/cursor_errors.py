@@ -9,18 +9,20 @@ import cursor_sdk
 from cursor_sdk import AgentBusyError
 
 from artek_buddy.runtime.cursor_wait import CURSOR_AUTH_ERROR_HINT
-from artek_buddy.runtime.types import AgentRuntimeError, AgentRuntimeExhausted
+from artek_buddy.runtime.types import AgentRuntimeError, AgentRuntimeExhausted, AgentRuntimeTimeout
 
 log = logging.getLogger("artek_buddy")
 
 QUOTA_EXHAUSTED_TEXT = "The model quota is exhausted. Wait and try again."
 CURSOR_KEY_INVALID_TEXT = "Open Models and check the Cursor key."
+CURSOR_TIMEOUT_TEXT = "The model timed out. Send again."
 
 RATE_LIMIT_MAX_WAIT_S = 60.0
 RATE_LIMIT_BACKOFF_BASE_S = 1.0
 
 _RateLimitError = getattr(cursor_sdk, "RateLimitError", None)
 _AuthenticationError = getattr(cursor_sdk, "AuthenticationError", None)
+_APITimeoutError = getattr(cursor_sdk, "APITimeoutError", None)
 
 _RATE_LIMIT_CODES = frozenset(
     {
@@ -39,6 +41,14 @@ _AUTH_CODES = frozenset(
         "api_key_not_found",
         "sdk_error_code_unauthorized",
         "sdk_error_code_api_key_not_found",
+    }
+)
+_TIMEOUT_CODES = frozenset(
+    {
+        "timeout",
+        "deadline_exceeded",
+        "sdk_error_code_timeout",
+        "sdk_error_code_deadline_exceeded",
     }
 )
 
@@ -82,6 +92,18 @@ def is_rate_limited(err: BaseException) -> bool:
     if _error_status(err) == 429:
         return True
     return _error_code(err) in _RATE_LIMIT_CODES
+
+
+def is_timeout(err: BaseException) -> bool:
+    if isinstance(err, AgentBusyError) or is_rate_limited(err):
+        return False
+    if isinstance(err, TimeoutError):
+        return True
+    if _APITimeoutError is not None and isinstance(err, _APITimeoutError):
+        return True
+    if _error_status(err) == 408:
+        return True
+    return _error_code(err) in _TIMEOUT_CODES
 
 
 def is_auth_failure(err: BaseException) -> bool:
@@ -140,12 +162,26 @@ def rate_limit_wait_seconds(err: BaseException, attempt: int = 0) -> float:
     return min(backoff, RATE_LIMIT_MAX_WAIT_S)
 
 
-def log_cursor_agent_error(err: BaseException) -> None:
+def log_cursor_agent_error(err: BaseException, *, run_id: str | None = None) -> None:
+    from artek_buddy.observe import redact_text
+
+    message = redact_text(_error_message(err))
+    request_id = _request_id(err)
+    rid = str(run_id or "").strip() or None
+    if is_timeout(err):
+        log.error(
+            "cursor timeout request_id=%s run_id=%s retryable=%s %s",
+            request_id,
+            rid,
+            getattr(err, "is_retryable", None),
+            message,
+        )
+        return
     log.error(
         "run did not start: %s retryable=%s request_id=%s",
-        _error_message(err),
+        message,
         getattr(err, "is_retryable", None),
-        _request_id(err),
+        request_id,
     )
 
 
@@ -158,6 +194,8 @@ def map_cursor_agent_error(err: BaseException) -> AgentRuntimeError:
             retryable=False,
             request_id=request_id,
         )
+    if is_timeout(err):
+        return AgentRuntimeTimeout(CURSOR_TIMEOUT_TEXT, request_id=request_id)
     if is_rate_limited(err):
         return AgentRuntimeExhausted(QUOTA_EXHAUSTED_TEXT, request_id=request_id)
     return AgentRuntimeError(
