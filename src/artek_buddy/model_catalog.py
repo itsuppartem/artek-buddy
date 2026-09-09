@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -67,11 +68,114 @@ def unknown_provider(provider: str) -> bool:
     return provider not in PROVIDERS_BY_ID
 
 
-def preferred_model(ids: list[str], want: str = "grok-4.6") -> str | None:
-    names = [item for item in ids if item]
+def preferred_model(models: list[Any], want: str = "grok-4.6") -> str | None:
+    names = catalog_model_ids(models)
     if want in names:
         return want
     return names[0] if names else None
+
+
+def catalog_model_ids(models: list[Any]) -> list[str]:
+    ids: list[str] = []
+    for item in models:
+        entry = catalog_entry(item)
+        if entry is not None:
+            ids.append(str(entry["id"]))
+    return ids
+
+
+def catalog_entry(item: Any) -> dict[str, Any] | None:
+    """Normalize a catalog row from a string, mapping, or runtime model object."""
+    if item is None:
+        return None
+    if isinstance(item, str):
+        model_id = item.strip()
+        return {"id": model_id} if model_id else None
+    if isinstance(item, dict):
+        model_id = item.get("id")
+        if not model_id:
+            return None
+        row: dict[str, Any] = {"id": str(model_id)}
+        provider = item.get("provider")
+        if provider:
+            row["provider"] = str(provider)
+        variants = _variant_labels(item.get("variants"))
+        if variants:
+            row["variants"] = variants
+        parameters = _parameter_rows(item.get("parameters"))
+        if parameters:
+            row["parameters"] = parameters
+        return row
+    model_id = getattr(item, "id", None)
+    if not model_id:
+        return None
+    row = {"id": str(model_id)}
+    variants = _variant_labels(getattr(item, "variants", None))
+    if variants:
+        row["variants"] = variants
+    parameters = _parameter_rows(getattr(item, "parameters", None))
+    if parameters:
+        row["parameters"] = parameters
+    return row
+
+
+def catalog_extras(entry: dict[str, Any]) -> dict[str, Any]:
+    extras: dict[str, Any] = {}
+    variants = entry.get("variants")
+    if variants:
+        extras["variants"] = list(variants)
+    parameters = entry.get("parameters")
+    if parameters:
+        extras["parameters"] = list(parameters)
+    return extras
+
+
+def _variant_labels(raw: Any) -> list[str]:
+    labels: list[str] = []
+    for item in raw or ():
+        if isinstance(item, str):
+            text = item.strip()
+            if text:
+                labels.append(text)
+            continue
+        if isinstance(item, dict):
+            text = str(item.get("id") or item.get("display_name") or "").strip()
+            if text:
+                labels.append(text)
+            continue
+        text = str(getattr(item, "id", None) or getattr(item, "display_name", None) or "").strip()
+        if text:
+            labels.append(text)
+    return labels
+
+
+def _parameter_rows(raw: Any) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in raw or ():
+        if isinstance(item, dict):
+            param_id = str(item.get("id") or "").strip()
+            values_raw = item.get("values") or ()
+        else:
+            param_id = str(getattr(item, "id", "") or "").strip()
+            values_raw = getattr(item, "values", None) or ()
+        if not param_id:
+            continue
+        values: list[dict[str, str]] = []
+        for value in values_raw:
+            if isinstance(value, dict):
+                text = str(value.get("value") or "").strip()
+                name = str(value.get("display_name") or "").strip()
+            else:
+                text = str(getattr(value, "value", "") or "").strip()
+                name = str(getattr(value, "display_name", "") or "").strip()
+            if not text:
+                continue
+            row = {"value": text}
+            if name:
+                row["display_name"] = name
+            values.append(row)
+        rows.append({"id": param_id, "values": values})
+    return rows
 
 
 def last_four(key: str) -> str:
@@ -112,26 +216,26 @@ def _ids_from_payload(payload: object) -> list[str]:
     return ids
 
 
-async def fetch_cursor_models(key: str, runtime: object | None = None) -> list[str]:
+async def fetch_cursor_models(key: str, runtime: object | None = None) -> list[dict[str, Any]]:
     """List Cursor models from the running bridge. There is no public catalog URL."""
     _ = key
     lister = getattr(runtime, "list_models", None)
     if lister is None:
         raise RuntimeError(fetch_failed_message())
     rows = await lister()
-    ids: list[str] = []
+    models: list[dict[str, Any]] = []
     for item in rows or []:
-        if isinstance(item, dict):
-            if item.get("provider") not in (None, "cursor"):
-                continue
-            model_id = item.get("id")
-        else:
-            model_id = getattr(item, "id", None)
-        if model_id:
-            ids.append(str(model_id))
-    if not ids:
+        entry = catalog_entry(item)
+        if entry is None:
+            continue
+        provider = entry.get("provider")
+        if provider not in (None, "cursor"):
+            continue
+        entry.pop("provider", None)
+        models.append(entry)
+    if not models:
         raise RuntimeError(fetch_failed_message())
-    return ids
+    return models
 
 
 async def fetch_models(provider: str, key: str, *, scripted: bool = False) -> list[str]:

@@ -58,7 +58,14 @@ export type ModelCredentialList = {
   defaultEffort?: string | null;
   defaultFast?: boolean | null;
 };
-export type ModelInfo = { id: string; provider: string };
+export type CatalogParamValue = { value: string; display_name?: string | null };
+export type CatalogParameter = { id: string; values: CatalogParamValue[] };
+export type ModelInfo = {
+  id: string;
+  provider: string;
+  variants?: string[];
+  parameters?: CatalogParameter[];
+};
 export type ModelListResponse = { models: ModelInfo[] };
 export type ConnectionKeyStatus = { configured: boolean; lastFour?: string | null };
 export type ConnectionCatalogItem = {

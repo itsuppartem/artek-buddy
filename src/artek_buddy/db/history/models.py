@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
 from typing import Any
+
+from psycopg.types.json import Json
 
 from artek_buddy.contracts.domain import ModelCredential, ModelCredentialList
 from artek_buddy.db.shaping import isoformat_utc
 from artek_buddy.model_catalog import (
     PROVIDERS,
+    catalog_entry,
+    catalog_extras,
     is_placeholder_key,
     last_four,
     provider_label,
@@ -110,25 +115,33 @@ class ModelsMixin:
             )
             conn.commit()
 
-    def replace_catalog(self, provider: str, model_ids: list[str]) -> None:
+    def replace_catalog(self, provider: str, models: list[Any]) -> None:
         with self._conn() as conn:
             conn.execute("DELETE FROM model_catalog WHERE provider = %s", (provider,))
-            for model_id in model_ids:
+            seen: set[str] = set()
+            for item in models:
+                entry = catalog_entry(item)
+                if entry is None:
+                    continue
+                model_id = str(entry["id"])
+                if model_id in seen:
+                    continue
+                seen.add(model_id)
                 conn.execute(
                     """
-                    INSERT INTO model_catalog (provider, model_id)
-                    VALUES (%s, %s)
+                    INSERT INTO model_catalog (provider, model_id, extras)
+                    VALUES (%s, %s, %s)
                     ON CONFLICT DO NOTHING
                     """,
-                    (provider, model_id),
+                    (provider, model_id, Json(catalog_extras(entry))),
                 )
             conn.commit()
 
-    def list_catalog(self) -> list[dict[str, str]]:
+    def list_catalog(self) -> list[dict[str, Any]]:
         with self._conn() as conn:
             rows = conn.execute(
                 """
-                SELECT c.provider, c.model_id
+                SELECT c.provider, c.model_id, c.extras
                 FROM model_catalog c
                 JOIN model_credentials k ON k.provider = c.provider
                 WHERE k.api_key IS NOT NULL AND k.api_key <> ''
@@ -136,7 +149,25 @@ class ModelsMixin:
                 """
             ).fetchall()
             conn.commit()
-        return [{"id": str(row["model_id"]), "provider": str(row["provider"])} for row in rows]
+        listed: list[dict[str, Any]] = []
+        for row in rows:
+            item: dict[str, Any] = {
+                "id": str(row["model_id"]),
+                "provider": str(row["provider"]),
+            }
+            extras = row.get("extras") or {}
+            if isinstance(extras, str):
+                extras = json.loads(extras)
+            if not isinstance(extras, dict):
+                extras = {}
+            variants = extras.get("variants")
+            if variants:
+                item["variants"] = list(variants)
+            parameters = extras.get("parameters")
+            if parameters:
+                item["parameters"] = list(parameters)
+            listed.append(item)
+        return listed
 
     def catalog_ids(self, provider: str) -> set[str]:
         with self._conn() as conn:

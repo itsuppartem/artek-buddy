@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Model catalog Save keeps variants and parameter ids/values (`0034_model_catalog_extras.sql`). `GET /v1/models` exposes those extras when present and still omits them for id-only rows. A router catalog id is selectable only when the list actually includes it.
 - Host Cursor bridge applies Settings timeouts (`CURSOR_UNARY_TIMEOUT_S`, `CURSOR_STREAM_TIMEOUT_S`, `CURSOR_MAX_RETRIES`) via SDK `with_options`. A timeout finishes as a retryable owner-visible message, not a hang. Read-only RPC retries stay small; a send that already has a run id is not retried.
 - Job-driven worker and routine turns keep a stable host `idempotency_key` (job id, or the worker row id) on the host POST. The local model send omits it: that bridge rejects Idempotency-Key (cloud Send only). Interactive owner Send still omits it.
 - Work log keeps recent runs in this chat (newest first, grouped by parent run) and shows per-turn token counts from `GET /v1/usage` when present. Show work log stays after complete. No Models spend pane.

@@ -567,11 +567,27 @@ class SetDefaultModelInput(BaseModel):
     bot_id: Id | None = None
 
 
+class CatalogParamValue(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    value: str
+    display_name: str | None = None
+
+
+class CatalogParameter(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    id: str
+    values: list[CatalogParamValue] = Field(default_factory=list)
+
+
 class ModelInfo(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     id: str
     provider: str
+    variants: list[str] | None = None
+    parameters: list[CatalogParameter] | None = None
 
 
 class ModelListResponse(BaseModel):

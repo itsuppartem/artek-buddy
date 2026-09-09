@@ -79,7 +79,7 @@ class HttpChatRuntime(RuntimeBase):
             role=role,
         )
 
-    async def list_models(self) -> list[dict[str, str]]:
+    async def list_models(self) -> list[dict[str, Any]]:
         if self.store is None:
             return []
         return self.store.list_catalog()

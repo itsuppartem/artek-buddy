@@ -1875,6 +1875,20 @@ export interface components {
             /** V */
             v: string;
         };
+        /** CatalogParamValue */
+        CatalogParamValue: {
+            /** Display Name */
+            display_name?: string | null;
+            /** Value */
+            value: string;
+        };
+        /** CatalogParameter */
+        CatalogParameter: {
+            /** Id */
+            id: string;
+            /** Values */
+            values?: components["schemas"]["CatalogParamValue"][];
+        };
         /** ChildBotBlock */
         ChildBotBlock: {
             /** Bot Id */
@@ -2606,8 +2620,12 @@ export interface components {
         ModelInfo: {
             /** Id */
             id: string;
+            /** Parameters */
+            parameters?: components["schemas"]["CatalogParameter"][] | null;
             /** Provider */
             provider: string;
+            /** Variants */
+            variants?: string[] | null;
         };
         /** ModelListResponse */
         ModelListResponse: {

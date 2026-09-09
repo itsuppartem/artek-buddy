@@ -742,6 +742,50 @@
         "title": "CardLine",
         "type": "object"
       },
+      "CatalogParamValue": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "CatalogParamValue",
+        "type": "object"
+      },
+      "CatalogParameter": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogParamValue"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "CatalogParameter",
+        "type": "object"
+      },
       "ChildBotBlock": {
         "properties": {
           "bot_id": {
@@ -2681,9 +2725,37 @@
             "title": "Id",
             "type": "string"
           },
+          "parameters": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CatalogParameter"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameters"
+          },
           "provider": {
             "title": "Provider",
             "type": "string"
+          },
+          "variants": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variants"
           }
         },
         "required": [
