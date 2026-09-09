@@ -82,7 +82,7 @@ def test_release_workflow_dispatch_requires_push_test_and_codeql_on_sha() -> Non
     assert "check-runs" in bind_block
     assert "analyze (python)" in bind_block
     assert "analyze (javascript-typescript)" in bind_block
-    assert '"CodeQL"' in bind_block or "'CodeQL'" in bind_block
+    assert "--workflow codeql" in bind_block
     assert bind < login
     assert text.find("check-runs") < login
 
