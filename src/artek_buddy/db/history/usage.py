@@ -4,8 +4,16 @@ from typing import Any
 
 from artek_buddy.contracts.domain import UsageRecord, UsageRecordList, UsageSummary
 from artek_buddy.db.shaping import isoformat_utc, new_id, parse_iso
+from artek_buddy.usage_cost import estimate_cost_usd_micros, micros_to_usd
 
 _LIST_TAIL = " ORDER BY created_at DESC LIMIT %s"
+
+
+def _usd_from_row(row: dict[str, Any]) -> float | None:
+    raw = row.get("cost_usd_micros")
+    if raw is None:
+        return None
+    return micros_to_usd(int(raw))
 
 
 def _usage_filter_sql(
@@ -46,18 +54,28 @@ class UsageMixin:
         cache_write_tokens: int = 0,
         reasoning_tokens: int = 0,
         total_tokens: int = 0,
+        fast: bool | None = None,
     ) -> UsageRecord | None:
         now = isoformat_utc()
         record_id = new_id("usage")
+        use_fast = True if fast is None else bool(fast)
+        cost_usd_micros = estimate_cost_usd_micros(
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_write_tokens=cache_write_tokens,
+            fast=use_fast,
+        )
         with self._conn() as conn:
             row = conn.execute(
                 """
                 INSERT INTO usage_records (
                     id, bot_id, run_id, provider, model,
                     input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-                    reasoning_tokens, total_tokens, created_at
+                    reasoning_tokens, total_tokens, cost_usd_micros, created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (run_id)
                 DO UPDATE SET
                     provider = EXCLUDED.provider,
@@ -67,7 +85,8 @@ class UsageMixin:
                     cache_read_tokens = EXCLUDED.cache_read_tokens,
                     cache_write_tokens = EXCLUDED.cache_write_tokens,
                     reasoning_tokens = EXCLUDED.reasoning_tokens,
-                    total_tokens = EXCLUDED.total_tokens
+                    total_tokens = EXCLUDED.total_tokens,
+                    cost_usd_micros = EXCLUDED.cost_usd_micros
                 RETURNING *
                 """,
                 (
@@ -82,6 +101,7 @@ class UsageMixin:
                     cache_write_tokens,
                     reasoning_tokens,
                     total_tokens,
+                    cost_usd_micros,
                     now,
                 ),
             ).fetchone()
@@ -125,6 +145,7 @@ class UsageMixin:
                 COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
                 COALESCE(SUM(reasoning_tokens), 0) AS reasoning_tokens,
                 COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                SUM(cost_usd_micros) AS cost_usd_micros,
                 COUNT(*)::int AS runs
             FROM usage_records
             """,
@@ -143,6 +164,7 @@ class UsageMixin:
             cache_write_tokens=int(row.get("cache_write_tokens") or 0),
             reasoning_tokens=int(row.get("reasoning_tokens") or 0),
             total_tokens=int(row.get("total_tokens") or 0),
+            estimated_cost_usd=_usd_from_row(row),
             runs=int(row.get("runs") or 0),
         )
 
@@ -159,5 +181,6 @@ class UsageMixin:
             cache_write_tokens=int(row.get("cache_write_tokens") or 0),
             reasoning_tokens=int(row.get("reasoning_tokens") or 0),
             total_tokens=int(row.get("total_tokens") or 0),
+            estimated_cost_usd=_usd_from_row(row),
             created_at=parse_iso(row["created_at"]),
         )

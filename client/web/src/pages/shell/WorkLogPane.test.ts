@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
   clipProgressLine,
+  formatEstimatedUsd,
   formatRunUsage,
   groupWorkLogRuns,
   latestWorkLine,
@@ -133,6 +134,32 @@ describe("WorkLogPane", () => {
     expect(html).toContain("3 in · 4 out · 7 total");
     expect(html).toContain("Checking source 2");
     expect(html.split('data-testid="work-log-run"').length - 1).toBe(2);
+  });
+
+  it("shows an estimated dollar next to token counts when the host sent one", () => {
+    expect(formatEstimatedUsd(0.577576)).toBe("$0.58");
+    expect(formatEstimatedUsd(null)).toBeNull();
+    const html = renderToStaticMarkup(
+      createElement(WorkLogPane, {
+        botName: "Research desk",
+        runId: "run-cost",
+        runStatus: "completed",
+        workers: [],
+        usageByRun: {
+          "run-cost": {
+            runId: "run-cost",
+            inputTokens: 128700,
+            outputTokens: 1242,
+            cacheReadTokens: 47872,
+            cacheWriteTokens: 0,
+            totalTokens: 177814,
+            estimatedCostUsd: 0.577576,
+          },
+        },
+        onClose: vi.fn(),
+      }),
+    );
+    expect(html).toContain("128700 in · 1242 out · 47872 cache · 177814 total · $0.58");
   });
 
   it("keeps Latest work after in-flight progress is gone", () => {

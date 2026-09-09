@@ -19,10 +19,15 @@ def persist_product_usage(
     run_id: str,
     usage: TokenUsage | None,
 ) -> None:
-    """Store counts for a product run. Missing usage is a no-op, never a failed turn."""
+    """Store counts for a product run. Missing usage is a no-op, never a failed turn.
+
+    An estimated USD is stored when the model has an in-repo rate card.
+    """
     if usage is None:
         return
     try:
+        _, stored_fast = history.get_model_params()
+        fast = True if stored_fast is None else bool(stored_fast)
         record = history.record_usage(
             bot_id=bot.id,
             run_id=run_id,
@@ -34,6 +39,7 @@ def persist_product_usage(
             cache_write_tokens=usage.cache_write_tokens,
             reasoning_tokens=usage.reasoning_tokens,
             total_tokens=usage.total_tokens,
+            fast=fast,
         )
     except Exception:
         log.exception("failed to persist usage for run %s", run_id)
@@ -46,6 +52,8 @@ def persist_product_usage(
             "bot_id": bot.id,
             **usage.counts_payload(),
         }
+        if record.estimated_cost_usd is not None:
+            payload["estimated_cost_usd"] = record.estimated_cost_usd
         event = ProductEvent(
             id=new_id("evt"),
             workspace_id=bot.workspace_id,
