@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "artek-buddy"
-version = "0.10.27"
+version = "0.2.0"
 description = "Self-hosted AI agent host for Linux (PC, server, or Raspberry Pi)"
 readme = "README.md"
 requires-python = ">=3.13"

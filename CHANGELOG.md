@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.2.0] - 2026-09-09
+
+This is the **v0.2.0** baseline. GitHub Releases **0.10.23–0.10.27** were the same product line under Debian-style numbering; this cut is the milestone-7 ship. Ships the window that lived on `develop` after **0.10.27**: Today, workspace rail, Work log, Library, phone host page, Models keys in the window, bot-to-bot, connections, playbooks, usage in Work log. Cursor remains the live agent runtime. An HTTP provider key in Models is catalog/check and a one-shot reply, not computer-use.
+
 ### Added
 - Model catalog Save keeps variants and parameter ids/values (`0034_model_catalog_extras.sql`). `GET /v1/models` exposes those extras when present and still omits them for id-only rows. A router catalog id is selectable only when the list actually includes it.
 - Host Cursor bridge applies Settings timeouts (`CURSOR_UNARY_TIMEOUT_S`, `CURSOR_STREAM_TIMEOUT_S`, `CURSOR_MAX_RETRIES`) via SDK `with_options`. A timeout finishes as a retryable owner-visible message, not a hang. Read-only RPC retries stay small; a send that already has a run id is not retried.
@@ -40,6 +44,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Changed
+- Debian `.deb` `Version` uses epoch 1 (`1:0.2.0`) so `dpkg` can upgrade from 0.10.27. The product number and filename stay `0.2.0`.
 - Stale-run cleanup lists through `client.agents.list_runs`. Owner Stop and listed-run cancel use `run.supports("cancel")` then `cancel()` and do not probe stop/abort. 404 ListRuns stays quiet (#328).
 - Pin the window OpenAPI toolchain's `js-yaml` to 4.3.2 so the backend job's npm audit high gate stays green.
 - Generalized documentation, architecture diagrams, threat models, and scripts to describe any standard Linux host (PC, server, mini PC, or Raspberry Pi) rather than assuming a Raspberry Pi.
@@ -853,7 +858,7 @@ Hygiene after the 0.2.0 cutover. Stages 0–2 unchanged.
 
 ## [0.2.0] - 2026-08-17
 
-Stages 0–2.
+Stages 0–2. In-tree cut only (never a GitHub Release). Public tags later used 0.10.x until the 2026-09-09 ship at the top of this file.
 
 - Host on this Raspberry Pi: FastAPI, Cursor runtime, Tailscale Funnel.
 - Shared contracts for bots, threads, messages, and runs.

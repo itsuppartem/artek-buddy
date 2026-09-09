@@ -202,7 +202,7 @@ def test_desktop_create_spec_capdrop_all_and_pi5_limits() -> None:
 def test_credential_runner_mounts_one_home_and_is_disposable() -> None:
     spec = credential_runner_spec(
         name="artek-credential-runner-abc",
-        image="ghcr.io/itsuppartem/artek-buddy:0.10.28",
+        image="ghcr.io/itsuppartem/artek-buddy:0.2.0",
         home="/data/homes/team-ws",
         home_key="team-ws",
         cwd="project",
@@ -211,7 +211,7 @@ def test_credential_runner_mounts_one_home_and_is_disposable() -> None:
         injected_env={"GH_TOKEN": "fixture", "UV_PUBLISH_TOKEN": "fixture-pypi"},
     )
     hc = spec["HostConfig"]
-    assert spec["Image"] == "ghcr.io/itsuppartem/artek-buddy:0.10.28"
+    assert spec["Image"] == "ghcr.io/itsuppartem/artek-buddy:0.2.0"
     assert spec["Entrypoint"] == ["/usr/bin/prlimit"]
     assert spec["Cmd"][0] == "--as=2147483648:2147483648"
     assert spec["Cmd"][-3:] == ["/bin/sh", "-c", "gh auth status && uv --version"]
@@ -262,7 +262,7 @@ def test_credential_runner_rejects_latest_and_escaping_cwd() -> None:
     with pytest.raises(ValueError, match="pinned"):
         credential_runner_spec(image="artek-buddy:latest", cwd=".", **base)
     with pytest.raises(ValueError, match="cwd"):
-        credential_runner_spec(image="artek-buddy:0.10.28", cwd="../other", **base)
+        credential_runner_spec(image="artek-buddy:0.2.0", cwd="../other", **base)
 
 
 def test_credential_runner_creates_only_selected_unbooted_home(tmp_path) -> None:
@@ -368,7 +368,7 @@ def test_supervisor_credential_endpoint_uses_distinct_token_and_creates_home(
         engine=engine,
         token="supervisor-token",
         credential_executor_token="executor-token",
-        credential_runner_image="artek-buddy:0.10.28",
+        credential_runner_image="artek-buddy:0.2.0",
         data_dir=tmp_path / "data",
     )
     monkeypatch.setattr(supervisor_server, "STATE", state)
