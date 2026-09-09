@@ -13,6 +13,13 @@ class ComputerMode(str):
     dedicated = "dedicated"
 
 
+ExecutionState = Literal[
+    "queued", "running", "waiting", "completed", "failed", "cancelled", "unknown"
+]
+AttentionReason = Literal["approval", "clarification", "takeover", "recovery", "none"]
+ConnectionState = Literal["live", "last_known"]
+
+
 class Bot(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -35,6 +42,14 @@ class Bot(BaseModel):
     cursor_agent_id: str | None = None
     updated_at: str
     created_at: str
+    execution_state: ExecutionState = "unknown"
+    attention_reason: AttentionReason = "none"
+    connection_state: ConnectionState = "live"
+    state_version: int = 0
+    pending_consent_id: str | None = None
+    pending_ask_id: str | None = None
+    takeover_run_id: str | None = None
+    result_id: str | None = None
 
 
 class CreateBotInput(BaseModel):

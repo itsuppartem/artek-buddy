@@ -107,6 +107,7 @@ import {
   type SidebarView,
   sortInboxBots,
 } from "../lib/sidebar";
+import { applyBotProjection, markConnectionLost, mergeBotList } from "../lib/task-flow";
 import {
   canAnswerOwnerPrompt,
   isHiddenLiveDraft,
@@ -318,6 +319,11 @@ export function ShellPage() {
   offlineQueueRef.current = offlineQueue;
   offlineCaptionsRef.current = offlineCaptions;
   hostDownRef.current = hostDown;
+
+  function markHostUnreachable() {
+    setHostDown(true);
+    setBots((list) => markConnectionLost(list));
+  }
   const [later, setLater] = useState<string | null>(null);
   const [usageRecords, setUsageRecords] = useState<UsageRecord[]>([]);
   const [attention, setAttention] = useState<AttentionAlert | null>(null);
@@ -703,26 +709,42 @@ export function ShellPage() {
     flushHeldAlerts();
     if (next) void dispatchAlert(next, incoming.id, bot.notifyOnFinish);
     if (incoming.type === "run.started") {
-      const running = { ...bot, status: "running" };
-      botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? running : item));
-      const stored = prevBotsRef.current.get(bot.id);
-      if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "running" });
-      setBots((list) =>
-        list.map((item) => (item.id === bot.id ? { ...item, status: "running" } : item)),
-      );
+      if (incoming.seq < (bot.stateVersion ?? 0)) {
+        // Late event: keep the newer host projection.
+      } else {
+        const running = applyBotProjection(bot, {
+          status: "running",
+          executionState: "running",
+          stateVersion: incoming.seq,
+        });
+        botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? running : item));
+        const stored = prevBotsRef.current.get(bot.id);
+        if (stored) prevBotsRef.current.set(bot.id, running);
+        setBots((list) =>
+          list.map((item) => (item.id === bot.id ? applyBotProjection(item, running) : item)),
+        );
+      }
+    }
+    if (incoming.type === "run.waiting_input") {
+      void refreshBotsRef.current().catch(() => undefined);
     }
     if (incoming.type === "computer.takeover.requested") {
-      const parked = {
-        ...bot,
-        status: "waiting_takeover",
-        updatedAt: new Date().toISOString(),
-      };
-      botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? parked : item));
-      const stored = prevBotsRef.current.get(bot.id);
-      if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "waiting_takeover" });
-      setBots((list) =>
-        list.map((item) => (item.id === bot.id ? { ...item, status: "waiting_takeover" } : item)),
-      );
+      if (incoming.seq >= (bot.stateVersion ?? 0)) {
+        const parked = applyBotProjection(bot, {
+          status: "waiting_takeover",
+          executionState: "waiting",
+          attentionReason: "takeover",
+          takeoverRunId: incoming.runId ?? bot.takeoverRunId,
+          updatedAt: new Date().toISOString(),
+          stateVersion: incoming.seq,
+        });
+        botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? parked : item));
+        const stored = prevBotsRef.current.get(bot.id);
+        if (stored) prevBotsRef.current.set(bot.id, parked);
+        setBots((list) =>
+          list.map((item) => (item.id === bot.id ? applyBotProjection(item, parked) : item)),
+        );
+      }
       void refreshBotsRef.current().catch(() => undefined);
     }
     if (incoming.type === "run.completed" || incoming.type === "run.failed") {
@@ -811,11 +833,15 @@ export function ShellPage() {
         markOpenThreadRead(viewing);
       }
     }
-    prevBotsRef.current = new Map(list.map((item) => [item.id, item]));
-    botsRef.current = list;
     for (const item of list) discardedBotIds.current.delete(item.id);
     const archivedList = await api.bots.listArchived().catch(() => [] as Bot[]);
-    setBots(list);
+    setBots((prev) => {
+      const merged = mergeBotList(prev, list);
+      const next = hostDownRef.current ? markConnectionLost(merged) : merged;
+      prevBotsRef.current = new Map(next.map((item) => [item.id, item]));
+      botsRef.current = next;
+      return next;
+    });
     raiseParkedAlerts();
     setArchivedBots(archivedList);
     if (archivedList.length === 0) setSidebarView("inbox");
@@ -946,7 +972,7 @@ export function ShellPage() {
     errorKindRef.current = classified.kind;
     setErrorKind(classified.kind);
     if (classified.kind === "host") {
-      setHostDown(true);
+      markHostUnreachable();
       return;
     }
     setError(message);
@@ -991,7 +1017,7 @@ export function ShellPage() {
       queuedAt: Date.now(),
     };
     setOfflineQueue((queue) => persistQueue(enqueueSend(queue, item)));
-    setHostDown(true);
+    markHostUnreachable();
     if (activeIdRef.current === botId) {
       setReplyTo(null);
     } else {
@@ -1030,7 +1056,7 @@ export function ShellPage() {
         } catch (err) {
           const classified = classifyError(err);
           if (classified.kind === "host") {
-            setHostDown(true);
+            markHostUnreachable();
             return;
           }
           if (classified.kind === "auth") {
@@ -1296,7 +1322,7 @@ export function ShellPage() {
             showError(err, classified.message);
             break;
           }
-          if (classified.kind === "host") setHostDown(true);
+          if (classified.kind === "host") markHostUnreachable();
           // Reconnect after a dropped stream. The last event id keeps replay safe.
         }
         if (abort.signal.aborted) break;
@@ -1712,7 +1738,15 @@ export function ShellPage() {
     try {
       const dispatched = await api.workspace.dispatch(text);
       setBots((list) =>
-        list.map((bot) => (bot.id === dispatched.botId ? { ...bot, status: "running" } : bot)),
+        list.map((row) =>
+          row.id === dispatched.botId
+            ? applyBotProjection(row, {
+                status: "running",
+                executionState: "running",
+                stateVersion: row.stateVersion ?? 0,
+              })
+            : row,
+        ),
       );
       void refreshBots().catch(() => undefined);
     } catch (err) {

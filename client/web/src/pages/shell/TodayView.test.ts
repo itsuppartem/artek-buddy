@@ -27,19 +27,25 @@ describe("TodayView", () => {
           bot({
             id: "working",
             name: "Research desk",
-            status: "working",
+            status: "running",
+            executionState: "running",
+            attentionReason: "none",
             preview: "Reading source 3 of 4",
           }),
           bot({
             id: "ready",
             name: "Release helper",
             unread: true,
+            executionState: "completed",
+            attentionReason: "none",
             preview: "Package report is ready",
           }),
           bot({
             id: "decision",
             name: "Mail",
-            status: "waiting",
+            status: "waiting_input",
+            executionState: "waiting",
+            attentionReason: "approval",
             unread: true,
             preview: "Needs approval to send",
           }),
@@ -64,6 +70,34 @@ describe("TodayView", () => {
     expect(html).toContain("Send to workspace");
     expect(html).not.toContain("Suggested:");
     expect(html).toContain("Open routines");
+  });
+
+  it("does not put an unread preview that says question into Needs your decision", () => {
+    const html = renderToStaticMarkup(
+      createElement(TodayView, {
+        botsReady: true,
+        bots: [
+          bot({
+            id: "trap",
+            name: "Preview trap",
+            unread: true,
+            preview: "No questions remain",
+            executionState: "completed",
+            attentionReason: "none",
+          }),
+        ],
+        onOpenBot: vi.fn(),
+        onStartTask: vi.fn(),
+        onOpenRoutines: vi.fn(),
+        onCreateBot: vi.fn(),
+      }),
+    );
+    const decision = html.indexOf("Needs your decision");
+    const ready = html.indexOf("Ready for you");
+    const trap = html.indexOf("Preview trap");
+    expect(trap).toBeGreaterThan(ready);
+    expect(trap).toBeGreaterThan(decision);
+    expect(html).toContain("Preview trap");
   });
 
   it("does not mistake loading for an empty workspace", () => {

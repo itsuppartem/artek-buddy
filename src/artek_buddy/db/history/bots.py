@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import Any
 
+from artek_buddy.bot_attention import (
+    BotAttentionFacts,
+    pending_ask_id_from_blocks,
+    project_bot,
+)
 from artek_buddy.contracts.domain import (
     Bot,
 )
@@ -93,7 +99,7 @@ class BotsMixin:
                 (now, now, bot_id),
             ).fetchone()
             conn.commit()
-        return self._bot_from_row(row) if row else None
+        return self._projected(self._bot_from_row(row) if row else None)
 
     def restore_bot(self, bot_id: str) -> Bot | None:
         now = isoformat_utc()
@@ -108,7 +114,7 @@ class BotsMixin:
                 (now, bot_id),
             ).fetchone()
             conn.commit()
-        return self._bot_from_row(row) if row else None
+        return self._projected(self._bot_from_row(row) if row else None)
 
     def duplicate_bot(self, bot_id: str) -> Bot:
         original = self.get_bot(bot_id)
@@ -195,7 +201,7 @@ class BotsMixin:
         if updated is not None and computer_mode is not None and new_mode != bot.computer_mode:
             self.ensure_computer(updated)
             return self.get_bot(bot_id) or updated
-        return updated
+        return self._projected(updated)
 
     def set_bot_unread(self, bot_id: str, unread: bool) -> Bot | None:
         now = isoformat_utc()
@@ -210,7 +216,7 @@ class BotsMixin:
                 (unread, now, bot_id),
             ).fetchone()
             conn.commit()
-        return self._bot_from_row(row) if row else None
+        return self._projected(self._bot_from_row(row) if row else None)
 
     def cancel_active_runs(self, bot_id: str) -> list[str]:
         now = isoformat_utc()
@@ -387,7 +393,7 @@ class BotsMixin:
                 """
             ).fetchall()
             conn.commit()
-        return [self._bot_from_row(row) for row in rows]
+        return self._attach_attention([self._bot_from_row(row) for row in rows])
 
     def list_archived_bots(self) -> list[Bot]:
         with self._conn() as conn:
@@ -399,13 +405,16 @@ class BotsMixin:
                 """
             ).fetchall()
             conn.commit()
-        return [self._bot_from_row(row) for row in rows]
+        return self._attach_attention([self._bot_from_row(row) for row in rows])
 
     def get_bot(self, bot_id: str) -> Bot | None:
         with self._conn() as conn:
             row = conn.execute("SELECT * FROM bots WHERE id = %s", (bot_id,)).fetchone()
             conn.commit()
-        return self._bot_from_row(row) if row else None
+        if row is None:
+            return None
+        attached = self._attach_attention([self._bot_from_row(row)])
+        return attached[0] if attached else None
 
     def get_bot_by_agent(self, cursor_agent_id: str) -> Bot | None:
         with self._conn() as conn:
@@ -419,7 +428,10 @@ class BotsMixin:
                 (cursor_agent_id,),
             ).fetchone()
             conn.commit()
-        return self._bot_from_row(row) if row else None
+        if row is None:
+            return None
+        attached = self._attach_attention([self._bot_from_row(row)])
+        return attached[0] if attached else None
 
     def default_bot(self, cursor_agent_id: str | None = None) -> Bot | None:
         if cursor_agent_id:
@@ -434,6 +446,147 @@ class BotsMixin:
             row = conn.execute("SELECT COUNT(*) AS n FROM bots").fetchone()
             conn.commit()
         return int(row["n"]) if row else 0
+
+    def _attach_attention(self, bots: list[Bot]) -> list[Bot]:
+        if not bots:
+            return []
+        facts = self._bot_attention_facts(bots)
+        return [project_bot(bot, facts.get(bot.id, BotAttentionFacts())) for bot in bots]
+
+    def _projected(self, bot: Bot | None) -> Bot | None:
+        if bot is None:
+            return None
+        return self._attach_attention([bot])[0]
+
+    def _bot_attention_facts(self, bots: list[Bot]) -> dict[str, BotAttentionFacts]:
+        ids = [bot.id for bot in bots]
+        threads = [bot.thread_id for bot in bots]
+        by_thread = {bot.thread_id: bot.id for bot in bots}
+        with self._conn() as conn:
+            active_rows = conn.execute(
+                """
+                SELECT DISTINCT ON (bot_id) bot_id, id, status
+                FROM runs
+                WHERE bot_id = ANY(%s)
+                  AND status IN (
+                      'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
+                  )
+                ORDER BY bot_id, started_at DESC NULLS LAST, id DESC
+                """,
+                (ids,),
+            ).fetchall()
+            result_rows = conn.execute(
+                """
+                SELECT DISTINCT ON (bot_id) bot_id, id, status
+                FROM runs
+                WHERE bot_id = ANY(%s)
+                  AND status IN ('completed', 'failed', 'cancelled')
+                ORDER BY bot_id, completed_at DESC NULLS LAST, started_at DESC NULLS LAST, id DESC
+                """,
+                (ids,),
+            ).fetchall()
+            consent_rows = conn.execute(
+                """
+                SELECT DISTINCT ON (bot_id) bot_id, id
+                FROM consent_requests
+                WHERE bot_id = ANY(%s)
+                  AND status = 'pending'
+                  AND message_id IS NOT NULL
+                ORDER BY bot_id, created_at DESC, id DESC
+                """,
+                (ids,),
+            ).fetchall()
+            job_rows = conn.execute(
+                """
+                SELECT DISTINCT ON (bot_id) bot_id, id
+                FROM consent_requests
+                WHERE bot_id = ANY(%s)
+                  AND status = 'pending'
+                  AND message_id IS NULL
+                  AND job_status IN ('queued', 'acknowledged')
+                ORDER BY bot_id, created_at DESC, id DESC
+                """,
+                (ids,),
+            ).fetchall()
+            activity_rows = conn.execute(
+                """
+                SELECT resource AS bot_id, MAX(seq) AS state_version
+                FROM activity
+                WHERE resource = ANY(%s)
+                GROUP BY resource
+                """,
+                (ids,),
+            ).fetchall()
+            ask_rows = conn.execute(
+                """
+                SELECT thread_id, id, blocks, seq
+                FROM (
+                    SELECT thread_id, id, blocks, seq,
+                           row_number() OVER (
+                               PARTITION BY thread_id ORDER BY seq DESC
+                           ) AS rn
+                    FROM messages
+                    WHERE thread_id = ANY(%s) AND role = 'bot'
+                ) recent
+                WHERE rn <= 30
+                ORDER BY thread_id, seq DESC
+                """,
+                (threads,),
+            ).fetchall()
+            conn.commit()
+        facts: dict[str, BotAttentionFacts] = {bot.id: BotAttentionFacts() for bot in bots}
+        for row in activity_rows:
+            bot_id = str(row["bot_id"])
+            current = facts.get(bot_id)
+            if current is None:
+                continue
+            facts[bot_id] = replace(current, state_version=int(row["state_version"] or 0))
+        for row in active_rows:
+            bot_id = str(row["bot_id"])
+            current = facts.get(bot_id)
+            if current is None:
+                continue
+            facts[bot_id] = replace(
+                current,
+                active_run_id=str(row["id"]),
+                active_run_status=str(row["status"]),
+            )
+        for row in result_rows:
+            bot_id = str(row["bot_id"])
+            current = facts.get(bot_id)
+            if current is None:
+                continue
+            facts[bot_id] = replace(
+                current,
+                result_id=str(row["id"]),
+                result_status=str(row["status"]),
+            )
+        for row in consent_rows:
+            bot_id = str(row["bot_id"])
+            current = facts.get(bot_id)
+            if current is None:
+                continue
+            facts[bot_id] = replace(current, pending_consent_id=str(row["id"]))
+        for row in job_rows:
+            bot_id = str(row["bot_id"])
+            current = facts.get(bot_id)
+            if current is None:
+                continue
+            facts[bot_id] = replace(current, pending_owner_job_id=str(row["id"]))
+        seen_threads: set[str] = set()
+        for row in ask_rows:
+            thread_id = str(row["thread_id"])
+            if thread_id in seen_threads:
+                continue
+            if not pending_ask_id_from_blocks(row["blocks"]):
+                continue
+            seen_threads.add(thread_id)
+            bot_id = by_thread.get(thread_id)
+            current = facts.get(bot_id) if bot_id else None
+            if current is None or bot_id is None:
+                continue
+            facts[bot_id] = replace(current, pending_ask_id=str(row["id"]))
+        return facts
 
     def _bot_from_row(self, row: dict[str, Any]) -> Bot:
         return Bot(

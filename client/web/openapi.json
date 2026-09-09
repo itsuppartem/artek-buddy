@@ -465,6 +465,18 @@
             ],
             "title": "Archived At"
           },
+          "attention_reason": {
+            "default": "none",
+            "enum": [
+              "approval",
+              "clarification",
+              "takeover",
+              "recovery",
+              "none"
+            ],
+            "title": "Attention Reason",
+            "type": "string"
+          },
           "color": {
             "title": "Color",
             "type": "string"
@@ -475,6 +487,15 @@
               "dedicated"
             ],
             "title": "Computer Mode",
+            "type": "string"
+          },
+          "connection_state": {
+            "default": "live",
+            "enum": [
+              "live",
+              "last_known"
+            ],
+            "title": "Connection State",
             "type": "string"
           },
           "created_at": {
@@ -494,6 +515,20 @@
           },
           "description": {
             "title": "Description",
+            "type": "string"
+          },
+          "execution_state": {
+            "default": "unknown",
+            "enum": [
+              "queued",
+              "running",
+              "waiting",
+              "completed",
+              "failed",
+              "cancelled",
+              "unknown"
+            ],
+            "title": "Execution State",
             "type": "string"
           },
           "id": {
@@ -525,6 +560,28 @@
             ],
             "title": "Parent Bot Id"
           },
+          "pending_ask_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Ask Id"
+          },
+          "pending_consent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Consent Id"
+          },
           "pinned": {
             "title": "Pinned",
             "type": "boolean"
@@ -533,9 +590,36 @@
             "title": "Preview",
             "type": "string"
           },
+          "result_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Id"
+          },
+          "state_version": {
+            "default": 0,
+            "title": "State Version",
+            "type": "integer"
+          },
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "takeover_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Takeover Run Id"
           },
           "thread_id": {
             "minLength": 1,

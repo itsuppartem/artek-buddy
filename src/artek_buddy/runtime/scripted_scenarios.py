@@ -19,6 +19,7 @@ from artek_buddy.consent import (
 E2E_DRAFT_LEAK = "grade's current weather from a public API"
 E2E_DRAFT_ANSWER = "Belgrade is 22°C and clear."
 E2E_CLOSE_STATUS = "Closing Chromium"
+E2E_NO_QUESTIONS_ANSWER = "No questions remain. The report is ready."
 E2E_SLOW_ANSWER = "slow done"
 E2E_LATE_COMPLETE = "pong"
 E2E_MARKDOWN_ANSWER = "**Belgrade** weather is 22C. [Open docs](https://example.com/artek-buddy)"
@@ -942,6 +943,8 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             scripted_text(E2E_LATE_COMPLETE),
             scripted_finish(E2E_LATE_COMPLETE),
         ]
+    if "e2e-no-questions" in hay:
+        return [scripted_finish(E2E_NO_QUESTIONS_ANSWER)]
     if "e2e-slow" in hay:
         return [scripted_delay(2.5), scripted_finish(E2E_SLOW_ANSWER)]
     if "e2e-markdown-preview" in hay:

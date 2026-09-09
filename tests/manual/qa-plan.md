@@ -74,7 +74,7 @@ Named job: [SCENARIOS.md](../../SCENARIOS.md). Use **Research** (Private). Live 
 | After Pair the first surface is **Today**, not a random bot. It shows **What needs doing?** and does not boot a desktop | [ ] | [ ] |
 | Today identifies **Workspace routing · uses every bot's context**; there is no coordinator bot in Chats and pinning does not choose one. Submit an outcome: the host reads existing bot profiles, activity, and bounded recent context, routes once, stays on Today, and the selected existing bot moves to **In progress** | [ ] | [ ] |
 | Open the routed bot: the exact outcome appears once in that bot's durable chat. With no bots, the action says **Create your first bot**; it never invents a lead chat | [ ] | [ ] |
-| Today orders **Needs your decision** before **In progress**, then **Ready for you**. Open each card and it lands in the named chat | [ ] | [ ] |
+| Today orders **Needs your decision** before **In progress**, then **Ready for you**. Open each card and it lands in the named chat. An unread preview that contains “question” / “No questions remain” is **not** a decision unless a real Allow / ask / take-control card is pending. A parked Allow (`e2e-consent-browse`) is **Needs your decision**. A lost host link does not move the card to failed. | [ ] | [ ] |
 | Desktop rail keeps **Today / Chats / Routines / Library** visible once. Chats shows an attention count when unread work exists; there is no duplicate Settings control | [ ] | — |
 | **New bot**, **Desktop**, **Show work log**, **Bot profile & access**, **Send**, and **Stop** are words, not mystery icons | [ ] | [ ] |
 | **Send** is grey while Message is empty (no text and no files) | [ ] | [ ] |

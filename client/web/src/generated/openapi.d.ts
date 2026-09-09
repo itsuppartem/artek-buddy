@@ -1764,6 +1764,12 @@ export interface components {
         Bot: {
             /** Archived At */
             archived_at: string | null;
+            /**
+             * Attention Reason
+             * @default none
+             * @enum {string}
+             */
+            attention_reason: "approval" | "clarification" | "takeover" | "recovery" | "none";
             /** Color */
             color: string;
             /**
@@ -1771,12 +1777,24 @@ export interface components {
              * @enum {string}
              */
             computer_mode: "team" | "dedicated";
+            /**
+             * Connection State
+             * @default live
+             * @enum {string}
+             */
+            connection_state: "live" | "last_known";
             /** Created At */
             created_at: string;
             /** Cursor Agent Id */
             cursor_agent_id?: string | null;
             /** Description */
             description: string;
+            /**
+             * Execution State
+             * @default unknown
+             * @enum {string}
+             */
+            execution_state: "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled" | "unknown";
             /** Id */
             id: string;
             /** Instructions */
@@ -1787,12 +1805,25 @@ export interface components {
             notify_on_finish: boolean;
             /** Parent Bot Id */
             parent_bot_id: string | null;
+            /** Pending Ask Id */
+            pending_ask_id?: string | null;
+            /** Pending Consent Id */
+            pending_consent_id?: string | null;
             /** Pinned */
             pinned: boolean;
             /** Preview */
             preview: string;
+            /** Result Id */
+            result_id?: string | null;
+            /**
+             * State Version
+             * @default 0
+             */
+            state_version: number;
             /** Status */
             status: string;
+            /** Takeover Run Id */
+            takeover_run_id?: string | null;
             /** Thread Id */
             thread_id: string;
             /** Title */
