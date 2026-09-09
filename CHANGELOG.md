@@ -72,6 +72,7 @@ This is the **v0.2.0** baseline. GitHub Releases **0.10.23–0.10.27** were the 
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
+- Log redaction of postgres URLs no longer uses a backtracking regex (CodeQL `py/polynomial-redos` on `observe.redact_text`).
 - Opening Computer on the Deb hatch no longer jumps the open chat to the top of the transcript.
 - Busy chats keep **Still working:** in one waiting slot under the transcript. The header stays a short Working line and the run summary does not repeat that paragraph.
 - Quota and bad-key Cursor send failures finish with an owner-visible `run-error` instead of a silent dead turn: exhausted quota says to wait and try again; an invalid key says to open Models. A retryable rate limit waits `retry_after` (or a bounded backoff) and retries send once before that message. Busy still uses local force once.

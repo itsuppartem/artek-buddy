@@ -31,6 +31,13 @@ def test_redact_novnc_and_database_url() -> None:
     assert "/novnc/[redacted]" in text
     assert "super-secret" not in text
     assert "postgresql://artek:[redacted]@" in text
+    short = redact_text("postgres://owner:hunter2@db")
+    assert "hunter2" not in short
+    assert "postgres://owner:[redacted]@" in short
+    pump = "postgres://.:" + ("postgres://!:" * 200)
+    pumped = redact_text(pump)
+    assert "postgres://.:" in pumped
+    assert len(pumped) == len(pump)
 
 
 def test_redact_pairing_code_and_device_token() -> None:
