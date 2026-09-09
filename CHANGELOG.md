@@ -40,6 +40,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Changed
+- Stale-run cleanup lists through `client.agents.list_runs`. Owner Stop and listed-run cancel use `run.supports("cancel")` then `cancel()` and do not probe stop/abort. 404 ListRuns stays quiet (#328).
 - Pin the window OpenAPI toolchain's `js-yaml` to 4.3.2 so the backend job's npm audit high gate stays green.
 - Generalized documentation, architecture diagrams, threat models, and scripts to describe any standard Linux host (PC, server, mini PC, or Raspberry Pi) rather than assuming a Raspberry Pi.
 - Tested and verified the interactive consent HTTP contract on Allow once, Always, repeat answers, and consent job results (`POST /v1/consents/{id}/result`), validating base64 inputs and honoring grants across subsequent prompts.

@@ -94,6 +94,31 @@ async def _cancel_cursor_run(run: Any) -> None:
         log.exception("cursor run cancel failed")
 
 
+async def _cancel_listed_cursor_run(run: Any, agents: Any, agent_id: str) -> bool:
+    """Cancel a listed stale run: supports('cancel') then cancel(), else agents.cancel_run."""
+    supports = getattr(run, "supports", None)
+    if callable(supports):
+        try:
+            allowed = supports("cancel")
+        except Exception:
+            log.exception("cursor run supports(cancel) failed")
+            return False
+        if not allowed:
+            return False
+    cancel = getattr(run, "cancel", None)
+    if callable(cancel):
+        result = cancel()
+        if asyncio.iscoroutine(result):
+            await result
+        return True
+    cancel_run = getattr(agents, "cancel_run", None)
+    rid = getattr(run, "id", None) or getattr(run, "run_id", None)
+    if callable(cancel_run) and rid:
+        await cancel_run(str(rid), agent_id=agent_id)
+        return True
+    return False
+
+
 async def _release_cursor_run(run: Any) -> None:
     """Cancel a live handle when supported, then wait so a retry send is not a second bill."""
     if run is None:
@@ -510,9 +535,9 @@ class CursorRuntime(RuntimeBase):
                 self._bridge_condition.notify_all()
 
     async def _cancel_stale_runs(self, agent_id: str) -> None:
-        list_runs = getattr(self.client, "list_runs", None)
-        cancel_run = getattr(self.client, "cancel_run", None)
-        if not callable(list_runs) or not callable(cancel_run):
+        agents = getattr(self.client, "agents", None)
+        list_runs = getattr(agents, "list_runs", None)
+        if not callable(list_runs):
             return
         try:
             listed = await list_runs(agent_id, limit=8)
@@ -537,8 +562,8 @@ class CursorRuntime(RuntimeBase):
             if not rid:
                 continue
             try:
-                await cancel_run(str(rid), agent_id=agent_id)
-                log.warning("cancelled stale cursor run %s on %s", rid, agent_id)
+                if await _cancel_listed_cursor_run(run, agents, agent_id):
+                    log.warning("cancelled stale cursor run %s on %s", rid, agent_id)
             except Exception:
                 log.exception("failed to cancel stale cursor run %s", rid)
 

@@ -14,7 +14,11 @@ from cursor_sdk import (
 )
 
 from artek_buddy.config import Settings
-from artek_buddy.runtime.cursor import CursorRuntime, _is_unsupported_list_runs
+from artek_buddy.runtime.cursor import (
+    CursorRuntime,
+    _cancel_cursor_run,
+    _is_unsupported_list_runs,
+)
 from artek_buddy.runtime.types import RunRecord
 
 
@@ -48,28 +52,41 @@ class _Agent:
         pass
 
 
+class _ListedRun:
+    def __init__(self, run_id: str, *, status: str, can_cancel: bool = True) -> None:
+        self.id = run_id
+        self.status = status
+        self.can_cancel = can_cancel
+        self.ops: list[str] = []
+
+    def supports(self, operation: str) -> bool:
+        self.ops.append(f"supports:{operation}")
+        return operation == "cancel" and self.can_cancel
+
+    async def cancel(self) -> None:
+        self.ops.append("cancel")
+
+    async def stop(self) -> None:
+        self.ops.append("stop")
+
+    async def abort(self) -> None:
+        self.ops.append("abort")
+
+
 class _Agents:
-    def __init__(self) -> None:
-        pass
-
-    async def resume(self, _agent_id: str, _options: Any) -> _Agent:
-        raise AssertionError("unexpected resume")
-
-
-class _MockClient:
     def __init__(
         self,
         *,
         list_runs_fn: Any = None,
         cancel_run_fn: Any = None,
+        owner: Any = None,
     ) -> None:
-        self.agents = _Agents()
         self._list_runs_fn = list_runs_fn
         self._cancel_run_fn = cancel_run_fn
-        self.cancelled: list[str] = []
+        self._owner = owner
 
-    async def aclose(self) -> None:
-        pass
+    async def resume(self, _agent_id: str, _options: Any) -> _Agent:
+        raise AssertionError("unexpected resume")
 
     async def list_runs(self, agent_id: str, limit: int = 8) -> Any:
         if self._list_runs_fn is not None:
@@ -79,7 +96,32 @@ class _MockClient:
     async def cancel_run(self, run_id: str, *, agent_id: str | None = None) -> None:
         if self._cancel_run_fn is not None:
             await self._cancel_run_fn(run_id, agent_id=agent_id)
-        self.cancelled.append(run_id)
+        if self._owner is not None:
+            self._owner.cancelled.append(run_id)
+
+
+class _MockClient:
+    def __init__(
+        self,
+        *,
+        list_runs_fn: Any = None,
+        cancel_run_fn: Any = None,
+    ) -> None:
+        self.cancelled: list[str] = []
+        self.agents = _Agents(
+            list_runs_fn=list_runs_fn,
+            cancel_run_fn=cancel_run_fn,
+            owner=self,
+        )
+
+    async def aclose(self) -> None:
+        pass
+
+    async def list_runs(self, agent_id: str, limit: int = 8) -> Any:
+        raise AssertionError("use client.agents.list_runs")
+
+    async def cancel_run(self, run_id: str, *, agent_id: str | None = None) -> None:
+        raise AssertionError("use client.agents.cancel_run or run.cancel")
 
 
 def test_is_unsupported_list_runs() -> None:
@@ -185,13 +227,11 @@ async def test_other_list_failures_remain_visible(tmp_path, caplog) -> None:
 
 @pytest.mark.asyncio
 async def test_supported_client_cancels_stale_runs(tmp_path, caplog) -> None:
+    stale = _ListedRun("run-stale-1", status="running")
+    done = _ListedRun("run-done", status="completed")
+
     async def fake_list_runs_ok(_agent_id: str, limit: int = 8) -> Any:
-        return SimpleNamespace(
-            items=[
-                SimpleNamespace(id="run-stale-1", status="running"),
-                SimpleNamespace(id="run-done", status="completed"),
-            ]
-        )
+        return SimpleNamespace(items=[stale, done])
 
     client = _MockClient(list_runs_fn=fake_list_runs_ok)
     agent = _Agent("agent-stale", [_Run("run-2", status="completed", result="fresh")])
@@ -218,22 +258,25 @@ async def test_supported_client_cancels_stale_runs(tmp_path, caplog) -> None:
     terminal = output[-1]
     assert isinstance(terminal, RunRecord)
     assert terminal.status == "completed"
-    assert client.cancelled == ["run-stale-1"]
+    assert stale.ops == ["supports:cancel", "cancel"]
+    assert "stop" not in stale.ops
+    assert "abort" not in stale.ops
+    assert done.ops == []
 
 
 @pytest.mark.asyncio
 async def test_cancel_stale_run_failure_remains_visible(tmp_path, caplog) -> None:
+    class _Boom(_ListedRun):
+        async def cancel(self) -> None:
+            self.ops.append("cancel")
+            raise RuntimeError("cancel refused by bridge")
+
+    stale = _Boom("run-stale-2", status="running")
+
     async def fake_list_runs_ok(_agent_id: str, limit: int = 8) -> Any:
-        return SimpleNamespace(
-            items=[
-                SimpleNamespace(id="run-stale-2", status="running"),
-            ]
-        )
+        return SimpleNamespace(items=[stale])
 
-    async def fake_cancel_fail(_run_id: str, *, agent_id: str | None = None) -> None:
-        raise RuntimeError("cancel refused by bridge")
-
-    client = _MockClient(list_runs_fn=fake_list_runs_ok, cancel_run_fn=fake_cancel_fail)
+    client = _MockClient(list_runs_fn=fake_list_runs_ok)
     agent = _Agent("agent-cancel-err", [_Run("run-3", status="completed", result="ok")])
 
     settings = Settings(
@@ -265,3 +308,83 @@ async def test_cancel_stale_run_failure_remains_visible(tmp_path, caplog) -> Non
         if r.levelno >= logging.ERROR and "failed to cancel stale cursor run" in r.message
     ]
     assert len(cancel_errs) == 1
+
+
+@pytest.mark.asyncio
+async def test_stale_snapshot_cancels_through_agents_cancel_run(tmp_path) -> None:
+    async def fake_list_runs_ok(_agent_id: str, limit: int = 8) -> Any:
+        return SimpleNamespace(items=[SimpleNamespace(id="run-stale-3", status="running")])
+
+    client = _MockClient(list_runs_fn=fake_list_runs_ok)
+    agent = _Agent("agent-snapshot", [_Run("run-4", status="completed", result="ok")])
+    settings = Settings(
+        agent_http_token="ci-host-token-aabbccddeeff001122334455",
+        cursor_api_key="ci-cursor-key",
+        agent_cwd=str(tmp_path / "workspace"),
+        agent_data_dir=str(tmp_path / "data"),
+        sandbox_provider="fake",
+    )
+    runtime = CursorRuntime(client, settings)
+    runtime._agents[agent.agent_id] = agent
+    output = [
+        item
+        async for item in runtime.stream(
+            "test prompt",
+            session_id=agent.agent_id,
+            bot_id="bot-test",
+        )
+    ]
+    terminal = output[-1]
+    assert isinstance(terminal, RunRecord)
+    assert terminal.status == "completed"
+    assert client.cancelled == ["run-stale-3"]
+
+
+@pytest.mark.asyncio
+async def test_stale_run_skips_cancel_when_unsupported(tmp_path) -> None:
+    stale = _ListedRun("run-stale-4", status="running", can_cancel=False)
+
+    async def fake_list_runs_ok(_agent_id: str, limit: int = 8) -> Any:
+        return SimpleNamespace(items=[stale])
+
+    client = _MockClient(list_runs_fn=fake_list_runs_ok)
+    agent = _Agent("agent-no-cancel", [_Run("run-5", status="completed", result="ok")])
+    settings = Settings(
+        agent_http_token="ci-host-token-aabbccddeeff001122334455",
+        cursor_api_key="ci-cursor-key",
+        agent_cwd=str(tmp_path / "workspace"),
+        agent_data_dir=str(tmp_path / "data"),
+        sandbox_provider="fake",
+    )
+    runtime = CursorRuntime(client, settings)
+    runtime._agents[agent.agent_id] = agent
+    output = [
+        item
+        async for item in runtime.stream(
+            "test prompt",
+            session_id=agent.agent_id,
+            bot_id="bot-test",
+        )
+    ]
+    terminal = output[-1]
+    assert isinstance(terminal, RunRecord)
+    assert terminal.status == "completed"
+    assert stale.ops == ["supports:cancel"]
+    assert "stop" not in stale.ops
+    assert "abort" not in stale.ops
+    assert client.cancelled == []
+
+
+@pytest.mark.asyncio
+async def test_cancel_cursor_run_checks_supports_and_skips_stop_abort() -> None:
+    blocked = _ListedRun("live-blocked", status="running", can_cancel=False)
+    await _cancel_cursor_run(blocked)
+    assert blocked.ops == ["supports:cancel"]
+    assert "stop" not in blocked.ops
+    assert "abort" not in blocked.ops
+
+    allowed = _ListedRun("live-ok", status="running", can_cancel=True)
+    await _cancel_cursor_run(allowed)
+    assert allowed.ops == ["supports:cancel", "cancel"]
+    assert "stop" not in allowed.ops
+    assert "abort" not in allowed.ops
