@@ -5,6 +5,9 @@
 ### Added
 - Named first-user recipe: a saved research brief from one public page ([SCENARIOS.md](SCENARIOS.md)). Scripted `please e2e-scenario-research` covers Allow → downloadable file with Answer / Sources / Unknowns, and Deny → no file.
 
+### Fixed
+- OPERATIONS.md backup/restore includes the `credential-data` volume and `.env` broker tokens. A tar of `data`/`workspace` plus `pg_dump` is not a complete host copy.
+
 ## [0.2.0] - 2026-09-09
 
 This is the **v0.2.0** baseline. GitHub Releases **0.10.23–0.10.27** were the same product line under Debian-style numbering; this cut is the milestone-7 ship. Ships the window that lived on `develop` after **0.10.27**: Today, workspace rail, Work log, Library, phone host page, Models keys in the window, bot-to-bot, connections, playbooks, usage in Work log. Cursor remains the live agent runtime. An HTTP provider key in Models is catalog/check and a one-shot reply, not computer-use.

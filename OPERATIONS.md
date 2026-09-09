@@ -42,48 +42,93 @@ considering the `artek-buddy` service healthy.
 
 ## Backup and restore
 
-Artek Buddy stores durable state in local directories and Docker volumes:
+Artek Buddy stores durable state in local directories **and** Docker volumes.
+A tar of `data` / `workspace` / `.env` plus `pg_dump` is **not** a complete
+copy: bot secrets live in the Compose named volume `credential-data`.
 
-- `./data`: SQLite credential databases, agent memory books, bot profiles, and
-  sandboxed desktop home directories (`./data/homes/{home_key}`).
-- `./workspace`: Working directory for bot file creation and execution.
-- Docker PostgreSQL volume: Durable chat history, messages, turns, and event records.
+| Piece | Where | In the file tar? |
+| --- | --- | --- |
+| Desktop homes, memory books, artifacts | `./data` | yes |
+| Bot workspace files | `./workspace` | yes |
+| Host tokens, `CREDENTIAL_BROKER_TOKEN`, `CREDENTIAL_EXECUTOR_TOKEN` | `.env` | yes |
+| Chat history, runs, pairing | Postgres volume (`memory-data`) | **no** — `pg_dump` |
+| Bot named secrets (broker SQLite) | Docker volume `credential-data` | **no** — volume tar below |
+| Legacy file tokens | `./data/credentials` | yes, if still present |
+
+`.env` is required to **read** a restored broker (loopback tokens). Treat the
+credential-data archive like `.env`: mode `0600`, not world-readable, never
+pasted into an issue, screenshot, or public CI log.
+
+`./data/credentials` is the **legacy** file store. After a successful
+migration the live secrets are only on `credential-data`. Restoring homes and
+Postgres without that volume can look fine (chats, UI) while bot secrets
+created after migration are gone.
+
+Unfinished owner jobs and in-process waiters do not survive this copy.
+Postgres may still show those runs as failed or waiting. That is expected
+until a recovery card exists.
+
+Do this drill on a **separate** test host, not the owner's daily machine.
 
 ### Backing up host state
 
-1. Stop running containers to ensure database and volume consistency:
+1. Stop running containers so files, Postgres, and the broker volume are quiet:
    ```bash
    docker compose down
    ```
 2. Archive the data directory, workspace, and environment configuration:
    ```bash
    tar -czf artek-buddy-backup-$(date +%Y%m%d).tar.gz data workspace .env
+   chmod 600 artek-buddy-backup-$(date +%Y%m%d).tar.gz
    ```
-3. Export PostgreSQL database dump:
+3. Archive the credential broker volume (Compose still creates/mounts it
+   after `down`; `docker-compose.release.yml` uses the same volume name).
+   `--no-deps` skips migrator/supervisor. `-T` keeps the archive binary-clean.
+   Redirect stdout; do not `tee` it into a log. The host image must already
+   exist (`artek-buddy:local` or the release image this compose file pins).
+   ```bash
+   docker compose run -T --rm --no-deps --entrypoint tar credential-broker \
+     czf - -C /var/lib/artek-buddy/credentials . \
+     > artek-buddy-credential-data-$(date +%Y%m%d).tar.gz
+   chmod 600 artek-buddy-credential-data-$(date +%Y%m%d).tar.gz
+   ```
+4. Export PostgreSQL:
    ```bash
    docker compose up -d memory
    docker compose exec memory pg_dump -U artek artek_buddy > artek_buddy_db_$(date +%Y%m%d).sql
+   chmod 600 artek_buddy_db_$(date +%Y%m%d).sql
    docker compose down
    ```
 
 ### Restoring host state
 
+Use a clean directory and the same Compose project name as the backup host
+so volume names match, or restore into the volume Compose creates here.
+
 1. Extract the file archive:
    ```bash
    tar -xzf artek-buddy-backup-<date>.tar.gz
    ```
-2. Start the database service:
+2. Restore the credential volume **before** `up` (migrator will not overwrite
+   broker values that already exist):
+   ```bash
+   docker compose run -T --rm --no-deps --entrypoint tar credential-broker \
+     xzf - -C /var/lib/artek-buddy/credentials \
+     < artek-buddy-credential-data-<date>.tar.gz
+   ```
+3. Start Postgres and restore the dump:
    ```bash
    docker compose up -d memory
-   ```
-3. Restore the SQL database dump:
-   ```bash
    docker compose exec -T memory psql -U artek -d artek_buddy < artek_buddy_db_<date>.sql
    ```
 4. Start the full stack:
    ```bash
    docker compose up -d
    ```
+5. Confirm a **post-migration** bot secret still works through the product
+   (Bot profile & access → a named secret you created after the broker
+   existed). Do not print the secret. A restore that only brings Postgres
+   back is not done.
 
 ## Production release process
 
