@@ -81,8 +81,15 @@ def send_local_options(
     *,
     force: bool = False,
     model: Any | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
-    """Local send options. `force` expires a stuck run; do not set it on every send."""
+    """Local send options. `force` expires a stuck run; do not set it on every send.
+
+    Local Cursor Send v1 rejects a non-empty idempotency key ("only supported
+    for cloud Send"). Job-driven turns still pass the key into `stream`; it is
+    not placed on this payload.
+    """
+    del idempotency_key
     local: dict[str, Any] = {"cwd": cwd}
     if force:
         local["force"] = True

@@ -23,11 +23,22 @@ def host_base() -> str:
     return f"http://127.0.0.1:{port}"
 
 
-def wake_routine(base: str, token: str, bot_id: str, prompt: str, timeout: float = 30) -> int:
+def wake_routine(
+    base: str,
+    token: str,
+    bot_id: str,
+    prompt: str,
+    timeout: float = 30,
+    *,
+    job_id: str | None = None,
+) -> int:
     request_id = mint_request_id()
+    payload: dict[str, str] = {"text": prompt, "trigger": "routine"}
+    if job_id:
+        payload["idempotency_key"] = job_id
     request = urllib.request.Request(
         f"{base.rstrip('/')}/v1/threads/{bot_id}/messages",
-        data=json.dumps({"text": prompt, "trigger": "routine"}).encode("utf-8"),
+        data=json.dumps(payload).encode("utf-8"),
         method="POST",
         headers={
             "Accept": "application/json",
@@ -101,7 +112,7 @@ def run_once(store: HistoryStore, base: str, token: str) -> int:
         if job.job_type == "routine.fire":
             bot_id = str(job.payload.get("bot_id") or "")
             prompt = str(job.payload.get("prompt") or "")
-            status = wake_routine(base, token, bot_id, prompt)
+            status = wake_routine(base, token, bot_id, prompt, job_id=job.id)
             auto_run_id = str(job.payload.get("automation_run_id") or "")
             if status in {200, 201}:
                 store.ack_job(job.id, result={"status": status})

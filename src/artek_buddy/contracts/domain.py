@@ -788,6 +788,7 @@ class ThreadSendInput(BaseModel):
     reply_to_id: Id | None = None
     attachment_ids: list[Id] = Field(default_factory=list)
     attachments: list[ThreadAttachmentInput] = Field(default_factory=list)
+    idempotency_key: str | None = Field(default=None, max_length=120)
 
     @model_validator(mode="after")
     def need_text_or_files(self) -> ThreadSendInput:

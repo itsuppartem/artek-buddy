@@ -340,3 +340,86 @@ async def test_dead_wait_exhausted_error_says_host_retried(tmp_path, caplog) -> 
     assert "run-dead" in summary
     assert "run-dead-2" in summary
     assert "retry_reason=dead_wait" in summary
+
+
+@pytest.mark.asyncio
+async def test_job_send_omits_local_idempotency_key_including_force_retry(tmp_path) -> None:
+    agent = _BusyAgent(
+        "agent-job",
+        [_Run("run-ok", status="finished", result="ok")],
+        busy_times=1,
+    )
+    runtime = CursorRuntime(_Client(_Agents()), _settings(tmp_path))
+    runtime._agents[agent.agent_id] = agent
+    output = [
+        item
+        async for item in runtime.stream(
+            "nightly",
+            session_id=agent.agent_id,
+            bot_id="bot-job",
+            idempotency_key="job_ab12cd34",
+        )
+    ]
+    terminal = output[-1]
+    assert isinstance(terminal, RunRecord)
+    assert terminal.status == "completed"
+    model = runtime.model.to_json()
+    cwd = {"cwd": str(tmp_path / "workspace")}
+    assert agent.send_options == [
+        {"local": cwd, "model": model},
+        {
+            "local": {**cwd, "force": True},
+            "model": model,
+        },
+    ]
+    for options in agent.send_options:
+        assert "idempotency_key" not in options
+
+
+@pytest.mark.asyncio
+async def test_interactive_send_omits_idempotency_key(tmp_path) -> None:
+    agent = _Agent("agent-chat", [_Run("run-ok", status="finished", result="ok")])
+    runtime = CursorRuntime(_Client(_Agents()), _settings(tmp_path))
+    runtime._agents[agent.agent_id] = agent
+    output = [
+        item
+        async for item in runtime.stream(
+            "hello",
+            session_id=agent.agent_id,
+            bot_id="bot-chat",
+        )
+    ]
+    terminal = output[-1]
+    assert isinstance(terminal, RunRecord)
+    assert terminal.status == "completed"
+    assert "idempotency_key" not in agent.send_options[0]
+
+
+@pytest.mark.asyncio
+async def test_job_stream_omits_local_idempotency_key_after_bridge_restart(tmp_path) -> None:
+    first_agent = _Agent("agent-old", [_Run("run-dead", status="error")])
+    resumed_agent = _Agent("agent-old", [_Run("run-recovered", status="finished", result="ok")])
+
+    async def restart_bridge() -> _Client:
+        return _Client(_Agents(resumed_agent))
+
+    runtime = CursorRuntime(
+        _Client(_Agents()),
+        _settings(tmp_path),
+        bridge_launcher=restart_bridge,
+    )
+    runtime._agents[first_agent.agent_id] = first_agent
+    output = [
+        item
+        async for item in runtime.stream(
+            "keep working",
+            session_id=first_agent.agent_id,
+            bot_id="bot-workhorse",
+            idempotency_key="job_ab12cd34",
+        )
+    ]
+    terminal = output[-1]
+    assert isinstance(terminal, RunRecord)
+    assert terminal.status == "completed"
+    assert "idempotency_key" not in first_agent.send_options[0]
+    assert "idempotency_key" not in resumed_agent.send_options[0]

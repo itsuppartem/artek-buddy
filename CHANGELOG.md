@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Job-driven worker and routine turns keep a stable host `idempotency_key` (job id, or the worker row id) on the host POST. The local model send omits it: that bridge rejects Idempotency-Key (cloud Send only). Interactive owner Send still omits it.
 - Work log keeps recent runs in this chat (newest first, grouped by parent run) and shows per-turn token counts from `GET /v1/usage` when present. Show work log stays after complete. No Models spend pane.
 - Persist per-turn token usage (`0033_usage.sql`, `GET /v1/usage`, `GET /v1/usage/summary`): input, output, cache, reasoning, and total for lead and worker product runs. Missing usage is omitted, not a failed turn. Counts-only `usage.recorded` SSE. No Models spend pane.
 - Added permission-aware Postgres full-text search (`0031_search_documents.sql`, `GET /v1/search`): GIN `simple` over message text, memory, artifact names, and bot names. The authorized resource set is applied in SQL before `ts_rank`, headline, and limit. Non-owner callers get the same empty page as a miss. The inbox Search box keeps name/preview filter and lists host hits underneath.
@@ -37,6 +38,7 @@
 - Models screen: paste provider keys in the window, fetch that account's list, pick one host default. Fresh host boots without `CURSOR_API_KEY`. Send without a default stays in the thread and says to open Models.
 
 ### Changed
+- Pin the window OpenAPI toolchain's `js-yaml` to 4.3.2 so the backend job's npm audit high gate stays green.
 - Generalized documentation, architecture diagrams, threat models, and scripts to describe any standard Linux host (PC, server, mini PC, or Raspberry Pi) rather than assuming a Raspberry Pi.
 - Tested and verified the interactive consent HTTP contract on Allow once, Always, repeat answers, and consent job results (`POST /v1/consents/{id}/result`), validating base64 inputs and honoring grants across subsequent prompts.
 - CI test workflows publish JUnit XML and coverage reports to GitHub Step Summary with secret redaction, and upload test/coverage XML artifacts without traces.

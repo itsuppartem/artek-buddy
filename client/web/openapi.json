@@ -4054,6 +4054,18 @@
             "title": "Attachments",
             "type": "array"
           },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
           "reply_to_id": {
             "anyOf": [
               {

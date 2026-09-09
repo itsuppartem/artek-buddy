@@ -81,6 +81,8 @@ class AgentRuntime(Protocol):
         session_id: str | None = None,
         bot_id: str | None = None,
         role: str = "lead",
+        *,
+        idempotency_key: str | None = None,
     ) -> AsyncIterator[ProductStreamEvent | RunRecord]: ...
 
     async def send(self, prompt: str, session_id: str | None = None) -> RunRecord: ...

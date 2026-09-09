@@ -3044,6 +3044,8 @@ export interface components {
             attachment_ids?: string[];
             /** Attachments */
             attachments?: components["schemas"]["ThreadAttachmentInput"][];
+            /** Idempotency Key */
+            idempotency_key?: string | null;
             /** Reply To Id */
             reply_to_id?: string | null;
             /**

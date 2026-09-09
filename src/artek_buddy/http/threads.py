@@ -168,6 +168,7 @@ async def send_thread_message(
         reply_to_id=body.reply_to_id,
         attachments=hosted,
         device_id=actor,
+        idempotency_key=body.idempotency_key,
     )
 
 

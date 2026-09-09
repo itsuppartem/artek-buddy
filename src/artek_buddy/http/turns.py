@@ -441,6 +441,8 @@ async def _turn_stream(
     prompt: str,
     agent_id: str,
     bot: Bot,
+    *,
+    idempotency_key: str | None = None,
 ):
     default = history.get_default_model()
     if runtime_kind(rt.settings) != "scripted" and default and default[0] != "cursor":
@@ -453,7 +455,12 @@ async def _turn_stream(
         )
         yield RunRecord(id=new_id("run"), agent_id=agent_id, status="completed", result=text)
         return
-    async for item in rt.stream(prompt, session_id=agent_id, bot_id=bot.id):
+    async for item in rt.stream(
+        prompt,
+        session_id=agent_id,
+        bot_id=bot.id,
+        idempotency_key=idempotency_key,
+    ):
         yield item
 
 
@@ -468,6 +475,7 @@ async def _accept_turn(
     attachments: list[dict[str, Any]] | None = None,
     model_prompt: str | None = None,
     device_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> ThreadSendResult:
     from artek_buddy.bot_credentials import apply_chat_credentials
 
@@ -584,6 +592,7 @@ async def _accept_turn(
             reply=reply_msg,
             inbox_items=inbox_items,
             device_id=device_id,
+            idempotency_key=idempotency_key,
         ),
         name=f"turn-{run.id}",
     )
@@ -603,6 +612,7 @@ async def _run_turn(
     reply: ThreadMessage | None = None,
     inbox_items: list[dict[str, str | None]] | None = None,
     device_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> None:
     remembered = None
     getter = getattr(rt, "device_for_run", None)
@@ -665,7 +675,9 @@ async def _run_turn(
             apps_context=format_apps_context(history),
             session_resume=session_resume,
         )
-        async for item in _turn_stream(history, rt, memory_prompt, agent_id, bot):
+        async for item in _turn_stream(
+            history, rt, memory_prompt, agent_id, bot, idempotency_key=idempotency_key
+        ):
             if isinstance(item, RunRecord):
                 if attach_agent and item.agent_id and item.agent_id != bot.cursor_agent_id:
                     bot = history.attach_agent(bot.id, item.agent_id)
