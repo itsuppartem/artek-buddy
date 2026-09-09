@@ -74,11 +74,30 @@ def test_waiting_ask_maps_to_clarification(client, auth_header) -> None:
         json={"text": "please e2e-ask"},
     )
     assert sent.status_code == 200
-    wait_run_status(client, auth_header, bot_id, sent.json()["run_id"], "waiting_input")
+    run_id = sent.json()["run_id"]
+    snap = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input")
     row = _bot_row(client, auth_header, bot_id)
     assert row["execution_state"] == "waiting"
     assert row["attention_reason"] == "clarification"
     assert row["pending_ask_id"]
+    pending = [
+        (message, block)
+        for message in snap["messages"]
+        for block in message["blocks"]
+        if block.get("kind") == "ask"
+        and block.get("status") == "pending"
+        and not block.get("consent_id")
+    ]
+    assert len(pending) == 1
+    message, _block = pending[0]
+    assert row["pending_ask_id"] == message["id"]
+    answered = client.post(
+        f"/v1/threads/{bot_id}/answer",
+        headers=auth_header,
+        json={"run_id": run_id, "message_id": message["id"], "answer": "Belgrade"},
+    )
+    assert answered.status_code == 200, answered.text
+    wait_run(client, auth_header, bot_id, run_id)
 
 
 def test_takeover_maps_to_attention_takeover(client, auth_header) -> None:
@@ -89,11 +108,15 @@ def test_takeover_maps_to_attention_takeover(client, auth_header) -> None:
         json={"text": "please e2e-park-takeover"},
     )
     assert sent.status_code == 200
-    wait_run_status(client, auth_header, bot_id, sent.json()["run_id"], "waiting_takeover")
+    run_id = sent.json()["run_id"]
+    wait_run_status(client, auth_header, bot_id, run_id, "waiting_takeover")
     row = _bot_row(client, auth_header, bot_id)
     assert row["execution_state"] == "waiting"
     assert row["attention_reason"] == "takeover"
-    assert row["takeover_run_id"] == sent.json()["run_id"]
+    assert row["takeover_run_id"] == run_id
+    stopped = client.post(f"/v1/threads/{bot_id}/stop", headers=auth_header)
+    assert stopped.status_code == 200, stopped.text
+    wait_run(client, auth_header, bot_id, run_id)
 
 
 def test_previous_result_id_remains_when_new_work_starts(client, auth_header) -> None:
@@ -119,6 +142,9 @@ def test_previous_result_id_remains_when_new_work_starts(client, auth_header) ->
     assert row["execution_state"] == "running"
     assert row["result_id"] == first_id
     assert row["result_id"] != second.json()["run_id"]
+    stopped = client.post(f"/v1/threads/{bot_id}/stop", headers=auth_header)
+    assert stopped.status_code == 200, stopped.text
+    wait_run(client, auth_header, bot_id, second.json()["run_id"])
 
 
 def test_late_list_snapshot_does_not_undo_accepted_decision(client, auth_header) -> None:
