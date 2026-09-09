@@ -72,7 +72,7 @@ This is the **v0.2.0** baseline. GitHub Releases **0.10.23–0.10.27** were the 
 - Protect develop and Protect main require `ui_web` with the other merge checks. `live` and `live_web` stay optional.
 
 ### Fixed
-- Host image upgrades setuptools and msgpack past Trivy HIGH that have a fixed version. Vendored cursor-sdk undici 5.29.0 and gh CLI golang.org/x/mod v0.39.0 stay in `.trivyignore` until those upstreams pin a patched copy.
+- Host image upgrades setuptools and msgpack past Trivy HIGH that have a fixed version. Vendored cursor-sdk undici 5.29.0, gh CLI golang.org/x/mod v0.39.0, and the CPython image SBOM pins (setuptools 70.3.0 / msgpack 1.1.2 while site-packages is already patched) stay in `.trivyignore`.
 - `release.yml` bind no longer requires the PR check named CodeQL on `main` pushes (GitHub does not post it there). It still requires `analyze (python)`, `analyze (javascript-typescript)`, and a green `codeql` workflow run.
 - Log redaction of postgres URLs no longer uses a backtracking regex (CodeQL `py/polynomial-redos` on `observe.redact_text`).
 - Opening Computer on the Deb hatch no longer jumps the open chat to the top of the transcript.
