@@ -39,7 +39,8 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir "uv==${UV_VERSION}"
+    && pip install --no-cache-dir "uv==${UV_VERSION}" \
+    && pip install --no-cache-dir --upgrade "setuptools>=78.1.1" "msgpack>=1.2.1"
 
 COPY src ./src
 COPY --from=web /src/client/web/dist /app/web

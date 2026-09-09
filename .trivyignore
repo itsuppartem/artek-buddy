@@ -1,2 +1,15 @@
 # Trivy suppressions. Unfixed base-image CVEs use ignore-unfixed in the workflow.
 # Add a CVE here only with a one-line reason (same bar as pip-audit-ignore).
+# Revisit by 2026-12-31.
+
+# cursor-sdk 1.0.30 (and 1.0.31) vendors undici 5.29.0. No SDK pin vendors
+# 6.27.0 / 7.28.0 / 8.5.0. The host Node bridge talks to Cursor Cloud over TLS;
+# we do not accept untrusted WebSocket peers.
+CVE-2026-12151
+CVE-2026-1526
+CVE-2026-2229
+
+# gh 2.99.0 and 2.100.0 still vendor golang.org/x/mod v0.39.0. Runtime gh is
+# not a Go module client (no `go get` of attacker-controlled module paths).
+CVE-2026-56864
+CVE-2026-56865

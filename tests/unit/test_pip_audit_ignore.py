@@ -121,3 +121,4 @@ def test_threat_model_does_not_treat_starlette_ignores_as_standing_policy() -> N
     assert "Starlette/pytest audit exceptions" not in ghcr
     assert "starlette" not in ghcr.lower()
     assert "pip-audit-ignore.txt" in ghcr
+    assert ".trivyignore" in ghcr
