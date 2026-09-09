@@ -24,16 +24,20 @@ def test_trivyignore_names_unfixable_host_image_highs() -> None:
         "CVE-2026-2229",
         "CVE-2026-56864",
         "CVE-2026-56865",
+        "CVE-2025-47273",
+        "GHSA-6v7p-g79w-8964",
     }
     assert "cursor-sdk" in text
     assert "undici" in text
     assert "golang.org/x/mod" in text
+    assert "site-packages" in text
 
 
 def test_host_dockerfile_upgrades_fixed_python_highs() -> None:
     text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "setuptools>=78.1.1" in text
     assert "msgpack>=1.2.1" in text
+    assert "ensurepip" in text
 
 
 def test_threat_model_names_trivy_host_image_residuals() -> None:
@@ -45,3 +49,5 @@ def test_threat_model_names_trivy_host_image_residuals() -> None:
     assert ".trivyignore" in ghcr
     assert "undici" in ghcr
     assert "golang.org/x/mod" in ghcr
+    assert "CVE-2025-47273" in ghcr
+    assert "GHSA-6v7p-g79w-8964" in ghcr
