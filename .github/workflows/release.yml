@@ -18,10 +18,11 @@ name: release
 # gh release create uses --verify-tag.
 # A second upload of the same Release asset name fails. Do not prune GitHub
 # Releases from this workflow.
-# Dispatch requires a green push test and CodeQL on github.sha (analyze
-# (python), analyze (javascript-typescript), and the check named CodeQL).
-# Bind prints check_run_id and codeql_run_id for that SHA. There is no
-# automatic workflow_run publish.
+# Dispatch requires a green push test and CodeQL on github.sha: analyze
+# (python), analyze (javascript-typescript), and a successful `codeql`
+# workflow run. GitHub does not post the PR check named CodeQL on `main`
+# pushes (default branch is develop). Bind prints check_run_id and
+# codeql_run_id for that SHA. There is no automatic workflow_run publish.
 # force can retry an unpublished VERSION; it cannot skip an existing tag
 # or GitHub Release. An emergency override is a separate Environment, not
 # that boolean.
@@ -89,7 +90,6 @@ jobs:
           required = (
               "analyze (python)",
               "analyze (javascript-typescript)",
-              "CodeQL",
           )
           best: dict[str, tuple[str, str, str, str]] = {}
           with open(path, encoding="utf-8") as fh:
