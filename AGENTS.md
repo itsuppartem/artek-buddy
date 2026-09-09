@@ -11,11 +11,12 @@ For the in-chat agent prompt inside the desktop sandbox container, see [`workspa
 When starting a non-trivial change, read files in this order:
 
 1. [`VISION.md`](VISION.md) — Product invariants, core assumptions, and explicit non-goals (no Kubernetes, no Redis, no multi-tenant SaaS).
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — System components, supervisor boundary, service communication, and data flow.
-3. [`THREAT-MODEL.md`](THREAT-MODEL.md) — Security boundaries, trust levels, capability isolation, and residual risk tracking.
-4. [`CONTRIBUTING.md`](CONTRIBUTING.md) — Git workflow (branch from `develop`, never push `main`), CI job expectations, and PR conventions.
-5. [`client/WINDOW.md`](client/WINDOW.md) — The living specification and locator map for the GTK `.deb` and mobile host-page UI.
-6. Relevant ADRs in [`adr/`](adr/) — Architectural decisions (Docker socket ownership, Team vs Private desktops, Compose vs Kubernetes, etc.).
+2. [`SCENARIOS.md`](SCENARIOS.md) — Named first-user recipe (saved research brief on Cursor).
+3. [`ARCHITECTURE.md`](ARCHITECTURE.md) — System components, supervisor boundary, service communication, and data flow.
+4. [`THREAT-MODEL.md`](THREAT-MODEL.md) — Security boundaries, trust levels, capability isolation, and residual risk tracking.
+5. [`CONTRIBUTING.md`](CONTRIBUTING.md) — Git workflow (branch from `develop`, never push `main`), CI job expectations, and PR conventions.
+6. [`client/WINDOW.md`](client/WINDOW.md) — The living specification and locator map for the GTK `.deb` and mobile host-page UI.
+7. Relevant ADRs in [`adr/`](adr/) — Architectural decisions (Docker socket ownership, Team vs Private desktops, Compose vs Kubernetes, etc.).
 
 ---
 

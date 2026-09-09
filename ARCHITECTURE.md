@@ -1,7 +1,7 @@
 # Architecture
 
 This is the running Compose stack on one Linux host (PC, server, or Raspberry Pi), not a target diagram.
-Trade-offs: [adr/](adr/). Trust and residual risk: [THREAT-MODEL.md](THREAT-MODEL.md).
+Trade-offs: [adr/](adr/). Trust and residual risk: [THREAT-MODEL.md](THREAT-MODEL.md). First-user recipe: [SCENARIOS.md](SCENARIOS.md).
 
 The HTTP API is the product. The `.deb` is the first client. Cursor Cloud is
 the only live model runtime.
