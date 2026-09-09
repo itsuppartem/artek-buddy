@@ -21,6 +21,7 @@ from cursor_sdk import (
 )
 
 from artek_buddy.config import Settings
+from artek_buddy.model_catalog import catalog_entry
 from artek_buddy.runtime.base import RuntimeBase
 from artek_buddy.runtime.capabilities import RuntimeCapabilities
 from artek_buddy.runtime.cursor_errors import (
@@ -271,19 +272,22 @@ class CursorRuntime(RuntimeBase):
     async def start(self) -> None:
         self._ensure_dirs()
         models = await self.client.models.list()
-        ids: list[str] = []
+        entries: list[dict[str, Any]] = []
         catalog_params: dict[str, set[str]] = {}
         for model in models:
-            ids.append(model.id)
-            raw = getattr(model, "parameters", None) or ()
-            catalog_params[model.id] = {
-                str(getattr(item, "id", "") or "") for item in raw if getattr(item, "id", None)
+            entry = catalog_entry(model)
+            if entry is None:
+                continue
+            entries.append(entry)
+            catalog_params[str(entry["id"])] = {
+                str(param["id"]) for param in entry.get("parameters") or []
             }
+        ids = [str(item["id"]) for item in entries]
         self._catalog_param_ids = catalog_params
         log.info("catalog models: %s", ", ".join(ids))
         if self.store is not None:
             try:
-                self.store.replace_catalog("cursor", ids)
+                self.store.replace_catalog("cursor", entries)
             except Exception:
                 log.exception("failed to persist Cursor catalog")
         if self.settings.cursor_model not in ids:
@@ -801,13 +805,9 @@ class CursorRuntime(RuntimeBase):
             models = await self.client.models.list()
             payload: list[dict[str, Any]] = []
             for model in models:
-                item: dict[str, Any] = {"id": model.id}
-                variants = getattr(model, "variants", None)
-                if variants:
-                    item["variants"] = [
-                        getattr(variant, "id", None) or str(variant) for variant in variants
-                    ]
-                payload.append(item)
+                entry = catalog_entry(model)
+                if entry is not None:
+                    payload.append(entry)
             return payload
         finally:
             await self._leave_bridge()

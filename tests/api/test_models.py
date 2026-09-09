@@ -352,3 +352,71 @@ def test_me_needs_model_until_default_is_set(client, auth_header) -> None:
     assert ready.json()["needs_model"] is False
     assert ready.json()["default_provider"] == "openai"
     assert ready.json()["default_model"] == "scripted"
+
+
+def test_catalog_extras_round_trip_on_get(client, auth_header) -> None:
+    store = client.app.state.store
+    store.save_key("cursor", SECRET)
+    store.replace_catalog(
+        "cursor",
+        [
+            {
+                "id": "grok-4.6",
+                "variants": ["fast"],
+                "parameters": [
+                    {
+                        "id": "effort",
+                        "values": [{"value": "xhigh", "display_name": "Extra high"}],
+                    }
+                ],
+            }
+        ],
+    )
+    models = client.get("/v1/models", headers=auth_header)
+    assert models.status_code == 200
+    assert models.json()["models"] == [
+        {
+            "id": "grok-4.6",
+            "provider": "cursor",
+            "variants": ["fast"],
+            "parameters": [
+                {
+                    "id": "effort",
+                    "values": [{"value": "xhigh", "display_name": "Extra high"}],
+                }
+            ],
+        }
+    ]
+
+
+def test_catalog_does_not_invent_a_router_id(client, auth_header) -> None:
+    store = client.app.state.store
+    store.save_key("cursor", SECRET)
+    store.replace_catalog("cursor", ["grok-4.6"])
+    models = client.get("/v1/models", headers=auth_header)
+    assert models.status_code == 200
+    body = models.json()["models"]
+    assert body == [{"id": "grok-4.6", "provider": "cursor"}]
+    assert "auto-smart" not in [row["id"] for row in body]
+
+
+def test_catalog_keeps_a_router_id_when_present(client, auth_header) -> None:
+    store = client.app.state.store
+    store.save_key("cursor", SECRET)
+    store.replace_catalog("cursor", ["grok-4.6", "auto-smart"])
+    models = client.get("/v1/models", headers=auth_header)
+    assert models.status_code == 200
+    assert models.json()["models"] == [
+        {"id": "auto-smart", "provider": "cursor"},
+        {"id": "grok-4.6", "provider": "cursor"},
+    ]
+
+
+def test_replace_catalog_drops_stale_ids(client, auth_header) -> None:
+    store = client.app.state.store
+    store.save_key("cursor", SECRET)
+    store.replace_catalog("cursor", ["old-model"])
+    store.replace_catalog("cursor", ["grok-4.6"])
+    models = client.get("/v1/models", headers=auth_header)
+    assert models.status_code == 200
+    assert models.json()["models"] == [{"id": "grok-4.6", "provider": "cursor"}]

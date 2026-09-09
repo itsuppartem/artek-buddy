@@ -5,6 +5,7 @@ import pytest
 from artek_buddy.model_catalog import (
     NEEDS_MODEL_TEXT,
     PROVIDERS,
+    catalog_entry,
     complete_chat,
     fetch_cursor_models,
     fetch_failed_message,
@@ -52,7 +53,10 @@ async def test_cursor_catalog_comes_from_the_running_runtime() -> None:
         async def list_models(self) -> list[dict[str, str]]:
             return [{"id": "grok-4.6"}, {"id": "composer-2"}]
 
-    assert await fetch_cursor_models("crsr_live", _Runtime()) == ["grok-4.6", "composer-2"]
+    assert await fetch_cursor_models("crsr_live", _Runtime()) == [
+        {"id": "grok-4.6"},
+        {"id": "composer-2"},
+    ]
 
     class _Mixed:
         async def list_models(self) -> list[dict[str, str]]:
@@ -61,7 +65,7 @@ async def test_cursor_catalog_comes_from_the_running_runtime() -> None:
                 {"id": "grok-4.6", "provider": "cursor"},
             ]
 
-    assert await fetch_cursor_models("crsr_live", _Mixed()) == ["grok-4.6"]
+    assert await fetch_cursor_models("crsr_live", _Mixed()) == [{"id": "grok-4.6"}]
     with pytest.raises(RuntimeError, match="Could not load models"):
         await fetch_cursor_models("crsr_live", None)
     with pytest.raises(RuntimeError, match="Could not load models"):
@@ -121,3 +125,60 @@ async def test_fetch_refused_key(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(PermissionError, match="refused"):
         await fetch_models("openai", "bad", scripted=False)
     assert "refused" in refused_key_message()
+
+
+def test_catalog_entry_keeps_variants_and_parameters() -> None:
+    class _Value:
+        value = "xhigh"
+        display_name = "Extra high"
+
+    class _Param:
+        id = "effort"
+        values = [_Value()]
+
+    class _Variant:
+        display_name = "fast"
+
+    class _Model:
+        id = "grok-4.6"
+        variants = [_Variant()]
+        parameters = [_Param()]
+
+    assert catalog_entry(_Model()) == {
+        "id": "grok-4.6",
+        "variants": ["fast"],
+        "parameters": [
+            {"id": "effort", "values": [{"value": "xhigh", "display_name": "Extra high"}]}
+        ],
+    }
+    assert catalog_entry({"id": "grok-4.6"}) == {"id": "grok-4.6"}
+    assert catalog_entry("scripted") == {"id": "scripted"}
+    assert preferred_model([{"id": "composer-2"}, {"id": "grok-4.6"}]) == "grok-4.6"
+
+
+@pytest.mark.asyncio
+async def test_cursor_catalog_keeps_runtime_extras() -> None:
+    class _Runtime:
+        async def list_models(self) -> list[dict[str, object]]:
+            return [
+                {
+                    "id": "grok-4.6",
+                    "variants": ["fast"],
+                    "parameters": [
+                        {
+                            "id": "effort",
+                            "values": [{"value": "xhigh", "display_name": "Extra high"}],
+                        }
+                    ],
+                }
+            ]
+
+    assert await fetch_cursor_models("crsr_live", _Runtime()) == [
+        {
+            "id": "grok-4.6",
+            "variants": ["fast"],
+            "parameters": [
+                {"id": "effort", "values": [{"value": "xhigh", "display_name": "Extra high"}]}
+            ],
+        }
+    ]

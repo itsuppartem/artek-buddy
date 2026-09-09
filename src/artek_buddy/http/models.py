@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from artek_buddy.bus import EventHub
@@ -36,12 +38,14 @@ def _scripted(cfg) -> bool:
     return runtime_kind(cfg) == "scripted"
 
 
-@router.get("/v1/models", dependencies=[Depends(require_auth)])
+@router.get(
+    "/v1/models",
+    dependencies=[Depends(require_auth)],
+    response_model_exclude_none=True,
+)
 async def list_models(history: HistoryStore = Depends(store)) -> ModelListResponse:
     try:
-        rows = [
-            ModelInfo(id=item["id"], provider=item["provider"]) for item in history.list_catalog()
-        ]
+        rows = [ModelInfo.model_validate(item) for item in history.list_catalog()]
         return ModelListResponse(models=rows)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
@@ -55,7 +59,7 @@ async def list_credentials(history: HistoryStore = Depends(store)) -> ModelCrede
         raise _db_error(err) from err
 
 
-async def _catalog(provider: str, key: str, cfg, rt: AgentRuntime) -> list[str]:
+async def _catalog(provider: str, key: str, cfg, rt: AgentRuntime) -> list[Any]:
     if _scripted(cfg):
         return await fetch_models(provider, key, scripted=True)
     if provider == "cursor":
