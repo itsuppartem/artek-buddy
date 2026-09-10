@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import time
 import uuid
 
@@ -335,3 +336,63 @@ async def test_stop_owns_the_task_after_duplicate_command_posts(
     leftover = client.app.state.active_turns.get(bot_id, {})
     live = leftover.get(run_id)
     assert live is None or live.done()
+
+
+def test_same_command_id_changed_attachment_bytes_is_conflict(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "CmdAttachBytes")["id"]
+    command_id = "cmd_attach_bytes"
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={
+            "text": "read it",
+            "command_id": command_id,
+            "attachments": [
+                {
+                    "name": "report.txt",
+                    "content_base64": base64.b64encode(b"one").decode("ascii"),
+                }
+            ],
+        },
+    )
+    assert first.status_code == 200, first.text
+    wait_run(client, auth_header, bot_id, first.json()["run_id"])
+    changed = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={
+            "text": "read it",
+            "command_id": command_id,
+            "attachments": [
+                {
+                    "name": "report.txt",
+                    "content_base64": base64.b64encode(b"two").decode("ascii"),
+                }
+            ],
+        },
+    )
+    assert changed.status_code == 409
+    assert "different message" in changed.json()["detail"]
+
+
+def test_same_command_id_same_attachment_bytes_replays(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "CmdAttachReplay")["id"]
+    body = {
+        "text": "read it",
+        "command_id": "cmd_attach_replay",
+        "attachments": [
+            {
+                "name": "report.txt",
+                "content_base64": base64.b64encode(b"one").decode("ascii"),
+            }
+        ],
+    }
+    first = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert first.status_code == 200, first.text
+    second = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert second.status_code == 200, second.text
+    assert first.json()["run_id"] == second.json()["run_id"]
+    done = wait_run(client, auth_header, bot_id, first.json()["run_id"])
+    assert done["run"]["status"] == "completed"
+    assert _user_texts(done).count("read it") == 1
+
