@@ -51,3 +51,41 @@ def test_thread_events_replay_message_created(client, auth_header, monkeypatch) 
 def test_thread_events_missing_bot_is_404(client, auth_header) -> None:
     response = client.get("/v1/threads/bot_missing/events", headers=auth_header)
     assert response.status_code == 404
+
+
+def test_principal_is_inactive_after_device_revoke(client) -> None:
+    from artek_buddy.http.threads import _principal_is_active
+
+    store = client.app.state.store
+    created = store.create_device("RevokedStream")
+    other = store.create_device("LiveStream")
+    principal = store.lookup_principal(created.token)
+    live = store.lookup_principal(other.token)
+    assert principal is not None
+    assert live is not None
+    store.revoke_device(created.id)
+    assert store.lookup_principal(created.token) is None
+    assert _principal_is_active(store, principal) is False
+    assert _principal_is_active(store, live) is True
+
+
+def test_revoked_device_open_workspace_stream_stops(client, host_token, monkeypatch) -> None:
+    store = client.app.state.store
+    created = store.create_device("OpenStream")
+    other = store.create_device("OtherStream")
+    headers = {"Authorization": f"Bearer {created.token}"}
+    other_headers = {"Authorization": f"Bearer {other.token}"}
+
+    async def _two_beats(self, heartbeat_s: float = 15.0):
+        yield HEARTBEAT
+        store.revoke_device(created.id)
+        yield HEARTBEAT
+
+    monkeypatch.setattr(EventHub, "subscribe_workspace", _two_beats)
+    response = client.get("/v1/events", headers=headers)
+    assert response.status_code == 200
+    assert response.text.count(": keepalive") == 1
+    still = client.get("/v1/me", headers=other_headers)
+    assert still.status_code == 200
+    host = client.get("/v1/me", headers={"Authorization": f"Bearer {host_token}"})
+    assert host.status_code == 200

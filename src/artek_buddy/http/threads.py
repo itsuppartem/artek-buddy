@@ -74,7 +74,10 @@ def _principal_is_active(history: HistoryStore, principal: Principal) -> bool:
     if principal.device_id == "host":
         return True
     member = history.get_member(principal.member_id)
-    return member is not None and member.state == "active"
+    if member is None or member.state != "active":
+        return False
+    device = history.get_device(principal.device_id)
+    return device is not None and device.revoked_at is None
 
 
 def _replay_gap_frame(bot: Bot, cursor: str | None) -> str:
