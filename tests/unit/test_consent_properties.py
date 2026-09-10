@@ -117,6 +117,31 @@ def test_inspect_git_and_find_stay_readonly() -> None:
     assert owner_command_is_readonly("find . -name '*.py' -print") is True
 
 
+def test_inspect_search_stays_readonly() -> None:
+    assert owner_command_is_readonly("rg audit notes.txt") is True
+    assert owner_command_is_readonly("rg --pretty audit") is True
+    assert owner_command_is_readonly("grep -n audit notes.txt") is True
+
+
+def test_named_rg_preprocessor_is_never_readonly() -> None:
+    assert owner_command_is_readonly("rg --pre /tmp/preprocessor audit notes.txt") is False
+    assert owner_command_is_readonly("rg --pre=/tmp/preprocessor audit") is False
+    assert owner_command_is_readonly("rg --pre-glob '*.txt' audit") is False
+
+
+def test_named_search_config_and_hostname_bin_are_never_readonly() -> None:
+    assert owner_command_is_readonly("rg --hostname-bin /bin/uname audit") is False
+    assert owner_command_is_readonly("rg --config /tmp/rgrc audit") is False
+    assert owner_command_is_readonly("grep --pre /tmp/x audit") is False
+
+
+def test_named_search_path_or_env_is_never_readonly() -> None:
+    assert owner_command_is_readonly("/tmp/rg audit notes.txt") is False
+    assert owner_command_is_readonly("./rg audit notes.txt") is False
+    assert owner_command_is_readonly("RIPGREP_CONFIG_PATH=/tmp/cfg rg audit") is False
+    assert owner_command_is_readonly("env FOO=1 rg audit") is False
+
+
 def test_timeout_wrapper_cannot_hide_rm() -> None:
     assert owner_command_is_readonly("timeout 1 rm -rf /tmp/x") is False
 
@@ -204,6 +229,15 @@ def test_redirects_are_never_readonly(command: str, dest: str) -> None:
 @given(st.sampled_from(("ls", "cat f", "echo hi")), st.sampled_from(PIPE_SINKS))
 def test_pipe_to_write_is_never_readonly(left: str, right: str) -> None:
     assert owner_command_is_readonly(f"{left} | {right}") is False
+
+
+@bounded
+@given(SAFE_NAME)
+def test_rg_preprocessor_is_never_readonly(program: str) -> None:
+    assert owner_command_is_readonly(f"rg --pre {program} audit notes.txt") is False
+    assert owner_command_is_readonly(f"rg --pre={program} audit") is False
+    assert owner_command_is_readonly(f"rg --pre-glob '{program}.txt' audit") is False
+    assert owner_command_is_readonly(f"/tmp/{program} audit notes.txt") is False
 
 
 @bounded
