@@ -50,6 +50,16 @@ def test_owner_readonly_commands() -> None:
     assert owner_command_is_readonly("git show --output=$HOME/leaked.patch HEAD") is False
     assert owner_command_is_readonly("find . -name '*.py' -print") is True
     assert owner_command_is_readonly("find . -fprint listing.txt") is False
+    assert owner_command_is_readonly("rg audit notes.txt") is True
+    assert owner_command_is_readonly("rg --pretty audit notes.txt") is True
+    assert owner_command_is_readonly("rg --pre /tmp/preprocessor audit notes.txt") is False
+    assert owner_command_is_readonly("rg --pre-glob '*.txt' --pre ./hook audit") is False
+    assert owner_command_is_readonly("rg --hostname-bin /bin/uname audit") is False
+    assert owner_command_is_readonly("/tmp/rg audit notes.txt") is False
+    assert owner_command_is_readonly("RIPGREP_CONFIG_PATH=/tmp/cfg rg audit") is False
+    assert owner_command_is_readonly("env FOO=1 rg audit notes.txt") is False
+    assert owner_command_is_readonly("grep -n audit notes.txt") is True
+    assert owner_command_is_readonly("grep --pre /tmp/x audit") is False
 
 
 class _ConsentStore:
@@ -443,6 +453,49 @@ def test_deny_git_write_options_leave_temp_repo_unchanged(tmp_path: Path) -> Non
     assert not leaked.exists()
     assert not listing.exists()
     assert "stolen-branch" not in branches
+
+
+def test_deny_search_preprocessor_does_not_start_a_process(tmp_path: Path) -> None:
+    """A search tool that can run another program must hit Allow; Deny must not exec."""
+    marker = tmp_path / "executed.txt"
+    ran: list[str] = []
+
+    def runner(command: str, cwd: str) -> dict[str, object]:
+        ran.append(command)
+        marker.write_text("ran\n", encoding="utf-8")
+        return {"ok": True, "stdout": "", "stderr": "", "exit_code": 0}
+
+    class Hub:
+        def require(self, **_kwargs: object) -> tuple[bool, None]:
+            return False, None
+
+    class Store:
+        def list_devices(self) -> list[Device]:
+            return [
+                Device(
+                    id="dev_1",
+                    name="pc",
+                    platform="linux",
+                    created_at="2026-01-01T00:00:00Z",
+                )
+            ]
+
+    tools = ProductTools(
+        SimpleNamespace(
+            consent=Hub(),
+            store=Store(),
+            resolve_turn_context=lambda _bot: ("bot_1", "run_1", "thr_1"),
+            resolve_turn_device=lambda: "dev_1",
+            owner_command_runner=runner,
+        )
+    )
+    result = tools._exec_run_owner_command(
+        {"command": "rg --pre /tmp/preprocessor audit notes.txt", "cwd": str(tmp_path)},
+        "bot_1",
+    )
+    assert result == {"ok": False, "error": "denied by owner", "denied": True}
+    assert ran == []
+    assert not marker.exists()
 
 
 def test_wait_takeover_release_before_and_during_wait() -> None:

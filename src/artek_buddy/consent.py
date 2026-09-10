@@ -87,6 +87,8 @@ _READONLY_COMMANDS = frozenset(
     }
 )
 _READONLY_WRAPPERS = frozenset({"timeout", "nice", "nohup", "command", "ionice", "stdbuf", "time"})
+_SEARCH_TOOLS = frozenset({"rg", "grep", "egrep", "fgrep"})
+_SEARCH_EXEC_FLAGS = frozenset({"--pre", "--pre-glob", "--hostname-bin", "--config"})
 _GIT_INSPECT_SUBS = frozenset(
     {
         "status",
@@ -259,7 +261,7 @@ def owner_scope(path: str) -> str:
 
 
 def owner_command_is_readonly(command: str) -> bool:
-    """True for explore-only shell: ls/cat/echo, inspect-only git, inspect-only find."""
+    """True for explore-only shell: ls/cat/echo, inspect-only git/find/search."""
     text = (command or "").strip()
     if not text or len(text) > 4000:
         return False
@@ -288,14 +290,17 @@ def _readonly_segment(part: str) -> bool:
     if not tokens:
         return False
     i = 0
-    while i < len(tokens) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[i]):
-        i += 1
+    if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[0]):
+        return False
     while i < len(tokens):
-        name = tokens[i].rsplit("/", 1)[-1]
+        raw = tokens[i]
+        if "/" in raw or raw in {".", ".."}:
+            return False
+        name = raw
         if name == "env" and i + 1 < len(tokens):
             i += 1
-            while i < len(tokens) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[i]):
-                i += 1
+            if i < len(tokens) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[i]):
+                return False
             continue
         if name in _READONLY_WRAPPERS:
             i += 1
@@ -308,12 +313,29 @@ def _readonly_segment(part: str) -> bool:
     rest = tokens[i:]
     if not rest:
         return True
-    name = rest[0].rsplit("/", 1)[-1]
+    name = rest[0]
+    if "/" in name or name in {".", ".."}:
+        return False
     if name == "git":
         return _git_inspect_ok(rest)
     if name == "find":
         return _find_inspect_ok(rest)
+    if name in _SEARCH_TOOLS:
+        return _search_inspect_ok(rest)
     return name in _READONLY_COMMANDS
+
+
+def _search_inspect_ok(tokens: list[str]) -> bool:
+    """rg/grep stay explore-only when argv cannot name another program or config."""
+    for item in tokens[1:]:
+        if item == "--":
+            return True
+        if not item.startswith("-"):
+            continue
+        flag = item.split("=", 1)[0]
+        if flag in _SEARCH_EXEC_FLAGS:
+            return False
+    return True
 
 
 def _git_flag_name(item: str) -> str:
