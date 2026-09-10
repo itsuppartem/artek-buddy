@@ -1,5 +1,5 @@
 import { type FormEvent, useMemo, useState } from "react";
-import { type BotTaskStage, botTaskStage } from "../../lib/task-flow";
+import { type BotTaskStage, botTaskStages } from "../../lib/task-flow";
 import type { Bot } from "../../types";
 import { BotAvatar } from "../../ui/bot-avatar";
 
@@ -27,13 +27,16 @@ export function TodayView({
   const [task, setTask] = useState("");
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
-  const grouped = useMemo(
-    () =>
-      new Map(
-        sections.map(({ stage }) => [stage, bots.filter((bot) => botTaskStage(bot) === stage)]),
-      ),
-    [bots],
-  );
+  const grouped = useMemo(() => {
+    const buckets = new Map<BotTaskStage, Bot[]>(sections.map(({ stage }) => [stage, []]));
+    for (const bot of bots) {
+      for (const stage of botTaskStages(bot)) {
+        if (stage === "recent") continue;
+        buckets.get(stage)?.push(bot);
+      }
+    }
+    return buckets;
+  }, [bots]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -195,8 +198,10 @@ function TaskSection({
         <div>
           {bots.map((bot) => (
             <button
-              key={bot.id}
+              key={`${bot.id}:${stage}`}
               type="button"
+              data-testid="today-card"
+              data-bot-id={bot.id}
               onClick={() => onOpenBot(bot.id)}
               className="flex min-h-[68px] w-full items-center gap-3 border-b border-hairline py-3 text-left"
             >
@@ -204,6 +209,7 @@ function TaskSection({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-bold text-paper">{bot.name}</span>
                 <span className="mt-1 block truncate text-[12px] text-mute">
+                  {bot.connectionState === "last_known" ? "Last known · " : ""}
                   {bot.preview || bot.title}
                 </span>
               </span>

@@ -74,7 +74,7 @@ Named job: [SCENARIOS.md](../../SCENARIOS.md). Use **Research** (Private). Live 
 | After Pair the first surface is **Today**, not a random bot. It shows **What needs doing?** and does not boot a desktop | [ ] | [ ] |
 | Today identifies **Workspace routing · uses every bot's context**; there is no coordinator bot in Chats and pinning does not choose one. Submit an outcome: the host reads existing bot profiles, activity, and bounded recent context, routes once, stays on Today, and the selected existing bot moves to **In progress** | [ ] | [ ] |
 | Open the routed bot: the exact outcome appears once in that bot's durable chat. With no bots, the action says **Create your first bot**; it never invents a lead chat | [ ] | [ ] |
-| Today orders **Needs your decision** before **In progress**, then **Ready for you**. Open each card and it lands in the named chat | [ ] | [ ] |
+| Today orders **Needs your decision** before **In progress**, then **Ready for you**. Open each card and it lands in the named chat. An unread preview that contains “question” / “No questions remain” is **not** a decision unless a real Allow / ask / take-control card is pending. A parked Allow (`e2e-consent-browse`) is **Needs your decision**. Unread failed or stopped work is **not** Ready. A lost host link stays on Today, shows **Host link lost. Showing last known state.**, and does not mark the run failed | [ ] | [ ] |
 | Desktop rail keeps **Today / Chats / Routines / Library** visible once. Chats shows an attention count when unread work exists; there is no duplicate Settings control | [ ] | — |
 | **New bot**, **Desktop**, **Show work log**, **Bot profile & access**, **Send**, and **Stop** are words, not mystery icons | [ ] | [ ] |
 | **Send** is grey while Message is empty (no text and no files) | [ ] | [ ] |
@@ -82,6 +82,7 @@ Named job: [SCENARIOS.md](../../SCENARIOS.md). Use **Research** (Private). Live 
 | **Library / More → Appearance** defaults to System and follows Ubuntu/iOS when the OS theme changes. Light and Dark override the OS immediately, survive a full app restart, and keep every label/control readable | [ ] | [ ] |
 | Drag the divider after the inbox and the divider before the context pane. Left and right widths change, the conversation remains usable, and widths survive reload. Arrow Left / Right works when a divider is focused; double-click restores the default | [ ] | — |
 | In `please e2e-worker-progress` / `please e2e-worker-essay`, the compact summary shows **Working on this task** and one **Show work log** — not a second **Still working:** line. Header identity is **Working**, not the progress paragraph. The waiting slot keeps the clipped `report_progress` step (never the worker finish body). Worker briefs are collapsed, scannable rows—not a full prompt wall—and detail is not duplicated as durable chat messages | [ ] | [ ] |
+| Stop `please e2e-slow`: thread header is **Stopped**, work-summary is **Stopped by you**, Work log is not **This run finished** / **Task is complete**, and Today does not put that chat in **Ready for you** | [ ] | [ ] |
 | Create a bot → focus lands in the new chat | [ ] | [ ] |
 | **Library → Bot profile & access** does **not** boot the desktop. Escape closes it and New bot (composer text stays; overlay Esc still drops fullscreen first) | [ ] | [ ] |
 | Pairing, Today, Chats, Library, Settings, Memory, Routines, ask/file cards, and the overlay share the navy / pale canvas / white plate / soft-blue / copper / sage system | [ ] | [ ] |
@@ -349,7 +350,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Auth error: **Pair this computer again** (Deb) / **Pair this phone again** (Phone). Click unpairs to the matching pair screen. Does not queue as an offline send | [ ] | [ ] |
 | Workspace `/v1/events` 401/403 (inbox still loads) still shows Pair again, not a quiet shell | [ ] | [ ] |
 | Restart the host API while a chat is open, then send again. The window reconnects, does not invent missing turns, and either replays or shows a gap then reloads the thread. A suspended/revoked device gets Pair again, not a live stream | [ ] | [ ] |
-| A host/action failure while Today is open returns to Chats so **Reconnecting to the host** / **Dismiss** is visible instead of hiding the recovery control behind Today | [ ] | [ ] |
+| A host/action failure while Today is open **stays on Today**. The banner is **Host link lost. Showing last known state.** / **Dismiss** — it does not jump to Chats or change the phone tab | [ ] | [ ] |
 | Unpair returns to the pair screen. Re-pair with a new code restores the inbox | [ ] | [ ] |
 | Pairing lands on **Today**. It does **not** open Desktop or Models and does **not** boot a desktop | [ ] | [ ] |
 

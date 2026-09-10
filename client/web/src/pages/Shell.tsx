@@ -108,6 +108,13 @@ import {
   sortInboxBots,
 } from "../lib/sidebar";
 import {
+  applyBotProjection,
+  markConnectionLost,
+  mergeBotList,
+  threadHeaderLabel,
+  workSummaryCopy,
+} from "../lib/task-flow";
+import {
   canAnswerOwnerPrompt,
   isHiddenLiveDraft,
   isRawRunFailedMessage,
@@ -311,13 +318,16 @@ export function ShellPage() {
   const flushingQueue = useRef(false);
   useEffect(() => {
     if (!error && !hostDown) return;
-    setWorkspaceView((current) => (current === "today" ? "chats" : current));
-    setPhoneTab((current) => (current === "today" ? "chat" : current));
     if (errorKind === "auth") setPanel(null);
   }, [error, errorKind, hostDown]);
   offlineQueueRef.current = offlineQueue;
   offlineCaptionsRef.current = offlineCaptions;
   hostDownRef.current = hostDown;
+
+  function markHostUnreachable() {
+    setHostDown(true);
+    setBots((list) => markConnectionLost(list));
+  }
   const [later, setLater] = useState<string | null>(null);
   const [usageRecords, setUsageRecords] = useState<UsageRecord[]>([]);
   const [attention, setAttention] = useState<AttentionAlert | null>(null);
@@ -376,6 +386,7 @@ export function ShellPage() {
     (thread?.run && isLiveTurn(thread.run.status)) ||
       (thread && !isParked && (hasLive(thread) || hasActiveWorkers(thread))),
   );
+  const runCopy = workSummaryCopy(thread?.run?.status, active?.attentionReason, isBusy);
   const flightText = inFlightProgressText(thread?.subagents);
   const hasWorkLog = Boolean(thread?.run) || (thread?.subagents ?? []).length > 0;
 
@@ -703,26 +714,42 @@ export function ShellPage() {
     flushHeldAlerts();
     if (next) void dispatchAlert(next, incoming.id, bot.notifyOnFinish);
     if (incoming.type === "run.started") {
-      const running = { ...bot, status: "running" };
-      botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? running : item));
-      const stored = prevBotsRef.current.get(bot.id);
-      if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "running" });
-      setBots((list) =>
-        list.map((item) => (item.id === bot.id ? { ...item, status: "running" } : item)),
-      );
+      if (incoming.seq < (bot.stateVersion ?? 0)) {
+        // Late event: keep the newer host projection.
+      } else {
+        const running = applyBotProjection(bot, {
+          status: "running",
+          executionState: "running",
+          stateVersion: incoming.seq,
+        });
+        botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? running : item));
+        const stored = prevBotsRef.current.get(bot.id);
+        if (stored) prevBotsRef.current.set(bot.id, running);
+        setBots((list) =>
+          list.map((item) => (item.id === bot.id ? applyBotProjection(item, running) : item)),
+        );
+      }
+    }
+    if (incoming.type === "run.waiting_input") {
+      void refreshBotsRef.current().catch(() => undefined);
     }
     if (incoming.type === "computer.takeover.requested") {
-      const parked = {
-        ...bot,
-        status: "waiting_takeover",
-        updatedAt: new Date().toISOString(),
-      };
-      botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? parked : item));
-      const stored = prevBotsRef.current.get(bot.id);
-      if (stored) prevBotsRef.current.set(bot.id, { ...stored, status: "waiting_takeover" });
-      setBots((list) =>
-        list.map((item) => (item.id === bot.id ? { ...item, status: "waiting_takeover" } : item)),
-      );
+      if (incoming.seq >= (bot.stateVersion ?? 0)) {
+        const parked = applyBotProjection(bot, {
+          status: "waiting_takeover",
+          executionState: "waiting",
+          attentionReason: "takeover",
+          takeoverRunId: incoming.runId ?? bot.takeoverRunId,
+          updatedAt: new Date().toISOString(),
+          stateVersion: incoming.seq,
+        });
+        botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? parked : item));
+        const stored = prevBotsRef.current.get(bot.id);
+        if (stored) prevBotsRef.current.set(bot.id, parked);
+        setBots((list) =>
+          list.map((item) => (item.id === bot.id ? applyBotProjection(item, parked) : item)),
+        );
+      }
       void refreshBotsRef.current().catch(() => undefined);
     }
     if (incoming.type === "run.completed" || incoming.type === "run.failed") {
@@ -811,11 +838,16 @@ export function ShellPage() {
         markOpenThreadRead(viewing);
       }
     }
-    prevBotsRef.current = new Map(list.map((item) => [item.id, item]));
-    botsRef.current = list;
-    for (const item of list) discardedBotIds.current.delete(item.id);
     const archivedList = await api.bots.listArchived().catch(() => [] as Bot[]);
-    setBots(list);
+    setBots((prev) => {
+      const incoming = list.filter((item) => !discardedBotIds.current.has(item.id));
+      const merged = mergeBotList(prev, incoming, freshBotIds.current);
+      for (const item of incoming) freshBotIds.current.delete(item.id);
+      const next = hostDownRef.current ? markConnectionLost(merged) : merged;
+      prevBotsRef.current = new Map(next.map((item) => [item.id, item]));
+      botsRef.current = next;
+      return next;
+    });
     raiseParkedAlerts();
     setArchivedBots(archivedList);
     if (archivedList.length === 0) setSidebarView("inbox");
@@ -946,7 +978,7 @@ export function ShellPage() {
     errorKindRef.current = classified.kind;
     setErrorKind(classified.kind);
     if (classified.kind === "host") {
-      setHostDown(true);
+      markHostUnreachable();
       return;
     }
     setError(message);
@@ -991,7 +1023,7 @@ export function ShellPage() {
       queuedAt: Date.now(),
     };
     setOfflineQueue((queue) => persistQueue(enqueueSend(queue, item)));
-    setHostDown(true);
+    markHostUnreachable();
     if (activeIdRef.current === botId) {
       setReplyTo(null);
     } else {
@@ -1030,7 +1062,7 @@ export function ShellPage() {
         } catch (err) {
           const classified = classifyError(err);
           if (classified.kind === "host") {
-            setHostDown(true);
+            markHostUnreachable();
             return;
           }
           if (classified.kind === "auth") {
@@ -1296,7 +1328,7 @@ export function ShellPage() {
             showError(err, classified.message);
             break;
           }
-          if (classified.kind === "host") setHostDown(true);
+          if (classified.kind === "host") markHostUnreachable();
           // Reconnect after a dropped stream. The last event id keeps replay safe.
         }
         if (abort.signal.aborted) break;
@@ -1712,7 +1744,15 @@ export function ShellPage() {
     try {
       const dispatched = await api.workspace.dispatch(text);
       setBots((list) =>
-        list.map((bot) => (bot.id === dispatched.botId ? { ...bot, status: "running" } : bot)),
+        list.map((row) =>
+          row.id === dispatched.botId
+            ? applyBotProjection(row, {
+                status: "running",
+                executionState: "running",
+                stateVersion: row.stateVersion ?? 0,
+              })
+            : row,
+        ),
       );
       void refreshBots().catch(() => undefined);
     } catch (err) {
@@ -2045,6 +2085,48 @@ export function ShellPage() {
           );
         }}
       />
+      {hostDown ? (
+        <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
+          <div
+            data-testid="reconnect-banner"
+            className="flex w-full items-center gap-2 border border-hairline border-l-[3px] border-l-tan bg-plate px-3 py-2 text-[13.5px] text-paper"
+          >
+            <p className="min-w-0 flex-1 text-left">Host link lost. Showing last known state.</p>
+            <button
+              type="button"
+              onClick={() => void reconnectHost(true)}
+              className="shrink-0 px-2 text-[13px] font-medium text-tan underline underline-offset-2"
+            >
+              Retry connection
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {error && errorKind !== "host" ? (
+        <div
+          data-testid={errorKind === "auth" ? "auth-error" : "action-error"}
+          className="mx-4 mt-2 shrink-0 self-center rounded-xl border border-danger/40 bg-danger-bg px-4 py-3 text-center text-[13.5px] text-danger"
+        >
+          <div>{error}</div>
+          {errorKind === "auth" ? (
+            <button
+              type="button"
+              onClick={() => void forgetDevice()}
+              className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
+            >
+              {pairAgainLabel()}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
+            >
+              Dismiss
+            </button>
+          )}
+        </div>
+      ) : null}
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <WorkspaceRail
           active={workspaceView}
@@ -2190,7 +2272,12 @@ export function ShellPage() {
                 </span>
                 {active ? (
                   <span className="mt-0.5 block truncate text-[10.5px] text-mute">
-                    {isBusy ? "Working" : active.title || "Ready"}
+                    {threadHeaderLabel(
+                      thread?.run?.status,
+                      active.attentionReason,
+                      active.title,
+                      isBusy,
+                    )}
                   </span>
                 ) : null}
               </span>
@@ -2221,23 +2308,6 @@ export function ShellPage() {
               </button>
             </div>
           </div>
-          {hostDown ? (
-            <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
-              <div
-                data-testid="reconnect-banner"
-                className="flex w-full items-center gap-2 border border-hairline border-l-[3px] border-l-tan bg-plate px-3 py-2 text-[13.5px] text-paper"
-              >
-                <p className="min-w-0 flex-1 text-left">Reconnecting to the host</p>
-                <button
-                  type="button"
-                  onClick={() => void reconnectHost(true)}
-                  className="shrink-0 px-2 text-[13px] font-medium text-tan underline underline-offset-2"
-                >
-                  Retry connection
-                </button>
-              </div>
-            </div>
-          ) : null}
           {attention || later ? (
             <div className="flex w-full shrink-0 flex-col gap-2 px-4 py-2">
               {attention ? (
@@ -2294,30 +2364,20 @@ export function ShellPage() {
               >
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                    isParked
+                    runCopy.tone === "parked"
                       ? "bg-copper"
-                      : isBusy
+                      : runCopy.tone === "busy"
                         ? "ab-live-dot bg-sage"
-                        : thread?.run?.status === "failed"
+                        : runCopy.tone === "failed"
                           ? "bg-danger"
-                          : "bg-tan"
+                          : runCopy.tone === "cancelled"
+                            ? "bg-mute"
+                            : "bg-tan"
                   }`}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12.5px] font-bold text-paper">
-                    {isParked
-                      ? "Needs your decision"
-                      : isBusy
-                        ? "Working on this task"
-                        : thread?.run?.status === "failed"
-                          ? "Task failed"
-                          : "Task is complete"}
-                  </p>
-                  <p className="mt-0.5 truncate text-[11px] text-mute">
-                    {isParked
-                      ? "Open the computer or answer the request to continue."
-                      : "The conversation keeps the result and decisions."}
-                  </p>
+                  <p className="truncate text-[12.5px] font-bold text-paper">{runCopy.title}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-mute">{runCopy.detail}</p>
                 </div>
                 <button
                   type="button"
@@ -2331,31 +2391,6 @@ export function ShellPage() {
                   Show work log
                 </button>
               </div>
-            </div>
-          ) : null}
-          {error && errorKind !== "host" ? (
-            <div
-              data-testid={errorKind === "auth" ? "auth-error" : "action-error"}
-              className="mx-4 mt-2 shrink-0 self-center rounded-xl border border-danger/40 bg-danger-bg px-4 py-3 text-center text-[13.5px] text-danger"
-            >
-              <div>{error}</div>
-              {errorKind === "auth" ? (
-                <button
-                  type="button"
-                  onClick={() => void forgetDevice()}
-                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
-                >
-                  {pairAgainLabel()}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setError(null)}
-                  className="mt-2 text-[13px] font-medium text-paper underline underline-offset-2"
-                >
-                  Dismiss
-                </button>
-              )}
             </div>
           ) : null}
           <div

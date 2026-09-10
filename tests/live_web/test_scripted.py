@@ -79,6 +79,7 @@ def test_host_page_worker_progress_line(page: Page, host_url: str) -> None:
         page.get_by_test_id("thread-pane").get_by_text(E2E_WORKER_PROGRESS_LINE, exact=True)
     ).to_have_count(1)
     expect(page.get_by_test_id("thread-header")).not_to_contain_text("Still working")
+    expect(page.get_by_test_id("thread-header")).to_contain_text("Working")
     expect(page.get_by_test_id("work-summary")).not_to_contain_text("Still working")
     expect(
         page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_PROGRESS_LINE)

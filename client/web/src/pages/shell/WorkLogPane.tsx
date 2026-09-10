@@ -1,3 +1,4 @@
+import { workLogLatestFallback, workLogRunStatusLabel } from "../../lib/task-flow";
 import { IconClose } from "../../ui/icons";
 
 export const PROGRESS_LINE_MAX = 200;
@@ -159,8 +160,7 @@ export function WorkLogPane({
 }) {
   const groups = groupWorkLogRuns(workers, runId);
   const latestLine = latestWorkLine(progress, groups);
-  const latestStatus =
-    runStatus || (groups[0] ? groups[0].workers[0]?.status : "") || "No recent run";
+  const latestStatus = workLogRunStatusLabel(runStatus || groups[0]?.workers[0]?.status);
 
   return (
     <div data-testid="work-log-pane">
@@ -188,7 +188,7 @@ export function WorkLogPane({
           <span className="font-mono text-[9px] text-sage uppercase">{latestStatus}</span>
         </div>
         <p className="mt-2 text-[12.5px] leading-5 text-mute">
-          {latestLine || "This run finished."}
+          {latestLine || workLogLatestFallback(runStatus)}
         </p>
       </section>
 
@@ -205,6 +205,7 @@ export function WorkLogPane({
               usage={usageByRun?.[group.runId]}
               usageByRun={usageByRun}
               current={group.runId === runId}
+              runStatus={group.runId === runId ? runStatus : undefined}
             />
           ))
         ) : (
@@ -226,14 +227,16 @@ function RunGroup({
   usage,
   usageByRun,
   current,
+  runStatus,
 }: {
   group: WorkLogGroup;
   usage?: WorkLogUsage;
   usageByRun?: Record<string, WorkLogUsage>;
   current: boolean;
+  runStatus?: string;
 }) {
   const usageLine = formatRunUsage(usage);
-  const status = group.workers[0]?.status || (current ? "latest" : "complete");
+  const status = group.workers[0]?.status || workLogRunStatusLabel(runStatus, current);
   return (
     <section
       data-testid="work-log-run"

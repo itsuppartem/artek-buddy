@@ -144,10 +144,11 @@ def test_workspace_events_auth_error_shows_repair(
     page: Page, client_url: str, host_url: str
 ) -> None:
     pair_fresh(page, client_url, host_url)
-    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Today").click()
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=8_000)
     fulfill_json(page, "**/v1/events", 401, '{"detail":"invalid token"}')
     page.reload()
-    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
     expect(page.get_by_test_id("auth-error")).to_be_visible(timeout=20_000)
     expect(page.get_by_test_id("pairing")).to_have_count(0)
     page.get_by_role("button", name="Pair this computer again").click()
@@ -156,24 +157,30 @@ def test_workspace_events_auth_error_shows_repair(
 
 def test_host_error_retry_clears_banner(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
-    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Today").click()
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=8_000)
     fulfill_json(page, "**/v1/**", 502, '{"detail":"upstream down"}')
     page.reload()
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
     card = page.get_by_test_id("reconnect-banner")
     expect(card).to_be_visible(timeout=20_000)
+    expect(card).to_contain_text("last known")
     page.unroute("**/v1/**")
     if card.is_visible():
         card.get_by_role("button", name="Retry connection").click()
     expect(card).to_be_hidden(timeout=20_000)
-    expect(page.get_by_test_id("thread-pane")).to_be_visible()
+    expect(page.get_by_test_id("today-view")).to_be_visible()
 
 
 def test_action_error_dismiss_clears_banner(page: Page, client_url: str, host_url: str) -> None:
     pair_fresh(page, client_url, host_url)
-    expect(page.get_by_test_id("thread-pane")).to_be_visible(timeout=20_000)
+    page.get_by_test_id("workspace-rail").get_by_role("button", name="Today").click()
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=8_000)
     fulfill_json(page, "**/v1/**", 400, '{"detail":"bad request"}')
     page.reload()
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
     card = page.get_by_test_id("action-error")
     expect(card).to_be_visible(timeout=20_000)
     card.get_by_role("button", name="Dismiss").click()
     expect(card).to_be_hidden()
+    expect(page.get_by_test_id("today-view")).to_be_visible()
