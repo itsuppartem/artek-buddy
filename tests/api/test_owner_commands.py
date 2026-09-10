@@ -395,3 +395,118 @@ def test_same_command_id_same_attachment_bytes_replays(client, auth_header) -> N
     done = wait_run(client, auth_header, bot_id, first.json()["run_id"])
     assert done["run"]["status"] == "completed"
     assert _user_texts(done).count("read it") == 1
+
+
+def test_queued_command_binds_to_follow_up_run(client, auth_header) -> None:
+    store = client.app.state.store
+    bot = store.get_bot(create_bot(client, auth_header, "CmdQueuedBind")["id"])
+    assert bot is not None
+    _, first, created = store.begin_or_enqueue_turn(bot, "first")
+    assert created == "created"
+    key = "cmd_queued_bind"
+    message, bound, queued = store.begin_or_enqueue_turn(
+        bot, "second", command_id=key, payload_hash="hash"
+    )
+    assert queued == "queued"
+    assert bound.id == first.id
+    _, retry_run, retry_disp = store.begin_or_enqueue_turn(
+        bot, "second", command_id=key, payload_hash="hash"
+    )
+    assert retry_disp == "replayed"
+    assert retry_run.id == first.id
+    assert store.inbox_holds_message(bot.id, message.id)
+    store.finish_turn(bot, first, "done", "completed")
+    assert store.inbox_holds_message(bot.id, message.id)
+    parked = store.get_owner_command(bot.id, key)
+    assert parked is not None
+    assert parked.run_id == first.id
+    claimed = store.claim_inbox_follow_up(bot)
+    assert claimed is not None
+    follow, items = claimed
+    assert follow.id != first.id
+    assert any(item["message_id"] == message.id for item in items)
+    found = store.get_owner_command(bot.id, key)
+    assert found is not None
+    assert found.run_id == follow.id
+    assert not store.inbox_holds_message(bot.id, message.id)
+
+
+def test_coalesced_queued_commands_share_the_follow_up_run(client, auth_header) -> None:
+    store = client.app.state.store
+    bot = store.get_bot(create_bot(client, auth_header, "CmdQueuedCoal")["id"])
+    assert bot is not None
+    _, first, created = store.begin_or_enqueue_turn(bot, "first")
+    assert created == "created"
+    store.begin_or_enqueue_turn(bot, "second", command_id="cmd_coal_b", payload_hash="hb")
+    store.begin_or_enqueue_turn(bot, "third", command_id="cmd_coal_c", payload_hash="hc")
+    store.finish_turn(bot, first, "done", "completed")
+    claimed = store.claim_inbox_follow_up(bot)
+    assert claimed is not None
+    follow, _items = claimed
+    bound_b = store.get_owner_command(bot.id, "cmd_coal_b")
+    bound_c = store.get_owner_command(bot.id, "cmd_coal_c")
+    assert bound_b is not None and bound_c is not None
+    assert bound_b.run_id == follow.id
+    assert bound_c.run_id == follow.id
+
+
+def test_queued_command_retry_does_not_dispatch_the_blocker(
+    client, auth_header, monkeypatch
+) -> None:
+    bot_id = create_bot(client, auth_header, "CmdQueuedSteal")["id"]
+    executions = _record_dispatches(monkeypatch)
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now", "command_id": "cmd_queue_steal_lead"},
+    )
+    assert first.status_code == 200, first.text
+    lead_id = first.json()["run_id"]
+    _wait_dispatches(executions, 1)
+    body = {"text": "behind the live turn", "command_id": "cmd_queue_steal_behind"}
+    queued = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert queued.status_code == 200, queued.text
+    assert queued.json().get("queued") is True
+    retry = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert retry.status_code == 200, retry.text
+    assert retry.json().get("queued") is True
+    assert retry.json()["run_id"] == lead_id
+    assert executions == [lead_id]
+
+
+def test_queued_command_http_retry_stays_queued_then_follows(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "CmdQueuedHttp")["id"]
+    first = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now", "command_id": "cmd_queue_lead"},
+    )
+    assert first.status_code == 200, first.text
+    lead_id = first.json()["run_id"]
+    body = {"text": "behind the live turn", "command_id": "cmd_queue_behind"}
+    queued = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert queued.status_code == 200, queued.text
+    assert queued.json().get("queued") is True
+    assert queued.json()["run_id"] == lead_id
+    retry = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert retry.status_code == 200, retry.text
+    assert retry.json().get("queued") is True
+    assert retry.json()["run_id"] == lead_id
+    wait_run(client, auth_header, bot_id, lead_id)
+    store = client.app.state.store
+    deadline = time.time() + 15
+    bound = store.get_owner_command(bot_id, "cmd_queue_behind")
+    while time.time() < deadline:
+        bound = store.get_owner_command(bot_id, "cmd_queue_behind")
+        if bound is not None and bound.run_id != lead_id:
+            break
+        time.sleep(0.05)
+    assert bound is not None
+    assert bound.run_id != lead_id
+    after = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert after.status_code == 200, after.text
+    assert after.json().get("queued") is not True
+    assert after.json()["run_id"] == bound.run_id
+    done = wait_run(client, auth_header, bot_id, bound.run_id)
+    assert done["run"]["status"] == "completed"
+    assert _user_texts(done).count("behind the live turn") == 1

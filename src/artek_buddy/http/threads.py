@@ -172,15 +172,16 @@ async def send_thread_message(
                     if found.message_id
                     else None
                 )
+                queued = history.inbox_holds_message(bot.id, found.message_id)
                 result = ThreadSendResult(
                     task_id=run.task_id if run is not None else found.run_id,
                     run_id=found.run_id,
                     seq=message.seq if message is not None else 0,
                     message=message,
                     run=run,
-                    queued=False,
+                    queued=queued,
                 )
-                if run is not None and history.claim_turn_dispatch(run.id):
+                if not queued and run is not None and history.claim_turn_dispatch(run.id):
                     await _resume_pending_command_dispatch(
                         history,
                         rt,

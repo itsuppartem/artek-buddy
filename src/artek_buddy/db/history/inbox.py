@@ -44,6 +44,21 @@ class InboxMixin:
             conn.commit()
         return int(row["n"]) if row else 0
 
+    def inbox_holds_message(self, bot_id: str, message_id: str | None) -> bool:
+        if not bot_id or not message_id:
+            return False
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 FROM turn_inbox
+                WHERE bot_id = %s AND message_id = %s
+                LIMIT 1
+                """,
+                (bot_id, message_id),
+            ).fetchone()
+            conn.commit()
+        return row is not None
+
     def clear_inbox(self, bot_id: str) -> None:
         with self._conn() as conn:
             conn.execute("DELETE FROM turn_inbox WHERE bot_id = %s", (bot_id,))
@@ -159,6 +174,18 @@ class InboxMixin:
                         now,
                     ),
                 )
+                message_ids = [
+                    str(row["message_id"]) for row in rows if row.get("message_id")
+                ]
+                if message_ids:
+                    conn.execute(
+                        """
+                        UPDATE owner_commands
+                        SET run_id = %s
+                        WHERE bot_id = %s AND message_id = ANY(%s)
+                        """,
+                        (run_id, bot.id, message_ids),
+                    )
                 conn.execute("DELETE FROM turn_inbox WHERE bot_id = %s", (bot.id,))
                 conn.execute(
                     "UPDATE bots SET status = %s, updated_at = %s WHERE id = %s",
