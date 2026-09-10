@@ -395,4 +395,3 @@ def test_same_command_id_same_attachment_bytes_replays(client, auth_header) -> N
     done = wait_run(client, auth_header, bot_id, first.json()["run_id"])
     assert done["run"]["status"] == "completed"
     assert _user_texts(done).count("read it") == 1
-
