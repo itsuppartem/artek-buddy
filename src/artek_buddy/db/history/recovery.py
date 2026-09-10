@@ -196,10 +196,16 @@ class RecoveryMixin:
                 )
                 """
             ).fetchall()
+            pending = conn.execute(
+                "SELECT run_id FROM turn_dispatches WHERE state = 'pending'"
+            ).fetchall()
             conn.commit()
+        pending_ids = {str(row["run_id"]) for row in pending}
         touched = 0
         for row in rows:
             run_id = str(row["id"])
+            if run_id in pending_ids:
+                continue
             bot_id = str(row["bot_id"])
             status = str(row["status"])
             classified = self._classify_orphan(run_id, bot_id, status)

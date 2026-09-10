@@ -64,6 +64,7 @@ from artek_buddy.http.turns import (
     _cancel_turns,
     _emit,
     _ingest_thread_files,
+    _resume_pending_command_dispatch,
     resume_parked_follow_up,
 )
 
@@ -171,7 +172,7 @@ async def send_thread_message(
                     if found.message_id
                     else None
                 )
-                return ThreadSendResult(
+                result = ThreadSendResult(
                     task_id=run.task_id if run is not None else found.run_id,
                     run_id=found.run_id,
                     seq=message.seq if message is not None else 0,
@@ -179,6 +180,19 @@ async def send_thread_message(
                     run=run,
                     queued=False,
                 )
+                if run is not None and history.claim_turn_dispatch(run.id):
+                    await _resume_pending_command_dispatch(
+                        history,
+                        rt,
+                        events,
+                        bot,
+                        run,
+                        body.text,
+                        device_id=actor,
+                        idempotency_key=body.idempotency_key,
+                        reply_to_id=body.reply_to_id,
+                    )
+                return result
         hosted = (
             _ingest_thread_files(
                 history,

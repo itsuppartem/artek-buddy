@@ -16,6 +16,7 @@
 - Work log usage estimates keep the Fast / rate-card variant from when that run started (`0036_run_usage_fast.sql`). Unchecking Fast (or turning it on) while another turn is still running does not rewrite that in-flight grok-4.6 Fast vs standard USD.
 - Revoking a paired device stops that device's already-open SSE; a still-valid device on the same member keeps its stream.
 - This-PC search (`rg`/`grep`) that can run another program or load extra config requires Allow. Deny does not start a process. A path-form binary or `VAR=value` prefix is not treated as explore-only.
+- Concurrent retries of one owner `command_id` dispatch a single executor (`0039_turn_dispatches.sql`). A lost HTTP response that retries before that run is claimed still starts it once. A changed payload is 409 without a second run.
 
 ## [0.2.0] - 2026-09-09
 

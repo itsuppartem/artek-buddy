@@ -20,7 +20,13 @@ def turn_bucket(bot_id: str) -> dict[str, asyncio.Task[Any]]:
 
 
 def register_turn(bot_id: str, run_id: str, task: asyncio.Task[Any]) -> None:
-    turn_bucket(bot_id)[run_id] = task
+    bucket = turn_bucket(bot_id)
+    existing = bucket.get(run_id)
+    if existing is not None and not existing.done():
+        if task is not existing and not task.done():
+            task.cancel()
+        return
+    bucket[run_id] = task
 
 
 def drop_turn(bot_id: str, run_id: str) -> None:
