@@ -16,6 +16,7 @@ from tests.live_web.helpers import (
     expect_bot_in_chats,
     open_phone_tab,
     pair_host_page,
+    send_message_phone,
 )
 
 pytestmark = pytest.mark.live
@@ -137,11 +138,17 @@ def test_host_page_workspace_events_auth_says_pair_this_phone_again(
     page: Page, host_url: str
 ) -> None:
     pair_host_page(page, host_url)
+    open_phone_tab(page, "today")
     expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
     fulfill_json(page, "**/v1/events", 401, '{"detail":"invalid token"}')
     page.reload()
-    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("phone-nav")).to_be_visible(timeout=20_000)
     expect(page.get_by_test_id("auth-error")).to_be_visible(timeout=20_000)
+    # Leftover host bots can put a helper id in the hash; reload then opens that
+    # chat. Auth loss still has to show on the paired shell, not kick to pairing.
+    if page.get_by_test_id("phone-tab-today").get_attribute("aria-current") != "page":
+        open_phone_tab(page, "today")
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
     expect(page.get_by_role("button", name="Pair this computer again")).to_have_count(0)
     expect(page.get_by_test_id("pairing")).to_have_count(0)
     page.get_by_role("button", name="Pair this phone again").click()
@@ -287,3 +294,17 @@ def test_phone_create_cancel_returns_to_previous_context(page: Page, host_url: s
     expect(page.get_by_placeholder("Name this bot")).to_have_count(0)
     open_phone_tab(page, "chat")
     expect(page.get_by_test_id("thread-header")).to_contain_text(name)
+
+
+def test_host_page_today_does_not_mark_hidden_thread_read(page: Page, host_url: str) -> None:
+    name = unique_bot("HideRead")
+    pair_host_page(page, host_url)
+    create_named_bot_phone(page, name)
+    send_message_phone(page, "please e2e-slow")
+    open_phone_tab(page, "today")
+    today = page.get_by_test_id("today-view")
+    expect(today).to_be_visible(timeout=8_000)
+    expect(page.get_by_test_id("thread-pane")).to_be_hidden()
+    expect(today).to_contain_text("slow done", timeout=15_000)
+    open_phone_tab(page, "chats")
+    expect(bot_row(page, name).get_by_test_id("unread-dot")).to_be_visible(timeout=8_000)

@@ -8,6 +8,7 @@
 
 ### Fixed
 - OPERATIONS.md backup/restore includes the `credential-data` volume and `.env` broker tokens. A tar of `data`/`workspace` plus `pg_dump` is not a complete host copy.
+- Leaving a chat for Today, Library, settings, or the phone Desktop tab no longer marks new replies on the selected helper as read, and does not dismiss that helper's native or web notify.
 
 ## [0.2.0] - 2026-09-09
 

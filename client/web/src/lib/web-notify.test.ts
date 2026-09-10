@@ -65,6 +65,9 @@ describe("home screen and web alerts", () => {
     expect(
       shouldShowWebNotification({ pageHidden: false, viewingBotId: "bot-a", alertBotId: "bot-a" }),
     ).toBe(false);
+    expect(
+      shouldShowWebNotification({ pageHidden: false, viewingBotId: null, alertBotId: "bot-a" }),
+    ).toBe(true);
   });
 
   it("holds only the open chat while the home-screen app is in front", () => {

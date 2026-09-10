@@ -33,6 +33,7 @@ import {
   shouldSendNativeAlert,
   shouldStickDismissOnView,
   shouldWatchBackgroundBot,
+  visibleConversationId,
 } from "../lib/alerts";
 import { healthOkClearsError, workspaceEventsAuthLoss } from "../lib/auth-loss";
 import { composerCanSend, composerPlaceholder, composerShouldSend } from "../lib/composer";
@@ -272,6 +273,10 @@ export function ShellPage() {
   const panelAfterModels = useRef<"computer" | "library" | null>(null);
   const panelAfterPlugins = useRef<"computer" | "library" | null>(null);
   const panelAfterContext = useRef<"library" | null>(null);
+  const workspaceViewRef = useRef(workspaceView);
+  const phoneTabRef = useRef(phoneTab);
+  const phoneShellRef = useRef(phoneShell);
+  const panelRef = useRef(panel);
   const creatingBot = useRef(false);
   const filesEpoch = useRef(0);
   const queueFilesRef = useRef<(incoming: File[]) => void>(() => undefined);
@@ -376,6 +381,20 @@ export function ShellPage() {
   const active = bots.find((bot) => bot.id === botId);
   activeIdRef.current = active?.id;
   botIdRef.current = botId;
+  workspaceViewRef.current = workspaceView;
+  phoneTabRef.current = phoneTab;
+  phoneShellRef.current = phoneShell;
+  panelRef.current = panel;
+
+  function visibleThreadId(): string | null {
+    return visibleConversationId({
+      selectedBotId: activeIdRef.current || botIdRef.current,
+      phoneShell: phoneShellRef.current,
+      workspaceView: workspaceViewRef.current,
+      phoneTab: phoneTabRef.current,
+      panel: panelRef.current,
+    });
+  }
   const cachedEntry = active ? peekThread(threadCache.current, active.id) : undefined;
   const cachedSnapshot = cachedEntry?.snapshot ?? null;
   const thread = active && snapshot?.botId === active.id ? snapshot : cachedSnapshot;
@@ -492,13 +511,15 @@ export function ShellPage() {
   }
 
   useEffect(() => {
-    if (!botId) return;
+    const viewing = visibleThreadId();
+    if (!viewing) return;
     void (async () => {
       const gtkWindowActive = await readGtkWindowActive();
+      if (visibleThreadId() !== viewing) return;
       if (
         !shouldCountThreadRead({
-          viewingBotId: botId,
-          chatId: botId,
+          viewingBotId: viewing,
+          chatId: viewing,
           windowFocused,
           pageHidden,
           gtkWindowActive,
@@ -506,9 +527,9 @@ export function ShellPage() {
       ) {
         return;
       }
-      markOpenThreadRead(botId);
+      markOpenThreadRead(viewing);
     })();
-  }, [botId, windowFocused, pageHidden]);
+  }, [botId, windowFocused, pageHidden, workspaceView, phoneTab, phoneShell, panel]);
 
   async function dispatchAlert(next: AttentionAlert, key: string, notifyOnFinish: boolean) {
     if (!allowAlert(next, notifyOnFinish)) return;
@@ -521,7 +542,7 @@ export function ShellPage() {
     }
     const gtkWindowActive = await readGtkWindowActive();
     if (seenAlertKeys.current.has(key) || seenAlertKeys.current.has(fingerprint)) return;
-    const viewing = activeIdRef.current || botIdRef.current || null;
+    const viewing = visibleThreadId();
     const hidden = typeof document !== "undefined" && document.hidden;
     const surface = pageSurface();
     const showBanner = shouldSendDesktopAlert({
@@ -608,7 +629,7 @@ export function ShellPage() {
 
   function flushHeldWebAlerts() {
     if (typeof document === "undefined" || !document.hidden) return;
-    const viewing = activeIdRef.current || botIdRef.current || null;
+    const viewing = visibleThreadId();
     for (const [id, held] of [...pendingAlerts.current.entries()]) {
       if (
         !shouldShowWebNotification({
@@ -627,7 +648,7 @@ export function ShellPage() {
   }
 
   function flushHeldAlerts() {
-    const viewing = activeIdRef.current || botIdRef.current || null;
+    const viewing = visibleThreadId();
     for (const [id, held] of [...pendingAlerts.current.entries()]) {
       if (id === viewing) continue;
       pendingAlerts.current.delete(id);
@@ -637,7 +658,7 @@ export function ShellPage() {
 
   function raiseParkedAlerts() {
     flushHeldAlerts();
-    const viewing = activeIdRef.current || botIdRef.current || null;
+    const viewing = visibleThreadId();
     const next = parkedAttentionForView(
       botsRef.current.map((bot) => ({
         id: bot.id,
@@ -765,7 +786,7 @@ export function ShellPage() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const viewing = activeIdRef.current || botIdRef.current;
+      const viewing = visibleThreadId();
       const watch = botsRef.current.some((bot) =>
         shouldWatchBackgroundBot(bot.status, bot.id, viewing),
       );
@@ -798,7 +819,7 @@ export function ShellPage() {
   }, []);
 
   useEffect(() => {
-    const viewing = activeIdRef.current || botIdRef.current || null;
+    const viewing = visibleThreadId();
     const lookingAtThread =
       viewing != null &&
       shouldCountThreadRead({
@@ -815,14 +836,24 @@ export function ShellPage() {
       setAttention(null);
     }
     previousViewingRef.current = viewing;
-  }, [active?.id, attention, windowFocused, pageHidden]);
+  }, [
+    active?.id,
+    attention,
+    windowFocused,
+    pageHidden,
+    workspaceView,
+    phoneTab,
+    phoneShell,
+    panel,
+  ]);
 
   async function refreshBots() {
     const list = await api.bots.list();
-    const viewing = activeIdRef.current || botIdRef.current;
+    const viewing = visibleThreadId();
     const gtkWindowActive = await readGtkWindowActive();
     if (
       viewing &&
+      viewing === visibleThreadId() &&
       !heldUnreadIds.current.has(viewing) &&
       shouldCountThreadRead({
         viewingBotId: viewing,
