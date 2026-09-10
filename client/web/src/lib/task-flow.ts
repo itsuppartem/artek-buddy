@@ -117,6 +117,7 @@ export function threadHeaderLabel(
   runStatus: string | undefined,
   attention: AttentionReason | null | undefined,
   title: string | undefined,
+  workersBusy = false,
 ): string {
   if (runStatus === "cancelled") return "Stopped";
   if (runStatus === "failed") return "Failed";
@@ -127,7 +128,9 @@ export function threadHeaderLabel(
   ) {
     return "Needs you";
   }
-  if (runStatus === "running" || runStatus === "queued" || runStatus === "leased") return "Working";
+  if (runStatus === "running" || runStatus === "queued" || runStatus === "leased" || workersBusy) {
+    return "Working";
+  }
   if (runStatus === "completed") return "Ready";
   return title?.trim() || "No work yet";
 }
@@ -135,6 +138,7 @@ export function threadHeaderLabel(
 export function workSummaryCopy(
   runStatus: string | undefined,
   attention: AttentionReason | null | undefined,
+  workersBusy = false,
 ): { title: string; detail: string; tone: "parked" | "busy" | "failed" | "cancelled" | "done" } {
   if (
     runStatus === "waiting_takeover" ||
@@ -161,7 +165,7 @@ export function workSummaryCopy(
       tone: "failed",
     };
   }
-  if (runStatus === "running" || runStatus === "queued" || runStatus === "leased") {
+  if (runStatus === "running" || runStatus === "queued" || runStatus === "leased" || workersBusy) {
     return {
       title: "Working on this task",
       detail: "The conversation keeps the result and decisions.",

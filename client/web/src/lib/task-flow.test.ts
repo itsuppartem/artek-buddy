@@ -216,4 +216,10 @@ describe("task-first routing", () => {
     expect(workLogLatestFallback("failed")).toBe("This run failed.");
     expect(workLogLatestFallback("")).toBe("No run in this chat yet.");
   });
+
+  it("keeps Working while a background worker is still in flight", () => {
+    expect(threadHeaderLabel("completed", "none", "Mail", true)).toBe("Working");
+    expect(workSummaryCopy("completed", "none", true).title).toBe("Working on this task");
+    expect(threadHeaderLabel("completed", "none", "Mail")).toBe("Ready");
+  });
 });

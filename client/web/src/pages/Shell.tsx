@@ -386,7 +386,7 @@ export function ShellPage() {
     (thread?.run && isLiveTurn(thread.run.status)) ||
       (thread && !isParked && (hasLive(thread) || hasActiveWorkers(thread))),
   );
-  const runCopy = workSummaryCopy(thread?.run?.status, active?.attentionReason);
+  const runCopy = workSummaryCopy(thread?.run?.status, active?.attentionReason, isBusy);
   const flightText = inFlightProgressText(thread?.subagents);
   const hasWorkLog = Boolean(thread?.run) || (thread?.subagents ?? []).length > 0;
 
@@ -2272,7 +2272,12 @@ export function ShellPage() {
                 </span>
                 {active ? (
                   <span className="mt-0.5 block truncate text-[10.5px] text-mute">
-                    {threadHeaderLabel(thread?.run?.status, active.attentionReason, active.title)}
+                    {threadHeaderLabel(
+                      thread?.run?.status,
+                      active.attentionReason,
+                      active.title,
+                      isBusy,
+                    )}
                   </span>
                 ) : null}
               </span>
