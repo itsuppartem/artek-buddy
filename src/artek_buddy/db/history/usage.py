@@ -41,6 +41,44 @@ def _usage_filter_sql(
 
 
 class UsageMixin:
+    def get_run_fast(self, run_id: str) -> bool | None:
+        if not run_id:
+            return None
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT fast FROM run_usage_fast WHERE run_id = %s",
+                (run_id,),
+            ).fetchone()
+            conn.commit()
+        if row is None:
+            return None
+        return bool(row["fast"])
+
+    def bind_run_fast(self, run_id: str, fast: bool | None = None) -> bool:
+        """Snapshot Fast for this run. The first write wins; later Models defaults do not."""
+        if not run_id:
+            return True if fast is None else bool(fast)
+        existing = self.get_run_fast(run_id)
+        if existing is not None:
+            return existing
+        if fast is None:
+            _, stored = self.get_model_params()
+            use_fast = True if stored is None else bool(stored)
+        else:
+            use_fast = bool(fast)
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO run_usage_fast (run_id, fast)
+                VALUES (%s, %s)
+                ON CONFLICT (run_id) DO NOTHING
+                """,
+                (run_id, use_fast),
+            )
+            conn.commit()
+        bound = self.get_run_fast(run_id)
+        return True if bound is None else bool(bound)
+
     def record_usage(
         self,
         *,

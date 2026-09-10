@@ -167,6 +167,7 @@ class InboxMixin:
         run = self._get_run(run_id)
         if run is None:
             raise RuntimeError("failed to persist follow-up run")
+        self.bind_run_fast(run.id)
         return (
             run,
             [

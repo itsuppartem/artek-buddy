@@ -639,6 +639,7 @@ async def _run_turn(
         thread_id=bot.thread_id,
         runtime=runtime_kind(rt.settings),
     )
+    history.bind_run_fast(run.id)
     draft = ""
     thinking = ""
     reply_text = ""

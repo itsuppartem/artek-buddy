@@ -195,6 +195,7 @@ class SubagentService:
             self.store.record_subagent_activity(sub_id, kind="run_started")
             record = self.store.get_subagent(sub_id) or record
             self._emit(live, record)
+            self.store.bind_run_fast(sub_id)
             self.runtime.set_current_turn_context(
                 live.id,
                 sub_id,
