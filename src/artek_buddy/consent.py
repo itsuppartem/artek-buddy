@@ -327,12 +327,12 @@ def _readonly_segment(part: str) -> bool:
 
 def _search_inspect_ok(tokens: list[str]) -> bool:
     """rg/grep stay explore-only when argv cannot name another program or config."""
-    for token in tokens[1:]:
-        if token == "--":
+    for item in tokens[1:]:
+        if item == "--":
             return True
-        if not token.startswith("-"):
+        if not item.startswith("-"):
             continue
-        flag = token.split("=", 1)[0]
+        flag = item.split("=", 1)[0]
         if flag in _SEARCH_EXEC_FLAGS:
             return False
     return True
