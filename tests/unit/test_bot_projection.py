@@ -60,6 +60,7 @@ def test_idle_with_no_runs_is_not_completed() -> None:
     assert execution_state_for("idle") == "unknown"
     assert execution_state_for("sleeping") == "unknown"
     assert execution_state_for("") == "unknown"
+    assert execution_state_for("idle", active_run_status="unknown") == "unconfirmed"
 
 
 def test_consent_ask_and_takeover_map_without_preview() -> None:

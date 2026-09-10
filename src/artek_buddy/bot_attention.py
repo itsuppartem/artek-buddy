@@ -15,6 +15,7 @@ ACTIVE_RUN_STATUSES = frozenset(
         "waiting_input",
         "waiting_takeover",
         "waiting_recovery",
+        "unknown",
     }
 )
 TERMINAL_RUN_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -26,6 +27,7 @@ _STATUS_TO_EXECUTION: dict[str, ExecutionState] = {
     "waiting_input": "waiting",
     "waiting_takeover": "waiting",
     "waiting_recovery": "waiting",
+    "unknown": "unconfirmed",
     "needs_you": "waiting",
     "completed": "completed",
     "failed": "failed",

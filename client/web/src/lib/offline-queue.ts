@@ -15,6 +15,7 @@ export type QueuedSend = {
   text: string;
   replyToId?: string | null;
   attachments?: QueuedAttachment[];
+  parentCommandId?: string;
   queuedAt: number;
 };
 
@@ -30,6 +31,13 @@ export function shouldQueueSend(kind: "host" | "auth" | "action"): boolean {
 
 export function newQueuedId(nowMs = Date.now()): string {
   return `queued:${nowMs}:${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function newCommandId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `cmd_${crypto.randomUUID()}`;
+  }
+  return `cmd_${newQueuedId()}`;
 }
 
 export function isQueuedMessageId(id: string): boolean {

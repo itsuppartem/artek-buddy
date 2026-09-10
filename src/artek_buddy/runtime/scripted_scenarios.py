@@ -125,6 +125,7 @@ class ScriptedStep:
     status: str | None = None
     error: str | None = None
     raise_error: str | None = None
+    raise_timeout: bool = False
     delay_s: float | None = None
     ignore_cancel: bool = False
     write_home: tuple[str, bytes] | None = None
@@ -986,6 +987,8 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             scripted_delay(2.5),
             scripted_finish(E2E_FAIL_ERROR, status="failed", error=E2E_FAIL_ERROR),
         ]
+    if "e2e-unknown-timeout" in hay:
+        return [scripted_delay(0.05), ScriptedStep(raise_timeout=True)]
     if "e2e-fail" in hay:
         return [scripted_finish(E2E_FAIL_ERROR, status="failed", error=E2E_FAIL_ERROR)]
     return [scripted_text("ok"), scripted_finish("ok")]

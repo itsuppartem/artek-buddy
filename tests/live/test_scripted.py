@@ -161,3 +161,16 @@ def test_scripted_terminal_send_suppresses_paraphrased_finish_and_exits_live(
     expect(page.get_by_text(E2E_SEND_PARAPHRASE, exact=True)).to_have_count(0)
     expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
     expect(page.get_by_test_id("thread-stop")).to_have_count(0)
+
+
+def test_unknown_timeout_is_not_failed_retry(page: Page, client_url: str, host_url: str) -> None:
+    name = _open_named(page, client_url, host_url, "UnkOut")
+    send_message(page, "please e2e-unknown-timeout", name)
+    unknown = page.get_by_test_id("run-unknown")
+    expect(unknown).to_be_visible(timeout=20_000)
+    expect(unknown).to_contain_text("do not send the same command again")
+    expect(page.get_by_test_id("run-error")).to_have_count(0)
+    expect(page.get_by_test_id("run-error").filter(has_text="Send again")).to_have_count(0)
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
+    expect(page.get_by_test_id("thread-stop")).to_be_visible()
+    expect(page.get_by_test_id("thread-header")).to_contain_text("Checking")

@@ -5,7 +5,9 @@ import {
   captionTargetId,
   enqueueSend,
   formatOfflineCaption,
+  isQueuedMessageId,
   mergeQueuedIntoMessages,
+  newCommandId,
   newQueuedId,
   type OfflineCaption,
   parseStoredList,
@@ -123,6 +125,13 @@ describe("persist without secrets", () => {
     expect(id.startsWith("queued:")).toBe(true);
     expect(id.includes("dev_")).toBe(false);
     expect(id.includes("token")).toBe(false);
+  });
+
+  it("mints a client command id before send, distinct from a queued bubble id", () => {
+    const id = newCommandId();
+    expect(id.startsWith("cmd_")).toBe(true);
+    expect(id.includes("dev_")).toBe(false);
+    expect(isQueuedMessageId(id)).toBe(false);
   });
 });
 

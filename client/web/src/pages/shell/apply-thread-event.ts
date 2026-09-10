@@ -26,7 +26,8 @@ export function applyThreadEvent(
     event.type === "computer.takeover.released" ||
     event.type === "run.completed" ||
     event.type === "run.failed" ||
-    event.type === "run.cancelled"
+    event.type === "run.cancelled" ||
+    event.type === "run.unknown"
   ) {
     setSnapshot((prev) => reduceThreadSnapshot(prev, event));
   }

@@ -230,7 +230,7 @@ class BotsMixin:
                     WHERE bot_id = %s
                       AND status IN (
                           'queued', 'leased', 'running', 'waiting_input',
-                          'waiting_takeover', 'waiting_recovery'
+                          'waiting_takeover', 'waiting_recovery', 'unknown'
                       )
                     RETURNING id
                     """,
@@ -438,7 +438,7 @@ class BotsMixin:
                 WHERE bot_id = ANY(%s)
                   AND status IN (
                       'queued', 'leased', 'running', 'waiting_input',
-                      'waiting_takeover', 'waiting_recovery'
+                      'waiting_takeover', 'waiting_recovery', 'unknown'
                   )
                 ORDER BY bot_id, started_at DESC NULLS LAST, id DESC
                 """,

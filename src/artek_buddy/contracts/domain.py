@@ -14,7 +14,14 @@ class ComputerMode(str):
 
 
 ExecutionState = Literal[
-    "queued", "running", "waiting", "completed", "failed", "cancelled", "unknown"
+    "queued",
+    "running",
+    "waiting",
+    "completed",
+    "failed",
+    "cancelled",
+    "unknown",
+    "unconfirmed",
 ]
 AttentionReason = Literal["approval", "clarification", "takeover", "recovery", "none"]
 ConnectionState = Literal["live", "last_known"]
@@ -825,6 +832,8 @@ class ThreadSendInput(BaseModel):
     attachment_ids: list[Id] = Field(default_factory=list)
     attachments: list[ThreadAttachmentInput] = Field(default_factory=list)
     idempotency_key: str | None = Field(default=None, max_length=120)
+    command_id: str | None = Field(default=None, min_length=1, max_length=120)
+    parent_command_id: str | None = Field(default=None, min_length=1, max_length=120)
 
     @model_validator(mode="after")
     def need_text_or_files(self) -> ThreadSendInput:

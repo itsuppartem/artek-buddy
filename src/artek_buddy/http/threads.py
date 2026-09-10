@@ -30,7 +30,8 @@ from artek_buddy.contracts import (
     ThreadSnapshot,
 )
 from artek_buddy.db import DatabaseUnavailable
-from artek_buddy.db.history import HistoryStore
+from artek_buddy.db.history import CommandPayloadConflict, HistoryStore
+from artek_buddy.db.history.commands import owner_command_fingerprint
 from artek_buddy.db.shaping import (
     DEFAULT_PAGE_SIZE,
     isoformat_utc,
@@ -146,6 +147,37 @@ async def send_thread_message(
 ) -> ThreadSendResult:
     try:
         bot = _require_bot(history, bot_id)
+        payload_hash = owner_command_fingerprint(
+            body.text,
+            reply_to_id=body.reply_to_id,
+            attachment_ids=list(body.attachment_ids),
+            attachment_names=[item.name for item in body.attachments],
+        )
+        if body.command_id:
+            try:
+                found = history.require_owner_command_payload(
+                    bot.id, body.command_id, payload_hash
+                )
+            except CommandPayloadConflict as err:
+                raise HTTPException(
+                    status_code=409,
+                    detail="this command id was used with a different message",
+                ) from err
+            if found is not None:
+                run = history.get_run(found.run_id)
+                message = (
+                    history.get_message_in_thread(bot.thread_id, found.message_id)
+                    if found.message_id
+                    else None
+                )
+                return ThreadSendResult(
+                    task_id=run.task_id if run is not None else found.run_id,
+                    run_id=found.run_id,
+                    seq=message.seq if message is not None else 0,
+                    message=message,
+                    run=run,
+                    queued=False,
+                )
         hosted = (
             _ingest_thread_files(
                 history,
@@ -160,18 +192,27 @@ async def send_thread_message(
         )
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
-    return await _accept_turn(
-        history,
-        rt,
-        events,
-        bot,
-        body.text,
-        trigger=body.trigger,
-        reply_to_id=body.reply_to_id,
-        attachments=hosted,
-        device_id=actor,
-        idempotency_key=body.idempotency_key,
-    )
+    try:
+        return await _accept_turn(
+            history,
+            rt,
+            events,
+            bot,
+            body.text,
+            trigger=body.trigger,
+            reply_to_id=body.reply_to_id,
+            attachments=hosted,
+            device_id=actor,
+            idempotency_key=body.idempotency_key,
+            command_id=body.command_id,
+            payload_hash=payload_hash,
+            parent_command_id=body.parent_command_id,
+        )
+    except CommandPayloadConflict as err:
+        raise HTTPException(
+            status_code=409,
+            detail="this command id was used with a different message",
+        ) from err
 
 
 @router.post("/v1/threads/{bot_id}/answer")

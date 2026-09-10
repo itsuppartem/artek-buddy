@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from psycopg.errors import UniqueViolation
 from psycopg.types.json import Json
 
 from artek_buddy.contracts.domain import (
@@ -12,6 +13,7 @@ from artek_buddy.contracts.domain import (
 )
 from artek_buddy.contracts.events import MessageRole
 from artek_buddy.contracts.ids import RunStatus
+from artek_buddy.db.history.commands import CommandPayloadConflict
 from artek_buddy.db.shaping import (
     is_raw_run_failed,
     isoformat_utc,
@@ -37,7 +39,7 @@ class TurnsMixin:
                 WHERE r.bot_id = %s
                 ORDER BY
                   CASE WHEN r.status IN (
-                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery'
+                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery', 'unknown'
                   ) THEN 0 ELSE 1 END,
                   r.started_at DESC NULLS LAST,
                   r.id DESC
@@ -55,7 +57,7 @@ class TurnsMixin:
                 SELECT COUNT(*) AS n FROM runs
                 WHERE bot_id = %s
                   AND status IN (
-                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery'
+                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery', 'unknown'
                   )
                 """,
                 (bot_id,),
@@ -76,11 +78,59 @@ class TurnsMixin:
         blocks: list[dict[str, Any]] | None = None,
         preview: str | None = None,
         inbox_text: str | None = None,
+        command_id: str | None = None,
+        payload_hash: str | None = None,
+        parent_command_id: str | None = None,
     ) -> tuple[ThreadMessage, Run, bool]:
         """Atomically start a lead turn or queue behind the current lead."""
         message_blocks = blocks or text_blocks(text)
         preview_text = preview or text
         inbox_body = inbox_text if inbox_text is not None else text
+        try:
+            return self._begin_or_enqueue_turn(
+                bot,
+                model_provider=model_provider,
+                model_id=model_id,
+                trigger=trigger,
+                reply_to_id=reply_to_id,
+                max_inbox=max_inbox,
+                message_blocks=message_blocks,
+                preview_text=preview_text,
+                inbox_body=inbox_body,
+                command_id=command_id,
+                payload_hash=payload_hash,
+                parent_command_id=parent_command_id,
+            )
+        except UniqueViolation:
+            if not command_id:
+                raise
+            found = self.get_owner_command(bot.id, command_id)
+            if found is None:
+                raise
+            if payload_hash and found.payload_hash != payload_hash:
+                raise CommandPayloadConflict from None
+            user = self._get_message(found.message_id) if found.message_id else None
+            run = self._get_run(found.run_id)
+            if user is None or run is None:
+                raise RuntimeError("failed to replay owner command") from None
+            return self._with_replies([user])[0], run, False
+
+    def _begin_or_enqueue_turn(
+        self,
+        bot: Bot,
+        *,
+        model_provider: str | None,
+        model_id: str | None,
+        trigger: str,
+        reply_to_id: str | None,
+        max_inbox: int,
+        message_blocks: list[dict[str, Any]],
+        preview_text: str,
+        inbox_body: str,
+        command_id: str | None,
+        payload_hash: str | None,
+        parent_command_id: str | None,
+    ) -> tuple[ThreadMessage, Run, bool]:
         with self._conn() as conn:
             with conn.transaction():
                 locked = conn.execute(
@@ -89,18 +139,42 @@ class TurnsMixin:
                 ).fetchone()
                 if locked is None:
                     raise RuntimeError("bot not found")
+                if command_id:
+                    existing = conn.execute(
+                        """
+                        SELECT command_id, bot_id, payload_hash, run_id, message_id
+                        FROM owner_commands
+                        WHERE command_id = %s
+                        FOR UPDATE
+                        """,
+                        (command_id,),
+                    ).fetchone()
+                    if existing is not None:
+                        if existing["bot_id"] != bot.id or (
+                            payload_hash and existing["payload_hash"] != payload_hash
+                        ):
+                            raise CommandPayloadConflict
+                        user = self._get_message(str(existing["message_id"]))
+                        run = self._get_run(str(existing["run_id"]))
+                        if user is None or run is None:
+                            raise RuntimeError("failed to replay owner command")
+                        return self._with_replies([user])[0], run, False
                 active = conn.execute(
                     """
                     SELECT * FROM runs
                     WHERE bot_id = %s
-                      AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery')
+                      AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery', 'unknown')
                     ORDER BY started_at DESC
                     LIMIT 1
                     FOR UPDATE
                     """,
                     (bot.id,),
                 ).fetchone()
-                if active is not None and active["status"] == "waiting_takeover":
+                if active is not None and active["status"] in {
+                    "waiting_takeover",
+                    "waiting_recovery",
+                    "unknown",
+                }:
                     conn.execute(
                         """
                         UPDATE runs
@@ -109,7 +183,11 @@ class TurnsMixin:
                         """,
                         (
                             RunStatus.cancelled.value,
-                            "Stopped.",
+                            (
+                                "The owner started a new attempt."
+                                if active["status"] in {"unknown", "waiting_recovery"}
+                                else "Stopped."
+                            ),
                             isoformat_utc(),
                             active["id"],
                         ),
@@ -221,6 +299,25 @@ class TurnsMixin:
                     run_id=run_id,
                     blocks=message_blocks,
                 )
+                if command_id:
+                    conn.execute(
+                        """
+                        INSERT INTO owner_commands (
+                            command_id, bot_id, payload_hash, run_id, message_id,
+                            parent_command_id, created_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            command_id,
+                            bot.id,
+                            payload_hash or "",
+                            run_id,
+                            msg_id,
+                            parent_command_id,
+                            now,
+                        ),
+                    )
         user = self._get_message(msg_id)
         run = self._get_run(run_id)
         if user is None or run is None:
@@ -376,16 +473,19 @@ class TurnsMixin:
                     "SELECT recovered_at FROM run_waits WHERE run_id = %s",
                     (run.id,),
                 ).fetchone()
+                already_status = already["status"] if already else None
                 skip_late = bool(
                     recovered
                     and recovered["recovered_at"] is not None
                     and status != RunStatus.cancelled.value
-                )
-                if not skip_late and not (
-                    already
-                    and already["status"] == RunStatus.cancelled.value
+                ) or (
+                    already_status == RunStatus.cancelled.value
                     and status != RunStatus.cancelled.value
-                ):
+                )
+                skip_dup_unknown = (
+                    already_status == RunStatus.unknown.value and status == RunStatus.unknown.value
+                )
+                if not skip_late and not skip_dup_unknown:
                     now = isoformat_utc()
                     body = (text or "").strip() if text else ""
                     err = (error or "").strip()
@@ -426,7 +526,13 @@ class TurnsMixin:
                         SET status = %s, error = %s, result = %s, completed_at = %s
                         WHERE id = %s
                         """,
-                        (status, error, text or None, now, run.id),
+                        (
+                            status,
+                            error,
+                            text or None,
+                            None if status == RunStatus.unknown.value else now,
+                            run.id,
+                        ),
                     )
                     still = conn.execute(
                         """
@@ -434,7 +540,7 @@ class TurnsMixin:
                         WHERE bot_id = %s
                           AND id <> %s
                           AND status IN (
-                            'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery'
+                            'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery', 'unknown'
                           )
                         LIMIT 1
                         """,
@@ -444,6 +550,8 @@ class TurnsMixin:
                         bot_status = "running"
                     elif status in {RunStatus.completed.value, RunStatus.cancelled.value}:
                         bot_status = "idle"
+                    elif status == RunStatus.unknown.value:
+                        bot_status = "running"
                     else:
                         bot_status = "error"
                     if body:
@@ -553,7 +661,7 @@ class TurnsMixin:
                 """
                 SELECT id FROM runs
                 WHERE bot_id = %s
-                  AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery')
+                  AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery', 'unknown')
                 LIMIT 1
                 """,
                 (bot_id,),

@@ -118,3 +118,15 @@ def test_host_page_worker_essay_stays_out_of_still_working(page: Page, host_url:
     expect(
         page.locator('[data-testid="thread-message"]').filter(has_text=E2E_WORKER_ESSAY_MARK)
     ).to_have_count(0)
+
+
+def test_unknown_timeout_is_not_failed_retry_on_iphone(page: Page, host_url: str) -> None:
+    pair_host_page(page, host_url)
+    create_named_bot_phone(page, unique_bot("UnkWeb"))
+    send_message_phone(page, "please e2e-unknown-timeout")
+    unknown = page.get_by_test_id("run-unknown")
+    expect(unknown).to_be_visible(timeout=20_000)
+    expect(unknown).to_contain_text("do not send the same command again")
+    expect(page.get_by_test_id("run-error")).to_have_count(0)
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
+    expect(page.get_by_test_id("thread-stop")).to_be_visible()

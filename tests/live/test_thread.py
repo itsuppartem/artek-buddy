@@ -1308,6 +1308,8 @@ def test_in_flight_send_does_not_disable_the_other_chat(
     box.fill("hold this send")
     expect(box).to_have_value("hold this send")
     box.press("Enter")
+    expect(page.get_by_test_id("send-delivering")).to_be_visible()
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
     expect(composer(page)).to_have_value("")
     expect(_composer_send(page)).to_be_disabled(timeout=5_000)
     open_chat(page, second)
@@ -1372,3 +1374,29 @@ def test_late_send_failure_keeps_files_on_the_origin_chat(
     open_chat(page, first)
     expect(page.get_by_test_id("attach-chip")).to_contain_text("drop.txt", timeout=5_000)
     expect(page.get_by_test_id("attach-chip")).to_have_count(1)
+
+
+def test_lost_send_response_is_unknown_not_a_queue(
+    page: Page, client_url: str, host_url: str
+) -> None:
+    name = _named(page, client_url, host_url, "LostCmd")
+    ensure_model(page)
+    expect(thread_header(page)).to_contain_text(name)
+
+    def abort_post(route) -> None:
+        if route.request.method != "POST":
+            route.continue_()
+            return
+        route.abort("connectionfailed")
+
+    page.route("**/v1/threads/**/messages", abort_post)
+    box = composer(page)
+    box.fill("maybe accepted")
+    expect(box).to_have_value("maybe accepted")
+    box.press("Enter")
+    unknown = page.get_by_test_id("run-unknown")
+    expect(unknown).to_be_visible(timeout=15_000)
+    expect(unknown).to_contain_text("Do not send the same command again.")
+    expect(page.get_by_test_id("run-error")).to_have_count(0)
+    expect(page.get_by_test_id("queued-pending")).to_have_count(0)
+    expect(page.get_by_test_id("typing-indicator")).to_have_count(0)
