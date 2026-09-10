@@ -138,11 +138,17 @@ def test_host_page_workspace_events_auth_says_pair_this_phone_again(
     page: Page, host_url: str
 ) -> None:
     pair_host_page(page, host_url)
+    open_phone_tab(page, "today")
     expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
     fulfill_json(page, "**/v1/events", 401, '{"detail":"invalid token"}')
     page.reload()
-    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
+    expect(page.get_by_test_id("phone-nav")).to_be_visible(timeout=20_000)
     expect(page.get_by_test_id("auth-error")).to_be_visible(timeout=20_000)
+    # Leftover host bots can put a helper id in the hash; reload then opens that
+    # chat. Auth loss still has to show on the paired shell, not kick to pairing.
+    if page.get_by_test_id("phone-tab-today").get_attribute("aria-current") != "page":
+        open_phone_tab(page, "today")
+    expect(page.get_by_test_id("today-view")).to_be_visible(timeout=20_000)
     expect(page.get_by_role("button", name="Pair this computer again")).to_have_count(0)
     expect(page.get_by_test_id("pairing")).to_have_count(0)
     page.get_by_role("button", name="Pair this phone again").click()
