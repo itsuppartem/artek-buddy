@@ -174,9 +174,7 @@ class InboxMixin:
                         now,
                     ),
                 )
-                message_ids = [
-                    str(row["message_id"]) for row in rows if row.get("message_id")
-                ]
+                message_ids = [str(row["message_id"]) for row in rows if row.get("message_id")]
                 if message_ids:
                     conn.execute(
                         """
