@@ -413,6 +413,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | Copy a **file** on Linux (file manager path / `file://`) and paste → the file, not the path as text | [ ] | — |
 | After Send the chip is gone and does not come back from a late clipboard read | [ ] | [ ] |
 | Images land in that bot’s `inbox/` on the Pi. Deleting the **chat** removes that chat’s inbox copies; a shared Team home and other bots stay | [ ] | [ ] |
+| Retry the same Send with the same file bytes: one bubble. The same filename with different bytes is rejected (not a second run) | [ ] | [ ] |
 
 ---
 

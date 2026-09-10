@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,16 +15,46 @@ class CommandPayloadConflict(Exception):
     """Same command id, different message or files."""
 
 
+def _inline_file_digest(name: str, content_base64: str) -> dict[str, str | int]:
+    blob = content_base64 or ""
+    try:
+        data = base64.b64decode(blob, validate=True)
+    except (binascii.Error, ValueError):
+        data = blob.encode("utf-8")
+    return {
+        "name": name,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "size": len(data),
+    }
+
+
+def _attachment_file_digests(attachments: list[Any] | None) -> list[dict[str, str | int]]:
+    files: list[dict[str, str | int]] = []
+    for item in attachments or []:
+        if isinstance(item, Mapping):
+            name = str(item.get("name") or "")
+            encoded = str(item.get("content_base64") or item.get("contentBase64") or "")
+        else:
+            name = str(getattr(item, "name", "") or "")
+            encoded = str(getattr(item, "content_base64", "") or "")
+        files.append(_inline_file_digest(name, encoded))
+    files.sort(key=lambda row: (str(row["name"]), str(row["sha256"]), int(row["size"])))
+    return files
+
+
 def owner_command_fingerprint(
     text: str,
     *,
     reply_to_id: str | None = None,
     attachment_ids: list[str] | None = None,
     attachment_names: list[str] | None = None,
+    attachments: list[Any] | None = None,
 ) -> str:
+    files = _attachment_file_digests(attachments)
     payload = {
+        "attachment_files": files,
         "attachment_ids": sorted(attachment_ids or []),
-        "attachment_names": sorted(attachment_names or []),
+        "attachment_names": [] if files else sorted(attachment_names or []),
         "reply_to_id": reply_to_id or "",
         "text": (text or "").strip(),
     }

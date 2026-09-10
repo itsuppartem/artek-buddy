@@ -155,7 +155,7 @@ async def send_thread_message(
             body.text,
             reply_to_id=body.reply_to_id,
             attachment_ids=list(body.attachment_ids),
-            attachment_names=[item.name for item in body.attachments],
+            attachments=list(body.attachments),
         )
         if body.command_id:
             try:
