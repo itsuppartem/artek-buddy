@@ -227,8 +227,13 @@ def ensure_model(page: Page) -> None:
             _restore_context_after_model_check(page, context, opened_library)
             return
         retry = page.get_by_test_id("models-retry-cursor")
-        if retry.count() and retry.first.is_visible(timeout=0) and retry.first.is_enabled():
-            retry.click()
+        with suppress(PlaywrightTimeoutError):
+            if (
+                retry.count()
+                and retry.first.is_visible(timeout=0)
+                and retry.first.is_enabled(timeout=0)
+            ):
+                retry.click()
         picker = page.get_by_test_id("models-picker-cursor")
         expect(picker.locator("[data-model]").first).to_be_visible(timeout=20_000)
         values = _picker_values(page, "models-picker-cursor")

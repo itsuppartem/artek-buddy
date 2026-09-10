@@ -606,6 +606,8 @@ export const api = {
       text: string,
       replyToId?: string | null,
       attachments?: { name: string; contentBase64: string; mimeType?: string }[],
+      commandId?: string,
+      parentCommandId?: string,
     ) {
       return request<ThreadSendResult>(
         "POST",
@@ -620,6 +622,8 @@ export const api = {
                 mimeType: item.mimeType,
               }))
             : undefined,
+          commandId,
+          parentCommandId,
         },
         attachments?.length ? 120_000 : REQUEST_TIMEOUT_MS,
       );
@@ -761,7 +765,8 @@ export function isActive(status: string | undefined): boolean {
     status === "running" ||
     status === "waiting_input" ||
     status === "waiting_takeover" ||
-    status === "waiting_recovery"
+    status === "waiting_recovery" ||
+    status === "unknown"
   );
 }
 
@@ -773,6 +778,15 @@ export function isParkedRecovery(status: string | undefined): boolean {
   return status === "waiting_recovery";
 }
 
+export function isUnknownOutcome(status: string | undefined): boolean {
+  return status === "unknown";
+}
+
 export function isLiveTurn(status: string | undefined): boolean {
-  return isActive(status) && !isParkedTakeover(status) && !isParkedRecovery(status);
+  return (
+    isActive(status) &&
+    !isParkedTakeover(status) &&
+    !isParkedRecovery(status) &&
+    !isUnknownOutcome(status)
+  );
 }

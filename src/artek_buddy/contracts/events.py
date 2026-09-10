@@ -25,6 +25,7 @@ class ProductEventType(str, Enum):
     RUN_COMPLETED = "run.completed"
     RUN_FAILED = "run.failed"
     RUN_CANCELLED = "run.cancelled"
+    RUN_UNKNOWN = "run.unknown"
     COMPUTER_STATUS = "computer.status"
     COMPUTER_TAKEOVER_REQUESTED = "computer.takeover.requested"
     COMPUTER_TAKEOVER_GRANTED = "computer.takeover.granted"

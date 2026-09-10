@@ -122,6 +122,10 @@ def product_run_status(sdk_status: str | None) -> str:
 
 
 TURN_FAILED = "The turn failed."
+UNKNOWN_OUTCOME_TEXT = (
+    "The host cannot confirm whether that turn finished. "
+    "Checking the outcome — do not send the same command again."
+)
 _RAW_RUN_FAILED = re.compile(r"^run failed: run-[0-9a-f-]+$", re.IGNORECASE)
 
 

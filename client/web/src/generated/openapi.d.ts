@@ -1811,7 +1811,7 @@ export interface components {
              * @default unknown
              * @enum {string}
              */
-            execution_state: "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled" | "unknown";
+            execution_state: "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled" | "unknown" | "unconfirmed";
             /** Id */
             id: string;
             /** Instructions */
@@ -2831,7 +2831,7 @@ export interface components {
          * RunStatus
          * @enum {string}
          */
-        RunStatus: "queued" | "leased" | "running" | "waiting_input" | "waiting_takeover" | "waiting_recovery" | "completed" | "failed" | "cancelled";
+        RunStatus: "queued" | "leased" | "running" | "waiting_input" | "waiting_takeover" | "waiting_recovery" | "unknown" | "completed" | "failed" | "cancelled";
         /**
          * SandboxKind
          * @enum {string}
@@ -3153,8 +3153,12 @@ export interface components {
             attachment_ids?: string[];
             /** Attachments */
             attachments?: components["schemas"]["ThreadAttachmentInput"][];
+            /** Command Id */
+            command_id?: string | null;
             /** Idempotency Key */
             idempotency_key?: string | null;
+            /** Parent Command Id */
+            parent_command_id?: string | null;
             /** Reply To Id */
             reply_to_id?: string | null;
             /**

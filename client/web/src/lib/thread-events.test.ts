@@ -285,6 +285,25 @@ describe("reduceThreadSnapshot", () => {
     expect(next?.messages.map((message) => message.id)).toEqual(["stream:run1"]);
   });
 
+  it("marks an unknown outcome without treating it as failed", () => {
+    const prev = snap({ run: run({ status: "running" }) });
+    const next = reduceThreadSnapshot(
+      prev,
+      event({
+        type: "run.unknown",
+        payload: { error: "The host cannot confirm whether that turn finished." },
+      }),
+    );
+    expect(next?.run?.status).toBe("unknown");
+    expect(next?.run?.error).toContain("cannot confirm");
+  });
+
+  it("does not let a late unknown overwrite a cancelled run", () => {
+    const prev = snap({ run: run({ status: "cancelled" }) });
+    const next = reduceThreadSnapshot(prev, event({ type: "run.unknown" }));
+    expect(next?.run?.status).toBe("cancelled");
+  });
+
   it("keeps Working when a model meta arrives without a run id", () => {
     const prev = snap({
       run: run({ status: "running" }),

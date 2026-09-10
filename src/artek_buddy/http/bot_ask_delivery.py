@@ -111,6 +111,8 @@ async def deliver_bot_ask_reply(
     take = getattr(history, "peek_undelivered_ask_for_run", None)
     if not callable(take):
         return
+    if status == "unknown":
+        return
     page = history.page_messages(bot.thread_id, limit=40)
     answer = last_bot_reply(page.messages) or (reply_text or "").strip()
     if status == "cancelled":

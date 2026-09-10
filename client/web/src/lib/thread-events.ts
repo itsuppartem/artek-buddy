@@ -128,12 +128,16 @@ export function reduceThreadSnapshot(
   if (
     event.type === "run.completed" ||
     event.type === "run.failed" ||
-    event.type === "run.cancelled"
+    event.type === "run.cancelled" ||
+    event.type === "run.unknown"
   ) {
     if (event.runId && prev.run && prev.run.id !== event.runId) {
       return { ...prev, cursor: event.seq };
     }
-    if (event.type === "run.completed" && prev.run?.status === "cancelled") {
+    if (
+      prev.run?.status === "cancelled" &&
+      (event.type === "run.completed" || event.type === "run.unknown")
+    ) {
       return { ...prev, cursor: event.seq };
     }
     const status =
@@ -141,7 +145,9 @@ export function reduceThreadSnapshot(
         ? "completed"
         : event.type === "run.cancelled"
           ? "cancelled"
-          : "failed";
+          : event.type === "run.unknown"
+            ? "unknown"
+            : "failed";
     const error = event.payload.error != null ? String(event.payload.error) : prev.run?.error;
     const cleanMessages = prev.messages.filter((message) => !isLiveForRun(message, event.runId));
     return {

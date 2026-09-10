@@ -12,7 +12,14 @@ import {
   useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { abortableDelay, api, classifyError, isLiveTurn, type ShellErrorKind } from "../api";
+import {
+  abortableDelay,
+  api,
+  classifyError,
+  isLiveTurn,
+  isUnknownOutcome,
+  type ShellErrorKind,
+} from "../api";
 import {
   type AttentionAlert,
   alertKeysToRemember,
@@ -69,6 +76,7 @@ import {
   formatOfflineCaption,
   isQueuedMessageId,
   mergeQueuedIntoMessages,
+  newCommandId,
   newQueuedId,
   OFFLINE_CAPTIONS_KEY,
   OFFLINE_QUEUE_KEY,
@@ -77,7 +85,6 @@ import {
   type QueuedSend,
   rememberCaption,
   removeQueuedSend,
-  shouldQueueSend,
   writeStoredList,
 } from "../lib/offline-queue";
 import { openOwnerBrowser } from "../lib/owner-browser";
@@ -265,6 +272,9 @@ export function ShellPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
+  const [sendUnknown, setSendUnknown] = useState(false);
+  const lastCommandByBot = useRef(new Map<string, string>());
+  const unknownLocalBots = useRef(new Set<string>());
   const [panel, setPanel] = useState<Panel>(null);
   const [modelState, setModelState] = useState<ModelCredentialList | null>(null);
   const panelAfterSettings = useRef<"library" | null>(null);
@@ -401,6 +411,7 @@ export function ShellPage() {
   const historyAtStart = Boolean(cachedEntry?.atStart);
   const loadingThread = Boolean(active && !thread && !error);
   const isParked = thread?.run?.status === "waiting_takeover";
+  const isUnknown = isUnknownOutcome(thread?.run?.status) || sendUnknown;
   const isBusy = Boolean(
     (thread?.run && isLiveTurn(thread.run.status)) ||
       (thread && !isParked && (hasLive(thread) || hasActiveWorkers(thread))),
@@ -778,12 +789,32 @@ export function ShellPage() {
     if (incoming.type === "run.completed" || incoming.type === "run.failed") {
       void refreshBotsRef.current().catch(() => undefined);
     }
+    if (incoming.type === "run.unknown") {
+      if (incoming.seq >= (bot.stateVersion ?? 0)) {
+        const checking = applyBotProjection(bot, {
+          status: "running",
+          executionState: "unconfirmed",
+          stateVersion: incoming.seq,
+        });
+        botsRef.current = botsRef.current.map((item) => (item.id === bot.id ? checking : item));
+        const stored = prevBotsRef.current.get(bot.id);
+        if (stored) prevBotsRef.current.set(bot.id, checking);
+        setBots((list) =>
+          list.map((item) => (item.id === bot.id ? applyBotProjection(item, checking) : item)),
+        );
+      }
+      void refreshBotsRef.current().catch(() => undefined);
+    }
   }
   considerEventRef.current = considerEvent;
 
   useEffect(() => {
     raiseParkedAlerts();
     void refreshBotsRef.current().catch(() => undefined);
+  }, [active?.id]);
+
+  useEffect(() => {
+    setSendUnknown(Boolean(active?.id && unknownLocalBots.current.has(active.id)));
   }, [active?.id]);
 
   useEffect(() => {
@@ -1046,6 +1077,8 @@ export function ShellPage() {
     text: string,
     replyToId: string | null,
     attachments: QueuedSend["attachments"],
+    commandId?: string,
+    parentCommandId?: string,
   ) {
     const item: QueuedSend = {
       id: newQueuedId(),
@@ -1053,6 +1086,8 @@ export function ShellPage() {
       text,
       replyToId,
       attachments,
+      commandId: commandId || newCommandId(),
+      parentCommandId,
       queuedAt: Date.now(),
     };
     setOfflineQueue((queue) => persistQueue(enqueueSend(queue, item)));
@@ -1073,7 +1108,14 @@ export function ShellPage() {
     try {
       for (const item of items) {
         try {
-          await api.threads.send(item.botId, item.text, item.replyToId, item.attachments);
+          await api.threads.send(
+            item.botId,
+            item.text,
+            item.replyToId,
+            item.attachments,
+            item.commandId || item.id,
+            item.parentCommandId,
+          );
           const snap =
             activeIdRef.current === item.botId
               ? await refreshThread(item.botId)
@@ -1346,7 +1388,8 @@ export function ShellPage() {
             if (
               event.type === "run.completed" ||
               event.type === "run.failed" ||
-              event.type === "run.waiting_input"
+              event.type === "run.waiting_input" ||
+              event.type === "run.unknown"
             ) {
               void refreshBotsRef.current().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
@@ -1819,6 +1862,11 @@ export function ShellPage() {
     setError(null);
     setSending(true);
     let attachments: QueuedSend["attachments"];
+    const linkParent =
+      isUnknownOutcome(thread?.run?.status) || sendUnknown
+        ? lastCommandByBot.current.get(targetId)
+        : undefined;
+    const commandId = newCommandId();
     try {
       attachments = files.length
         ? await Promise.all(
@@ -1830,10 +1878,39 @@ export function ShellPage() {
           )
         : undefined;
       if (hostDownRef.current) {
-        parkSend(targetId, text, replyId, attachments);
+        lastCommandByBot.current.set(targetId, commandId);
+        parkSend(targetId, text, replyId, attachments, commandId, linkParent);
         return;
       }
-      await api.threads.send(targetId, text, replyId, attachments);
+      const post = () =>
+        api.threads.send(targetId, text, replyId, attachments, commandId, linkParent);
+      try {
+        await post();
+      } catch (err) {
+        const classified = classifyError(err);
+        if (classified.kind !== "host") {
+          throw err;
+        }
+        lastCommandByBot.current.set(targetId, commandId);
+        let reachable = !hostDownRef.current;
+        if (reachable) {
+          try {
+            await api.health();
+          } catch {
+            reachable = false;
+          }
+        }
+        if (!reachable) {
+          parkSend(targetId, text, replyId, attachments, commandId, linkParent);
+          return;
+        }
+        unknownLocalBots.current.add(targetId);
+        setSendUnknown(true);
+        return;
+      }
+      lastCommandByBot.current.set(targetId, commandId);
+      unknownLocalBots.current.delete(targetId);
+      setSendUnknown(false);
       const next = applyComposerSendResult({
         currentBotId: activeIdRef.current,
         targetId,
@@ -1854,8 +1931,22 @@ export function ShellPage() {
       }
     } catch (err) {
       const classified = classifyError(err);
-      if (shouldQueueSend(classified.kind)) {
-        parkSend(targetId, text, replyId, attachments);
+      if (classified.kind === "host") {
+        lastCommandByBot.current.set(targetId, commandId);
+        let reachable = !hostDownRef.current;
+        if (reachable) {
+          try {
+            await api.health();
+          } catch {
+            reachable = false;
+          }
+        }
+        if (!reachable) {
+          parkSend(targetId, text, replyId, attachments, commandId, linkParent);
+          return;
+        }
+        unknownLocalBots.current.add(targetId);
+        setSendUnknown(true);
         return;
       }
       const next = applyComposerSendResult({
@@ -2579,7 +2670,26 @@ export function ShellPage() {
                 {ownerRunError(thread.run.error ?? undefined, thread.run.status)}
               </div>
             ) : null}
-            {isBusy ? (
+            {sending && !isBusy && !isUnknown ? (
+              <div
+                data-testid="send-delivering"
+                role="status"
+                className="self-start rounded-xl border border-hairline bg-plate px-4 py-2 text-[13.5px] text-mute"
+              >
+                Still delivering this send.
+              </div>
+            ) : null}
+            {isUnknown ? (
+              <div
+                data-testid="run-unknown"
+                role="status"
+                className="self-start rounded-xl border border-tan/40 bg-plate px-4 py-2 text-[13.5px] text-paper"
+              >
+                {thread?.run?.error ||
+                  "The outcome is not confirmed yet. Do not send the same command again."}
+              </div>
+            ) : null}
+            {isBusy && !isUnknown ? (
               <div className="flex justify-start">
                 <div
                   data-testid="typing-indicator"
@@ -2645,7 +2755,7 @@ export function ShellPage() {
                 ))}
               </div>
             ) : null}
-            {isBusy ? (
+            {isBusy && !isUnknown ? (
               <p className="mb-1.5 px-1 text-[10.5px] text-mute">
                 This task is still running · replies steer it
               </p>
@@ -2697,7 +2807,7 @@ export function ShellPage() {
                 }
                 className="max-h-40 min-h-[44px] min-w-0 flex-1 resize-none rounded-[10px] border border-hairline bg-raised px-3 py-2.5 text-[15px] leading-[22px] text-paper disabled:cursor-not-allowed disabled:opacity-40"
               />
-              {isBusy ? (
+              {isBusy || isUnknownOutcome(thread?.run?.status) ? (
                 <button
                   type="button"
                   data-testid="thread-stop"

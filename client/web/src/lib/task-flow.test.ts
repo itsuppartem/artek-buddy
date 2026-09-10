@@ -209,6 +209,22 @@ describe("task-first routing", () => {
     expect(executionFromStatus("sleeping")).toBe("unknown");
   });
 
+  it("treats an unconfirmed send as working, not idle unknown", () => {
+    expect(
+      botTaskStage({
+        id: "u",
+        status: "running",
+        unread: false,
+        preview: "checking",
+        attentionReason: "none",
+        executionState: "unconfirmed",
+      }),
+    ).toBe("working");
+    expect(threadHeaderLabel("unknown", "none", "Mail")).toBe("Checking");
+    expect(workSummaryCopy("unknown", "none").title).toBe("Checking that send");
+    expect(workLogLatestFallback("unknown")).toBe("Checking whether that send finished.");
+  });
+
   it("labels cancelled work as stopped, not complete", () => {
     expect(threadHeaderLabel("cancelled", "none", "Mail")).toBe("Stopped");
     expect(workSummaryCopy("cancelled", "none").title).toBe("Stopped by you");

@@ -32,6 +32,7 @@ from artek_buddy.db import DatabaseUnavailable, product_run_status
 from artek_buddy.db.history import HistoryStore, InboxFullError
 from artek_buddy.db.shaping import (
     DEFAULT_BOT_NAME,
+    UNKNOWN_OUTCOME_TEXT,
     blocks_text,
     isoformat_utc,
     new_id,
@@ -62,6 +63,7 @@ from artek_buddy.runtime import (
     runtime_kind,
 )
 from artek_buddy.runtime.owner_intent import classify_owner_intent
+from artek_buddy.runtime.types import AgentRuntimeTimeout
 from artek_buddy.status_ping import STATUS_PING_GUIDE
 from artek_buddy.stream import accumulate
 from artek_buddy.uploads import (
@@ -512,6 +514,9 @@ async def _accept_turn(
     model_prompt: str | None = None,
     device_id: str | None = None,
     idempotency_key: str | None = None,
+    command_id: str | None = None,
+    payload_hash: str | None = None,
+    parent_command_id: str | None = None,
 ) -> ThreadSendResult:
     from artek_buddy.bot_credentials import apply_chat_credentials
 
@@ -568,6 +573,9 @@ async def _accept_turn(
                 else (preview_for_upload(display, hosted) if hosted else None)
             ),
             inbox_text=prompt,
+            command_id=command_id,
+            payload_hash=payload_hash,
+            parent_command_id=parent_command_id,
         )
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
@@ -762,6 +770,16 @@ async def _run_turn(
         error = "Stopped."
         reply_text = ""
         log.info("turn %s cancelled", run.id)
+    except AgentRuntimeTimeout as err:
+        status = "unknown"
+        error = UNKNOWN_OUTCOME_TEXT
+        reply_text = ""
+        log.warning(
+            "run %s outcome unknown: %s request_id=%s",
+            run.id,
+            err.message,
+            err.request_id,
+        )
     except AgentRuntimeError as err:
         status = "failed"
         error = err.message
@@ -786,6 +804,9 @@ async def _run_turn(
     rt.clear_active_turn(run_id=run.id)
 
     if status == "cancelled":
+        reply_text = ""
+    elif status == "unknown":
+        error = UNKNOWN_OUTCOME_TEXT
         reply_text = ""
     elif status != "completed":
         error = owner_visible_error(error, run.id)
@@ -837,6 +858,8 @@ async def _run_turn(
     )
     if status == "cancelled":
         final_type = ProductEventType.RUN_CANCELLED
+    elif status == "unknown":
+        final_type = ProductEventType.RUN_UNKNOWN
     _emit(
         events,
         bot,
@@ -856,11 +879,14 @@ async def _run_turn(
                     _emit_remembered(events, bot, entry.text, run.id, entry=entry)
             except Exception:
                 log.exception("failed to extract memory after turn")
-    try:
-        await _deliver_bot_ask_reply(history, rt, events, bot, finished, status, error, reply_text)
-    except Exception:
-        log.exception("failed to return asked reply from %s", bot.id)
-    if status != "cancelled":
+    if status != "unknown":
+        try:
+            await _deliver_bot_ask_reply(
+                history, rt, events, bot, finished, status, error, reply_text
+            )
+        except Exception:
+            log.exception("failed to return asked reply from %s", bot.id)
+    if status not in {"cancelled", "unknown"}:
         await _kick_inbox(history, rt, events, bot)
 
 

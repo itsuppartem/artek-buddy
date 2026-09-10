@@ -9,7 +9,8 @@ export type ExecutionState =
   | "completed"
   | "failed"
   | "cancelled"
-  | "unknown";
+  | "unknown"
+  | "unconfirmed";
 
 export type AttentionReason = "approval" | "clarification" | "takeover" | "recovery" | "none";
 
@@ -30,7 +31,7 @@ export type TodayBot = {
   resultStatus?: ResultStatus | null;
 };
 
-const activeExecution = new Set<ExecutionState>(["queued", "running", "waiting"]);
+const activeExecution = new Set<ExecutionState>(["queued", "running", "waiting", "unconfirmed"]);
 
 const statusExecution: Record<string, ExecutionState> = {
   queued: "queued",
@@ -39,6 +40,7 @@ const statusExecution: Record<string, ExecutionState> = {
   waiting_input: "waiting",
   waiting_takeover: "waiting",
   waiting_recovery: "waiting",
+  unknown: "unconfirmed",
   needs_you: "waiting",
   completed: "completed",
   failed: "failed",
@@ -130,6 +132,7 @@ export function threadHeaderLabel(
   ) {
     return "Needs you";
   }
+  if (runStatus === "unknown") return "Checking";
   if (runStatus === "running" || runStatus === "queued" || runStatus === "leased" || workersBusy) {
     return "Working";
   }
@@ -168,6 +171,13 @@ export function workSummaryCopy(
       tone: "failed",
     };
   }
+  if (runStatus === "unknown") {
+    return {
+      title: "Checking that send",
+      detail: "The outcome is not confirmed yet. Do not send the same command again.",
+      tone: "busy",
+    };
+  }
   if (runStatus === "running" || runStatus === "queued" || runStatus === "leased" || workersBusy) {
     return {
       title: "Working on this task",
@@ -199,6 +209,7 @@ export function workLogLatestFallback(runStatus?: string): string {
   ) {
     return "Waiting for you.";
   }
+  if (runStatus === "unknown") return "Checking whether that send finished.";
   if (runStatus === "running" || runStatus === "queued" || runStatus === "leased") {
     return "Work is still going.";
   }
@@ -216,6 +227,7 @@ export function workLogRunStatusLabel(runStatus?: string, current = false): stri
     runStatus === "waiting_recovery"
   )
     return "waiting";
+  if (runStatus === "unknown") return "checking";
   if (runStatus === "running" || runStatus === "queued" || runStatus === "leased") return "running";
   if (runStatus === "completed") return "completed";
   if (current) return "latest";

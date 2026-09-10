@@ -287,6 +287,11 @@ class ScriptedRuntime(RuntimeBase):
                         except Exception:
                             log.exception("failed to resume run after owner file")
                 continue
+            if step.raise_timeout:
+                from artek_buddy.db.shaping import UNKNOWN_OUTCOME_TEXT
+                from artek_buddy.runtime.types import AgentRuntimeTimeout
+
+                raise AgentRuntimeTimeout(UNKNOWN_OUTCOME_TEXT)
             if step.raise_error:
                 raise AgentRuntimeError(step.raise_error)
             if step.consent:

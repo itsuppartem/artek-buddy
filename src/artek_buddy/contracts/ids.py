@@ -23,6 +23,7 @@ class RunStatus(str, Enum):
     waiting_input = "waiting_input"
     waiting_takeover = "waiting_takeover"
     waiting_recovery = "waiting_recovery"
+    unknown = "unknown"
     completed = "completed"
     failed = "failed"
     cancelled = "cancelled"

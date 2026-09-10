@@ -4,6 +4,7 @@ from artek_buddy.db.history.audit import AuditMixin
 from artek_buddy.db.history.automations import AutomationsMixin
 from artek_buddy.db.history.books import BooksMixin
 from artek_buddy.db.history.bots import BotsMixin
+from artek_buddy.db.history.commands import CommandPayloadConflict, CommandsMixin
 from artek_buddy.db.history.computer import ComputerMixin
 from artek_buddy.db.history.connections import ConnectionsMixin
 from artek_buddy.db.history.consents import ConsentsMixin
@@ -22,7 +23,12 @@ from artek_buddy.db.history.subagents import SubagentsMixin
 from artek_buddy.db.history.turns import TurnsMixin
 from artek_buddy.db.history.usage import UsageMixin
 
-__all__ = ["HistoryStore", "InboxFullError", "MigrationChecksumError"]
+__all__ = [
+    "CommandPayloadConflict",
+    "HistoryStore",
+    "InboxFullError",
+    "MigrationChecksumError",
+]
 
 
 class HistoryStore(
@@ -49,5 +55,6 @@ class HistoryStore(
     ConnectionsMixin,
     UsageMixin,
     RecoveryMixin,
+    CommandsMixin,
 ):
     pass

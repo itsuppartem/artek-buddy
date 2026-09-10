@@ -526,7 +526,8 @@
               "completed",
               "failed",
               "cancelled",
-              "unknown"
+              "unknown",
+              "unconfirmed"
             ],
             "title": "Execution State",
             "type": "string"
@@ -3329,6 +3330,7 @@
           "waiting_input",
           "waiting_takeover",
           "waiting_recovery",
+          "unknown",
           "completed",
           "failed",
           "cancelled"
@@ -4379,6 +4381,19 @@
             "title": "Attachments",
             "type": "array"
           },
+          "command_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command Id"
+          },
           "idempotency_key": {
             "anyOf": [
               {
@@ -4390,6 +4405,19 @@
               }
             ],
             "title": "Idempotency Key"
+          },
+          "parent_command_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Command Id"
           },
           "reply_to_id": {
             "anyOf": [
