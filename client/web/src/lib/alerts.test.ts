@@ -21,6 +21,7 @@ import {
   shouldSendNativeAlert,
   shouldStickDismissOnView,
   shouldWatchBackgroundBot,
+  visibleConversationId,
 } from "./alerts";
 
 function event(over: Partial<ProductEvent> & Pick<ProductEvent, "type">): ProductEvent {
@@ -81,6 +82,17 @@ describe("shouldSendDesktopAlert", () => {
         windowFocused: false,
         pageHidden: true,
         viewingBotId: "bot-a",
+        alertBotId: "bot-a",
+      }),
+    ).toBe(true);
+  });
+
+  it("alerts when the selected helper is not the visible conversation", () => {
+    expect(
+      shouldSendDesktopAlert({
+        windowFocused: true,
+        pageHidden: false,
+        viewingBotId: null,
         alertBotId: "bot-a",
       }),
     ).toBe(true);
@@ -204,6 +216,54 @@ describe("shouldCountThreadRead", () => {
         gtkWindowActive: false,
       }),
     ).toBe(false);
+    expect(
+      shouldCountThreadRead({
+        viewingBotId: null,
+        chatId: "bot-a",
+        windowFocused: true,
+        pageHidden: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("visibleConversationId", () => {
+  const onScreen = {
+    selectedBotId: "bot-a",
+    phoneShell: false,
+    workspaceView: "chats" as const,
+    phoneTab: "chat" as const,
+    panel: null,
+  };
+
+  it("is the selected helper only while that conversation is on screen", () => {
+    expect(visibleConversationId(onScreen)).toBe("bot-a");
+  });
+
+  it("is empty on Today, Library, and Routines even if a helper is selected", () => {
+    expect(visibleConversationId({ ...onScreen, workspaceView: "today" })).toBeNull();
+    expect(visibleConversationId({ ...onScreen, workspaceView: "library" })).toBeNull();
+    expect(visibleConversationId({ ...onScreen, workspaceView: "routines" })).toBeNull();
+  });
+
+  it("is empty under settings and other covering panels", () => {
+    expect(visibleConversationId({ ...onScreen, panel: "settings" })).toBeNull();
+    expect(visibleConversationId({ ...onScreen, panel: "create" })).toBeNull();
+    expect(visibleConversationId({ ...onScreen, panel: "memory" })).toBeNull();
+    expect(visibleConversationId({ ...onScreen, panel: "models" })).toBeNull();
+  });
+
+  it("keeps the desktop split conversation when Computer is a side hatch", () => {
+    expect(visibleConversationId({ ...onScreen, panel: "computer" })).toBe("bot-a");
+  });
+
+  it("is empty on phone Today, inbox, Desktop, and More", () => {
+    const phone = { ...onScreen, phoneShell: true };
+    expect(visibleConversationId({ ...phone, phoneTab: "today" })).toBeNull();
+    expect(visibleConversationId({ ...phone, phoneTab: "chats" })).toBeNull();
+    expect(visibleConversationId({ ...phone, phoneTab: "desk" })).toBeNull();
+    expect(visibleConversationId({ ...phone, phoneTab: "more" })).toBeNull();
+    expect(visibleConversationId({ ...phone, phoneTab: "chat" })).toBe("bot-a");
   });
 });
 

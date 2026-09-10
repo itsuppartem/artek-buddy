@@ -224,6 +224,28 @@ export function shouldSendNativeAlert(input: {
   });
 }
 
+const COVERING_PANELS = new Set(["settings", "create", "memory", "models", "plugins", "context"]);
+
+export type ConversationChrome = {
+  selectedBotId: string | null | undefined;
+  phoneShell: boolean;
+  workspaceView: "today" | "chats" | "routines" | "library";
+  phoneTab: "today" | "chats" | "chat" | "desk" | "more";
+  panel: string | null;
+};
+
+/** Which thread is actually on screen. Selected helper is not enough. */
+export function visibleConversationId(chrome: ConversationChrome): string | null {
+  const selected = chrome.selectedBotId || null;
+  if (!selected) return null;
+  if (chrome.panel != null && COVERING_PANELS.has(chrome.panel)) return null;
+  if (chrome.phoneShell) {
+    return chrome.phoneTab === "chat" ? selected : null;
+  }
+  if (chrome.workspaceView !== "chats") return null;
+  return selected;
+}
+
 export function shouldCountThreadRead(input: {
   viewingBotId: string | null | undefined;
   chatId: string;
