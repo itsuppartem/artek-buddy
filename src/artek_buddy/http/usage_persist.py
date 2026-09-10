@@ -22,12 +22,16 @@ def persist_product_usage(
     """Store counts for a product run. Missing usage is a no-op, never a failed turn.
 
     An estimated USD is stored when the model has an in-repo rate card.
+    Fast is the value bound when that run started, not the live Models default.
     """
     if usage is None:
         return
     try:
-        _, stored_fast = history.get_model_params()
-        fast = True if stored_fast is None else bool(stored_fast)
+        bound = history.get_run_fast(run_id)
+        if bound is None:
+            fast = True
+        else:
+            fast = bound
         record = history.record_usage(
             bot_id=bot.id,
             run_id=run_id,

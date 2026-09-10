@@ -62,6 +62,7 @@ class SubagentsMixin:
         found = self.get_subagent(sub_id)
         if found is None:
             raise RuntimeError("failed to persist subagent")
+        self.bind_run_fast(sub_id)
         return found
 
     def bot_latest_progress_posted_at(self, bot_id: str) -> str | None:

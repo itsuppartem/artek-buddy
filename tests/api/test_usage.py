@@ -1,13 +1,31 @@
 from __future__ import annotations
 
+import json
 import time
 
-from tests.api.helpers import create_bot, wait_run, wait_thread_has
+from tests.api.helpers import create_bot, wait_run, wait_run_status, wait_thread_has
 
 from artek_buddy.db.shaping import new_id
-from artek_buddy.runtime.token_usage import SCRIPTED_LEAD_USAGE, SCRIPTED_WORKER_USAGE
+from artek_buddy.http.usage_persist import persist_product_usage
+from artek_buddy.runtime.token_usage import (
+    SCRIPTED_LEAD_USAGE,
+    SCRIPTED_WORKER_USAGE,
+    TokenUsage,
+)
 
 WORKER_SUMMARY = "The background job is done."
+CURSOR_CONNECT_KEY = "sk-test-usage-fast-wxyz"
+# cursor grok-4.6 Fast vs standard rate cards (same counts as #548).
+GROK_FAST_USD = 0.577576
+GROK_STANDARD_USD = 0.288788
+GROK_USAGE = TokenUsage(
+    input_tokens=128700,
+    output_tokens=1242,
+    cache_read_tokens=47872,
+    total_tokens=177814,
+    provider="cursor",
+    model="grok-4.6",
+)
 
 
 def _wait_usage_row(client, auth_header: dict[str, str], bot_id: str, run_id: str) -> dict:
@@ -284,36 +302,141 @@ def test_usage_unknown_model_omits_estimated_cost(client, auth_header) -> None:
     assert "estimated_cost_usd" not in summary.json()
 
 
-def test_persist_product_usage_reads_store_fast(client, auth_header) -> None:
-    from artek_buddy.http.usage_persist import persist_product_usage
-    from artek_buddy.runtime.token_usage import TokenUsage
+def _connect_cursor(client, auth_header: dict[str, str]) -> None:
+    connected = client.post(
+        "/v1/models/credentials",
+        headers=auth_header,
+        json={"provider": "cursor", "api_key": CURSOR_CONNECT_KEY},
+    )
+    assert connected.status_code == 200
 
-    bot_id = create_bot(client, auth_header, "UsageCostPersist")["id"]
+
+def _set_cursor_fast(client, auth_header: dict[str, str], *, fast: bool, bot_id: str) -> None:
+    chosen = client.post(
+        "/v1/models/default",
+        headers=auth_header,
+        json={
+            "provider": "cursor",
+            "model": "scripted",
+            "effort": "xhigh",
+            "fast": fast,
+            "bot_id": bot_id,
+        },
+    )
+    assert chosen.status_code == 200, chosen.text
+
+
+def _persist_grok_and_row(client, auth_header: dict[str, str], bot_id: str, run_id: str) -> dict:
     store = client.app.state.store
     bot = store.get_bot(bot_id)
     assert bot is not None
-    store.set_default_model("cursor", "grok-4.6", fast=False)
-    run_id = new_id("run")
-    persist_product_usage(
-        store,
-        None,
-        bot,
-        run_id,
-        TokenUsage(
-            input_tokens=128700,
-            output_tokens=1242,
-            cache_read_tokens=47872,
-            total_tokens=177814,
-            provider="cursor",
-            model="grok-4.6",
-        ),
-    )
+    persist_product_usage(store, client.app.state.hub, bot, run_id, GROK_USAGE)
     listed = client.get(
         "/v1/usage",
         headers=auth_header,
         params={"bot_id": bot_id, "run_id": run_id},
     )
-    assert listed.status_code == 200
+    assert listed.status_code == 200, listed.text
     records = listed.json()["records"]
     assert len(records) == 1
-    assert records[0]["estimated_cost_usd"] == 0.288788
+    return records[0]
+
+
+def _usage_recorded_payloads(client, bot_id: str, run_id: str) -> list[dict]:
+    return [
+        event.payload
+        for event in client.app.state.hub.replay(bot_id)
+        if event.type.value == "usage.recorded" and event.run_id == run_id
+    ]
+
+
+def test_grok_fast_estimate_uses_fast_bound_at_run_start(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "UsageFastStart")["id"]
+    store = client.app.state.store
+    bot = store.get_bot(bot_id)
+    assert bot is not None
+    store.set_default_model("cursor", "grok-4.6", fast=True)
+    run = store.begin_run(bot, model_provider="cursor", model_id="grok-4.6")
+    store.set_default_model("cursor", "grok-4.6", fast=False)
+    persist_product_usage(store, client.app.state.hub, bot, run.id, GROK_USAGE)
+    listed = client.get(
+        "/v1/usage",
+        headers=auth_header,
+        params={"bot_id": bot_id, "run_id": run.id},
+    )
+    assert listed.status_code == 200
+    row = listed.json()["records"][0]
+    assert row["estimated_cost_usd"] == GROK_FAST_USD
+    recorded = _usage_recorded_payloads(client, bot_id, run.id)
+    assert recorded
+    last = recorded[-1]
+    assert last["estimated_cost_usd"] == GROK_FAST_USD
+    blob = json.dumps(last)
+    assert "api_key" not in blob
+    assert CURSOR_CONNECT_KEY not in blob
+    assert "test-secret-seed" not in blob
+
+
+def test_grok_standard_estimate_not_rewritten_when_fast_turned_on(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "UsageStdStart")["id"]
+    store = client.app.state.store
+    bot = store.get_bot(bot_id)
+    assert bot is not None
+    store.set_default_model("cursor", "grok-4.6", fast=False)
+    run = store.begin_run(bot, model_provider="cursor", model_id="grok-4.6")
+    store.set_default_model("cursor", "grok-4.6", fast=True)
+    persist_product_usage(store, None, bot, run.id, GROK_USAGE)
+    listed = client.get(
+        "/v1/usage",
+        headers=auth_header,
+        params={"bot_id": bot_id, "run_id": run.id},
+    )
+    assert listed.status_code == 200
+    assert listed.json()["records"][0]["estimated_cost_usd"] == GROK_STANDARD_USD
+
+
+def test_usage_keeps_grok_fast_card_when_fast_unchecked_during_e2e_slow(
+    client, auth_header
+) -> None:
+    _connect_cursor(client, auth_header)
+    bot_id = create_bot(client, auth_header, "UsageFastLive")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    wait_run_status(client, auth_header, bot_id, run_id, "running")
+    _set_cursor_fast(client, auth_header, fast=False, bot_id=bot_id)
+    snap = wait_run(client, auth_header, bot_id, run_id)
+    assert snap["run"]["status"] == "completed"
+    row = _persist_grok_and_row(client, auth_header, bot_id, run_id)
+    assert row["estimated_cost_usd"] == GROK_FAST_USD
+    recorded = _usage_recorded_payloads(client, bot_id, run_id)
+    assert recorded
+    blob = json.dumps(recorded)
+    assert "api_key" not in blob
+    assert CURSOR_CONNECT_KEY not in blob
+    assert any(item.get("estimated_cost_usd") == GROK_FAST_USD for item in recorded)
+
+
+def test_usage_keeps_grok_standard_card_when_fast_checked_during_e2e_slow(
+    client, auth_header
+) -> None:
+    _connect_cursor(client, auth_header)
+    bot_id = create_bot(client, auth_header, "UsageStdLive")["id"]
+    _set_cursor_fast(client, auth_header, fast=False, bot_id=bot_id)
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    wait_run_status(client, auth_header, bot_id, run_id, "running")
+    _set_cursor_fast(client, auth_header, fast=True, bot_id=bot_id)
+    snap = wait_run(client, auth_header, bot_id, run_id)
+    assert snap["run"]["status"] == "completed"
+    row = _persist_grok_and_row(client, auth_header, bot_id, run_id)
+    assert row["estimated_cost_usd"] == GROK_STANDARD_USD

@@ -223,6 +223,8 @@ class TurnsMixin:
         run = self._get_run(run_id)
         if user is None or run is None:
             raise RuntimeError("failed to persist turn")
+        if not queued_turn:
+            self.bind_run_fast(run.id)
         return self._with_replies([user])[0], run, queued_turn
 
     def record_worker_stop(
@@ -348,6 +350,7 @@ class TurnsMixin:
         run = self._get_run(run_id)
         if user is None or run is None:
             raise RuntimeError("failed to persist turn start")
+        self.bind_run_fast(run.id)
         return self._with_replies([user])[0], run
 
     def finish_turn(
@@ -497,6 +500,7 @@ class TurnsMixin:
         run = self._get_run(run_id)
         if run is None:
             raise RuntimeError("failed to persist follow-up run")
+        self.bind_run_fast(run.id)
         return run
 
     def _get_run(self, run_id: str) -> Run | None:

@@ -222,4 +222,6 @@ class AsksMixin:
             raise RuntimeError("failed to persist ask reply card")
         ready = self._with_replies([message])[0]
         follow = self._get_run(follow_id) if follow_id else None
+        if follow is not None:
+            self.bind_run_fast(follow.id)
         return ask_row, ready, follow

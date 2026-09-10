@@ -1,5 +1,7 @@
 """List prices for known host models, snapshotted when a usage row is written.
 
+The Fast / rate-card variant is the one bound when that run started
+(`run_usage_fast`). Live Models defaults are not re-read at persist time.
 Unknown models omit a cost instead of inventing one. History does not drift
 when the card is edited later.
 """
