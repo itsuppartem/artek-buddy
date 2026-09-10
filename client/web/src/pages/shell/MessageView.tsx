@@ -11,6 +11,7 @@ import type { ThreadMessage } from "../../types";
 import { Button } from "../../ui/button";
 import { AskCard } from "./AskCard";
 import { FileCard } from "./FileCard";
+import { RecoveryCard } from "./RecoveryCard";
 
 export function replyExcerpt(message: ThreadMessage): string {
   if (message.replyTo?.excerpt) return message.replyTo.excerpt;
@@ -35,6 +36,7 @@ export function MessageView({
   offlineCaption,
   runStatus,
   onAnswer,
+  onRecover,
   onOpenBot,
   onOpenMemory,
   onOpenComputer,
@@ -46,6 +48,7 @@ export function MessageView({
   offlineCaption?: string;
   runStatus?: string;
   onAnswer: (text: string, message: ThreadMessage) => Promise<void>;
+  onRecover?: (action: "continue" | "new_attempt", message: ThreadMessage) => Promise<void>;
   onOpenBot: (botId: string) => void;
   onOpenMemory?: (fact: string) => void;
   onOpenComputer?: () => void;
@@ -212,6 +215,16 @@ export function MessageView({
               block={block}
               canAnswer={canAnswer}
               onAnswer={(text) => onAnswer(text, message)}
+            />
+          );
+        }
+        if (block.kind === "recovery") {
+          return (
+            <RecoveryCard
+              key={index}
+              block={block}
+              canAnswer={canAnswer}
+              onRecover={(action) => (onRecover ? onRecover(action, message) : Promise.resolve())}
             />
           );
         }

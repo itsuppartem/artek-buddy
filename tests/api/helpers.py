@@ -127,3 +127,21 @@ def consent_id_from_thread(snap: dict[str, Any]) -> str:
             if cid:
                 return str(cid)
     raise AssertionError("no consent_id on the thread")
+
+
+def simulate_host_restart(client) -> int:
+    """Stamp recovered waits and replace the in-memory consent hub (process restart)."""
+    import time
+
+    from artek_buddy.consent import ConsentHub
+
+    old = client.app.state.consent
+    store = client.app.state.store
+    runtime = client.app.state.runtime
+    touched = store.fail_orphaned_runs()
+    old.abandon_process_waiters()
+    fresh = ConsentHub(store, client.app.state.hub, client.app.state.settings)
+    client.app.state.consent = fresh
+    runtime.consent = fresh
+    time.sleep(0.2)
+    return touched

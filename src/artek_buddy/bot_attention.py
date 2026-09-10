@@ -8,7 +8,14 @@ from dataclasses import dataclass
 from artek_buddy.contracts.domain import AttentionReason, Bot, ConnectionState, ExecutionState
 
 ACTIVE_RUN_STATUSES = frozenset(
-    {"queued", "leased", "running", "waiting_input", "waiting_takeover"}
+    {
+        "queued",
+        "leased",
+        "running",
+        "waiting_input",
+        "waiting_takeover",
+        "waiting_recovery",
+    }
 )
 TERMINAL_RUN_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
@@ -18,6 +25,7 @@ _STATUS_TO_EXECUTION: dict[str, ExecutionState] = {
     "running": "running",
     "waiting_input": "waiting",
     "waiting_takeover": "waiting",
+    "waiting_recovery": "waiting",
     "needs_you": "waiting",
     "completed": "completed",
     "failed": "failed",
@@ -34,6 +42,7 @@ class BotAttentionFacts:
     result_status: str | None = None
     pending_consent_id: str | None = None
     pending_ask_id: str | None = None
+    pending_recovery_id: str | None = None
     pending_owner_job_id: str | None = None
     state_version: int = 0
 
@@ -66,6 +75,7 @@ def attention_reason_for(
     bot_status: str = "",
     pending_consent_id: str | None = None,
     pending_ask_id: str | None = None,
+    pending_recovery_id: str | None = None,
     pending_owner_job_id: str | None = None,
 ) -> AttentionReason:
     status = (active_run_status or bot_status or "").strip().lower()
@@ -75,7 +85,7 @@ def attention_reason_for(
         return "approval"
     if pending_ask_id:
         return "clarification"
-    if pending_owner_job_id:
+    if pending_recovery_id or pending_owner_job_id or status == "waiting_recovery":
         return "recovery"
     return "none"
 
@@ -96,6 +106,7 @@ def project_bot(
         bot_status=bot.status,
         pending_consent_id=facts.pending_consent_id,
         pending_ask_id=facts.pending_ask_id,
+        pending_recovery_id=facts.pending_recovery_id,
         pending_owner_job_id=facts.pending_owner_job_id,
     )
     takeover_id = facts.active_run_id if facts.active_run_status == "waiting_takeover" else None
@@ -109,6 +120,7 @@ def project_bot(
             "state_version": max(0, int(facts.state_version)),
             "pending_consent_id": facts.pending_consent_id,
             "pending_ask_id": facts.pending_ask_id,
+            "pending_recovery_id": facts.pending_recovery_id,
             "takeover_run_id": takeover_id,
             "result_id": facts.result_id,
             "result_status": (
@@ -138,4 +150,18 @@ def pending_ask_id_from_blocks(blocks: object) -> bool:
             continue
         if block.get("status") != "answered":
             return True
+    return False
+
+
+def pending_recovery_id_from_blocks(blocks: object) -> bool:
+    if isinstance(blocks, str):
+        try:
+            blocks = json.loads(blocks)
+        except json.JSONDecodeError:
+            return False
+    if not isinstance(blocks, list):
+        return False
+    for block in blocks:
+        if isinstance(block, dict) and block.get("kind") == "recovery":
+            return block.get("status") != "resolved"
     return False

@@ -305,7 +305,7 @@ class ComputerMixin:
                 WHERE b.computer_id = %s
                   AND b.id <> %s
                   AND r.status IN (
-                    'queued', 'leased', 'running', 'waiting_takeover'
+                    'queued', 'leased', 'running', 'waiting_takeover', 'waiting_recovery'
                   )
                 LIMIT 1
                 """,

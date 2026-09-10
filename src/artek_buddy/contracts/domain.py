@@ -48,6 +48,7 @@ class Bot(BaseModel):
     state_version: int = 0
     pending_consent_id: str | None = None
     pending_ask_id: str | None = None
+    pending_recovery_id: str | None = None
     takeover_run_id: str | None = None
     result_id: str | None = None
     result_status: Literal["completed", "failed", "cancelled"] | None = None
@@ -499,6 +500,7 @@ class Run(BaseModel):
     error: str | None
     started_at: str | None
     completed_at: str | None
+    recovery_path: Literal["continue", "check", "new_attempt"] | None = None
 
 
 class ThreadMessagePage(BaseModel):
@@ -857,6 +859,15 @@ class ThreadAnswerInput(BaseModel):
     run_id: Id
     message_id: Id
     answer: str = Field(min_length=1)
+
+
+class ThreadRecoveryInput(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    bot_id: Id | None = None
+    run_id: Id
+    message_id: Id
+    action: Literal["continue", "new_attempt"]
 
 
 class ConsentAnswerInput(BaseModel):

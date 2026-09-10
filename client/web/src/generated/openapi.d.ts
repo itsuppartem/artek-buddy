@@ -1499,6 +1499,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/threads/{bot_id}/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recover Thread Run */
+        post: operations["recover_thread_run_v1_threads__bot_id__recovery_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/threads/{bot_id}/stop": {
         parameters: {
             query?: never;
@@ -1809,6 +1826,8 @@ export interface components {
             pending_ask_id?: string | null;
             /** Pending Consent Id */
             pending_consent_id?: string | null;
+            /** Pending Recovery Id */
+            pending_recovery_id?: string | null;
             /** Pinned */
             pinned: boolean;
             /** Preview */
@@ -2704,6 +2723,29 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** RecoveryBlock */
+        RecoveryBlock: {
+            /** Actions */
+            actions?: components["schemas"]["AskAction"][] | null;
+            /** Answer */
+            answer?: string | null;
+            /** Detail */
+            detail?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "recovery";
+            /**
+             * Path
+             * @enum {string}
+             */
+            path: "continue" | "check" | "new_attempt";
+            /** Status */
+            status?: ("pending" | "resolved") | null;
+            /** Text */
+            text: string;
+        };
         /** Routine */
         Routine: {
             /** Active */
@@ -2760,6 +2802,8 @@ export interface components {
             model_id: string | null;
             /** Model Provider */
             model_provider: string | null;
+            /** Recovery Path */
+            recovery_path?: ("continue" | "check" | "new_attempt") | null;
             /** Started At */
             started_at: string | null;
             status: components["schemas"]["RunStatus"];
@@ -2787,7 +2831,7 @@ export interface components {
          * RunStatus
          * @enum {string}
          */
-        RunStatus: "queued" | "leased" | "running" | "waiting_input" | "waiting_takeover" | "completed" | "failed" | "cancelled";
+        RunStatus: "queued" | "leased" | "running" | "waiting_input" | "waiting_takeover" | "waiting_recovery" | "completed" | "failed" | "cancelled";
         /**
          * SandboxKind
          * @enum {string}
@@ -3064,7 +3108,7 @@ export interface components {
         /** ThreadMessage */
         ThreadMessage: {
             /** Blocks */
-            blocks: (components["schemas"]["TextBlock"] | components["schemas"]["CardBlock"] | components["schemas"]["AskBlock"] | components["schemas"]["ChoiceBlock"] | components["schemas"]["ConnectBlock"] | components["schemas"]["ComputerBlock"] | components["schemas"]["PluginBlock"] | components["schemas"]["BookBlock"] | components["schemas"]["MetaBlock"] | components["schemas"]["ProgressBlock"] | components["schemas"]["SubagentBlock"] | components["schemas"]["ChildBotBlock"] | components["schemas"]["FileBlock"])[];
+            blocks: (components["schemas"]["TextBlock"] | components["schemas"]["CardBlock"] | components["schemas"]["AskBlock"] | components["schemas"]["RecoveryBlock"] | components["schemas"]["ChoiceBlock"] | components["schemas"]["ConnectBlock"] | components["schemas"]["ComputerBlock"] | components["schemas"]["PluginBlock"] | components["schemas"]["BookBlock"] | components["schemas"]["MetaBlock"] | components["schemas"]["ProgressBlock"] | components["schemas"]["SubagentBlock"] | components["schemas"]["ChildBotBlock"] | components["schemas"]["FileBlock"])[];
             /** Created At */
             created_at: string;
             /** Id */
@@ -3088,6 +3132,20 @@ export interface components {
             older_cursor: number | null;
             /** Thread Id */
             thread_id: string;
+        };
+        /** ThreadRecoveryInput */
+        ThreadRecoveryInput: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "continue" | "new_attempt";
+            /** Bot Id */
+            bot_id?: string | null;
+            /** Message Id */
+            message_id: string;
+            /** Run Id */
+            run_id: string;
         };
         /** ThreadSendInput */
         ThreadSendInput: {
@@ -6910,6 +6968,45 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recover_thread_run_v1_threads__bot_id__recovery_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                bot_id: string;
+            };
+            cookie?: {
+                artek_device?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadRecoveryInput"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

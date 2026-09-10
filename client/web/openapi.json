@@ -582,6 +582,17 @@
             ],
             "title": "Pending Consent Id"
           },
+          "pending_recovery_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Recovery Id"
+          },
           "pinned": {
             "title": "Pinned",
             "type": "boolean"
@@ -2964,6 +2975,86 @@
         "title": "ProgressBlock",
         "type": "object"
       },
+      "RecoveryBlock": {
+        "properties": {
+          "actions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AskAction"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actions"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "kind": {
+            "const": "recovery",
+            "default": "recovery",
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "enum": [
+              "continue",
+              "check",
+              "new_attempt"
+            ],
+            "title": "Path",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "resolved"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "text"
+        ],
+        "title": "RecoveryBlock",
+        "type": "object"
+      },
       "Routine": {
         "properties": {
           "active": {
@@ -3136,6 +3227,22 @@
             ],
             "title": "Model Provider"
           },
+          "recovery_path": {
+            "anyOf": [
+              {
+                "enum": [
+                  "continue",
+                  "check",
+                  "new_attempt"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovery Path"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -3221,6 +3328,7 @@
           "running",
           "waiting_input",
           "waiting_takeover",
+          "waiting_recovery",
           "completed",
           "failed",
           "cancelled"
@@ -4057,6 +4165,7 @@
                   "meta": "#/components/schemas/MetaBlock",
                   "plugin": "#/components/schemas/PluginBlock",
                   "progress": "#/components/schemas/ProgressBlock",
+                  "recovery": "#/components/schemas/RecoveryBlock",
                   "subagent": "#/components/schemas/SubagentBlock",
                   "text": "#/components/schemas/TextBlock"
                 },
@@ -4071,6 +4180,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/AskBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/RecoveryBlock"
                 },
                 {
                   "$ref": "#/components/schemas/ChoiceBlock"
@@ -4207,6 +4319,47 @@
           "older_cursor"
         ],
         "title": "ThreadMessagePage",
+        "type": "object"
+      },
+      "ThreadRecoveryInput": {
+        "properties": {
+          "action": {
+            "enum": [
+              "continue",
+              "new_attempt"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "bot_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bot Id"
+          },
+          "message_id": {
+            "minLength": 1,
+            "title": "Message Id",
+            "type": "string"
+          },
+          "run_id": {
+            "minLength": 1,
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "message_id",
+          "action"
+        ],
+        "title": "ThreadRecoveryInput",
         "type": "object"
       },
       "ThreadSendInput": {
@@ -12092,6 +12245,87 @@
           }
         },
         "summary": "Mark Thread Read"
+      }
+    },
+    "/v1/threads/{bot_id}/recovery": {
+      "post": {
+        "operationId": "recover_thread_run_v1_threads__bot_id__recovery_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bot_id",
+            "required": true,
+            "schema": {
+              "title": "Bot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "artek_device",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Artek Device"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadRecoveryInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recover Thread Run"
       }
     },
     "/v1/threads/{bot_id}/stop": {

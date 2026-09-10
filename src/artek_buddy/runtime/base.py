@@ -147,6 +147,15 @@ class RuntimeBase:
             return False
         if row is None:
             return False
+        wait_get = getattr(store, "get_run_wait", None)
+        if callable(wait_get):
+            try:
+                wait = wait_get(run_id)
+            except Exception:
+                log.exception("failed to read run wait recovery state")
+                wait = None
+            if wait is not None and getattr(wait, "recovered_at", None):
+                return True
         status = getattr(row.status, "value", None) or str(row.status)
         return status not in {
             "queued",

@@ -67,6 +67,8 @@ def test_consent_ask_and_takeover_map_without_preview() -> None:
     assert attention_reason_for(pending_ask_id="msg_1") == "clarification"
     assert attention_reason_for(active_run_status="waiting_takeover") == "takeover"
     assert attention_reason_for(pending_owner_job_id="job_1") == "recovery"
+    assert attention_reason_for(pending_recovery_id="msg_rec") == "recovery"
+    assert attention_reason_for(active_run_status="waiting_recovery") == "recovery"
 
 
 def test_takeover_wins_over_consent() -> None:

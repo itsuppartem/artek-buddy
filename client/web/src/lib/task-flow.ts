@@ -38,6 +38,7 @@ const statusExecution: Record<string, ExecutionState> = {
   running: "running",
   waiting_input: "waiting",
   waiting_takeover: "waiting",
+  waiting_recovery: "waiting",
   needs_you: "waiting",
   completed: "completed",
   failed: "failed",
@@ -124,6 +125,7 @@ export function threadHeaderLabel(
   if (
     runStatus === "waiting_input" ||
     runStatus === "waiting_takeover" ||
+    runStatus === "waiting_recovery" ||
     (attention && attention !== "none")
   ) {
     return "Needs you";
@@ -143,6 +145,7 @@ export function workSummaryCopy(
   if (
     runStatus === "waiting_takeover" ||
     runStatus === "waiting_input" ||
+    runStatus === "waiting_recovery" ||
     (attention && attention !== "none")
   ) {
     return {
@@ -189,7 +192,11 @@ export function workSummaryCopy(
 export function workLogLatestFallback(runStatus?: string): string {
   if (runStatus === "cancelled") return "Stopped by you.";
   if (runStatus === "failed") return "This run failed.";
-  if (runStatus === "waiting_input" || runStatus === "waiting_takeover") {
+  if (
+    runStatus === "waiting_input" ||
+    runStatus === "waiting_takeover" ||
+    runStatus === "waiting_recovery"
+  ) {
     return "Waiting for you.";
   }
   if (runStatus === "running" || runStatus === "queued" || runStatus === "leased") {
@@ -203,7 +210,12 @@ export function workLogLatestFallback(runStatus?: string): string {
 export function workLogRunStatusLabel(runStatus?: string, current = false): string {
   if (runStatus === "cancelled") return "stopped";
   if (runStatus === "failed") return "failed";
-  if (runStatus === "waiting_input" || runStatus === "waiting_takeover") return "waiting";
+  if (
+    runStatus === "waiting_input" ||
+    runStatus === "waiting_takeover" ||
+    runStatus === "waiting_recovery"
+  )
+    return "waiting";
   if (runStatus === "running" || runStatus === "queued" || runStatus === "leased") return "running";
   if (runStatus === "completed") return "completed";
   if (current) return "latest";
