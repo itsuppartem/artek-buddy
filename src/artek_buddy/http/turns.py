@@ -502,6 +502,79 @@ async def _turn_stream(
         yield item
 
 
+async def _resume_pending_command_dispatch(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+    bot: Bot,
+    run: Run,
+    text: str,
+    *,
+    device_id: str | None = None,
+    idempotency_key: str | None = None,
+    reply_to_id: str | None = None,
+) -> None:
+    """Dispatch a committed lead whose outbox row was still pending (lost HTTP / crash)."""
+    bot = await _ensure_agent(history, rt, bot)
+    prompt = (text or "").strip()
+    reply_msg = None
+    if reply_to_id:
+        reply_msg = history.get_message_in_thread(bot.thread_id, reply_to_id)
+    _start_claimed_turn(
+        history,
+        rt,
+        events,
+        bot,
+        prompt,
+        run,
+        reply=reply_msg,
+        device_id=device_id,
+        idempotency_key=idempotency_key,
+    )
+
+
+def _start_claimed_turn(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+    bot: Bot,
+    prompt: str,
+    run: Run,
+    *,
+    reply: ThreadMessage | None = None,
+    inbox_items: list[dict[str, str | None]] | None = None,
+    device_id: str | None = None,
+    idempotency_key: str | None = None,
+    session_id: str | None = None,
+    attach_agent: bool = True,
+) -> None:
+    _emit(
+        events,
+        bot,
+        ProductEventType.RUN_STARTED,
+        {"run": run.model_dump(mode="json")},
+        run_id=run.id,
+    )
+    task = asyncio.create_task(
+        _run_turn(
+            history,
+            rt,
+            events,
+            bot,
+            prompt,
+            run,
+            session_id=session_id if session_id is not None else bot.cursor_agent_id,
+            attach_agent=attach_agent,
+            reply=reply,
+            inbox_items=inbox_items,
+            device_id=device_id,
+            idempotency_key=idempotency_key,
+        ),
+        name=f"turn-{run.id}",
+    )
+    _register_turn(bot.id, run.id, task)
+
+
 async def _accept_turn(
     history: HistoryStore,
     rt: AgentRuntime,
@@ -554,7 +627,7 @@ async def _accept_turn(
             reply_msg = history.get_message_in_thread(bot.thread_id, reply_to_id)
             if reply_msg is None:
                 raise HTTPException(status_code=400, detail="reply target not found")
-        user_msg, run, queued = history.begin_or_enqueue_turn(
+        user_msg, run, disposition = history.begin_or_enqueue_turn(
             bot,
             stored if model_prompt is not None else prompt,
             model_provider=runtime_kind(rt.settings),
@@ -597,17 +670,18 @@ async def _accept_turn(
         thread_id=bot.thread_id,
         turn_id=run.id,
         runtime=runtime_kind(rt.settings),
-        result="queued" if queued else "started",
+        result=disposition,
     )
-    _emit_answered_asks(history, events, bot, display or prompt, run.id)
-    _emit(
-        events,
-        bot,
-        ProductEventType.THREAD_MESSAGE_CREATED,
-        {"message": user_msg.model_dump(mode="json")},
-        run_id=run.id,
-    )
-    if queued:
+    if disposition != "replayed":
+        _emit_answered_asks(history, events, bot, display or prompt, run.id)
+        _emit(
+            events,
+            bot,
+            ProductEventType.THREAD_MESSAGE_CREATED,
+            {"message": user_msg.model_dump(mode="json")},
+            run_id=run.id,
+        )
+    if disposition == "queued":
         return ThreadSendResult(
             task_id=run.task_id,
             run_id=run.id,
@@ -615,32 +689,21 @@ async def _accept_turn(
             run=run,
             queued=True,
         )
-    _emit(
+    if not history.claim_turn_dispatch(run.id):
+        return ThreadSendResult(task_id=run.task_id, run_id=run.id, seq=user_msg.seq, run=run)
+    inbox_items = history.drain_inbox(bot.id) if disposition == "created" else None
+    _start_claimed_turn(
+        history,
+        rt,
         events,
         bot,
-        ProductEventType.RUN_STARTED,
-        {"run": run.model_dump(mode="json")},
-        run_id=run.id,
+        prompt,
+        run,
+        reply=reply_msg,
+        inbox_items=inbox_items,
+        device_id=device_id,
+        idempotency_key=idempotency_key,
     )
-    inbox_items = history.drain_inbox(bot.id)
-    task = asyncio.create_task(
-        _run_turn(
-            history,
-            rt,
-            events,
-            bot,
-            prompt,
-            run,
-            session_id=bot.cursor_agent_id,
-            attach_agent=True,
-            reply=reply_msg,
-            inbox_items=inbox_items,
-            device_id=device_id,
-            idempotency_key=idempotency_key,
-        ),
-        name=f"turn-{run.id}",
-    )
-    _register_turn(bot.id, run.id, task)
     return ThreadSendResult(task_id=run.task_id, run_id=run.id, seq=user_msg.seq, run=run)
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from psycopg.errors import UniqueViolation
 from psycopg.types.json import Json
@@ -26,6 +26,8 @@ from artek_buddy.db.shaping import (
 log = logging.getLogger("artek_buddy")
 
 from artek_buddy.db.history.store import InboxFullError
+
+TurnDisposition = Literal["created", "queued", "replayed"]
 
 
 class TurnsMixin:
@@ -81,7 +83,7 @@ class TurnsMixin:
         command_id: str | None = None,
         payload_hash: str | None = None,
         parent_command_id: str | None = None,
-    ) -> tuple[ThreadMessage, Run, bool]:
+    ) -> tuple[ThreadMessage, Run, TurnDisposition]:
         """Atomically start a lead turn or queue behind the current lead."""
         message_blocks = blocks or text_blocks(text)
         preview_text = preview or text
@@ -113,7 +115,7 @@ class TurnsMixin:
             run = self._get_run(found.run_id)
             if user is None or run is None:
                 raise RuntimeError("failed to replay owner command") from None
-            return self._with_replies([user])[0], run, False
+            return self._with_replies([user])[0], run, "replayed"
 
     def _begin_or_enqueue_turn(
         self,
@@ -130,7 +132,7 @@ class TurnsMixin:
         command_id: str | None,
         payload_hash: str | None,
         parent_command_id: str | None,
-    ) -> tuple[ThreadMessage, Run, bool]:
+    ) -> tuple[ThreadMessage, Run, TurnDisposition]:
         with self._conn() as conn:
             with conn.transaction():
                 locked = conn.execute(
@@ -158,7 +160,7 @@ class TurnsMixin:
                         run = self._get_run(str(existing["run_id"]))
                         if user is None or run is None:
                             raise RuntimeError("failed to replay owner command")
-                        return self._with_replies([user])[0], run, False
+                        return self._with_replies([user])[0], run, "replayed"
                 active = conn.execute(
                     """
                     SELECT * FROM runs
@@ -318,13 +320,39 @@ class TurnsMixin:
                             now,
                         ),
                     )
+                if not queued_turn:
+                    conn.execute(
+                        """
+                        INSERT INTO turn_dispatches (run_id, bot_id, state, created_at)
+                        VALUES (%s, %s, 'pending', %s)
+                        """,
+                        (run_id, bot.id, now),
+                    )
         user = self._get_message(msg_id)
         run = self._get_run(run_id)
         if user is None or run is None:
             raise RuntimeError("failed to persist turn")
         if not queued_turn:
             self.bind_run_fast(run.id)
-        return self._with_replies([user])[0], run, queued_turn
+        return self._with_replies([user])[0], run, "queued" if queued_turn else "created"
+
+    def claim_turn_dispatch(self, run_id: str) -> bool:
+        """Claim pending lead dispatch once. Replay and a second POST lose."""
+        if not run_id:
+            return False
+        now = isoformat_utc()
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                UPDATE turn_dispatches
+                SET state = 'claimed', claimed_at = %s
+                WHERE run_id = %s AND state = 'pending'
+                RETURNING run_id
+                """,
+                (now, run_id),
+            ).fetchone()
+            conn.commit()
+        return row is not None
 
     def record_worker_stop(
         self,

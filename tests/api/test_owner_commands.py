@@ -1,6 +1,18 @@
 from __future__ import annotations
 
-from tests.api.helpers import create_bot, wait_run, wait_run_status, wait_thread_has
+import asyncio
+import threading
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+
+from tests.api.helpers import (
+    create_bot,
+    simulate_host_restart,
+    wait_run,
+    wait_run_status,
+    wait_thread_has,
+)
 
 from artek_buddy.db.shaping import UNKNOWN_OUTCOME_TEXT
 
@@ -143,3 +155,172 @@ def test_stop_during_unknown_rejects_late_complete(client, auth_header) -> None:
     still = store.get_run(run_id)
     assert still is not None
     assert still.status == "cancelled"
+
+
+def _record_dispatches(monkeypatch) -> list[str]:
+    from artek_buddy.http import turns
+
+    executions: list[str] = []
+
+    async def record(*args, **kwargs) -> None:
+        run = kwargs.get("run") or args[5]
+        executions.append(run.id)
+
+    monkeypatch.setattr(turns, "_run_turn", record)
+    return executions
+
+
+def _rendezvous_ensure_agent(monkeypatch, count: int) -> None:
+    from artek_buddy.http import turns
+
+    original = turns._ensure_agent
+    gate = threading.Barrier(count, timeout=10)
+
+    async def rendezvous(history, rt, bot):
+        result = await original(history, rt, bot)
+        await asyncio.to_thread(gate.wait)
+        return result
+
+    monkeypatch.setattr(turns, "_ensure_agent", rendezvous)
+
+
+def _wait_dispatches(executions: list[str], expected: int, timeout: float = 5.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if len(executions) == expected:
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"expected {expected} dispatches, got {executions}")
+
+
+def test_twenty_identical_commands_dispatch_once(client, auth_header, monkeypatch) -> None:
+    bot_id = create_bot(client, auth_header, "CmdOnce")["id"]
+    executions = _record_dispatches(monkeypatch)
+    _rendezvous_ensure_agent(monkeypatch, 20)
+    body = {"text": "synthetic task", "command_id": f"cmd_{uuid.uuid4()}"}
+
+    def post():
+        return client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        replies = [future.result() for future in [pool.submit(post) for _ in range(20)]]
+    assert all(item.status_code == 200 for item in replies), [item.text for item in replies]
+    run_ids = {item.json()["run_id"] for item in replies}
+    assert len(run_ids) == 1
+    _wait_dispatches(executions, 1)
+    thread = client.get(f"/v1/threads/{bot_id}", headers=auth_header).json()
+    assert _user_texts(thread).count("synthetic task") == 1
+
+
+def test_changed_payload_conflicts_without_a_second_dispatch(
+    client, auth_header, monkeypatch
+) -> None:
+    bot_id = create_bot(client, auth_header, "CmdConflictRace")["id"]
+    executions = _record_dispatches(monkeypatch)
+    _rendezvous_ensure_agent(monkeypatch, 2)
+    command_id = f"cmd_{uuid.uuid4()}"
+
+    def post(text: str):
+        return client.post(
+            f"/v1/threads/{bot_id}/messages",
+            headers=auth_header,
+            json={"text": text, "command_id": command_id},
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        hello = pool.submit(post, "hello")
+        other = pool.submit(post, "other")
+        replies = [hello.result(), other.result()]
+    codes = sorted(item.status_code for item in replies)
+    assert codes == [200, 409], [item.text for item in replies]
+    conflict = next(item for item in replies if item.status_code == 409)
+    assert "different message" in conflict.json()["detail"]
+    _wait_dispatches(executions, 1)
+    thread = client.get(f"/v1/threads/{bot_id}", headers=auth_header).json()
+    assert len(_user_texts(thread)) == 1
+
+
+def test_crash_before_dispatch_retry_starts_once(client, auth_header, monkeypatch) -> None:
+    from artek_buddy.db.history.turns import TurnsMixin
+
+    bot_id = create_bot(client, auth_header, "CmdCrash")["id"]
+    executions = _record_dispatches(monkeypatch)
+    real = TurnsMixin.claim_turn_dispatch
+    seen = {"n": 0}
+
+    def crash_first(self, run_id: str) -> bool:
+        seen["n"] += 1
+        if seen["n"] == 1:
+            return False
+        return real(self, run_id)
+
+    monkeypatch.setattr(TurnsMixin, "claim_turn_dispatch", crash_first)
+    body = {"text": "hello", "command_id": "cmd_crash_hello"}
+    first = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert first.status_code == 200, first.text
+    assert executions == []
+    second = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert second.status_code == 200, second.text
+    assert first.json()["run_id"] == second.json()["run_id"]
+    _wait_dispatches(executions, 1)
+    thread = client.get(f"/v1/threads/{bot_id}", headers=auth_header).json()
+    assert _user_texts(thread).count("hello") == 1
+
+
+def test_restart_before_claim_does_not_park_or_duplicate(
+    client, auth_header, monkeypatch
+) -> None:
+    from artek_buddy.db.history.turns import TurnsMixin
+
+    bot_id = create_bot(client, auth_header, "CmdRestartPending")["id"]
+    executions = _record_dispatches(monkeypatch)
+    real = TurnsMixin.claim_turn_dispatch
+    seen = {"n": 0}
+
+    def crash_first(self, run_id: str) -> bool:
+        seen["n"] += 1
+        if seen["n"] == 1:
+            return False
+        return real(self, run_id)
+
+    monkeypatch.setattr(TurnsMixin, "claim_turn_dispatch", crash_first)
+    body = {"text": "hello", "command_id": "cmd_restart_pending"}
+    first = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert first.status_code == 200, first.text
+    run_id = first.json()["run_id"]
+    simulate_host_restart(client)
+    parked = client.app.state.store.get_run(run_id)
+    assert parked is not None
+    assert parked.status == "running"
+    assert parked.status != "waiting_recovery"
+    retry = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["run_id"] == run_id
+    _wait_dispatches(executions, 1)
+
+
+def test_stop_owns_the_task_after_duplicate_command_posts(
+    client, auth_header, monkeypatch
+) -> None:
+    bot_id = create_bot(client, auth_header, "CmdStopDup")["id"]
+    _rendezvous_ensure_agent(monkeypatch, 5)
+    body = {"text": "please e2e-slow now", "command_id": "cmd_stop_dup"}
+
+    def post():
+        return client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        replies = [future.result() for future in [pool.submit(post) for _ in range(5)]]
+    assert all(item.status_code == 200 for item in replies), [item.text for item in replies]
+    run_ids = {item.json()["run_id"] for item in replies}
+    assert len(run_ids) == 1
+    run_id = next(iter(run_ids))
+    stopped = client.post(f"/v1/threads/{bot_id}/stop", headers=auth_header)
+    assert stopped.status_code == 200, stopped.text
+    snap = wait_run(client, auth_header, bot_id, run_id)
+    assert snap["run"]["status"] == "cancelled"
+    thread = client.get(f"/v1/threads/{bot_id}", headers=auth_header).json()
+    assert _user_texts(thread).count("please e2e-slow now") == 1
+    leftover = client.app.state.active_turns.get(bot_id, {})
+    live = leftover.get(run_id)
+    assert live is None or live.done()

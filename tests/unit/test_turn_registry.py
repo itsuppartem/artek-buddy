@@ -57,6 +57,17 @@ def test_cancel_bot_without_run_id_drops_the_bucket(monkeypatch) -> None:
     assert turn_registry.current_app().state.active_turns == {}
 
 
+def test_register_same_run_keeps_the_live_task(monkeypatch) -> None:
+    app = _app(monkeypatch)
+    first = _FakeTask()
+    second = _FakeTask()
+    turn_registry.register_turn("bot-a", "run-1", first)
+    turn_registry.register_turn("bot-a", "run-1", second)
+    assert app.state.active_turns["bot-a"]["run-1"] is first
+    assert second.cancelled is True
+    assert first.cancelled is False
+
+
 def test_turns_uses_registry_and_bot_ask_delivery() -> None:
     assert turns._register_turn is turn_registry.register_turn
     assert turns._drop_turn is turn_registry.drop_turn
