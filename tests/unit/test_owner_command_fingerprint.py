@@ -51,4 +51,3 @@ def test_owner_command_fingerprint_does_not_embed_raw_base64() -> None:
         attachments=[{"name": "report.txt", "content_base64": "b25l"}],
     )
     assert "b25l" not in digest
-
