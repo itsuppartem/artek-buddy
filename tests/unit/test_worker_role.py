@@ -95,6 +95,18 @@ def test_lead_cannot_use_worker_only_tools() -> None:
     assert "spawn_subagent" not in worker
 
 
+def test_ask_user_spec_covers_unclear_assignment() -> None:
+    tools = ProductTools(SimpleNamespace(store=None, settings=None))
+    lead = next(spec for spec in tools.specs("lead") if spec.name == "ask_user")
+    worker = next(spec for spec in tools.specs("subagent") if spec.name == "ask_user")
+    assert lead.description == worker.description
+    assert "assignment is unclear" in lead.description
+    assert "required fact is missing" in lead.description
+    assert "blocked locator" in lead.description
+    assert "Do not invent a target" in lead.description
+    assert "Do not ask for passwords" in lead.description
+
+
 def test_map_desktop_home_path_is_lexical(tmp_path) -> None:
     home = tmp_path / "homes" / "bot_c"
     mapped = map_desktop_home_path("/home/artek/inbox/notes.txt", home)
