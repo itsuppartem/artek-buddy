@@ -39,6 +39,15 @@ E2E_ASK_QUESTION = "Which city?"
 E2E_ASK_FREE_QUESTION = "What should I call you?"
 E2E_OWNER_HELP_QUESTION = "I cannot continue in the browser. Please complete the blocked step."
 E2E_OWNER_HELP_ANSWER = "I continued after your help."
+E2E_UNCLEAR_QUESTION = (
+    "Which file, site, or person should I use? The assignment does not name a target."
+)
+E2E_UNCLEAR_ANSWER = "I continued with the target you named."
+E2E_SPECIFIED_ANSWER = "Wrote notes.md for the Research chat using the three sources you named."
+E2E_WORKER_UNCLEAR_QUESTION = (
+    "Which artifact should I build? The assignment does not name a target."
+)
+E2E_WORKER_UNCLEAR_ANSWER = "I built the artifact you named."
 E2E_FAIL_ERROR = "scripted fail"
 E2E_FAIL_RAW_ERROR = "run failed: run-fb7fd73f-32ed-43ed-a22f-a561aab1600a"
 E2E_META_TEXT = "Remembered: Prefers short answers without emoji"
@@ -516,6 +525,27 @@ def steps_for_prompt(prompt: str) -> list[ScriptedStep]:
             ),
             scripted_finish(E2E_WORKER_ACK),
         ]
+    if "e2e-worker-unclear-assignment" in hay:
+        return [
+            scripted_tool(
+                "spawn_subagent",
+                name=E2E_SUBAGENT_NAME,
+                task="please e2e-worker-missing-target",
+            ),
+            scripted_finish(E2E_WORKER_ACK),
+        ]
+    if "e2e-worker-missing-target" in hay:
+        return [
+            scripted_tool("ask_user", question=E2E_WORKER_UNCLEAR_QUESTION),
+            scripted_finish(E2E_WORKER_UNCLEAR_ANSWER),
+        ]
+    if "e2e-unclear-assignment" in hay:
+        return [
+            scripted_tool("ask_user", question=E2E_UNCLEAR_QUESTION),
+            scripted_finish(E2E_UNCLEAR_ANSWER),
+        ]
+    if "e2e-specified-assignment" in hay:
+        return [scripted_finish(E2E_SPECIFIED_ANSWER)]
     if "e2e-worker-ask" in hay:
         return [
             scripted_tool(

@@ -81,7 +81,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         description=(
             "Pause this turn and ask the chat owner for one concrete answer or action. "
             "The answer returns to this tool call so you can continue the same task. "
-            "Use after one blocked locator, API, login, challenge, or owner-only setup step. "
+            "Call this when the assignment is unclear or a required fact is missing, "
+            "and after one blocked locator, API, login, challenge, or owner-only setup step. "
+            "Do not invent a target or pick a default silently. One question at a time. "
             "Do not ask for passwords. Use request_takeover instead if the owner must operate "
             "this bot's desktop."
         ),

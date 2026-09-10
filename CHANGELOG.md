@@ -5,8 +5,10 @@
 ### Added
 - Named first-user recipe: a saved research brief from one public page ([SCENARIOS.md](SCENARIOS.md)). Scripted `please e2e-scenario-research` covers Allow → downloadable file with Answer / Sources / Unknowns, and Deny → no file.
 - Today groups bots from host `execution_state`, `attention_reason`, and `connection_state` on `GET /v1/bots`. Unread preview words such as “question” no longer create **Needs your decision**. A late snapshot with an older `state_version` does not undo an accepted decision. A dropped link stays on Today and shows last-known state, not a failed run. Helper idle is not completed; unread failed/stopped work is not Ready.
+- Lead and workers call `ask_user` when the assignment is unclear or a required fact is missing, instead of inventing a target. Scripted `please e2e-unclear-assignment` parks on the Ask card; `please e2e-specified-assignment` does not. A worker missing its target (`please e2e-worker-unclear-assignment`) asks on that worker.
 
 ### Fixed
+- A parked Ask (`run.waiting_input`) reloads that thread so Needs you cannot sit on the header without the Ask card. `please e2e-blocked-browser` on the phone is the check.
 - OPERATIONS.md backup/restore includes the `credential-data` volume and `.env` broker tokens. A tar of `data`/`workspace` plus `pg_dump` is not a complete host copy.
 - Leaving a chat for Today, Library, settings, or the phone Desktop tab no longer marks new replies on the selected helper as read, and does not dismiss that helper's native or web notify.
 

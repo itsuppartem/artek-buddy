@@ -24,7 +24,10 @@ from artek_buddy.runtime.scripted import (
     E2E_SEND_PARAPHRASE,
     E2E_SEND_TEASER,
     E2E_SEND_TERMINAL,
+    E2E_SPECIFIED_ANSWER,
     E2E_SUBAGENT_NAME,
+    E2E_UNCLEAR_ANSWER,
+    E2E_UNCLEAR_QUESTION,
     E2E_WORKER_ACK,
     E2E_WORKER_BLOCK_S,
     E2E_WORKER_ESSAY,
@@ -38,6 +41,8 @@ from artek_buddy.runtime.scripted import (
     E2E_WORKER_STEER_ACK,
     E2E_WORKER_SUMMARY,
     E2E_WORKER_TAKEOVER_RESULT,
+    E2E_WORKER_UNCLEAR_ANSWER,
+    E2E_WORKER_UNCLEAR_QUESTION,
     steps_for_prompt,
 )
 from artek_buddy.runtime.types import AgentRuntimeError
@@ -280,6 +285,21 @@ def test_scripted_thread_prompts_force_window_blocks() -> None:
     assert ask_run[0].tool == "ask_user"
     assert ask_run[0].args["question"] == E2E_OWNER_HELP_QUESTION
     assert ask_run[-1].result == E2E_OWNER_HELP_ANSWER
+
+    unclear = steps_for_prompt("please e2e-unclear-assignment")
+    assert unclear[0].tool == "ask_user"
+    assert unclear[0].args["question"] == E2E_UNCLEAR_QUESTION
+    assert unclear[-1].result == E2E_UNCLEAR_ANSWER
+    specified = steps_for_prompt("please e2e-specified-assignment")
+    assert not any(step.tool == "ask_user" for step in specified)
+    assert specified[-1].result == E2E_SPECIFIED_ANSWER
+    worker_unclear = steps_for_prompt("please e2e-worker-unclear-assignment")
+    assert worker_unclear[0].tool == "spawn_subagent"
+    assert worker_unclear[0].args["task"] == "please e2e-worker-missing-target"
+    missing = steps_for_prompt("please e2e-worker-missing-target")
+    assert missing[0].tool == "ask_user"
+    assert missing[0].args["question"] == E2E_WORKER_UNCLEAR_QUESTION
+    assert missing[-1].result == E2E_WORKER_UNCLEAR_ANSWER
 
     worker_hold = steps_for_prompt("please e2e-worker-park-takeover")
     assert worker_hold[0].tool == "spawn_subagent"

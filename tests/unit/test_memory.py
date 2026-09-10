@@ -57,6 +57,20 @@ def test_wrap_turn_prompt_lead_dispatches_and_worker_stays_silent() -> None:
     assert "run_credential_scoped_command" in worker
 
 
+def test_wrap_turn_prompt_asks_when_assignment_is_unclear() -> None:
+    lead = wrap_turn_prompt("handle that", None, role="lead")
+    worker = wrap_turn_prompt("handle that", None, role="subagent")
+    assert "assignment is unclear" in lead
+    assert "required fact is missing" in lead
+    assert "call ask_user before producing a result" in lead
+    assert "Do not invent a target" in lead
+    assert "assignment is unclear" in worker
+    assert "required fact is missing" in worker
+    assert "call ask_user before producing a result" in worker
+    assert "Do not invent a target" in worker
+    assert "wrong artifact is not success" in worker
+
+
 def test_wrap_turn_prompt_keeps_user_tail() -> None:
     wrapped = wrap_turn_prompt("remember this city", "Belgrade is the capital")
     assert wrapped.endswith("remember this city")
