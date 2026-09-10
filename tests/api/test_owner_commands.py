@@ -267,9 +267,7 @@ def test_crash_before_dispatch_retry_starts_once(client, auth_header, monkeypatc
     assert _user_texts(thread).count("hello") == 1
 
 
-def test_restart_before_claim_does_not_park_or_duplicate(
-    client, auth_header, monkeypatch
-) -> None:
+def test_restart_before_claim_does_not_park_or_duplicate(client, auth_header, monkeypatch) -> None:
     from artek_buddy.db.history.turns import TurnsMixin
 
     bot_id = create_bot(client, auth_header, "CmdRestartPending")["id"]
@@ -299,9 +297,7 @@ def test_restart_before_claim_does_not_park_or_duplicate(
     _wait_dispatches(executions, 1)
 
 
-def test_stop_owns_the_task_after_duplicate_command_posts(
-    client, auth_header, monkeypatch
-) -> None:
+def test_stop_owns_the_task_after_duplicate_command_posts(client, auth_header, monkeypatch) -> None:
     bot_id = create_bot(client, auth_header, "CmdStopDup")["id"]
     _rendezvous_ensure_agent(monkeypatch, 5)
     body = {"text": "please e2e-slow now", "command_id": "cmd_stop_dup"}
