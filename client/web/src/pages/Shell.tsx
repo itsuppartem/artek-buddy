@@ -1081,11 +1081,12 @@ export function ShellPage() {
     parentCommandId?: string,
   ) {
     const item: QueuedSend = {
-      id: commandId || newQueuedId(),
+      id: newQueuedId(),
       botId,
       text,
       replyToId,
       attachments,
+      commandId: commandId || newCommandId(),
       parentCommandId,
       queuedAt: Date.now(),
     };
@@ -1112,7 +1113,7 @@ export function ShellPage() {
             item.text,
             item.replyToId,
             item.attachments,
-            item.id,
+            item.commandId || item.id,
             item.parentCommandId,
           );
           const snap =
@@ -1887,18 +1888,25 @@ export function ShellPage() {
         await post();
       } catch (err) {
         const classified = classifyError(err);
-        if (classified.kind === "host") {
-          try {
-            await post();
-          } catch {
-            lastCommandByBot.current.set(targetId, commandId);
-            unknownLocalBots.current.add(targetId);
-            setSendUnknown(true);
-            return;
-          }
-        } else {
+        if (classified.kind !== "host") {
           throw err;
         }
+        lastCommandByBot.current.set(targetId, commandId);
+        let reachable = !hostDownRef.current;
+        if (reachable) {
+          try {
+            await api.health();
+          } catch {
+            reachable = false;
+          }
+        }
+        if (!reachable) {
+          parkSend(targetId, text, replyId, attachments, commandId, linkParent);
+          return;
+        }
+        unknownLocalBots.current.add(targetId);
+        setSendUnknown(true);
+        return;
       }
       lastCommandByBot.current.set(targetId, commandId);
       unknownLocalBots.current.delete(targetId);
@@ -1925,6 +1933,18 @@ export function ShellPage() {
       const classified = classifyError(err);
       if (classified.kind === "host") {
         lastCommandByBot.current.set(targetId, commandId);
+        let reachable = !hostDownRef.current;
+        if (reachable) {
+          try {
+            await api.health();
+          } catch {
+            reachable = false;
+          }
+        }
+        if (!reachable) {
+          parkSend(targetId, text, replyId, attachments, commandId, linkParent);
+          return;
+        }
         unknownLocalBots.current.add(targetId);
         setSendUnknown(true);
         return;

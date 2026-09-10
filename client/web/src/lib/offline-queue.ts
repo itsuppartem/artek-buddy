@@ -15,6 +15,7 @@ export type QueuedSend = {
   text: string;
   replyToId?: string | null;
   attachments?: QueuedAttachment[];
+  commandId?: string;
   parentCommandId?: string;
   queuedAt: number;
 };

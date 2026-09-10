@@ -132,6 +132,7 @@ describe("persist without secrets", () => {
     expect(id.startsWith("cmd_")).toBe(true);
     expect(id.includes("dev_")).toBe(false);
     expect(isQueuedMessageId(id)).toBe(false);
+    expect(isQueuedMessageId(newQueuedId())).toBe(true);
   });
 });
 
