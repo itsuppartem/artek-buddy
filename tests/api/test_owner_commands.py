@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 
+import httpx
+import pytest
 from tests.api.helpers import (
     create_bot,
     simulate_host_restart,
@@ -174,14 +174,37 @@ def _rendezvous_ensure_agent(monkeypatch, count: int) -> None:
     from artek_buddy.http import turns
 
     original = turns._ensure_agent
-    gate = threading.Barrier(count, timeout=10)
+    arrived = {"n": 0}
+    lock = asyncio.Lock()
+    release = asyncio.Event()
 
     async def rendezvous(history, rt, bot):
         result = await original(history, rt, bot)
-        await asyncio.to_thread(gate.wait)
+        async with lock:
+            arrived["n"] += 1
+            if arrived["n"] >= count:
+                release.set()
+        await asyncio.wait_for(release.wait(), timeout=10)
         return result
 
     monkeypatch.setattr(turns, "_ensure_agent", rendezvous)
+
+
+async def _post_messages_together(client, auth_header, bot_id: str, bodies: list[dict]) -> list:
+    transport = httpx.ASGITransport(app=client.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as session:
+        return list(
+            await asyncio.gather(
+                *[
+                    session.post(
+                        f"/v1/threads/{bot_id}/messages",
+                        headers=auth_header,
+                        json=body,
+                    )
+                    for body in bodies
+                ]
+            )
+        )
 
 
 def _wait_dispatches(executions: list[str], expected: int, timeout: float = 5.0) -> None:
@@ -193,17 +216,13 @@ def _wait_dispatches(executions: list[str], expected: int, timeout: float = 5.0)
     raise AssertionError(f"expected {expected} dispatches, got {executions}")
 
 
-def test_twenty_identical_commands_dispatch_once(client, auth_header, monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_twenty_identical_commands_dispatch_once(client, auth_header, monkeypatch) -> None:
     bot_id = create_bot(client, auth_header, "CmdOnce")["id"]
     executions = _record_dispatches(monkeypatch)
     _rendezvous_ensure_agent(monkeypatch, 20)
     body = {"text": "synthetic task", "command_id": f"cmd_{uuid.uuid4()}"}
-
-    def post():
-        return client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
-
-    with ThreadPoolExecutor(max_workers=20) as pool:
-        replies = [future.result() for future in [pool.submit(post) for _ in range(20)]]
+    replies = await _post_messages_together(client, auth_header, bot_id, [body] * 20)
     assert all(item.status_code == 200 for item in replies), [item.text for item in replies]
     run_ids = {item.json()["run_id"] for item in replies}
     assert len(run_ids) == 1
@@ -212,25 +231,23 @@ def test_twenty_identical_commands_dispatch_once(client, auth_header, monkeypatc
     assert _user_texts(thread).count("synthetic task") == 1
 
 
-def test_changed_payload_conflicts_without_a_second_dispatch(
+@pytest.mark.asyncio
+async def test_changed_payload_conflicts_without_a_second_dispatch(
     client, auth_header, monkeypatch
 ) -> None:
     bot_id = create_bot(client, auth_header, "CmdConflictRace")["id"]
     executions = _record_dispatches(monkeypatch)
     _rendezvous_ensure_agent(monkeypatch, 2)
     command_id = f"cmd_{uuid.uuid4()}"
-
-    def post(text: str):
-        return client.post(
-            f"/v1/threads/{bot_id}/messages",
-            headers=auth_header,
-            json={"text": text, "command_id": command_id},
-        )
-
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        hello = pool.submit(post, "hello")
-        other = pool.submit(post, "other")
-        replies = [hello.result(), other.result()]
+    replies = await _post_messages_together(
+        client,
+        auth_header,
+        bot_id,
+        [
+            {"text": "hello", "command_id": command_id},
+            {"text": "other", "command_id": command_id},
+        ],
+    )
     codes = sorted(item.status_code for item in replies)
     assert codes == [200, 409], [item.text for item in replies]
     conflict = next(item for item in replies if item.status_code == 409)
@@ -297,16 +314,14 @@ def test_restart_before_claim_does_not_park_or_duplicate(client, auth_header, mo
     _wait_dispatches(executions, 1)
 
 
-def test_stop_owns_the_task_after_duplicate_command_posts(client, auth_header, monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_stop_owns_the_task_after_duplicate_command_posts(
+    client, auth_header, monkeypatch
+) -> None:
     bot_id = create_bot(client, auth_header, "CmdStopDup")["id"]
     _rendezvous_ensure_agent(monkeypatch, 5)
     body = {"text": "please e2e-slow now", "command_id": "cmd_stop_dup"}
-
-    def post():
-        return client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
-
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        replies = [future.result() for future in [pool.submit(post) for _ in range(5)]]
+    replies = await _post_messages_together(client, auth_header, bot_id, [body] * 5)
     assert all(item.status_code == 200 for item in replies), [item.text for item in replies]
     run_ids = {item.json()["run_id"] for item in replies}
     assert len(run_ids) == 1
