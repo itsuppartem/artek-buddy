@@ -155,9 +155,7 @@ async def send_thread_message(
         )
         if body.command_id:
             try:
-                found = history.require_owner_command_payload(
-                    bot.id, body.command_id, payload_hash
-                )
+                found = history.require_owner_command_payload(bot.id, body.command_id, payload_hash)
             except CommandPayloadConflict as err:
                 raise HTTPException(
                     status_code=409,
