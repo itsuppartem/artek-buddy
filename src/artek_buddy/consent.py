@@ -768,6 +768,9 @@ class ConsentHub(OwnerJobTransport):
         message_id: str,
         text: str,
     ) -> Any | None:
+        wait = getattr(self.store, "get_run_wait", lambda _rid: None)(run_id)
+        if wait is None or getattr(wait, "kind", None) != "ask":
+            return None
         run = self.store.get_run(run_id)
         if run is None or run.bot_id != bot_id:
             return None

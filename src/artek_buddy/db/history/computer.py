@@ -332,8 +332,7 @@ class ComputerMixin:
                     JOIN runs r ON r.bot_id = other.id
                     WHERE other.computer_id = c.id
                       AND r.status IN (
-                        'queued', 'leased', 'running', 'waiting_input',
-                        'waiting_takeover', 'waiting_recovery'
+                        'queued', 'leased', 'running', 'waiting_input'
                       )
                   )
                 ORDER BY c.sleep_at ASC
