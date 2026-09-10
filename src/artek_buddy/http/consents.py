@@ -22,6 +22,7 @@ from fastapi import APIRouter
 
 from artek_buddy.http.deps import (
     consent,
+    current_app,
     require_auth,
 )
 
@@ -52,6 +53,26 @@ async def answer_consent(
         if hub.get_job(consent_id) is None:
             raise HTTPException(status_code=404, detail="consent not found")
         raise HTTPException(status_code=400, detail="consent not pending")
+    if not row.woke_waiter and row.run_id and row.status in {"once", "always"}:
+        from artek_buddy.db.history.recovery import CONTINUE_FOLLOW_UP
+        from artek_buddy.http.turns import resume_parked_follow_up
+
+        app = current_app()
+        history = app.state.store
+        live = history.get_run(row.run_id)
+        status = getattr(getattr(live, "status", None), "value", None) or getattr(
+            live, "status", None
+        )
+        bot = history.get_bot(row.bot_id)
+        if bot is not None and live is not None and str(status) == "waiting_input":
+            await resume_parked_follow_up(
+                history,
+                app.state.runtime,
+                app.state.hub,
+                bot,
+                row.run_id,
+                CONTINUE_FOLLOW_UP,
+            )
     return OkResponse(ok=True)
 
 

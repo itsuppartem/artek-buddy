@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from artek_buddy.config import Settings
+from artek_buddy.consent import RECOVERED, WaitRecovered
 from artek_buddy.db.shaping import TURN_FAILED, new_id
 from artek_buddy.runtime.base import RuntimeBase
 from artek_buddy.runtime.capabilities import RuntimeCapabilities
@@ -310,6 +311,8 @@ class ScriptedRuntime(RuntimeBase):
                     )
                     if request_id:
                         decision = await asyncio.to_thread(hub.wait_decision, request_id)
+                        if decision == RECOVERED:
+                            raise WaitRecovered(ctx_run)
                         if ctx_run:
                             try:
                                 self.store.mark_run_running(ctx_run)

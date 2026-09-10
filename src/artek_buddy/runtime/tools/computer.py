@@ -6,6 +6,8 @@ from typing import Any
 
 from artek_buddy.consent import (
     CLASS_BROWSE,
+    RECOVERED,
+    WaitRecovered,
     browse_origin,
 )
 from artek_buddy.runtime.tools.common import (
@@ -283,6 +285,8 @@ class ComputerToolsMixin:
         wait = getattr(hub, "wait_takeover", None) if hub is not None else None
         if ctx is not None and ctx.role == "subagent" and callable(wait):
             outcome = wait(bot_id, run_id)
+            if outcome == RECOVERED:
+                raise WaitRecovered(run_id)
             if outcome != "released":
                 error = (
                     "The owner cancelled takeover."

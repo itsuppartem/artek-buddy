@@ -17,6 +17,17 @@ DECISIONS = ("once", "always", "deny")
 LABELS = {"once": "Allow once", "always": "Always", "deny": "Deny"}
 WAIT_SECONDS = 300
 OWNER_QUESTION_WAIT = 300
+RECOVERED = "recovered"
+
+
+class WaitRecovered(Exception):
+    """Process restarted; leave the parked wait in Postgres."""
+
+    def __init__(self, run_id: str | None = None) -> None:
+        super().__init__("host recovered parked wait")
+        self.run_id = run_id
+
+
 OWNER_FILE_WAIT = 90
 OWNER_RESULT_WAIT = 120
 CLASS_BROWSE = "browse"
@@ -382,6 +393,7 @@ class ConsentRequest:
     parent_run_id: str | None = None
     message_id: str | None = None
     job_status: str | None = None
+    woke_waiter: bool = True
 
 
 @dataclass
@@ -393,6 +405,7 @@ class OwnerQuestion:
     message_id: str | None = None
     answer: str | None = None
     cancelled: bool = False
+    recovered: bool = False
 
 
 from artek_buddy.consent_jobs import OwnerJobTransport  # noqa: E402
@@ -425,6 +438,7 @@ class ConsentHub(OwnerJobTransport):
         self._takeover_waiters: dict[str, dict[str, threading.Event]] = {}
         self._takeover_results: dict[str, str] = {}
         self._takeover_released: set[str] = set()
+        self._recovered_consents: set[str] = set()
 
     def _mode(self) -> str | None:
         if self.auto in {"allow", "deny"}:
@@ -511,6 +525,17 @@ class ConsentHub(OwnerJobTransport):
         if run_id:
             try:
                 self.store.mark_run_waiting_input(run_id)
+                bind = getattr(self.store, "bind_run_wait", None)
+                if callable(bind):
+                    bind(
+                        run_id,
+                        bot_id,
+                        kind="owner_job" if job else "consent",
+                        path="continue",
+                        effect="intended",
+                        message_id=message.id,
+                        consent_id=request_id,
+                    )
             except Exception:
                 log.exception("failed to mark waiting_input")
         self._publish(
@@ -580,6 +605,8 @@ class ConsentHub(OwnerJobTransport):
             waiter = self._waiters.get(request_id)
         if waiter is not None:
             waiter.wait(WAIT_SECONDS)
+        if self._wait_recovered(run_id=run_id, request_id=request_id):
+            raise WaitRecovered(run_id)
         decision = self._decisions.get(request_id, "deny")
         if run_id:
             try:
@@ -625,6 +652,7 @@ class ConsentHub(OwnerJobTransport):
             waiter = self._waiters.pop(request_id, None)
         if waiter is not None:
             waiter.set()
+        row.woke_waiter = waiter is not None
         return row
 
     def wait_decision(self, request_id: str, timeout: float = WAIT_SECONDS) -> str:
@@ -632,6 +660,8 @@ class ConsentHub(OwnerJobTransport):
             waiter = self._waiters.get(request_id)
         if waiter is not None:
             waiter.wait(timeout)
+        if self._wait_recovered(request_id=request_id):
+            return RECOVERED
         return self._decisions.get(request_id, "deny")
 
     def begin_question(self, bot_id: str, run_id: str, thread_id: str) -> bool:
@@ -668,6 +698,16 @@ class ConsentHub(OwnerJobTransport):
                 self._questions.pop(run_id, None)
                 return False
             self.store.mark_run_waiting_input(run_id)
+            bind = getattr(self.store, "bind_run_wait", None)
+            if callable(bind):
+                bind(
+                    run_id,
+                    pending.bot_id,
+                    kind="ask",
+                    path="continue",
+                    effect="intended",
+                    message_id=message_id,
+                )
             self._publish(
                 bot,
                 ProductEventType.RUN_WAITING_INPUT,
@@ -690,6 +730,10 @@ class ConsentHub(OwnerJobTransport):
         text = (answer or "").strip()
         if not text:
             return None
+        with self._lock:
+            pending = self._questions.get(run_id)
+        if pending is None:
+            return self._answer_parked_question(bot_id, run_id, message_id, text)
         with self._lock:
             pending = self._questions.get(run_id)
             if pending is None or pending.cancelled or pending.bot_id != bot_id:
@@ -717,6 +761,36 @@ class ConsentHub(OwnerJobTransport):
             pending.waiter.set()
             return updated
 
+    def _answer_parked_question(
+        self,
+        bot_id: str,
+        run_id: str,
+        message_id: str,
+        text: str,
+    ) -> Any | None:
+        run = self.store.get_run(run_id)
+        if run is None or run.bot_id != bot_id:
+            return None
+        status = getattr(run.status, "value", None) or str(run.status)
+        if status != "waiting_input":
+            return None
+        bot = self.store.get_bot(bot_id)
+        if bot is None:
+            return None
+        message = self.store.get_message_in_thread(bot.thread_id, message_id)
+        if message is None or message.run_id != run_id:
+            return None
+        updated = self.store.answer_message_ask(message_id, text)
+        if updated is None:
+            return None
+        self._publish(
+            bot,
+            ProductEventType.THREAD_MESSAGE_CREATED,
+            {"message": updated.model_dump(mode="json")},
+            run_id,
+        )
+        return updated
+
     def wait_question(
         self,
         run_id: str,
@@ -725,6 +799,8 @@ class ConsentHub(OwnerJobTransport):
         with self._lock:
             pending = self._questions.get(run_id)
         if pending is None:
+            if self._wait_recovered(run_id=run_id):
+                return None, RECOVERED
             return None, "The owner question is no longer active."
         pending.waiter.wait(timeout)
         with self._lock:
@@ -733,10 +809,14 @@ class ConsentHub(OwnerJobTransport):
                 return None, "The owner question is no longer active."
             answer = current.answer
             cancelled = current.cancelled
+            recovered = current.recovered
         if answer is not None:
             return answer, None
         if cancelled:
             return None, "The owner question was cancelled."
+        wait = getattr(self.store, "get_run_wait", lambda _rid: None)(run_id)
+        if recovered or (wait is not None and getattr(wait, "recovered_at", None)):
+            return None, RECOVERED
         bot = self.store.get_bot(current.bot_id)
         updated = (
             self.store.answer_message_ask(current.message_id, "Timed out")
@@ -761,6 +841,8 @@ class ConsentHub(OwnerJobTransport):
     ) -> str:
         if not bot_id or not run_id:
             return "timeout"
+        if self._wait_recovered(run_id=run_id):
+            return RECOVERED
         waiter = threading.Event()
         with self._lock:
             if bot_id in self._takeover_released:
@@ -778,7 +860,10 @@ class ConsentHub(OwnerJobTransport):
                 if not pending:
                     self._takeover_waiters.pop(bot_id, None)
             self._takeover_released.discard(bot_id)
-            return self._takeover_results.pop(run_id, "timeout")
+            result = self._takeover_results.pop(run_id, "timeout")
+            if result == RECOVERED or self._wait_recovered(run_id=run_id):
+                return RECOVERED
+            return result
 
     def release_takeovers(self, bot_id: str) -> None:
         if not bot_id:
@@ -807,6 +892,39 @@ class ConsentHub(OwnerJobTransport):
                     to_wake.append(waiter)
                 if not pending:
                     self._takeover_waiters.pop(bot_id, None)
+        for waiter in to_wake:
+            waiter.set()
+
+    def _wait_recovered(self, *, run_id: str | None = None, request_id: str | None = None) -> bool:
+        if request_id and request_id in self._recovered_consents:
+            return True
+        rid = run_id
+        if not rid and request_id:
+            row = self.store.get_consent_request(request_id)
+            rid = getattr(row, "run_id", None) if row is not None else None
+        if not rid:
+            return False
+        wait = getattr(self.store, "get_run_wait", lambda _rid: None)(rid)
+        return bool(wait is not None and getattr(wait, "recovered_at", None))
+
+    def abandon_process_waiters(self) -> None:
+        """Wake in-memory waiters after a host restart without denying the cards."""
+        to_wake: list[threading.Event] = []
+        with self._lock:
+            for pending in self._questions.values():
+                pending.recovered = True
+                to_wake.append(pending.waiter)
+            for request_id, waiter in self._waiters.items():
+                self._recovered_consents.add(request_id)
+                to_wake.append(waiter)
+            for pending in self._takeover_waiters.values():
+                for run_id, waiter in pending.items():
+                    self._takeover_results[run_id] = RECOVERED
+                    to_wake.append(waiter)
+            for waiter in self._file_waiters.values():
+                to_wake.append(waiter)
+            for waiter in self._result_waiters.values():
+                to_wake.append(waiter)
         for waiter in to_wake:
             waiter.set()
 

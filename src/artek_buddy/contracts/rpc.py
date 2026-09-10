@@ -205,6 +205,14 @@ PROCEDURES: list[Procedure] = [
         True,
     ),
     _p(
+        "threads.recovery",
+        "POST",
+        "/v1/threads/{bot_id}/recovery",
+        "ThreadRecoveryInput",
+        "OkResponse",
+        True,
+    ),
+    _p(
         "consents.answer",
         "POST",
         "/v1/consents/{consent_id}",

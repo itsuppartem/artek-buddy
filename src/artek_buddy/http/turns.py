@@ -17,6 +17,7 @@ from artek_buddy.bus import EventHub
 from artek_buddy.computer.service import (
     ComputerService,
 )
+from artek_buddy.consent import WaitRecovered
 from artek_buddy.contracts import (
     Bot,
     ComputerStatus,
@@ -83,6 +84,41 @@ from artek_buddy.http.turn_registry import cancel_turns as _cancel_turns
 from artek_buddy.http.turn_registry import drop_turn as _drop_turn
 from artek_buddy.http.turn_registry import register_turn as _register_turn
 from artek_buddy.http.usage_persist import persist_product_usage
+
+_PARKED_WAIT = {"waiting_input", "waiting_takeover", "waiting_recovery"}
+
+
+def _leave_parked_wait(history: HistoryStore, run: Run) -> bool:
+    live = history.get_run(run.id)
+    if live is None:
+        return False
+    status = getattr(live.status, "value", None) or str(live.status)
+    if status not in _PARKED_WAIT:
+        return False
+    wait = getattr(history, "get_run_wait", lambda _rid: None)(run.id)
+    if wait is not None and getattr(wait, "recovered_at", None):
+        return True
+    return status == "waiting_recovery"
+
+
+async def resume_parked_follow_up(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+    bot: Bot,
+    run_id: str,
+    prompt: str,
+) -> None:
+    history.complete_parked_run(run_id)
+    await _accept_turn(
+        history,
+        rt,
+        events,
+        bot,
+        "Continued after the host restarted.",
+        trigger="follow_up",
+        model_prompt=prompt,
+    )
 
 
 def _emit(
@@ -707,6 +743,9 @@ async def _run_turn(
                 continue
             event_type = ProductEventType(typ)
             _emit(events, bot, event_type, payload, run_id=run.id)
+    except WaitRecovered:
+        log.info("turn %s left parked after host recovery", run.id)
+        return
     except asyncio.CancelledError:
         waiting = None
         try:
@@ -715,6 +754,9 @@ async def _run_turn(
             waiting = None
         if waiting is not None and waiting.id == run.id:
             log.info("turn %s waiting for takeover", run.id)
+            return
+        if _leave_parked_wait(history, run):
+            log.info("turn %s left parked after cancel during wait", run.id)
             return
         status = "cancelled"
         error = "Stopped."
@@ -757,6 +799,10 @@ async def _run_turn(
             reply_text = ""
     elif not reply_text:
         reply_text = draft or ""
+
+    if _leave_parked_wait(history, run):
+        log.info("turn %s left parked; skipping finish", run.id)
+        return
 
     persist_product_usage(history, events, bot, run.id, turn_usage)
     try:

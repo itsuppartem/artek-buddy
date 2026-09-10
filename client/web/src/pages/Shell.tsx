@@ -2546,6 +2546,12 @@ export function ShellPage() {
                     }
                     await api.threads.answer(active.id, item.runId, item.id, text);
                   }}
+                  onRecover={async (action, item) => {
+                    if (!active || !item.runId) {
+                      throw new Error("This recovery is no longer waiting");
+                    }
+                    await api.threads.recover(active.id, item.runId, item.id, action);
+                  }}
                   onOpenComputer={() => void openOverlay("preview")}
                   onOpenMemory={(fact) => {
                     setMemoryFocusFact(fact);

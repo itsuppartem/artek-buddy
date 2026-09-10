@@ -24,6 +24,7 @@ from artek_buddy.contracts import (
     ThreadAnswerInput,
     ThreadFollowUpInput,
     ThreadMessagePage,
+    ThreadRecoveryInput,
     ThreadSendInput,
     ThreadSendResult,
     ThreadSnapshot,
@@ -62,6 +63,7 @@ from artek_buddy.http.turns import (
     _cancel_turns,
     _emit,
     _ingest_thread_files,
+    resume_parked_follow_up,
 )
 
 router = APIRouter()
@@ -180,6 +182,7 @@ async def answer_thread_question(
     history: HistoryStore = Depends(store),
     questions: ConsentHub = Depends(consent),
     events: EventHub = Depends(hub),
+    rt: AgentRuntime = Depends(runtime),
 ) -> OkResponse:
     from artek_buddy.bot_credentials import raise_if_pasted_credential
 
@@ -212,6 +215,94 @@ async def answer_thread_question(
             if auto_run.state == "queued":
                 history.enqueue_automation_prompt(auto_run)
             return OkResponse(ok=True)
+        live = history.get_run(body.run_id)
+        status = getattr(getattr(live, "status", None), "value", None) or getattr(
+            live, "status", None
+        )
+        if live is not None and str(status) == "waiting_input":
+            from artek_buddy.db.history.recovery import CONTINUE_FOLLOW_UP
+
+            await resume_parked_follow_up(
+                history,
+                rt,
+                events,
+                bot,
+                body.run_id,
+                CONTINUE_FOLLOW_UP,
+            )
+        return OkResponse(ok=True)
+    except DatabaseUnavailable as err:
+        raise _db_error(err) from err
+
+
+@router.post("/v1/threads/{bot_id}/recovery")
+async def recover_thread_run(
+    bot_id: str,
+    body: ThreadRecoveryInput,
+    _actor: str = Depends(require_auth),
+    history: HistoryStore = Depends(store),
+    events: EventHub = Depends(hub),
+    rt: AgentRuntime = Depends(runtime),
+) -> OkResponse:
+    try:
+        bot = _require_bot(history, bot_id)
+        if body.bot_id is not None and body.bot_id != bot.id:
+            raise HTTPException(status_code=404, detail="bot not found")
+        wait = history.get_run_wait(body.run_id)
+        live = history.get_run(body.run_id)
+        status = getattr(getattr(live, "status", None), "value", None) or getattr(
+            live, "status", None
+        )
+        if (
+            wait is None
+            or live is None
+            or wait.bot_id != bot.id
+            or str(status) != "waiting_recovery"
+        ):
+            raise HTTPException(status_code=409, detail="run is not waiting for recovery")
+        if body.action == "continue" and wait.path != "continue":
+            raise HTTPException(
+                status_code=409, detail="this recovery path is not safe to continue"
+            )
+        resolved = history.resolve_recovery_message(body.message_id, body.action)
+        if resolved is None:
+            raise HTTPException(status_code=409, detail="recovery card is no longer waiting")
+        _emit(
+            events,
+            bot,
+            ProductEventType.THREAD_MESSAGE_CREATED,
+            {"message": resolved.model_dump(mode="json")},
+            run_id=body.run_id,
+        )
+        if body.action == "continue":
+            from artek_buddy.db.history.recovery import CONTINUE_FOLLOW_UP
+
+            await resume_parked_follow_up(
+                history,
+                rt,
+                events,
+                bot,
+                body.run_id,
+                CONTINUE_FOLLOW_UP,
+            )
+            return OkResponse(ok=True)
+        finished_run = history.get_run(body.run_id)
+        history.complete_parked_run(
+            body.run_id,
+            error="The owner started a new attempt.",
+        )
+        finished = history.get_run(body.run_id) or finished_run
+        if finished is not None:
+            _emit(
+                events,
+                bot,
+                ProductEventType.RUN_CANCELLED,
+                {
+                    "run": finished.model_dump(mode="json"),
+                    "error": "The owner started a new attempt.",
+                },
+                run_id=body.run_id,
+            )
         return OkResponse(ok=True)
     except DatabaseUnavailable as err:
         raise _db_error(err) from err

@@ -130,6 +130,28 @@ describe("canAnswerOwnerPrompt", () => {
     expect(canAnswerOwnerPrompt(message, run({ status: "running" }))).toBe(true);
     expect(canAnswerOwnerPrompt(message, run({ status: "completed" }))).toBe(false);
   });
+
+  it("keeps a restart recovery card answerable while the run is parked", () => {
+    const message = {
+      id: "m-rec",
+      threadId: "t",
+      seq: 1,
+      role: "bot" as const,
+      blocks: [
+        {
+          kind: "recovery" as const,
+          path: "check" as const,
+          text: "Check before continuing.",
+          status: "pending" as const,
+          actions: [{ id: "new_attempt", label: "Start a new attempt" }],
+        },
+      ],
+      runId: "run1",
+      createdAt: "2026-01-01T00:00:00Z",
+    };
+    expect(canAnswerOwnerPrompt(message, run({ status: "waiting_recovery" }))).toBe(true);
+    expect(canAnswerOwnerPrompt(message, run({ status: "completed" }))).toBe(false);
+  });
 });
 
 describe("mergeThreadSnapshot", () => {

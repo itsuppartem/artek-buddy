@@ -637,6 +637,13 @@ export const api = {
         answer,
       });
     },
+    recover(botId: string, runId: string, messageId: string, action: "continue" | "new_attempt") {
+      return request<OkResponse>("POST", `/v1/threads/${botId}/recovery`, {
+        runId,
+        messageId,
+        action,
+      });
+    },
     markRead(botId: string) {
       return request<OkResponse>("POST", `/v1/threads/${botId}/read`);
     },
@@ -753,7 +760,8 @@ export function isActive(status: string | undefined): boolean {
     status === "leased" ||
     status === "running" ||
     status === "waiting_input" ||
-    status === "waiting_takeover"
+    status === "waiting_takeover" ||
+    status === "waiting_recovery"
   );
 }
 
@@ -761,6 +769,10 @@ export function isParkedTakeover(status: string | undefined): boolean {
   return status === "waiting_takeover";
 }
 
+export function isParkedRecovery(status: string | undefined): boolean {
+  return status === "waiting_recovery";
+}
+
 export function isLiveTurn(status: string | undefined): boolean {
-  return isActive(status) && !isParkedTakeover(status);
+  return isActive(status) && !isParkedTakeover(status) && !isParkedRecovery(status);
 }

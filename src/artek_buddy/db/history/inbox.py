@@ -116,7 +116,7 @@ class InboxMixin:
                     """
                     SELECT 1 FROM runs
                     WHERE bot_id = %s
-                      AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
+                      AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery')
                     LIMIT 1
                     """,
                     (bot.id,),

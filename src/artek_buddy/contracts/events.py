@@ -78,6 +78,16 @@ class AskBlock(BaseModel):
     consent_id: str | None = None
 
 
+class RecoveryBlock(BaseModel):
+    kind: Literal["recovery"] = "recovery"
+    path: Literal["continue", "check", "new_attempt"]
+    text: str
+    detail: str | None = None
+    status: Literal["pending", "resolved"] | None = None
+    answer: str | None = None
+    actions: list[AskAction] | None = None
+
+
 class ChoiceOption(BaseModel):
     id: str
     letter: str
@@ -162,6 +172,7 @@ MessageBlock = Annotated[
     TextBlock
     | CardBlock
     | AskBlock
+    | RecoveryBlock
     | ChoiceBlock
     | ConnectBlock
     | ComputerBlock

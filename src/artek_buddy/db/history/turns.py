@@ -31,14 +31,16 @@ class TurnsMixin:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                SELECT * FROM runs
-                WHERE bot_id = %s
+                SELECT r.*, w.path AS recovery_path
+                FROM runs r
+                LEFT JOIN run_waits w ON w.run_id = r.id
+                WHERE r.bot_id = %s
                 ORDER BY
-                  CASE WHEN status IN (
-                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
+                  CASE WHEN r.status IN (
+                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery'
                   ) THEN 0 ELSE 1 END,
-                  started_at DESC NULLS LAST,
-                  id DESC
+                  r.started_at DESC NULLS LAST,
+                  r.id DESC
                 LIMIT 1
                 """,
                 (bot_id,),
@@ -53,7 +55,7 @@ class TurnsMixin:
                 SELECT COUNT(*) AS n FROM runs
                 WHERE bot_id = %s
                   AND status IN (
-                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
+                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery'
                   )
                 """,
                 (bot_id,),
@@ -91,7 +93,7 @@ class TurnsMixin:
                     """
                     SELECT * FROM runs
                     WHERE bot_id = %s
-                      AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
+                      AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery')
                     ORDER BY started_at DESC
                     LIMIT 1
                     FOR UPDATE
@@ -370,7 +372,16 @@ class TurnsMixin:
                     "SELECT status FROM runs WHERE id = %s FOR UPDATE",
                     (run.id,),
                 ).fetchone()
-                if not (
+                recovered = conn.execute(
+                    "SELECT recovered_at FROM run_waits WHERE run_id = %s",
+                    (run.id,),
+                ).fetchone()
+                skip_late = bool(
+                    recovered
+                    and recovered["recovered_at"] is not None
+                    and status != RunStatus.cancelled.value
+                )
+                if not skip_late and not (
                     already
                     and already["status"] == RunStatus.cancelled.value
                     and status != RunStatus.cancelled.value
@@ -423,7 +434,7 @@ class TurnsMixin:
                         WHERE bot_id = %s
                           AND id <> %s
                           AND status IN (
-                            'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
+                            'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery'
                           )
                         LIMIT 1
                         """,
@@ -505,7 +516,15 @@ class TurnsMixin:
 
     def _get_run(self, run_id: str) -> Run | None:
         with self._conn() as conn:
-            row = conn.execute("SELECT * FROM runs WHERE id = %s", (run_id,)).fetchone()
+            row = conn.execute(
+                """
+                SELECT r.*, w.path AS recovery_path
+                FROM runs r
+                LEFT JOIN run_waits w ON w.run_id = r.id
+                WHERE r.id = %s
+                """,
+                (run_id,),
+            ).fetchone()
             conn.commit()
         return self._run_from_row(row) if row else None
 
@@ -525,6 +544,7 @@ class TurnsMixin:
             error=row["error"],
             started_at=parse_iso(row["started_at"]) if row["started_at"] else None,
             completed_at=parse_iso(row["completed_at"]) if row["completed_at"] else None,
+            recovery_path=row.get("recovery_path"),
         )
 
     def has_active_run(self, bot_id: str) -> bool:
@@ -533,7 +553,7 @@ class TurnsMixin:
                 """
                 SELECT id FROM runs
                 WHERE bot_id = %s
-                  AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
+                  AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery')
                 LIMIT 1
                 """,
                 (bot_id,),
@@ -608,7 +628,18 @@ class TurnsMixin:
                 (now, run_id),
             )
             conn.commit()
-        return self._run_from_row(row) if row else None
+        parked = self._run_from_row(row) if row else None
+        if parked is not None:
+            bind = getattr(self, "bind_run_wait", None)
+            if callable(bind):
+                bind(
+                    run_id,
+                    parked.bot_id,
+                    kind="takeover",
+                    path="new_attempt",
+                    effect="intended",
+                )
+        return parked
 
     def waiting_takeover_run(self, bot_id: str) -> Run | None:
         with self._conn() as conn:

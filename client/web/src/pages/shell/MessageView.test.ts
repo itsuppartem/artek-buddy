@@ -162,6 +162,38 @@ describe("MessageView", () => {
     expect(doneHtml).toContain("done");
     expect(doneHtml).not.toContain("Open computer");
   });
+
+  it("renders a host-restart recovery card", () => {
+    const message: ThreadMessage = {
+      id: "msg-rec",
+      threadId: "thr-rec",
+      runId: "run-rec",
+      role: "bot",
+      seq: 1,
+      createdAt: "2026-09-10T00:00:00Z",
+      blocks: [
+        {
+          kind: "recovery",
+          path: "check",
+          text: "Check before continuing. The host restarted.",
+          status: "pending",
+          actions: [{ id: "new_attempt", label: "Start a new attempt" }],
+        },
+      ],
+    };
+    const html = renderToStaticMarkup(
+      createElement(MessageView, {
+        canAnswer: true,
+        message,
+        onAnswer: async () => undefined,
+        onRecover: async () => undefined,
+        onOpenBot: vi.fn(),
+      }),
+    );
+    expect(html).toContain("recovery-card");
+    expect(html).toContain("Start a new attempt");
+    expect(html).toContain("Check before continuing");
+  });
 });
 
 describe("messageCopyText", () => {

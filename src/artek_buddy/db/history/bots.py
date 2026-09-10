@@ -7,6 +7,7 @@ from typing import Any
 from artek_buddy.bot_attention import (
     BotAttentionFacts,
     pending_ask_id_from_blocks,
+    pending_recovery_id_from_blocks,
     project_bot,
 )
 from artek_buddy.contracts.domain import (
@@ -227,7 +228,10 @@ class BotsMixin:
                     UPDATE runs
                     SET status = %s, error = %s, completed_at = %s
                     WHERE bot_id = %s
-                      AND status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
+                      AND status IN (
+                          'queued', 'leased', 'running', 'waiting_input',
+                          'waiting_takeover', 'waiting_recovery'
+                      )
                     RETURNING id
                     """,
                     (RunStatus.cancelled.value, "Stopped.", now, bot_id),
@@ -237,42 +241,6 @@ class BotsMixin:
                     (now, bot_id),
                 )
         return [row["id"] for row in rows]
-
-    def fail_orphaned_runs(
-        self, error: str = "The host restarted before this turn finished."
-    ) -> int:
-        """Mark leftover in-flight work failed after a process restart."""
-        now = isoformat_utc()
-        with self._conn() as conn:
-            with conn.transaction():
-                rows = conn.execute(
-                    """
-                    UPDATE runs
-                    SET status = %s, error = %s, completed_at = %s
-                    WHERE status IN ('queued', 'leased', 'running', 'waiting_input', 'waiting_takeover')
-                    RETURNING id, bot_id
-                    """,
-                    (RunStatus.failed.value, error, now),
-                ).fetchall()
-                bot_ids = [row["bot_id"] for row in rows]
-                if bot_ids:
-                    conn.execute(
-                        """
-                        UPDATE bots
-                        SET status = 'idle', updated_at = %s
-                        WHERE id = ANY(%s)
-                        """,
-                        (now, bot_ids),
-                    )
-                conn.execute(
-                    """
-                    UPDATE subagents
-                    SET status = 'failed', error = %s, updated_at = %s
-                    WHERE status IN ('queued', 'running')
-                    """,
-                    (error, now),
-                )
-        return len(rows)
 
     def create_bot(
         self,
@@ -469,7 +437,8 @@ class BotsMixin:
                 FROM runs
                 WHERE bot_id = ANY(%s)
                   AND status IN (
-                      'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover'
+                      'queued', 'leased', 'running', 'waiting_input',
+                      'waiting_takeover', 'waiting_recovery'
                   )
                 ORDER BY bot_id, started_at DESC NULLS LAST, id DESC
                 """,
@@ -586,6 +555,19 @@ class BotsMixin:
             if current is None or bot_id is None:
                 continue
             facts[bot_id] = replace(current, pending_ask_id=str(row["id"]))
+        seen_recovery: set[str] = set()
+        for row in ask_rows:
+            thread_id = str(row["thread_id"])
+            if thread_id in seen_recovery:
+                continue
+            if not pending_recovery_id_from_blocks(row["blocks"]):
+                continue
+            seen_recovery.add(thread_id)
+            bot_id = by_thread.get(thread_id)
+            current = facts.get(bot_id) if bot_id else None
+            if current is None or bot_id is None:
+                continue
+            facts[bot_id] = replace(current, pending_recovery_id=str(row["id"]))
         return facts
 
     def _bot_from_row(self, row: dict[str, Any]) -> Bot:

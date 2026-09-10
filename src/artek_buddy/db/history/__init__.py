@@ -14,6 +14,7 @@ from artek_buddy.db.history.members import MembersMixin
 from artek_buddy.db.history.memory import MemoryMixin
 from artek_buddy.db.history.messages import MessagesMixin
 from artek_buddy.db.history.models import ModelsMixin
+from artek_buddy.db.history.recovery import RecoveryMixin
 from artek_buddy.db.history.routines import RoutinesMixin
 from artek_buddy.db.history.search import SearchMixin
 from artek_buddy.db.history.store import HistoryStoreCore, InboxFullError, MigrationChecksumError
@@ -47,5 +48,6 @@ class HistoryStore(
     ModelsMixin,
     ConnectionsMixin,
     UsageMixin,
+    RecoveryMixin,
 ):
     pass

@@ -12,6 +12,7 @@ from artek_buddy.bot_asks import (
     resolve_ask,
 )
 from artek_buddy.bot_credentials import PASTED_CREDENTIAL_DETAIL, looks_like_pasted_credential
+from artek_buddy.consent import RECOVERED, WaitRecovered
 from artek_buddy.contracts.events import ProductEvent, ProductEventType
 from artek_buddy.db.shaping import isoformat_utc, new_id
 from artek_buddy.runtime.tools.common import (
@@ -435,6 +436,8 @@ class ChatToolsMixin:
             hub.abort_question(run_id)
             return {"ok": False, "error": "could not wait for the owner's answer"}
         answer, error = hub.wait_question(run_id)
+        if error == RECOVERED:
+            raise WaitRecovered(run_id)
         if answer is None:
             return {"ok": False, "error": error or "owner question failed"}
         return {"ok": True, "message_id": message_id, "answer": answer}

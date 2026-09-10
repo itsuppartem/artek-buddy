@@ -305,7 +305,7 @@ class ComputerMixin:
                 WHERE b.computer_id = %s
                   AND b.id <> %s
                   AND r.status IN (
-                    'queued', 'leased', 'running', 'waiting_takeover'
+                    'queued', 'leased', 'running', 'waiting_takeover', 'waiting_recovery'
                   )
                 LIMIT 1
                 """,
@@ -332,7 +332,8 @@ class ComputerMixin:
                     JOIN runs r ON r.bot_id = other.id
                     WHERE other.computer_id = c.id
                       AND r.status IN (
-                        'queued', 'leased', 'running', 'waiting_input'
+                        'queued', 'leased', 'running', 'waiting_input',
+                        'waiting_takeover', 'waiting_recovery'
                       )
                   )
                 ORDER BY c.sleep_at ASC

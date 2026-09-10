@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
                 store.ensure_search_index()
                 leftover = store.fail_orphaned_runs()
                 if leftover:
-                    log.warning("marked %s leftover run(s) failed after restart", leftover)
+                    log.warning("recovered %s leftover run(s) after restart", leftover)
                 reaped = computers.reap_orphan_computers()
                 if reaped:
                     log.warning("destroyed %s computer(s) with no remaining bot", reaped)

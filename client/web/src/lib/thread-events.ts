@@ -432,7 +432,8 @@ function isActiveRun(status: string | undefined): boolean {
     status === "leased" ||
     status === "running" ||
     status === "waiting_input" ||
-    status === "waiting_takeover"
+    status === "waiting_takeover" ||
+    status === "waiting_recovery"
   );
 }
 
@@ -463,6 +464,15 @@ export function canAnswerOwnerPrompt(
     (block) =>
       block.kind === "ask" && !block.consentId && (block.status ?? "pending") === "pending",
   );
+  const pendingRecovery = message.blocks.some(
+    (block) => block.kind === "recovery" && (block.status ?? "pending") === "pending",
+  );
+  if (pendingRecovery) {
+    if (!run || !message.runId || message.runId !== run.id) {
+      return false;
+    }
+    return run.status === "waiting_recovery" || run.status === "waiting_input";
+  }
   return (
     pendingQuestion &&
     (run?.status === "running" || run?.status === "waiting_input") &&
