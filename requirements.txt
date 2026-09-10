@@ -1,8 +1,8 @@
-cursor-sdk==1.0.30
+cursor-sdk==1.0.31
 fastapi==0.141.1
 starlette==1.6.0
 uvicorn[standard]==0.52.4
 pydantic-settings==2.15.0
-psycopg[binary,pool]==3.3.4
+psycopg[binary,pool]==3.3.5
 playwright==1.62.0
 
