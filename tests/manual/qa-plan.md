@@ -352,7 +352,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 | After pair, the credential is not visible in the page (Deb: `~/.config/artek-buddy/token` mode 600; Phone: httpOnly cookie) | [ ] | [ ] |
 | Auth error: **Pair this computer again** (Deb) / **Pair this phone again** (Phone). Click unpairs to the matching pair screen. Does not queue as an offline send | [ ] | [ ] |
 | Workspace `/v1/events` 401/403 (inbox still loads) still shows Pair again, not a quiet shell | [ ] | [ ] |
-| Restart the host API while a chat is open, then send again. The window reconnects, does not invent missing turns, and either replays or shows a gap then reloads the thread. A suspended/revoked device gets Pair again, not a live stream | [ ] | [ ] |
+| Restart the host API while a chat is open, then send again. The window reconnects, does not invent missing turns, and either replays or shows a gap then reloads the thread. Revoke that device from another pair while this window is open: this stream stops (Pair again), the other device stays live | [ ] | [ ] |
 | A host/action failure while Today is open **stays on Today**. The banner is **Host link lost. Showing last known state.** / **Dismiss** — it does not jump to Chats or change the phone tab | [ ] | [ ] |
 | Unpair returns to the pair screen. Re-pair with a new code restores the inbox | [ ] | [ ] |
 | Pairing lands on **Today**. It does **not** open Desktop or Models and does **not** boot a desktop | [ ] | [ ] |

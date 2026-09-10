@@ -14,6 +14,7 @@
 - OPERATIONS.md backup/restore includes the `credential-data` volume and `.env` broker tokens. A tar of `data`/`workspace` plus `pg_dump` is not a complete host copy.
 - Leaving a chat for Today, Library, settings, or the phone Desktop tab no longer marks new replies on the selected helper as read, and does not dismiss that helper's native or web notify.
 - Work log usage estimates keep the Fast / rate-card variant from when that run started (`0036_run_usage_fast.sql`). Unchecking Fast (or turning it on) while another turn is still running does not rewrite that in-flight grok-4.6 Fast vs standard USD.
+- Revoking a paired device stops that device's already-open SSE; a still-valid device on the same member keeps its stream.
 
 ## [0.2.0] - 2026-09-09
 
