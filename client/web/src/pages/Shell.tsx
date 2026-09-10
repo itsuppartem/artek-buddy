@@ -753,6 +753,8 @@ export function ShellPage() {
     }
     if (incoming.type === "run.waiting_input") {
       void refreshBotsRef.current().catch(() => undefined);
+      const id = activeIdRef.current;
+      if (id) void refreshThread(id).catch(() => undefined);
     }
     if (incoming.type === "computer.takeover.requested") {
       if (incoming.seq >= (bot.stateVersion ?? 0)) {
@@ -1341,7 +1343,11 @@ export function ShellPage() {
             const bot = botsRef.current.find((item) => item.id === active.id) ?? active;
             considerEvent(event, bot, { source: "thread" });
             if (leftChat) break;
-            if (event.type === "run.completed" || event.type === "run.failed") {
+            if (
+              event.type === "run.completed" ||
+              event.type === "run.failed" ||
+              event.type === "run.waiting_input"
+            ) {
               void refreshBotsRef.current().catch(() => undefined);
               void refreshThread(active.id).catch(() => undefined);
             }
