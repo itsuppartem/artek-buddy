@@ -131,7 +131,8 @@ class AsksMixin:
                     SELECT COUNT(*) AS n FROM runs
                     WHERE bot_id = %s
                       AND status IN (
-                        'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery'
+                        'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover',
+                        'waiting_recovery', 'unknown'
                       )
                     """,
                     (source.id,),

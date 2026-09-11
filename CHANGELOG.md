@@ -23,6 +23,7 @@
 - Deny on a consent card after host restart fails the parked run instead of leaving it on `waiting_input`. The rejected browse (or other consent) is not dispatched.
 - After host restart, resuming a parked Ask passes the saved question and owner answer into the follow-up runtime prompt, not only generic continuation text.
 - `POST /v1/threads/{bot_id}/recovery` resolves only the recovery card bound to that run in `run_waits`; another bot's card is 409 with no partial cancel.
+- Bot-ask follow-up delivery treats `unknown` runs like other blocking states: the reply queues to inbox instead of starting a second run on the asking bot.
 
 ## [0.2.0] - 2026-09-09
 

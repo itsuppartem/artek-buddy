@@ -29,6 +29,16 @@ from artek_buddy.db.history.store import InboxFullError
 
 TurnDisposition = Literal["created", "queued", "replayed", "resumed"]
 
+BUSY_RUN_STATUSES = (
+    "queued",
+    "leased",
+    "running",
+    "waiting_input",
+    "waiting_takeover",
+    "waiting_recovery",
+    "unknown",
+)
+
 
 class TurnsMixin:
     def latest_run(self, bot_id: str) -> Run | None:
@@ -59,7 +69,8 @@ class TurnsMixin:
                 SELECT COUNT(*) AS n FROM runs
                 WHERE bot_id = %s
                   AND status IN (
-                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover', 'waiting_recovery', 'unknown'
+                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover',
+                    'waiting_recovery', 'unknown'
                   )
                 """,
                 (bot_id,),
