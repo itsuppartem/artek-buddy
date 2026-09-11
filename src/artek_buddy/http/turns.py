@@ -298,6 +298,54 @@ def _message_excerpt(message: ThreadMessage, limit: int = 400) -> str:
     return preview_snippet(blocks_text(_block_dicts(message)), limit)
 
 
+def _owner_dispatch_prompt_from_message(
+    history: HistoryStore, bot: Bot, message_id: str | None
+) -> tuple[str, ThreadMessage | None]:
+    if not message_id:
+        return "", None
+    msg = history.get_message_in_thread(bot.thread_id, message_id)
+    if msg is None:
+        return "", None
+    texts: list[str] = []
+    attachments: list[dict[str, Any]] = []
+    for block in _block_dicts(msg):
+        kind = block.get("kind")
+        if kind == "text":
+            texts.append(str(block.get("text") or ""))
+        elif kind == "file":
+            artifact_id = str(block.get("artifact_id") or "")
+            found = history.get_artifact(artifact_id) if artifact_id else None
+            if found is not None:
+                artifact, storage_path = found
+                attachments.append(
+                    {
+                        "id": artifact.id,
+                        "name": artifact.name,
+                        "mime_type": artifact.mime_type,
+                        "size": artifact.size,
+                        "path": storage_path,
+                    }
+                )
+            else:
+                attachments.append(
+                    {
+                        "name": str(block.get("name") or "file"),
+                        "mime_type": str(block.get("mime_type") or "application/octet-stream"),
+                        "size": int(block.get("size") or 0),
+                    }
+                )
+    display = "\n".join(part for part in texts if part.strip()).strip()
+    prompt = format_user_turn(display, attachments) if attachments else display
+    reply = None
+    if msg.reply_to_id:
+        reply = history.get_message_in_thread(bot.thread_id, msg.reply_to_id)
+    return prompt, reply
+
+
+_ACTIVE_DISPATCH_STATUSES = frozenset({"queued", "leased", "running"})
+_TERMINAL_RUN_STATUSES = frozenset({"completed", "failed", "cancelled"})
+
+
 def _posted_bot_texts(history: HistoryStore, bot: Bot, run_id: str) -> set[str]:
     posted: set[str] = set()
     for msg in history.page_messages(bot.thread_id, limit=200).messages:
@@ -570,12 +618,19 @@ async def _resume_pending_command_dispatch(
     device_id: str | None = None,
     idempotency_key: str | None = None,
     reply_to_id: str | None = None,
+    reply: ThreadMessage | None = None,
 ) -> None:
     """Dispatch a committed lead whose outbox row was still pending (lost HTTP / crash)."""
     bot = await _ensure_agent(history, rt, bot)
+    live = history.get_run(run.id)
+    status = getattr(getattr(live, "status", None), "value", None) or getattr(
+        live, "status", None
+    )
+    if live is None or str(status) not in _ACTIVE_DISPATCH_STATUSES:
+        return
     prompt = (text or "").strip()
-    reply_msg = None
-    if reply_to_id:
+    reply_msg = reply
+    if reply_msg is None and reply_to_id:
         reply_msg = history.get_message_in_thread(bot.thread_id, reply_to_id)
     _start_claimed_turn(
         history,
@@ -630,6 +685,51 @@ def _start_claimed_turn(
         name=f"turn-{run.id}",
     )
     _register_turn(bot.id, run.id, task)
+
+
+async def resume_pending_turn_dispatches(
+    history: HistoryStore,
+    rt: AgentRuntime,
+    events: EventHub,
+) -> None:
+    """Boot / wake: start executors for committed turns that never left the outbox."""
+    try:
+        history.reset_stale_turn_dispatch_claims()
+        pending = history.list_unfinished_turn_dispatches()
+    except Exception:
+        log.exception("failed to list pending turn dispatches")
+        return
+    for run_id, bot_id in pending:
+        try:
+            bot = history.get_bot(bot_id)
+            run = history.get_run(run_id)
+            if bot is None or run is None:
+                continue
+            status = getattr(getattr(run, "status", None), "value", None) or getattr(
+                run, "status", None
+            )
+            if str(status) not in _ACTIVE_DISPATCH_STATUSES:
+                history.cancel_turn_dispatches([run_id])
+                continue
+            if not history.claim_turn_dispatch(run_id):
+                continue
+            cmd = history.get_owner_command_for_run(bot_id, run_id)
+            prompt, reply = _owner_dispatch_prompt_from_message(
+                history, bot, cmd.message_id if cmd else None
+            )
+            if not prompt.strip():
+                continue
+            await _resume_pending_command_dispatch(
+                history,
+                rt,
+                events,
+                bot,
+                run,
+                prompt,
+                reply=reply,
+            )
+        except Exception:
+            log.exception("failed to resume pending dispatch for run %s", run_id)
 
 
 async def _accept_turn(

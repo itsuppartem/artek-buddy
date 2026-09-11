@@ -286,6 +286,38 @@ def test_crash_before_dispatch_retry_starts_once(client, auth_header, monkeypatc
     assert _user_texts(thread).count("hello") == 1
 
 
+@pytest.mark.asyncio
+async def test_restart_resumes_pending_dispatch_without_retry_post(
+    client, auth_header, monkeypatch
+) -> None:
+    from artek_buddy.db.history.turns import TurnsMixin
+    from artek_buddy.http.turns import resume_pending_turn_dispatches
+
+    bot_id = create_bot(client, auth_header, "CmdBootResume")["id"]
+    executions = _record_dispatches(monkeypatch)
+    real = TurnsMixin.claim_turn_dispatch
+    seen = {"n": 0}
+
+    def crash_first(self, run_id: str) -> bool:
+        seen["n"] += 1
+        if seen["n"] == 1:
+            return False
+        return real(self, run_id)
+
+    monkeypatch.setattr(TurnsMixin, "claim_turn_dispatch", crash_first)
+    body = {"text": "hello", "command_id": "cmd_boot_resume"}
+    first = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert first.status_code == 200, first.text
+    assert executions == []
+    simulate_host_restart(client)
+    await resume_pending_turn_dispatches(
+        client.app.state.store,
+        client.app.state.runtime,
+        client.app.state.hub,
+    )
+    _wait_dispatches(executions, 1)
+
+
 def test_restart_before_claim_does_not_park_or_duplicate(client, auth_header, monkeypatch) -> None:
     from artek_buddy.db.history.turns import TurnsMixin
 

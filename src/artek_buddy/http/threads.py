@@ -64,10 +64,12 @@ from artek_buddy.http.deps import (
     store,
 )
 from artek_buddy.http.turns import (
+    _TERMINAL_RUN_STATUSES,
     _accept_turn,
     _cancel_turns,
     _emit,
     _ingest_thread_files,
+    _owner_dispatch_prompt_from_message,
     _resume_pending_command_dispatch,
     resume_parked_follow_up,
 )
@@ -201,17 +203,29 @@ async def send_thread_message(
                         run=run,
                         queued=queued,
                     )
+                    if run is not None:
+                        run_status = getattr(getattr(run, "status", None), "value", None) or getattr(
+                            run, "status", None
+                        )
+                        if str(run_status) in _TERMINAL_RUN_STATUSES:
+                            return result
                     if not queued and run is not None and history.claim_turn_dispatch(run.id):
+                        prompt, reply = _owner_dispatch_prompt_from_message(
+                            history, bot, found.message_id
+                        )
+                        if not prompt.strip():
+                            prompt = (body.text or "").strip()
                         await _resume_pending_command_dispatch(
                             history,
                             rt,
                             events,
                             bot,
                             run,
-                            body.text,
+                            prompt,
                             device_id=actor,
                             idempotency_key=body.idempotency_key,
                             reply_to_id=body.reply_to_id,
+                            reply=reply,
                         )
                     return result
         hosted = (

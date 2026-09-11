@@ -53,6 +53,7 @@ from artek_buddy.http.threads import router as threads_router
 from artek_buddy.http.turns import (
     _handle_takeover_request,
     _kick_inbox,
+    resume_pending_turn_dispatches,
     _shutdown_work,
 )
 from artek_buddy.http.usage import router as usage_router
@@ -123,6 +124,7 @@ async def lifespan(app: FastAPI):
             runtime.on_takeover_requested = _handle_takeover_request
             runtime.on_bot_ask = _handle_bot_ask
             try:
+                await resume_pending_turn_dispatches(store, runtime, app.state.hub)
                 for bot in store.list_bots():
                     asyncio.create_task(
                         _kick_inbox(store, runtime, app.state.hub, bot),
