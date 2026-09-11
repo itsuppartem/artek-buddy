@@ -9,6 +9,7 @@ from typing import Any, Literal
 from psycopg.types.json import Json
 
 from artek_buddy.bot_attention import pending_ask_id_from_blocks
+from artek_buddy.contracts.domain import Run
 from artek_buddy.contracts.ids import EffectStatus, RunStatus
 from artek_buddy.db.shaping import isoformat_utc
 
@@ -113,6 +114,44 @@ class RecoveryMixin:
                 (now, run_id),
             )
             conn.commit()
+
+    def fail_parked_run(self, run_id: str, *, error: str) -> Run | None:
+        now = isoformat_utc()
+        with self._conn() as conn:
+            with conn.transaction():
+                row = conn.execute(
+                    """
+                    UPDATE runs
+                    SET status = %s, error = %s, completed_at = %s
+                    WHERE id = %s
+                      AND status IN (
+                          'waiting_input', 'waiting_takeover', 'waiting_recovery'
+                      )
+                    RETURNING bot_id
+                    """,
+                    (RunStatus.failed.value, error, now, run_id),
+                ).fetchone()
+                if row is None:
+                    return None
+                still = conn.execute(
+                    """
+                    SELECT 1 FROM runs
+                    WHERE bot_id = %s
+                      AND id <> %s
+                      AND status IN (
+                          'queued', 'leased', 'running', 'waiting_input',
+                          'waiting_takeover', 'waiting_recovery'
+                      )
+                    LIMIT 1
+                    """,
+                    (row["bot_id"], run_id),
+                ).fetchone()
+                if still is None:
+                    conn.execute(
+                        "UPDATE bots SET status = 'error', updated_at = %s WHERE id = %s",
+                        (now, row["bot_id"]),
+                    )
+        return self._get_run(run_id)
 
     def complete_parked_run(self, run_id: str, *, error: str | None = None) -> None:
         now = isoformat_utc()

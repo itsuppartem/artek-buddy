@@ -20,6 +20,7 @@
 - Owner Send `command_id` fingerprints attachment bytes (sha256 + size), not only the filename. The same file retried is one command; different bytes under the same name are 409.
 - A command queued behind a live turn keeps reporting queued on retry. Inbox claim binds that command to the follow-up run, not the previous turn's outcome.
 - Owner Send with no default model still records `command_id`. A retry before Models setup is one user bubble; after a key and model are saved, the same id starts that assignment once.
+- Deny on a consent card after host restart fails the parked run instead of leaving it on `waiting_input`. The rejected browse (or other consent) is not dispatched.
 
 ## [0.2.0] - 2026-09-09
 

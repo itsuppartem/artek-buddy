@@ -124,6 +124,29 @@ async def resume_parked_follow_up(
     )
 
 
+async def resume_parked_consent_deny(
+    history: HistoryStore,
+    events: EventHub,
+    bot: Bot,
+    run_id: str,
+) -> None:
+    error = owner_visible_error("denied by owner", run_id)
+    finished = history.fail_parked_run(run_id, error=error)
+    if finished is None:
+        return
+    _emit(
+        events,
+        bot,
+        ProductEventType.RUN_FAILED,
+        {
+            "run": finished.model_dump(mode="json"),
+            "error": error,
+            "message": None,
+        },
+        run_id=finished.id,
+    )
+
+
 def _emit(
     events: EventHub,
     bot: Bot,
