@@ -4,7 +4,7 @@ import time
 
 from artek_buddy.computer.client import FakeSupervisorClient
 from artek_buddy.computer.models import ComputerRecord
-from artek_buddy.computer.service import ComputerService, wipe_computer_home
+from artek_buddy.computer.service import ComputerOwnerControl, ComputerService, wipe_computer_home
 from artek_buddy.config import Settings
 from artek_buddy.contracts.domain import Bot
 
@@ -101,6 +101,54 @@ class _ComputerStore:
         self.record.control_bot_id = None
         self.record.last_input_at = None
         return self.record
+
+    def set_control_lease(
+        self,
+        computer_id: str,
+        bot_id: str,
+        lease_id: str,
+        expires_at: str,
+        last_input_at: str,
+    ) -> ComputerRecord | None:
+        self.record.control_holder = "user"
+        self.record.control_lease_id = lease_id
+        self.record.control_lease_expires_at = expires_at
+        self.record.control_bot_id = bot_id
+        self.record.last_input_at = last_input_at
+        return self.record
+
+
+def test_helper_act_skips_supervisor_while_owner_has_control() -> None:
+    import pytest
+
+    client = FakeSupervisorClient()
+    box = client.provision("bot_1", "home-box")
+    record = ComputerRecord(
+        id="cmp_1",
+        workspace_id="ws",
+        scope="dedicated",
+        scope_key="bot_1",
+        home_key="home-box",
+        home_revision=None,
+        kind="fake",
+        provider_ref=box.id,
+        state="running",
+        control_holder="user",
+        control_lease_id="lease-1",
+        control_lease_expires_at="2099-01-01T00:00:00Z",
+        control_bot_id="bot_1",
+        execution_run_id=None,
+        execution_bot_id="bot_1",
+        execution_lease_expires_at=None,
+        sleep_at=None,
+        updated_at="2026-08-20T00:00:00Z",
+    )
+    service = ComputerService(store=_ComputerStore(record), settings=_settings(), client=client)
+    with pytest.raises(ComputerOwnerControl):
+        service.act(_bot(), [{"kind": "click", "x": 1, "y": 1}])
+    assert not [call for call in client.calls if call[0] == "act"]
+    service.observe(_bot())
+    assert [call for call in client.calls if call[0] == "observe"]
 
 
 def test_stop_marks_computer_sleeping() -> None:

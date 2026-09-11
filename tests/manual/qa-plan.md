@@ -200,6 +200,7 @@ Open **Desktop** for **Demo** (Private) or Team.
 | Preview is a live screen, caption **Preview · view only**. Not black text «Desktop is running». Click on the preview does **not** take control | [ ] | [ ] |
 | fluxbox panel: window title, close, menu. Not a bare X | [ ] | [ ] |
 | **Take control** → mouse / keys go to the guest. Caps Lock raises case (`abc` → `ABC`). **Release** → the same turn continues; typing dots and Stop work again | [ ] | [ ] |
+| With **You have control** active, the helper does not click or type on that desktop (park for login, owner types, no surprise pointer). View-only preview may still update | [ ] | [ ] |
 | In one active box, drag a window, type in Terminal, and scroll a normal page. Pointer/key feedback starts promptly; Files, Chromium, Terminal, and the guest picture all remain usable | [ ] | [ ] |
 | Take control from Sleeping (or Open screen before pixels): overlay says **Waking the desktop…** until the guest is on the glass, not a black void | [ ] | [ ] |
 | No pointer for **2 minutes** on the overlay → host Releases itself (holder is bot again) | [ ] | [ ] |

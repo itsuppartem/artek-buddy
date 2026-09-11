@@ -216,6 +216,30 @@ def test_include_image_attaches_even_with_good_title(client, auth_header) -> Non
     assert result["content"][0]["type"] == "image"
 
 
+def test_helper_desktop_mutations_refused_while_owner_has_control(client, auth_header) -> None:
+    import pytest
+
+    from artek_buddy.computer.service import ComputerOwnerControl
+    from artek_buddy.main import app
+
+    bot_id = create_bot(client, auth_header, "OwnerLock", computer_mode="dedicated")["id"]
+    assert client.post(f"/v1/computer/{bot_id}/boot", headers=auth_header).status_code == 200
+    assert client.post(f"/v1/computer/{bot_id}/takeover", headers=auth_header).status_code == 200
+    bot = app.state.store.get_bot(bot_id)
+    boxes = app.state.computers
+    before = [call for call in boxes.client.calls if call[0] in {"act", "exec"}]
+    with pytest.raises(ComputerOwnerControl):
+        boxes.act(bot, [{"kind": "click", "x": 1, "y": 1}])
+    with pytest.raises(ComputerOwnerControl):
+        boxes.exec_command(bot, "echo hi")
+    with pytest.raises(ComputerOwnerControl):
+        boxes.launch_app(bot, "terminal")
+    after = [call for call in boxes.client.calls if call[0] in {"act", "exec"}]
+    assert after == before
+    result = boxes.observe(bot)
+    assert result["ok"] is True
+
+
 def test_computer_act_batch_can_return_slim_observe(client, auth_header) -> None:
     from artek_buddy.main import app
 
