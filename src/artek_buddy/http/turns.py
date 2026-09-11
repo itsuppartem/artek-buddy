@@ -623,9 +623,7 @@ async def _resume_pending_command_dispatch(
     """Dispatch a committed lead whose outbox row was still pending (lost HTTP / crash)."""
     bot = await _ensure_agent(history, rt, bot)
     live = history.get_run(run.id)
-    status = getattr(getattr(live, "status", None), "value", None) or getattr(
-        live, "status", None
-    )
+    status = getattr(getattr(live, "status", None), "value", None) or getattr(live, "status", None)
     if live is None or str(status) not in _ACTIVE_DISPATCH_STATUSES:
         return
     prompt = (text or "").strip()
