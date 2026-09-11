@@ -171,6 +171,49 @@ def test_restart_during_interactive_consent_deny_terminates(client, auth_header)
     assert client.app.state.store.get_consent_request(consent_id).status == "deny"
 
 
+def test_recovery_rejects_card_from_another_bot(client, auth_header) -> None:
+    store = client.app.state.store
+    bot_a_id = create_bot(client, auth_header, "Recovery A")["id"]
+    bot_b_id = create_bot(client, auth_header, "Recovery B")["id"]
+
+    def _park_slow(bot_id: str) -> tuple[str, str]:
+        sent = client.post(
+            f"/v1/threads/{bot_id}/messages",
+            headers=auth_header,
+            json={"text": "please e2e-slow now"},
+        )
+        assert sent.status_code == 200
+        run_id = sent.json()["run_id"]
+        wait_run_status(client, auth_header, bot_id, run_id, "running")
+        simulate_host_restart(client)
+        snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header).json()
+        assert snap["run"]["status"] == "waiting_recovery"
+        cards = _recovery_blocks(snap)
+        assert len(cards) == 1
+        return run_id, cards[0]["message"]["id"]
+
+    run_a_id, _card_a = _park_slow(bot_a_id)
+    run_b_id, card_b_id = _park_slow(bot_b_id)
+
+    response = client.post(
+        f"/v1/threads/{bot_a_id}/recovery",
+        headers=auth_header,
+        json={
+            "run_id": run_a_id,
+            "message_id": card_b_id,
+            "action": "new_attempt",
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert store.get_run(run_a_id).status == "waiting_recovery"
+    assert store.get_run(run_b_id).status == "waiting_recovery"
+    wait_b = store.get_run_wait(run_b_id)
+    assert wait_b is not None and wait_b.message_id == card_b_id
+    msg_b = store.get_message_in_thread(store.get_bot(bot_b_id).thread_id, card_b_id)
+    block = next(b for b in msg_b.blocks if getattr(b, "kind", None) == "recovery")
+    assert getattr(block, "status", None) == "pending"
+
+
 def test_restart_during_running_is_check_not_failed(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "RecoverCheck")["id"]
     sent = client.post(
