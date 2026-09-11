@@ -681,7 +681,8 @@ async def _accept_turn(
             {"message": user_msg.model_dump(mode="json")},
             run_id=run.id,
         )
-    if disposition == "queued":
+    queued_retry = disposition == "replayed" and history.inbox_holds_message(bot.id, user_msg.id)
+    if disposition == "queued" or queued_retry:
         return ThreadSendResult(
             task_id=run.task_id,
             run_id=run.id,

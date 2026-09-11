@@ -18,6 +18,7 @@
 - This-PC search (`rg`/`grep`) that can run another program or load extra config requires Allow. Deny does not start a process. A path-form binary or `VAR=value` prefix is not treated as explore-only.
 - Concurrent retries of one owner `command_id` dispatch a single executor (`0039_turn_dispatches.sql`). A lost HTTP response that retries before that run is claimed still starts it once. A changed payload is 409 without a second run.
 - Owner Send `command_id` fingerprints attachment bytes (sha256 + size), not only the filename. The same file retried is one command; different bytes under the same name are 409.
+- A command queued behind a live turn keeps reporting queued on retry. Inbox claim binds that command to the follow-up run, not the previous turn's outcome.
 
 ## [0.2.0] - 2026-09-09
 
