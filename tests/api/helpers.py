@@ -129,6 +129,27 @@ def consent_id_from_thread(snap: dict[str, Any]) -> str:
     raise AssertionError("no consent_id on the thread")
 
 
+def free_shared_team_desktop(client, auth_header: dict[str, str]) -> None:
+    """API tests share one Postgres DB per worker; clear team pool before team-only cases."""
+    store = client.app.state.store
+    bots = store.list_bots()
+    for bot in bots:
+        store.cancel_active_runs(bot.id)
+        client.post(f"/v1/computer/{bot.id}/release", headers=auth_header)
+    team_bots = [b for b in bots if b.computer_mode == "team"]
+    if not team_bots:
+        return
+    record = store.get_computer_for_bot(team_bots[0])
+    holder_id = record.execution_bot_id
+    if holder_id:
+        stopped = client.post(f"/v1/computer/{holder_id}/stop", headers=auth_header)
+        assert stopped.status_code == 200, stopped.text
+    for bot in bots:
+        if bot.id == holder_id:
+            continue
+        client.post(f"/v1/computer/{bot.id}/stop", headers=auth_header)
+
+
 def simulate_host_restart(client) -> int:
     """Stamp recovered waits and replace the in-memory consent hub (process restart)."""
     import time

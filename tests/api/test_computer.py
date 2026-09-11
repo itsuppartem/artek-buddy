@@ -6,7 +6,12 @@ import time
 
 import httpx
 import pytest
-from tests.api.helpers import consent_id_from_thread, create_bot, wait_run_status
+from tests.api.helpers import (
+    consent_id_from_thread,
+    create_bot,
+    free_shared_team_desktop,
+    wait_run_status,
+)
 
 
 def test_computer_boot_stop_on_fake(client, auth_header) -> None:
@@ -46,10 +51,7 @@ def test_computer_restart_and_reset(client, auth_header) -> None:
 
 
 def test_team_status_names_the_bot_that_booted(client, auth_header) -> None:
-    # API tests share one Postgres DB per worker; earlier tests can leave the team pool busy.
-    store = client.app.state.store
-    for row in store.list_bots():
-        client.post(f"/v1/computer/{row.id}/stop", headers=auth_header)
+    free_shared_team_desktop(client, auth_header)
     alpha = client.post(
         "/v1/bots",
         headers=auth_header,
