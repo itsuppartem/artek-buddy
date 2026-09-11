@@ -38,7 +38,6 @@ BUSY_RUN_STATUSES = (
     "waiting_recovery",
     "unknown",
 )
-BUSY_RUN_STATUSES_IN = ", ".join(f"'{status}'" for status in BUSY_RUN_STATUSES)
 
 
 class TurnsMixin:
@@ -69,9 +68,11 @@ class TurnsMixin:
                 """
                 SELECT COUNT(*) AS n FROM runs
                 WHERE bot_id = %s
-                  AND status IN ("""
-                + BUSY_RUN_STATUSES_IN
-                + ")",
+                  AND status IN (
+                    'queued', 'leased', 'running', 'waiting_input', 'waiting_takeover',
+                    'waiting_recovery', 'unknown'
+                  )
+                """,
                 (bot_id,),
             ).fetchone()
             conn.commit()
