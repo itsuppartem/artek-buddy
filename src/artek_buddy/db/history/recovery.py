@@ -33,6 +33,12 @@ CONTINUE_FOLLOW_UP = (
 )
 
 
+def _block_field(block: Any, key: str) -> Any:
+    if isinstance(block, dict):
+        return block.get(key)
+    return getattr(block, key, None)
+
+
 def answered_ask_from_message(message: Any) -> tuple[str, str] | None:
     blocks = getattr(message, "blocks", None)
     if blocks is None and isinstance(message, dict):
@@ -40,12 +46,12 @@ def answered_ask_from_message(message: Any) -> tuple[str, str] | None:
     if not isinstance(blocks, list):
         return None
     for block in blocks:
-        if not isinstance(block, dict) or block.get("kind") != "ask":
+        if _block_field(block, "kind") != "ask":
             continue
-        if block.get("status") != "answered":
+        if _block_field(block, "status") != "answered":
             continue
-        question = str(block.get("text") or "").strip()
-        answer = str(block.get("answer") or "").strip()
+        question = str(_block_field(block, "text") or "").strip()
+        answer = str(_block_field(block, "answer") or "").strip()
         if question and answer:
             return question, answer
     return None
