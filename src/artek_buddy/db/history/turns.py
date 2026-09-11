@@ -38,6 +38,7 @@ BUSY_RUN_STATUSES = (
     "waiting_recovery",
     "unknown",
 )
+BUSY_RUN_STATUSES_IN = ", ".join(f"'{status}'" for status in BUSY_RUN_STATUSES)
 
 
 class TurnsMixin:
@@ -63,14 +64,14 @@ class TurnsMixin:
         return self._run_from_row(row) if row else None
 
     def active_run_count(self, bot_id: str) -> int:
-        busy = ", ".join(f"'{status}'" for status in BUSY_RUN_STATUSES)
         with self._conn() as conn:
             row = conn.execute(
-                f"""
+                """
                 SELECT COUNT(*) AS n FROM runs
                 WHERE bot_id = %s
-                  AND status IN ({busy})
-                """,
+                  AND status IN ("""
+                + BUSY_RUN_STATUSES_IN
+                + ")",
                 (bot_id,),
             ).fetchone()
             conn.commit()

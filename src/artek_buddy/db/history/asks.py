@@ -7,7 +7,7 @@ from psycopg.types.json import Json
 from artek_buddy.contracts.domain import Bot, Run, ThreadMessage
 from artek_buddy.contracts.events import MessageRole
 from artek_buddy.contracts.ids import RunStatus
-from artek_buddy.db.history.turns import BUSY_RUN_STATUSES
+from artek_buddy.db.history.turns import BUSY_RUN_STATUSES_IN
 from artek_buddy.db.shaping import isoformat_utc, new_id, preview_snippet
 
 
@@ -127,13 +127,13 @@ class AsksMixin:
                 if row is None:
                     return None
                 ask_row = dict(row)
-                busy_statuses = ", ".join(f"'{status}'" for status in BUSY_RUN_STATUSES)
                 active = conn.execute(
-                    f"""
+                    """
                     SELECT COUNT(*) AS n FROM runs
                     WHERE bot_id = %s
-                      AND status IN ({busy_statuses})
-                    """,
+                      AND status IN ("""
+                    + BUSY_RUN_STATUSES_IN
+                    + ")",
                     (source.id,),
                 ).fetchone()
                 busy = int(active["n"]) > 0 if active else False
