@@ -95,6 +95,11 @@ class ComputerCancelled(ComputerError):
         super().__init__(message, category="cancelled", retryable=False)
 
 
+class ComputerOwnerControl(ComputerError):
+    def __init__(self, message: str = "owner has control") -> None:
+        super().__init__(message, category="forbidden", retryable=False)
+
+
 class ComputerService:
     def __init__(self, store: HistoryStore, settings: Settings, client: Any | None = None) -> None:
         self.store = store
@@ -496,6 +501,7 @@ class ComputerService:
         from artek_buddy.computer.observe import log_tool_result
 
         record = self.ensure_running(bot)
+        self._require_helper_may_act(record)
         result = self.client.act(record.provider_ref, actions)
         if return_observe:
             result = {**result, "observe": self.observe(bot, include_image=False)}
@@ -508,6 +514,7 @@ class ComputerService:
 
     def exec_command(self, bot: Bot, command: str) -> dict[str, Any]:
         record = self.ensure_running(bot)
+        self._require_helper_may_act(record)
         return self.client.execute(record.provider_ref, command)
 
     execute = exec_command
@@ -515,10 +522,12 @@ class ComputerService:
 
     def open_path(self, bot: Bot, path: str) -> dict[str, Any]:
         record = self.ensure_running(bot)
+        self._require_helper_may_act(record)
         return self.client.act(record.provider_ref, [{"kind": "open", "path": path}])
 
     def launch_app(self, bot: Bot, name: str, uri: str | None = None) -> dict[str, Any]:
         record = self.ensure_running(bot)
+        self._require_helper_may_act(record)
         action: dict[str, Any] = {"kind": "launch", "name": name}
         if uri:
             action["uri"] = uri
@@ -527,8 +536,10 @@ class ComputerService:
     def close_app(self, bot: Bot, name: str) -> dict[str, Any]:
         record = self.store.get_computer_for_bot(bot)
         record = self._expire_lease(record)
+        record = self._expire_idle_control(record)
         if record.state != "running" or not record.provider_ref:
             return {"ok": True, "closed": name, "state": record.state}
+        self._require_helper_may_act(record)
         record = self._touch(record)
         self.store.save_box_state(record)
         return self.client.act(record.provider_ref, [{"kind": "close", "name": name}])
@@ -592,6 +603,10 @@ class ComputerService:
             return False
         expires = datetime.fromisoformat(record.control_lease_expires_at.replace("Z", "+00:00"))
         return expires > datetime.now(UTC)
+
+    def _require_helper_may_act(self, record: ComputerRecord) -> None:
+        if self._user_has_control(record):
+            raise ComputerOwnerControl()
 
     def _expire_lease(self, record: ComputerRecord) -> ComputerRecord:
         if record.control_holder != "user" or not record.control_lease_expires_at:
