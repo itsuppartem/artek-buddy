@@ -13,7 +13,7 @@ from artek_buddy.contracts.domain import (
 )
 from artek_buddy.contracts.events import MessageRole
 from artek_buddy.contracts.ids import RunStatus
-from artek_buddy.db.history.commands import CommandPayloadConflict
+from artek_buddy.db.history.commands import CommandPayloadConflict, owner_command_is_needs_setup
 from artek_buddy.db.shaping import (
     is_raw_run_failed,
     isoformat_utc,
@@ -27,7 +27,7 @@ log = logging.getLogger("artek_buddy")
 
 from artek_buddy.db.history.store import InboxFullError
 
-TurnDisposition = Literal["created", "queued", "replayed"]
+TurnDisposition = Literal["created", "queued", "replayed", "resumed"]
 
 
 class TurnsMixin:
@@ -112,8 +112,12 @@ class TurnsMixin:
             if payload_hash and found.payload_hash != payload_hash:
                 raise CommandPayloadConflict from None
             user = self._get_message(found.message_id) if found.message_id else None
+            if user is None:
+                raise RuntimeError("failed to replay owner command") from None
+            if owner_command_is_needs_setup(found.run_id):
+                raise RuntimeError("needs_setup owner command is not replayable here") from None
             run = self._get_run(found.run_id)
-            if user is None or run is None:
+            if run is None:
                 raise RuntimeError("failed to replay owner command") from None
             return self._with_replies([user])[0], run, "replayed"
 
@@ -133,6 +137,7 @@ class TurnsMixin:
         payload_hash: str | None,
         parent_command_id: str | None,
     ) -> tuple[ThreadMessage, Run, TurnDisposition]:
+        resume_setup_message_id: str | None = None
         with self._conn() as conn:
             with conn.transaction():
                 locked = conn.execute(
@@ -157,10 +162,15 @@ class TurnsMixin:
                         ):
                             raise CommandPayloadConflict
                         user = self._get_message(str(existing["message_id"]))
-                        run = self._get_run(str(existing["run_id"]))
-                        if user is None or run is None:
+                        if user is None:
                             raise RuntimeError("failed to replay owner command")
-                        return self._with_replies([user])[0], run, "replayed"
+                        if owner_command_is_needs_setup(str(existing["run_id"])):
+                            resume_setup_message_id = str(existing["message_id"])
+                        else:
+                            run = self._get_run(str(existing["run_id"]))
+                            if run is None:
+                                raise RuntimeError("failed to replay owner command")
+                            return self._with_replies([user])[0], run, "replayed"
                 active = conn.execute(
                     """
                     SELECT * FROM runs
@@ -196,8 +206,15 @@ class TurnsMixin:
                     )
                     active = None
                 now = isoformat_utc()
-                seq = self._lock_next_seq(conn, bot.thread_id)
-                msg_id = new_id("msg")
+                if resume_setup_message_id is not None:
+                    msg_id = resume_setup_message_id
+                    user = self._get_message(msg_id)
+                    if user is None:
+                        raise RuntimeError("failed to resume needs_setup owner command")
+                    seq = user.seq
+                else:
+                    seq = self._lock_next_seq(conn, bot.thread_id)
+                    msg_id = new_id("msg")
                 if active is not None:
                     queued = conn.execute(
                         "SELECT COUNT(*) AS n FROM turn_inbox WHERE bot_id = %s",
@@ -207,23 +224,24 @@ class TurnsMixin:
                         raise InboxFullError(
                             "Too many messages are already queued. Wait for the bot to finish, then try again."
                         )
-                    conn.execute(
-                        """
-                        INSERT INTO messages (
-                            id, thread_id, seq, role, blocks, run_id, reply_to_id, created_at
+                    if resume_setup_message_id is None:
+                        conn.execute(
+                            """
+                            INSERT INTO messages (
+                                id, thread_id, seq, role, blocks, run_id, reply_to_id, created_at
+                            )
+                            VALUES (%s, %s, %s, %s, %s, NULL, %s, %s)
+                            """,
+                            (
+                                msg_id,
+                                bot.thread_id,
+                                seq,
+                                MessageRole.user.value,
+                                Json(message_blocks),
+                                reply_to_id,
+                                now,
+                            ),
                         )
-                        VALUES (%s, %s, %s, %s, %s, NULL, %s, %s)
-                        """,
-                        (
-                            msg_id,
-                            bot.thread_id,
-                            seq,
-                            MessageRole.user.value,
-                            Json(message_blocks),
-                            reply_to_id,
-                            now,
-                        ),
-                    )
                     conn.execute(
                         """
                         INSERT INTO turn_inbox (
@@ -242,24 +260,34 @@ class TurnsMixin:
                 else:
                     run_id = new_id("run")
                     task_id = new_id("tsk")
-                    conn.execute(
-                        """
-                        INSERT INTO messages (
-                            id, thread_id, seq, role, blocks, run_id, reply_to_id, created_at
+                    if resume_setup_message_id is None:
+                        conn.execute(
+                            """
+                            INSERT INTO messages (
+                                id, thread_id, seq, role, blocks, run_id, reply_to_id, created_at
+                            )
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            """,
+                            (
+                                msg_id,
+                                bot.thread_id,
+                                seq,
+                                MessageRole.user.value,
+                                Json(message_blocks),
+                                run_id,
+                                reply_to_id,
+                                now,
+                            ),
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (
-                            msg_id,
-                            bot.thread_id,
-                            seq,
-                            MessageRole.user.value,
-                            Json(message_blocks),
-                            run_id,
-                            reply_to_id,
-                            now,
-                        ),
-                    )
+                    else:
+                        conn.execute(
+                            """
+                            UPDATE messages
+                            SET run_id = %s
+                            WHERE id = %s AND thread_id = %s
+                            """,
+                            (run_id, msg_id, bot.thread_id),
+                        )
                     conn.execute(
                         """
                         INSERT INTO runs (
@@ -291,35 +319,46 @@ class TurnsMixin:
                         (preview_snippet(preview_text), "running", now, bot.id),
                     )
                     queued_turn = False
-                self._record_message_created(
-                    conn,
-                    bot_id=bot.id,
-                    thread_id=bot.thread_id,
-                    message_id=msg_id,
-                    role="user",
-                    seq=seq,
-                    run_id=run_id,
-                    blocks=message_blocks,
-                )
-                if command_id:
-                    conn.execute(
-                        """
-                        INSERT INTO owner_commands (
-                            command_id, bot_id, payload_hash, run_id, message_id,
-                            parent_command_id, created_at
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (
-                            command_id,
-                            bot.id,
-                            payload_hash or "",
-                            run_id,
-                            msg_id,
-                            parent_command_id,
-                            now,
-                        ),
+                if resume_setup_message_id is None:
+                    self._record_message_created(
+                        conn,
+                        bot_id=bot.id,
+                        thread_id=bot.thread_id,
+                        message_id=msg_id,
+                        role="user",
+                        seq=seq,
+                        run_id=run_id,
+                        blocks=message_blocks,
                     )
+                if command_id:
+                    if resume_setup_message_id is not None:
+                        conn.execute(
+                            """
+                            UPDATE owner_commands
+                            SET run_id = %s
+                            WHERE command_id = %s AND bot_id = %s
+                            """,
+                            (run_id, command_id, bot.id),
+                        )
+                    else:
+                        conn.execute(
+                            """
+                            INSERT INTO owner_commands (
+                                command_id, bot_id, payload_hash, run_id, message_id,
+                                parent_command_id, created_at
+                            )
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """,
+                            (
+                                command_id,
+                                bot.id,
+                                payload_hash or "",
+                                run_id,
+                                msg_id,
+                                parent_command_id,
+                                now,
+                            ),
+                        )
                 if not queued_turn:
                     conn.execute(
                         """
@@ -334,7 +373,11 @@ class TurnsMixin:
             raise RuntimeError("failed to persist turn")
         if not queued_turn:
             self.bind_run_fast(run.id)
-        return self._with_replies([user])[0], run, "queued" if queued_turn else "created"
+        if resume_setup_message_id is not None and not queued_turn:
+            disposition: TurnDisposition = "resumed"
+        else:
+            disposition = "queued" if queued_turn else "created"
+        return self._with_replies([user])[0], run, disposition
 
     def claim_turn_dispatch(self, run_id: str) -> bool:
         """Claim pending lead dispatch once. Replay and a second POST lose."""

@@ -31,7 +31,11 @@ from artek_buddy.contracts import (
 )
 from artek_buddy.db import DatabaseUnavailable
 from artek_buddy.db.history import CommandPayloadConflict, HistoryStore
-from artek_buddy.db.history.commands import owner_command_fingerprint
+from artek_buddy.db.history.commands import (
+    NEEDS_SETUP_RUN_ID,
+    owner_command_fingerprint,
+    owner_command_is_needs_setup,
+)
 from artek_buddy.db.shaping import (
     DEFAULT_PAGE_SIZE,
     isoformat_utc,
@@ -166,34 +170,50 @@ async def send_thread_message(
                     detail="this command id was used with a different message",
                 ) from err
             if found is not None:
-                run = history.get_run(found.run_id)
-                message = (
-                    history.get_message_in_thread(bot.thread_id, found.message_id)
-                    if found.message_id
-                    else None
-                )
-                queued = history.inbox_holds_message(bot.id, found.message_id)
-                result = ThreadSendResult(
-                    task_id=run.task_id if run is not None else found.run_id,
-                    run_id=found.run_id,
-                    seq=message.seq if message is not None else 0,
-                    message=message,
-                    run=run,
-                    queued=queued,
-                )
-                if not queued and run is not None and history.claim_turn_dispatch(run.id):
-                    await _resume_pending_command_dispatch(
-                        history,
-                        rt,
-                        events,
-                        bot,
-                        run,
-                        body.text,
-                        device_id=actor,
-                        idempotency_key=body.idempotency_key,
-                        reply_to_id=body.reply_to_id,
+                if owner_command_is_needs_setup(found.run_id):
+                    if history.get_default_model() is None:
+                        message = (
+                            history.get_message_in_thread(bot.thread_id, found.message_id)
+                            if found.message_id
+                            else None
+                        )
+                        return ThreadSendResult(
+                            task_id=NEEDS_SETUP_RUN_ID,
+                            run_id=NEEDS_SETUP_RUN_ID,
+                            seq=message.seq if message is not None else 0,
+                            message=message,
+                            run=None,
+                            queued=False,
+                        )
+                else:
+                    run = history.get_run(found.run_id)
+                    message = (
+                        history.get_message_in_thread(bot.thread_id, found.message_id)
+                        if found.message_id
+                        else None
                     )
-                return result
+                    queued = history.inbox_holds_message(bot.id, found.message_id)
+                    result = ThreadSendResult(
+                        task_id=run.task_id if run is not None else found.run_id,
+                        run_id=found.run_id,
+                        seq=message.seq if message is not None else 0,
+                        message=message,
+                        run=run,
+                        queued=queued,
+                    )
+                    if not queued and run is not None and history.claim_turn_dispatch(run.id):
+                        await _resume_pending_command_dispatch(
+                            history,
+                            rt,
+                            events,
+                            bot,
+                            run,
+                            body.text,
+                            device_id=actor,
+                            idempotency_key=body.idempotency_key,
+                            reply_to_id=body.reply_to_id,
+                        )
+                    return result
         hosted = (
             _ingest_thread_files(
                 history,

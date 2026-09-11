@@ -15,6 +15,7 @@ from tests.api.helpers import (
     wait_thread_has,
 )
 
+from artek_buddy.db.history.commands import NEEDS_SETUP_RUN_ID
 from artek_buddy.db.shaping import UNKNOWN_OUTCOME_TEXT
 
 
@@ -510,3 +511,52 @@ def test_queued_command_http_retry_stays_queued_then_follows(client, auth_header
     done = wait_run(client, auth_header, bot_id, bound.run_id)
     assert done["run"]["status"] == "completed"
     assert _user_texts(done).count("behind the live turn") == 1
+
+
+MODEL_SECRET = "sk-test-secret-wxyz"
+
+
+@pytest.mark.no_model_seed
+def test_missing_model_deduplicates_command_id(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "CmdNoModelDedup")["id"]
+    body = {"text": "audit task", "command_id": f"cmd_{uuid.uuid4()}"}
+    first = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    second = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    snapshot = client.get(f"/v1/threads/{bot_id}", headers=auth_header).json()
+    user_messages = [msg for msg in snapshot.get("messages") or [] if msg.get("role") == "user"]
+    assert len(user_messages) == 1
+    assert first.json()["run_id"] == NEEDS_SETUP_RUN_ID
+    assert second.json()["run_id"] == NEEDS_SETUP_RUN_ID
+    found = client.app.state.store.get_owner_command(bot_id, body["command_id"])
+    assert found is not None
+    assert found.run_id == NEEDS_SETUP_RUN_ID
+
+
+@pytest.mark.no_model_seed
+def test_missing_model_command_resumes_after_default(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "CmdNoModelResume")["id"]
+    command_id = f"cmd_{uuid.uuid4()}"
+    body = {"text": "audit task", "command_id": command_id}
+    parked = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert parked.status_code == 200, parked.text
+    assert parked.json()["run"] is None
+    creds = client.post(
+        "/v1/models/credentials",
+        headers=auth_header,
+        json={"provider": "openai", "api_key": MODEL_SECRET},
+    )
+    assert creds.status_code == 200, creds.text
+    started = client.post(f"/v1/threads/{bot_id}/messages", headers=auth_header, json=body)
+    assert started.status_code == 200, started.text
+    assert started.json()["run_id"] != NEEDS_SETUP_RUN_ID
+    snapshot = client.get(f"/v1/threads/{bot_id}", headers=auth_header).json()
+    user_messages = [msg for msg in snapshot.get("messages") or [] if msg.get("role") == "user"]
+    assert len(user_messages) == 1
+    assert user_messages[0].get("blocks", [{}])[0].get("text") == "audit task"
+    done = wait_run(client, auth_header, bot_id, started.json()["run_id"])
+    assert done["run"]["status"] == "completed"
+    bound = client.app.state.store.get_owner_command(bot_id, command_id)
+    assert bound is not None
+    assert bound.run_id == started.json()["run_id"]
