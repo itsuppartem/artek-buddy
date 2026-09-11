@@ -432,7 +432,7 @@ Deb uses a real mouse and keyboard; skip pad gestures there.
 
 Read a file or list a folder under the Linux home: no Allow card. Read-only shell (`ls`, `cat`, `echo`, `git status`, `find … -name` / `-print`) does not ask.
 
-Write a file or a command that can change the PC: Allow once / Always / Deny. That includes `git show --output=…`, `git diff --output=…`, `git branch new-name`, `git branch -m …`, `find … -fprint` / `-fprintf` / `-fls`, and search that can run another program (`rg --pre …`, `--hostname-bin`, `--config`). Always covers later writes and commands on this PC **from this Deb**, not each folder. Paths outside `$HOME` stay 403 on the card. A git/find write path outside `$HOME` does not run.
+Write a file or a command that can change the PC: Allow once / Always / Deny. That includes `git show --output=…`, `git diff --output=…`, `git branch new-name`, `git branch -m …`, `find … -fprint` / `-fprintf` / `-fls`, and search that can run another program (`rg --pre …`, `--hostname-bin`, `--config`, including when `--` is only the search pattern). Always covers later writes and commands on this PC **from this Deb**, not each folder. Paths outside `$HOME` stay 403 on the card. A git/find write path outside `$HOME` does not run.
 
 For SSH reuse, use a real alias already present on the owner PC. Do not add one
 for this test and do not change `~/.ssh/config`. First test without
@@ -444,7 +444,7 @@ rebuilt client. This stays in the long walk because it needs a real owner alias.
 | Read / list under home: no card | [ ] | — |
 | `git status` / `find . -name '*.py' -print`: no card | [ ] | — |
 | Write / mutating command: card, then the action only after Allow | [ ] | — |
-| `git show --output=…`, `git branch new-name`, `find … -fprint …`, or `rg --pre …`: card. Deny does not create the file or start the extra program | [ ] | — |
+| `git show --output=…`, `git branch new-name`, `find … -fprint …`, or `rg --pre …` (including `rg -e -- --pre …`): card. Deny does not create the file or start the extra program | [ ] | — |
 | Write path outside `$HOME` (`git show --output=/tmp/…`) does not run | [ ] | — |
 | Deny does not touch the PC | [ ] | — |
 | Ask for several small remote checks. The agent sends one `ssh alias 'check; check; check'` owner command / one card, not one SSH call per check | [ ] | — |

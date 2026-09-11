@@ -15,7 +15,7 @@
 - Leaving a chat for Today, Library, settings, or the phone Desktop tab no longer marks new replies on the selected helper as read, and does not dismiss that helper's native or web notify.
 - Work log usage estimates keep the Fast / rate-card variant from when that run started (`0036_run_usage_fast.sql`). Unchecking Fast (or turning it on) while another turn is still running does not rewrite that in-flight grok-4.6 Fast vs standard USD.
 - Revoking a paired device stops that device's already-open SSE; a still-valid device on the same member keeps its stream.
-- This-PC search (`rg`/`grep`) that can run another program or load extra config requires Allow. Deny does not start a process. A path-form binary or `VAR=value` prefix is not treated as explore-only.
+- This-PC search (`rg`/`grep`) that can run another program or load extra config requires Allow. Deny does not start a process. A path-form binary or `VAR=value` prefix is not treated as explore-only. `--` as the value of `-e`/`--regexp`/`-f` does not hide later executing flags; unknown search flags also require Allow.
 - Concurrent retries of one owner `command_id` dispatch a single executor (`0039_turn_dispatches.sql`). A lost HTTP response that retries before that run is claimed still starts it once. A changed payload is 409 without a second run.
 - Owner Send `command_id` fingerprints attachment bytes (sha256 + size), not only the filename. The same file retried is one command; different bytes under the same name are 409.
 - A command queued behind a live turn keeps reporting queued on retry. Inbox claim binds that command to the follow-up run, not the previous turn's outcome.

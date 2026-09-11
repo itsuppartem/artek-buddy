@@ -238,6 +238,10 @@ def test_rg_preprocessor_is_never_readonly(program: str) -> None:
     assert owner_command_is_readonly(f"rg --pre={program} audit") is False
     assert owner_command_is_readonly(f"rg --pre-glob '{program}.txt' audit") is False
     assert owner_command_is_readonly(f"/tmp/{program} audit notes.txt") is False
+    assert owner_command_is_readonly(f"rg -e -- --pre {program} audit notes.txt") is False
+    assert owner_command_is_readonly(f"rg --regexp -- --pre={program} audit") is False
+    assert owner_command_is_readonly(f"rg -f -- --hostname-bin {program} audit") is False
+    assert owner_command_is_readonly(f"timeout 1 rg -e -- --pre {program} audit") is False
 
 
 @bounded

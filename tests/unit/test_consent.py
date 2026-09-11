@@ -52,7 +52,15 @@ def test_owner_readonly_commands() -> None:
     assert owner_command_is_readonly("find . -fprint listing.txt") is False
     assert owner_command_is_readonly("rg audit notes.txt") is True
     assert owner_command_is_readonly("rg --pretty audit notes.txt") is True
+    assert owner_command_is_readonly("rg -e audit notes.txt") is True
     assert owner_command_is_readonly("rg --pre /tmp/preprocessor audit notes.txt") is False
+    assert owner_command_is_readonly("rg -e -- --pre /tmp/preprocessor audit notes.txt") is False
+    assert owner_command_is_readonly("rg --regexp -- --pre /tmp/preprocessor audit") is False
+    assert owner_command_is_readonly("rg -f -- --pre /tmp/preprocessor audit") is False
+    assert owner_command_is_readonly("rg --regexp=-- --pre /tmp/preprocessor audit") is False
+    assert owner_command_is_readonly("timeout 1 rg -e -- --hostname-bin /bin/uname audit") is False
+    assert owner_command_is_readonly("grep -e -- --pre /tmp/x audit") is False
+    assert owner_command_is_readonly("rg --unknown-flag audit") is False
     assert owner_command_is_readonly("rg --pre-glob '*.txt' --pre ./hook audit") is False
     assert owner_command_is_readonly("rg --hostname-bin /bin/uname audit") is False
     assert owner_command_is_readonly("/tmp/rg audit notes.txt") is False
@@ -491,6 +499,52 @@ def test_deny_search_preprocessor_does_not_start_a_process(tmp_path: Path) -> No
     )
     result = tools._exec_run_owner_command(
         {"command": "rg --pre /tmp/preprocessor audit notes.txt", "cwd": str(tmp_path)},
+        "bot_1",
+    )
+    assert result == {"ok": False, "error": "denied by owner", "denied": True}
+    assert ran == []
+    assert not marker.exists()
+
+
+def test_deny_search_option_value_dashdash_does_not_start_a_process(tmp_path: Path) -> None:
+    """`--` as a regexp value must not hide later executing flags from Allow."""
+    marker = tmp_path / "executed.txt"
+    ran: list[str] = []
+
+    def runner(command: str, cwd: str) -> dict[str, object]:
+        ran.append(command)
+        marker.write_text("ran\n", encoding="utf-8")
+        return {"ok": True, "stdout": "", "stderr": "", "exit_code": 0}
+
+    class Hub:
+        def require(self, **_kwargs: object) -> tuple[bool, None]:
+            return False, None
+
+    class Store:
+        def list_devices(self) -> list[Device]:
+            return [
+                Device(
+                    id="dev_1",
+                    name="pc",
+                    platform="linux",
+                    created_at="2026-01-01T00:00:00Z",
+                )
+            ]
+
+    tools = ProductTools(
+        SimpleNamespace(
+            consent=Hub(),
+            store=Store(),
+            resolve_turn_context=lambda _bot: ("bot_1", "run_1", "thr_1"),
+            resolve_turn_device=lambda: "dev_1",
+            owner_command_runner=runner,
+        )
+    )
+    result = tools._exec_run_owner_command(
+        {
+            "command": "rg -e -- --pre /tmp/preprocessor audit notes.txt",
+            "cwd": str(tmp_path),
+        },
         "bot_1",
     )
     assert result == {"ok": False, "error": "denied by owner", "denied": True}
