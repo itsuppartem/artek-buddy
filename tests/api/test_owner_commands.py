@@ -7,8 +7,6 @@ import uuid
 
 import httpx
 import pytest
-
-from artek_buddy.db.history.commands import NEEDS_SETUP_RUN_ID
 from tests.api.helpers import (
     create_bot,
     simulate_host_restart,
@@ -17,6 +15,7 @@ from tests.api.helpers import (
     wait_thread_has,
 )
 
+from artek_buddy.db.history.commands import NEEDS_SETUP_RUN_ID
 from artek_buddy.db.shaping import UNKNOWN_OUTCOME_TEXT
 
 

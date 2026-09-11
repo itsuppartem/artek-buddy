@@ -12,7 +12,6 @@ from typing import Any
 
 from artek_buddy.db.shaping import isoformat_utc
 
-
 NEEDS_SETUP_RUN_ID = "needs_setup"
 
 
