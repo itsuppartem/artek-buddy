@@ -337,15 +337,25 @@ async def recover_thread_run(
             raise HTTPException(status_code=404, detail="bot not found")
         wait = history.get_run_wait(body.run_id)
         live = history.get_run(body.run_id)
+        if wait is None or live is None or wait.bot_id != bot.id:
+            raise HTTPException(status_code=409, detail="run is not waiting for recovery")
+        resolution = history.recovery_resolution_state(
+            run_id=body.run_id,
+            bot_id=bot.id,
+            thread_id=bot.thread_id,
+            message_id=body.message_id,
+            action=body.action,
+        )
+        if resolution == "conflict":
+            raise HTTPException(status_code=409, detail="recovery action conflicts")
+        if resolution == "replay":
+            return OkResponse(ok=True)
+        if resolution == "missing":
+            raise HTTPException(status_code=409, detail="recovery card is no longer waiting")
         status = getattr(getattr(live, "status", None), "value", None) or getattr(
             live, "status", None
         )
-        if (
-            wait is None
-            or live is None
-            or wait.bot_id != bot.id
-            or str(status) != "waiting_recovery"
-        ):
+        if str(status) != "waiting_recovery":
             raise HTTPException(status_code=409, detail="run is not waiting for recovery")
         if body.action == "continue" and wait.path != "continue":
             raise HTTPException(

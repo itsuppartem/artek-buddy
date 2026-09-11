@@ -333,6 +333,38 @@ def test_restart_during_running_is_check_not_failed(client, auth_header) -> None
     assert resolved[0]["block"]["status"] == "resolved"
 
 
+def test_recovery_new_attempt_replay_is_idempotent(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "RecoverReplay")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    wait_run_status(client, auth_header, bot_id, run_id, "running")
+    simulate_host_restart(client)
+    snap = client.get(f"/v1/threads/{bot_id}", headers=auth_header).json()
+    cards = _recovery_blocks(snap)
+    assert len(cards) == 1
+    message_id = cards[0]["message"]["id"]
+    payload = {
+        "run_id": run_id,
+        "message_id": message_id,
+        "action": "new_attempt",
+    }
+    first = client.post(f"/v1/threads/{bot_id}/recovery", headers=auth_header, json=payload)
+    assert first.status_code == 200, first.text
+    second = client.post(f"/v1/threads/{bot_id}/recovery", headers=auth_header, json=payload)
+    assert second.status_code == 200, second.text
+    conflict = client.post(
+        f"/v1/threads/{bot_id}/recovery",
+        headers=auth_header,
+        json={**payload, "action": "continue"},
+    )
+    assert conflict.status_code == 409
+
+
 def test_restart_does_not_execute_owner_job_twice(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "RecoverJob")["id"]
     sent = client.post(
