@@ -297,15 +297,25 @@ async def answer_thread_question(
             live, "status", None
         )
         if live is not None and str(status) == "waiting_input":
-            from artek_buddy.db.history.recovery import CONTINUE_FOLLOW_UP
+            from artek_buddy.db.history.recovery import (
+                CONTINUE_FOLLOW_UP,
+                answered_ask_from_message,
+                resume_follow_up_for_answered_ask,
+            )
 
+            pair = answered_ask_from_message(updated) if updated is not None else None
+            follow_up = (
+                resume_follow_up_for_answered_ask(pair[0], pair[1])
+                if pair is not None
+                else CONTINUE_FOLLOW_UP
+            )
             await resume_parked_follow_up(
                 history,
                 rt,
                 events,
                 bot,
                 body.run_id,
-                CONTINUE_FOLLOW_UP,
+                follow_up,
             )
         return OkResponse(ok=True)
     except DatabaseUnavailable as err:
