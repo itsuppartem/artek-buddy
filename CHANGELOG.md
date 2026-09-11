@@ -21,6 +21,7 @@
 - A command queued behind a live turn keeps reporting queued on retry. Inbox claim binds that command to the follow-up run, not the previous turn's outcome.
 - Owner Send with no default model still records `command_id`. A retry before Models setup is one user bubble; after a key and model are saved, the same id starts that assignment once.
 - Deny on a consent card after host restart fails the parked run instead of leaving it on `waiting_input`. The rejected browse (or other consent) is not dispatched.
+- After host restart, resuming a parked Ask passes the saved question and owner answer into the follow-up runtime prompt, not only generic continuation text.
 
 ## [0.2.0] - 2026-09-09
 

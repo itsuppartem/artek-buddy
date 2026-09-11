@@ -33,6 +33,46 @@ def _pending_ask(payload: dict) -> tuple[dict, dict]:
     return pending[0]
 
 
+def test_recovered_ask_answer_reaches_followup_prompt(client, auth_header, monkeypatch) -> None:
+    from artek_buddy.http import turns
+    from artek_buddy.runtime.types import RunRecord
+
+    bot_id = create_bot(client, auth_header, "RecoverAskPrompt")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-blocked-browser"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    waiting = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input")
+    message, _block = _pending_ask(waiting)
+
+    simulate_host_restart(client)
+    captured: list[str] = []
+
+    async def capture(history, rt, prompt, agent_id, bot, **kwargs):
+        captured.append(prompt)
+        yield RunRecord(
+            id="run_audit_projection",
+            agent_id=agent_id,
+            status="completed",
+            result="audit projection finished",
+        )
+
+    monkeypatch.setattr(turns, "_turn_stream", capture)
+    canary = "unique-owner-answer-emerald-4729"
+    answered = client.post(
+        f"/v1/threads/{bot_id}/answer",
+        headers=auth_header,
+        json={"run_id": run_id, "message_id": message["id"], "answer": canary},
+    )
+    assert answered.status_code == 200, answered.text
+    wait_thread_has(client, auth_header, bot_id, "audit projection finished")
+    assert len(captured) == 1
+    assert canary in captured[0]
+
+
 def test_restart_during_ask_keeps_thread_and_answer_continues(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "RecoverAsk")["id"]
     sent = client.post(

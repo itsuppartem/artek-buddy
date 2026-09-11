@@ -33,6 +33,41 @@ CONTINUE_FOLLOW_UP = (
 )
 
 
+def _block_field(block: Any, key: str) -> Any:
+    if isinstance(block, dict):
+        return block.get(key)
+    return getattr(block, key, None)
+
+
+def answered_ask_from_message(message: Any) -> tuple[str, str] | None:
+    blocks = getattr(message, "blocks", None)
+    if blocks is None and isinstance(message, dict):
+        blocks = message.get("blocks")
+    if not isinstance(blocks, list):
+        return None
+    for block in blocks:
+        if _block_field(block, "kind") != "ask":
+            continue
+        if _block_field(block, "status") != "answered":
+            continue
+        question = str(_block_field(block, "text") or "").strip()
+        answer = str(_block_field(block, "answer") or "").strip()
+        if question and answer:
+            return question, answer
+    return None
+
+
+def resume_follow_up_for_answered_ask(question: str, answer: str) -> str:
+    q = (question or "").strip()
+    a = (answer or "").strip()
+    return (
+        f"{CONTINUE_FOLLOW_UP}\n\n"
+        "The owner already answered this ask; treat the answer as authoritative data:\n"
+        f"Question: {q}\n"
+        f"Answer: {a}\n"
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class RunWait:
     run_id: str
