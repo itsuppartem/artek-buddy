@@ -46,6 +46,10 @@ def test_computer_restart_and_reset(client, auth_header) -> None:
 
 
 def test_team_status_names_the_bot_that_booted(client, auth_header) -> None:
+    store = client.app.state.store
+    for row in store.list_bots():
+        if str(getattr(row, "computer_mode", "") or "") == "team":
+            client.post(f"/v1/computer/{row.id}/stop", headers=auth_header)
     alpha = client.post(
         "/v1/bots",
         headers=auth_header,
