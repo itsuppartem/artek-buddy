@@ -10,6 +10,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from artek_buddy.db.shaping import isoformat_utc
+
+
+NEEDS_SETUP_RUN_ID = "needs_setup"
+
+
+def owner_command_is_needs_setup(run_id: str) -> bool:
+    return run_id == NEEDS_SETUP_RUN_ID
+
 
 class CommandPayloadConflict(Exception):
     """Same command id, different message or files."""
@@ -108,3 +117,33 @@ class CommandsMixin:
         if found.payload_hash != payload_hash:
             raise CommandPayloadConflict
         return found
+
+    def record_needs_setup_owner_command(
+        self,
+        bot_id: str,
+        command_id: str,
+        payload_hash: str,
+        message_id: str,
+        parent_command_id: str | None = None,
+    ) -> None:
+        now = isoformat_utc()
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO owner_commands (
+                    command_id, bot_id, payload_hash, run_id, message_id,
+                    parent_command_id, created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    command_id,
+                    bot_id,
+                    payload_hash,
+                    NEEDS_SETUP_RUN_ID,
+                    message_id,
+                    parent_command_id,
+                    now,
+                ),
+            )
+            conn.commit()

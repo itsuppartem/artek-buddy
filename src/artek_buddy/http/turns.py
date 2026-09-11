@@ -30,6 +30,7 @@ from artek_buddy.contracts import (
 )
 from artek_buddy.db import DatabaseUnavailable, product_run_status
 from artek_buddy.db.history import HistoryStore, InboxFullError
+from artek_buddy.db.history.commands import NEEDS_SETUP_RUN_ID, owner_command_is_needs_setup
 from artek_buddy.db.shaping import (
     DEFAULT_BOT_NAME,
     UNKNOWN_OUTCOME_TEXT,
@@ -447,10 +448,41 @@ def _needs_model_send(
     events: EventHub,
     bot: Bot,
     text: str,
+    *,
+    reply_to_id: str | None = None,
+    command_id: str | None = None,
+    payload_hash: str | None = None,
+    parent_command_id: str | None = None,
 ) -> ThreadSendResult:
+    if command_id:
+        found = history.require_owner_command_payload(bot.id, command_id, payload_hash or "")
+        if found is not None and owner_command_is_needs_setup(found.run_id):
+            message = (
+                history.get_message_in_thread(bot.thread_id, found.message_id)
+                if found.message_id
+                else None
+            )
+            if message is None:
+                raise HTTPException(status_code=500, detail="owner command message missing")
+            return ThreadSendResult(
+                task_id=NEEDS_SETUP_RUN_ID,
+                run_id=NEEDS_SETUP_RUN_ID,
+                seq=message.seq,
+                message=message,
+                run=None,
+                queued=False,
+            )
     display = (text or "").strip() or " "
-    user_msg = history.append_user_message(bot, display)
+    user_msg = history.append_user_message(bot, display, reply_to_id=reply_to_id)
     notice = history.append_bot_message(bot, [{"kind": "text", "text": NEEDS_MODEL_TEXT}])
+    if command_id:
+        history.record_needs_setup_owner_command(
+            bot.id,
+            command_id,
+            payload_hash or "",
+            user_msg.id,
+            parent_command_id=parent_command_id,
+        )
     _emit(
         events,
         bot,
@@ -464,8 +496,8 @@ def _needs_model_send(
         {"message": notice.model_dump(mode="json")},
     )
     return ThreadSendResult(
-        task_id=new_id("task"),
-        run_id=new_id("run"),
+        task_id=NEEDS_SETUP_RUN_ID,
+        run_id=NEEDS_SETUP_RUN_ID,
         seq=user_msg.seq,
         message=user_msg,
         run=None,
@@ -599,7 +631,16 @@ async def _accept_turn(
     text = apply_chat_credentials(credential_store, bot.id, text)
     try:
         if history.get_default_model() is None:
-            return _needs_model_send(history, events, bot, text)
+            return _needs_model_send(
+                history,
+                events,
+                bot,
+                text,
+                reply_to_id=reply_to_id,
+                command_id=command_id,
+                payload_hash=payload_hash,
+                parent_command_id=parent_command_id,
+            )
     except DatabaseUnavailable as err:
         raise _db_error(err) from err
     bot = await _ensure_agent(history, rt, bot)
@@ -672,7 +713,7 @@ async def _accept_turn(
         runtime=runtime_kind(rt.settings),
         result=disposition,
     )
-    if disposition != "replayed":
+    if disposition not in {"replayed", "resumed"}:
         _emit_answered_asks(history, events, bot, display or prompt, run.id)
         _emit(
             events,
@@ -681,6 +722,8 @@ async def _accept_turn(
             {"message": user_msg.model_dump(mode="json")},
             run_id=run.id,
         )
+    elif disposition == "resumed":
+        _emit_answered_asks(history, events, bot, display or prompt, run.id)
     queued_retry = disposition == "replayed" and history.inbox_holds_message(bot.id, user_msg.id)
     if disposition == "queued" or queued_retry:
         return ThreadSendResult(
@@ -692,7 +735,7 @@ async def _accept_turn(
         )
     if not history.claim_turn_dispatch(run.id):
         return ThreadSendResult(task_id=run.task_id, run_id=run.id, seq=user_msg.seq, run=run)
-    inbox_items = history.drain_inbox(bot.id) if disposition == "created" else None
+    inbox_items = history.drain_inbox(bot.id) if disposition in {"created", "resumed"} else None
     _start_claimed_turn(
         history,
         rt,
