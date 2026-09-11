@@ -107,6 +107,30 @@ def test_restart_during_interactive_consent_allow_continues(client, auth_header)
     wait_thread_has(client, auth_header, bot_id, "ok")
 
 
+def test_restart_during_interactive_consent_deny_terminates(client, auth_header) -> None:
+    bot_id = create_bot(client, auth_header, "RecoverConsentDeny")["id"]
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "e2e-consent-browse"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    waiting = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input")
+    consent_id = consent_id_from_thread(waiting)
+
+    simulate_host_restart(client)
+    denied = client.post(
+        f"/v1/consents/{consent_id}",
+        headers=auth_header,
+        json={"decision": "deny"},
+    )
+    assert denied.status_code == 200, denied.text
+    finished = wait_run(client, auth_header, bot_id, run_id)
+    assert finished["run"]["status"] == "failed"
+    assert client.app.state.store.get_consent_request(consent_id).status == "deny"
+
+
 def test_restart_during_running_is_check_not_failed(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "RecoverCheck")["id"]
     sent = client.post(
