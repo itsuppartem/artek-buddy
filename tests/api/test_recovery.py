@@ -171,6 +171,34 @@ def test_restart_during_interactive_consent_deny_terminates(client, auth_header)
     assert client.app.state.store.get_consent_request(consent_id).status == "deny"
 
 
+def test_recovery_rejects_card_from_another_bot(client, auth_header) -> None:
+    store = client.app.state.store
+    bot_a = store.get_bot(create_bot(client, auth_header, "Recovery A")["id"])
+    bot_b = store.get_bot(create_bot(client, auth_header, "Recovery B")["id"])
+    assert bot_a is not None and bot_b is not None
+    _, run_a, _ = store.begin_or_enqueue_turn(bot_a, "A")
+    _, run_b, _ = store.begin_or_enqueue_turn(bot_b, "B")
+    store.recover_orphaned_runs()
+    wait_b = store.get_run_wait(run_b.id)
+    assert wait_b is not None and wait_b.message_id
+    response = client.post(
+        f"/v1/threads/{bot_a.id}/recovery",
+        headers=auth_header,
+        json={
+            "run_id": run_a.id,
+            "message_id": wait_b.message_id,
+            "action": "new_attempt",
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert store.get_run(run_a.id).status == "waiting_recovery"
+    assert store.get_run(run_b.id).status == "waiting_recovery"
+    msg_b = store.get_message_in_thread(bot_b.thread_id, wait_b.message_id)
+    assert msg_b is not None
+    block = next(b for b in msg_b.blocks if getattr(b, "kind", None) == "recovery")
+    assert getattr(block, "status", None) == "pending"
+
+
 def test_restart_during_running_is_check_not_failed(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "RecoverCheck")["id"]
     sent = client.post(

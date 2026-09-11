@@ -351,7 +351,13 @@ async def recover_thread_run(
             raise HTTPException(
                 status_code=409, detail="this recovery path is not safe to continue"
             )
-        resolved = history.resolve_recovery_message(body.message_id, body.action)
+        resolved = history.resolve_run_recovery(
+            run_id=body.run_id,
+            bot_id=bot.id,
+            thread_id=bot.thread_id,
+            message_id=body.message_id,
+            action=body.action,
+        )
         if resolved is None:
             raise HTTPException(status_code=409, detail="recovery card is no longer waiting")
         _emit(

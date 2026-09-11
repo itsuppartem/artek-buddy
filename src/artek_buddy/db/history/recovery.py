@@ -259,6 +259,70 @@ class RecoveryMixin:
             conn.commit()
         return self._get_message(message_id)
 
+    def resolve_run_recovery(
+        self,
+        *,
+        run_id: str,
+        bot_id: str,
+        thread_id: str,
+        message_id: str,
+        action: str,
+    ) -> Any | None:
+        with self._conn() as conn:
+            with conn.transaction():
+                wait_row = conn.execute(
+                    "SELECT message_id, bot_id FROM run_waits WHERE run_id = %s FOR UPDATE",
+                    (run_id,),
+                ).fetchone()
+                if wait_row is None:
+                    return None
+                bound_message = wait_row.get("message_id")
+                if not bound_message or str(bound_message) != message_id:
+                    return None
+                if str(wait_row["bot_id"]) != bot_id:
+                    return None
+                row = conn.execute(
+                    """
+                    SELECT id, thread_id, run_id, blocks FROM messages
+                    WHERE id = %s FOR UPDATE
+                    """,
+                    (message_id,),
+                ).fetchone()
+                if row is None:
+                    return None
+                if str(row["thread_id"]) != thread_id or str(row["run_id"] or "") != run_id:
+                    return None
+                blocks = row["blocks"]
+                if isinstance(blocks, str):
+                    blocks = json.loads(blocks)
+                if not isinstance(blocks, list):
+                    return None
+                recovery: dict[str, Any] | None = None
+                for block in blocks:
+                    if isinstance(block, dict) and block.get("kind") == "recovery":
+                        recovery = block
+                        break
+                if recovery is None:
+                    return None
+                status = str(recovery.get("status") or "")
+                if status == "resolved":
+                    if str(recovery.get("answer") or "") == action:
+                        return self._get_message(message_id)
+                    return None
+                if status != "pending":
+                    return None
+                next_blocks: list[Any] = []
+                for block in blocks:
+                    if isinstance(block, dict) and block.get("kind") == "recovery":
+                        next_blocks.append({**block, "status": "resolved", "answer": action})
+                    else:
+                        next_blocks.append(block)
+                conn.execute(
+                    "UPDATE messages SET blocks = %s WHERE id = %s",
+                    (Json(next_blocks), message_id),
+                )
+        return self._get_message(message_id)
+
     def recover_orphaned_runs(self) -> int:
         """After a process restart: keep parked waits, or show a recovery card."""
         with self._conn() as conn:
