@@ -11,6 +11,7 @@
 
 ### Fixed
 - `POST /v1/threads/{bot_id}/recovery` accepts a same-action replay after the card is already resolved (lost HTTP 200), and still conflicts on a different action (#624).
+- Recovered Deny on a parked consent fails the old run and claims the next queued owner send instead of leaving a hidden inbox (`resume_parked_consent_deny` kicks the inbox).
 - A parked Ask (`run.waiting_input`) reloads that thread so Needs you cannot sit on the header without the Ask card. `please e2e-blocked-browser` on the phone is the check.
 - OPERATIONS.md backup/restore includes the `credential-data` volume and `.env` broker tokens. A tar of `data`/`workspace` plus `pg_dump` is not a complete host copy.
 - Leaving a chat for Today, Library, settings, or the phone Desktop tab no longer marks new replies on the selected helper as read, and does not dismiss that helper's native or web notify.

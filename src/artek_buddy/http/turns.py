@@ -126,6 +126,7 @@ async def resume_parked_follow_up(
 
 async def resume_parked_consent_deny(
     history: HistoryStore,
+    rt: AgentRuntime,
     events: EventHub,
     bot: Bot,
     run_id: str,
@@ -145,6 +146,7 @@ async def resume_parked_consent_deny(
         },
         run_id=finished.id,
     )
+    await _kick_inbox(history, rt, events, bot)
 
 
 def _emit(

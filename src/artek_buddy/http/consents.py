@@ -79,6 +79,7 @@ async def answer_consent(
 
                 await resume_parked_consent_deny(
                     history,
+                    app.state.runtime,
                     app.state.hub,
                     bot,
                     row.run_id,

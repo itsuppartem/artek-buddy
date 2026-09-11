@@ -147,6 +147,65 @@ def test_restart_during_interactive_consent_allow_continues(client, auth_header)
     wait_thread_has(client, auth_header, bot_id, "ok")
 
 
+def test_recovered_deny_starts_queued_inbox_send(client, auth_header) -> None:
+    import time
+
+    bot_id = create_bot(client, auth_header, "DenyInboxKick")["id"]
+    store = client.app.state.store
+    sent = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "e2e-consent-browse"},
+    )
+    assert sent.status_code == 200
+    run_id = sent.json()["run_id"]
+    waiting = wait_run_status(client, auth_header, bot_id, run_id, "waiting_input")
+    consent_id = consent_id_from_thread(waiting)
+    queued = client.post(
+        f"/v1/threads/{bot_id}/messages",
+        headers=auth_header,
+        json={"text": "please e2e-slow now"},
+    )
+    assert queued.status_code == 200, queued.text
+    assert queued.json().get("queued") is True
+    assert store.inbox_count(bot_id) == 1
+    assert store.active_run_count(bot_id) >= 1
+
+    simulate_host_restart(client)
+    denied = client.post(
+        f"/v1/consents/{consent_id}",
+        headers=auth_header,
+        json={"decision": "deny"},
+    )
+    assert denied.status_code == 200, denied.text
+    finished = wait_run(client, auth_header, bot_id, run_id)
+    assert finished["run"]["status"] == "failed"
+    assert store.inbox_count(bot_id) == 0
+
+    deadline = time.time() + 25
+    last: dict = {}
+    while time.time() < deadline:
+        response = client.get(f"/v1/threads/{bot_id}", headers=auth_header)
+        assert response.status_code == 200
+        last = response.json()
+        run = last.get("run") or {}
+        if run.get("id") != run_id and run.get("status") in {
+            "completed",
+            "failed",
+            "cancelled",
+        }:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"queued send did not run after recovered deny: {last.get('run')}")
+    assert "please e2e-slow now" in " ".join(
+        block.get("text", "")
+        for msg in last.get("messages") or []
+        for block in msg.get("blocks") or []
+        if block.get("kind") == "text"
+    )
+
+
 def test_restart_during_interactive_consent_deny_terminates(client, auth_header) -> None:
     bot_id = create_bot(client, auth_header, "RecoverConsentDeny")["id"]
     sent = client.post(
