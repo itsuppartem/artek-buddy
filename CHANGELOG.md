@@ -10,6 +10,8 @@
 - Lead and workers call `ask_user` when the assignment is unclear or a required fact is missing, instead of inventing a target. Scripted `please e2e-unclear-assignment` parks on the Ask card; `please e2e-specified-assignment` does not. A worker missing its target (`please e2e-worker-unclear-assignment`) asks on that worker.
 
 ### Fixed
+- Host boot resumes `turn_dispatches` outbox rows (pending or stale claimed) for still-active runs, using the stored owner message for the model prompt instead of a retry POST body (#610).
+- Owner `command_id` replay skips dispatch when the run is already terminal; Stop cancels matching pending dispatches (#610).
 - Recovered Deny on a parked consent fails the old run and claims the next queued owner send instead of leaving a hidden inbox (`resume_parked_consent_deny` kicks the inbox).
 - A parked Ask (`run.waiting_input`) reloads that thread so Needs you cannot sit on the header without the Ask card. `please e2e-blocked-browser` on the phone is the check.
 - OPERATIONS.md backup/restore includes the `credential-data` volume and `.env` broker tokens. A tar of `data`/`workspace` plus `pg_dump` is not a complete host copy.

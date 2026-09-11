@@ -240,6 +240,16 @@ class BotsMixin:
                     "UPDATE bots SET status = 'idle', updated_at = %s WHERE id = %s",
                     (now, bot_id),
                 )
+                cancelled = [str(row["id"]) for row in rows]
+                if cancelled:
+                    conn.execute(
+                        """
+                        UPDATE turn_dispatches
+                        SET state = 'cancelled'
+                        WHERE run_id = ANY(%s) AND state IN ('pending', 'claimed')
+                        """,
+                        (cancelled,),
+                    )
         return [row["id"] for row in rows]
 
     def create_bot(
