@@ -89,6 +89,152 @@ _READONLY_COMMANDS = frozenset(
 _READONLY_WRAPPERS = frozenset({"timeout", "nice", "nohup", "command", "ionice", "stdbuf", "time"})
 _SEARCH_TOOLS = frozenset({"rg", "grep", "egrep", "fgrep"})
 _SEARCH_EXEC_FLAGS = frozenset({"--pre", "--pre-glob", "--hostname-bin", "--config"})
+# Inspect-only flags that consume the next argv token (or --flag=value).
+_SEARCH_VALUE_FLAGS = frozenset(
+    {
+        "-e",
+        "--regexp",
+        "-f",
+        "--file",
+        "-A",
+        "--after-context",
+        "-B",
+        "--before-context",
+        "-C",
+        "--context",
+        "-m",
+        "--max-count",
+        "-g",
+        "--glob",
+        "--iglob",
+        "-t",
+        "--type",
+        "-T",
+        "--type-not",
+        "-j",
+        "--threads",
+        "-M",
+        "--max-columns",
+        "--max-filesize",
+        "--max-depth",
+        "--encoding",
+        "--sort",
+        "--sortr",
+        "--color",
+        "--colors",
+        "--ignore-file",
+        "--type-add",
+        "--type-clear",
+        "--dfa-size-limit",
+        "--regex-size-limit",
+        "--engine",
+        "--path-separator",
+        "--context-separator",
+        "--field-context-separator",
+        "--field-match-separator",
+        "--hyperlink-format",
+        "-r",
+        "--replace",
+        "--pre",
+        "--pre-glob",
+        "--hostname-bin",
+        "--config",
+    }
+)
+_SEARCH_SWITCH_FLAGS = frozenset(
+    {
+        "-i",
+        "--ignore-case",
+        "-n",
+        "--line-number",
+        "--no-line-number",
+        "-v",
+        "--invert-match",
+        "-w",
+        "--word-regexp",
+        "-x",
+        "--line-regexp",
+        "-l",
+        "--files-with-matches",
+        "-L",
+        "--files-without-match",
+        "-c",
+        "--count",
+        "--count-matches",
+        "-o",
+        "--only-matching",
+        "-H",
+        "--with-filename",
+        "-I",
+        "--no-filename",
+        "-h",
+        "--no-filename",
+        "--help",
+        "-q",
+        "--quiet",
+        "--silent",
+        "-a",
+        "--text",
+        "-z",
+        "--null-data",
+        "--search-zip",
+        "-0",
+        "--null",
+        "-F",
+        "--fixed-strings",
+        "-P",
+        "--pcre2",
+        "-U",
+        "--multiline",
+        "--multiline-dotall",
+        "-s",
+        "--case-sensitive",
+        "-S",
+        "--smart-case",
+        "-p",
+        "--pretty",
+        "--pretty",
+        "--heading",
+        "--no-heading",
+        "--column",
+        "--vimgrep",
+        "--json",
+        "--hidden",
+        "--no-ignore",
+        "--no-ignore-vcs",
+        "--no-ignore-parent",
+        "--no-ignore-dot",
+        "--no-ignore-global",
+        "--follow",
+        "--one-file-system",
+        "-u",
+        "--unrestricted",
+        "--no-config",
+        "--debug",
+        "--trace",
+        "--stats",
+        "--version",
+        "-V",
+        "--crlf",
+        "--binary",
+        "--block-buffered",
+        "--line-buffered",
+        "--trim",
+        "--passthru",
+        "--stop-on-nonmatch",
+        "--no-unicode",
+        "--mmap",
+        "--no-mmap",
+        "--messages",
+        "--no-messages",
+        "-E",
+        "--extended-regexp",
+        "-G",
+        "--basic-regexp",
+        "-R",
+        "--recursive",
+    }
+)
 _GIT_INSPECT_SUBS = frozenset(
     {
         "status",
@@ -325,16 +471,58 @@ def _readonly_segment(part: str) -> bool:
     return name in _READONLY_COMMANDS
 
 
+def _search_flag_name(item: str) -> str:
+    return item.split("=", 1)[0]
+
+
+def _search_value_flags(tool: str) -> frozenset[str]:
+    """rg -r is --replace (arity 1); grep -r is recursive (switch)."""
+    if tool in {"grep", "egrep", "fgrep"}:
+        return _SEARCH_VALUE_FLAGS - {"-r", "--replace"}
+    return _SEARCH_VALUE_FLAGS
+
+
+def _search_switch_flags(tool: str) -> frozenset[str]:
+    if tool in {"grep", "egrep", "fgrep"}:
+        return _SEARCH_SWITCH_FLAGS | {"-r"}
+    return _SEARCH_SWITCH_FLAGS - {"-R", "--recursive"}
+
+
 def _search_inspect_ok(tokens: list[str]) -> bool:
-    """rg/grep stay explore-only when argv cannot name another program or config."""
-    for item in tokens[1:]:
+    """rg/grep stay explore-only when argv cannot name another program or config.
+
+    `--` ends options only when it is not the value of a prior flag (`-e`,
+    `--regexp`, `-f`, …). Unknown flags require Allow.
+    """
+    tool = tokens[0]
+    value_flags = _search_value_flags(tool)
+    switch_flags = _search_switch_flags(tool)
+    index = 1
+    while index < len(tokens):
+        item = tokens[index]
         if item == "--":
             return True
         if not item.startswith("-"):
+            index += 1
             continue
-        flag = item.split("=", 1)[0]
+        flag = _search_flag_name(item)
         if flag in _SEARCH_EXEC_FLAGS:
             return False
+        attached = "=" in item
+        if flag in value_flags:
+            if attached:
+                index += 1
+                continue
+            if index + 1 >= len(tokens):
+                return False
+            index += 2
+            continue
+        if flag in switch_flags:
+            if attached:
+                return False
+            index += 1
+            continue
+        return False
     return True
 
 
