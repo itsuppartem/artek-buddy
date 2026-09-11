@@ -53,8 +53,8 @@ from artek_buddy.http.threads import router as threads_router
 from artek_buddy.http.turns import (
     _handle_takeover_request,
     _kick_inbox,
-    resume_pending_turn_dispatches,
     _shutdown_work,
+    resume_pending_turn_dispatches,
 )
 from artek_buddy.http.usage import router as usage_router
 from artek_buddy.http.workspace import router as workspace_router
