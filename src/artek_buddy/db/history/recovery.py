@@ -15,6 +15,7 @@ from artek_buddy.db.shaping import isoformat_utc
 
 WaitKind = Literal["ask", "consent", "takeover", "owner_job", "running"]
 WaitPath = Literal["continue", "check", "new_attempt"]
+RecoveryResolutionState = Literal["missing", "pending", "replay", "conflict"]
 
 CONTINUE_TEXT = (
     "Safe to continue. The host restarted while this was waiting; the side effect had not started."
@@ -258,6 +259,41 @@ class RecoveryMixin:
             )
             conn.commit()
         return self._get_message(message_id)
+
+    def recovery_resolution_state(
+        self,
+        *,
+        run_id: str,
+        bot_id: str,
+        thread_id: str,
+        message_id: str,
+        action: str,
+    ) -> RecoveryResolutionState:
+        wait = self.get_run_wait(run_id)
+        if wait is None or str(wait.bot_id) != bot_id:
+            return "missing"
+        if str(wait.message_id or "") != message_id:
+            return "missing"
+        msg = self.get_message_in_thread(thread_id, message_id)
+        if msg is None or str(msg.run_id or "") != run_id:
+            return "missing"
+        recovery: dict[str, Any] | None = None
+        for block in msg.blocks:
+            data = block.model_dump() if hasattr(block, "model_dump") else block
+            if isinstance(data, dict) and data.get("kind") == "recovery":
+                recovery = data
+                break
+        if recovery is None:
+            return "missing"
+        status = str(recovery.get("status") or "")
+        answer = str(recovery.get("answer") or "")
+        if status == "pending":
+            return "pending"
+        if status == "resolved":
+            if answer == action:
+                return "replay"
+            return "conflict"
+        return "missing"
 
     def resolve_run_recovery(
         self,
