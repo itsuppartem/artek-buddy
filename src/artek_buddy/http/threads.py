@@ -204,7 +204,9 @@ async def send_thread_message(
                         queued=queued,
                     )
                     if run is not None:
-                        run_status = getattr(getattr(run, "status", None), "value", None) or getattr(run, "status", None)
+                        run_status = getattr(
+                            getattr(run, "status", None), "value", None
+                        ) or getattr(run, "status", None)
                         if str(run_status) in _TERMINAL_RUN_STATUSES:
                             return result
                     if not queued and run is not None and history.claim_turn_dispatch(run.id):
