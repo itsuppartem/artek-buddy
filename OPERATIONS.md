@@ -1,5 +1,7 @@
 # Operations and deployment guide
 
+> **Frozen indefinitely** — see [FROZEN.md](FROZEN.md).
+
 This document covers running, monitoring, backing up, and maintaining an
 Artek Buddy host. For architectural components, see [ARCHITECTURE.md](ARCHITECTURE.md).
 For quality gates, see [ENGINEERING.md](ENGINEERING.md). For threat modeling,

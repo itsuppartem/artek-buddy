@@ -1,5 +1,7 @@
 # Changelog
 
+> **Frozen indefinitely** — see [FROZEN.md](FROZEN.md). Entries below may include work that never shipped in a release.
+
 ## Unreleased
 
 ### Added

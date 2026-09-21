@@ -1,5 +1,7 @@
 # Contributing
 
+> **Frozen indefinitely** — see [FROZEN.md](FROZEN.md). Pull requests may not be reviewed.
+
 Artek Buddy is a personal, self-hosted Linux agent (PC, server, or Raspberry Pi). The HTTP API is
 the product. The first client is a Linux `.deb`.
 

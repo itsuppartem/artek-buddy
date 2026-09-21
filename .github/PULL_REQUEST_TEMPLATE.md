@@ -1,3 +1,5 @@
+> **Project frozen indefinitely** — see [FROZEN.md](../FROZEN.md). PRs may not be reviewed.
+
 ## Summary
 
 - User-visible behavior:

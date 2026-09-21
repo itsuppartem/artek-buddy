@@ -1,5 +1,7 @@
 # artek-buddy client
 
+> **Frozen indefinitely** — see [FROZEN.md](../FROZEN.md).
+
 Desktop GUI for the Artek Buddy host. Command: `artek-buddy`.
 Source: `artek_buddy.py` (entrypoint) plus `pairing.py`, `proxy.py` (static /
 host proxy / local RPC mixins), `ssh_mux.py`,

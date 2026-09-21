@@ -1,5 +1,7 @@
 # Architecture
 
+> **Frozen indefinitely** — see [FROZEN.md](FROZEN.md).
+
 This is the running Compose stack on one Linux host (PC, server, or Raspberry Pi), not a target diagram.
 Trade-offs: [adr/](adr/). Trust and residual risk: [THREAT-MODEL.md](THREAT-MODEL.md). First-user recipe: [SCENARIOS.md](SCENARIOS.md).
 

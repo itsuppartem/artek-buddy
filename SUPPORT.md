@@ -1,5 +1,7 @@
 # Support
 
+> **Frozen indefinitely** — see [FROZEN.md](FROZEN.md). Bug reports may not receive a response.
+
 ## Reporting bugs
 
 If something in Artek Buddy is broken, reproducible, or unexpected:

@@ -1,5 +1,7 @@
 # Owner manual QA — Linux `.deb` and iPhone 11 Pro web
 
+> **Frozen indefinitely** — see [FROZEN.md](../../FROZEN.md).
+
 Issue: [#220](https://github.com/itsuppartem/artek-buddy/issues/220). Daily tracker: [#174](https://github.com/itsuppartem/artek-buddy/issues/174). Pad / keys: [#218](https://github.com/itsuppartem/artek-buddy/issues/218) / [PR #219](https://github.com/itsuppartem/artek-buddy/pull/219).
 
 Checkbox = you saw the expected thing on that surface. Walk **0 → 12** in order, then **13+** for the rest of the visible product. If time is short, use the ordered **Short path** at the end of this plan.

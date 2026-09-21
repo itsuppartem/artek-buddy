@@ -1,5 +1,7 @@
 # Engineering practices and quality gates
 
+> **Frozen indefinitely** — see [FROZEN.md](FROZEN.md).
+
 This document describes how Artek Buddy is tested, validated, and maintained.
 For trust boundaries, authentication architecture, and residual risk, see
 [THREAT-MODEL.md](THREAT-MODEL.md). For operational runtime setup and backups,
