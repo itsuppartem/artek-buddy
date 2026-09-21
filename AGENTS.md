@@ -1,5 +1,7 @@
 # Repository Agent Guide (AGENTS.md)
 
+> **Frozen indefinitely** — see [FROZEN.md](FROZEN.md).
+
 This document maps the repository architecture, execution boundaries, and CI-aligned development commands for coding agents and contributors.
 
 For the in-chat agent prompt inside the desktop sandbox container, see [`workspace/AGENTS.md`](workspace/AGENTS.md).

@@ -1,5 +1,7 @@
 # First-user scenario
 
+> **Frozen indefinitely** — see [FROZEN.md](FROZEN.md).
+
 One named job on the **shipped Cursor** runtime. HTTP without Cursor is Phase 2 ([#563](https://github.com/itsuppartem/artek-buddy/issues/563)) — the same recipe, later.
 
 This is not a catalog of templates. Guests run it on **their own** Linux host with **their own** Cursor key. Do not pair a tester onto someone else's production host.

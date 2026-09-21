@@ -1,5 +1,7 @@
 # Artek Buddy
 
+> **Frozen indefinitely** — active development is paused with no restart date. The repo is reference-only; issues and PRs may not be reviewed. See [FROZEN.md](FROZEN.md).
+
 [![test](https://github.com/itsuppartem/artek-buddy/actions/workflows/test.yml/badge.svg)](https://github.com/itsuppartem/artek-buddy/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/itsuppartem/artek-buddy)](https://github.com/itsuppartem/artek-buddy/releases/latest)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)

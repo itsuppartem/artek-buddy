@@ -1,5 +1,7 @@
 # Security policy
 
+> **Frozen indefinitely** — reports are still welcome; fixes are not guaranteed. See [FROZEN.md](FROZEN.md).
+
 Artek Buddy is a self-hosted personal agent. Treat the Linux host
 as the trust boundary: anyone who can call `:8080` with a valid token can
 drive bots, memory, routines, and desktop sandboxes. The written model is

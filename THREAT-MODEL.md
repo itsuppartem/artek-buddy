@@ -1,5 +1,7 @@
 # Threat model
 
+> **Frozen indefinitely** — see [FROZEN.md](FROZEN.md).
+
 A reviewer should be able to answer **what is trusted, what is not, and what
 remains open** from this page. Residual risk is named on purpose.
 

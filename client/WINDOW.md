@@ -1,5 +1,7 @@
 # Client window map
 
+> **Frozen indefinitely** — see [FROZEN.md](../FROZEN.md).
+
 This is the product window: `artek_buddy.py` (GTK/WebKit + loopback proxy) plus `web/`.
 The same page is also served from the host on `:8080` for a phone or a desktop browser. Take control follows the pointer in use (mouse = `.deb` iframe; coarse/phone = pad), not only the window width.
 The page never sees `~/.config/artek-buddy/token` or `AGENT_HTTP_TOKEN`. Update this file in the same change as the UI.

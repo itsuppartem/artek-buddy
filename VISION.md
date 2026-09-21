@@ -1,5 +1,7 @@
 # Vision and Invariants
 
+> **Frozen indefinitely** — see [FROZEN.md](FROZEN.md).
+
 Artek Buddy is a self-hosted personal AI agent host designed for one trusted Linux machine (PC, server, mini PC, or Raspberry Pi). It provides durable bots, isolated computer sandboxes, and honest owner consent before computer actions.
 
 ## Core Invariants

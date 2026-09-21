@@ -1,5 +1,7 @@
 # Artek Buddy marks
 
+> **Frozen indefinitely** — see [FROZEN.md](../../FROZEN.md).
+
 Original marks for the Linux `.deb` and the product window. The face is the
 owner's tricolor Cavalier (black ears, white blaze, tan eyebrows), redrawn in
 the navy / sky / cream product palette. The lying pose is pairing only.
