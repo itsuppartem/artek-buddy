@@ -11,13 +11,13 @@ requires-python = ">=3.13"
 license = { text = "Apache-2.0" }
 authors = [{ name = "itsuppartem" }]
 dependencies = [
-    "cursor-sdk==1.0.30",
+    "cursor-sdk==1.0.31",
     "fastapi==0.141.1",
     "starlette==1.6.0",
-    "uvicorn[standard]==0.52.4",
+    "uvicorn[standard]==0.53.0",
     "pydantic-settings==2.15.0",
-    "psycopg[binary,pool]==3.3.4",
-    "playwright==1.62.0",
+    "psycopg[binary,pool]==3.3.6",
+    "playwright==1.63.0",
 ]
 
 [project.scripts]
@@ -28,12 +28,12 @@ dev = [
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "httpx==0.28.1",
-    "playwright==1.62.0",
+    "playwright==1.63.0",
     "pytest-playwright==0.9.0",
     "pytest-timeout==2.4.0",
     "pytest-cov==7.1.0",
-    "hypothesis==6.167.0",
-    "ruff==0.16.5",
+    "hypothesis==6.168.0",
+    "ruff==0.16.8",
     "mypy==2.3.1",
     "pip-audit==2.10.1",
 ]
