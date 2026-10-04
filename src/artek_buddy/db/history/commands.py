@@ -92,6 +92,23 @@ def _command_from_row(row: dict[str, Any]) -> OwnerCommand:
 
 
 class CommandsMixin:
+    def get_owner_command_for_run(self, bot_id: str, run_id: str) -> OwnerCommand | None:
+        if not bot_id or not run_id:
+            return None
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT command_id, bot_id, payload_hash, run_id, message_id, parent_command_id
+                FROM owner_commands
+                WHERE bot_id = %s AND run_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (bot_id, run_id),
+            ).fetchone()
+            conn.commit()
+        return _command_from_row(row) if row else None
+
     def get_owner_command(self, bot_id: str, command_id: str) -> OwnerCommand | None:
         if not bot_id or not command_id:
             return None

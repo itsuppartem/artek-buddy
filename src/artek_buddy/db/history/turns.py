@@ -390,6 +390,52 @@ class TurnsMixin:
             disposition = "queued" if queued_turn else "created"
         return self._with_replies([user])[0], run, disposition
 
+    def list_unfinished_turn_dispatches(self) -> list[tuple[str, str]]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT td.run_id, td.bot_id
+                FROM turn_dispatches td
+                INNER JOIN runs r ON r.id = td.run_id
+                WHERE td.state IN ('pending', 'claimed')
+                  AND r.status IN ('queued', 'leased', 'running')
+                ORDER BY td.created_at
+                """
+            ).fetchall()
+            conn.commit()
+        return [(str(row["run_id"]), str(row["bot_id"])) for row in rows]
+
+    def reset_stale_turn_dispatch_claims(self) -> int:
+        """After restart: a claimed row with no live task should be pending again."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                UPDATE turn_dispatches td
+                SET state = 'pending', claimed_at = NULL
+                FROM runs r
+                WHERE td.run_id = r.id
+                  AND td.state = 'claimed'
+                  AND r.status IN ('queued', 'leased', 'running')
+                RETURNING td.run_id
+                """
+            ).fetchall()
+            conn.commit()
+        return len(rows)
+
+    def cancel_turn_dispatches(self, run_ids: list[str]) -> None:
+        if not run_ids:
+            return
+        with self._conn() as conn:
+            conn.execute(
+                """
+                UPDATE turn_dispatches
+                SET state = 'cancelled'
+                WHERE run_id = ANY(%s) AND state IN ('pending', 'claimed')
+                """,
+                (run_ids,),
+            )
+            conn.commit()
+
     def claim_turn_dispatch(self, run_id: str) -> bool:
         """Claim pending lead dispatch once. Replay and a second POST lose."""
         if not run_id:
@@ -398,10 +444,14 @@ class TurnsMixin:
         with self._conn() as conn:
             row = conn.execute(
                 """
-                UPDATE turn_dispatches
+                UPDATE turn_dispatches td
                 SET state = 'claimed', claimed_at = %s
-                WHERE run_id = %s AND state = 'pending'
-                RETURNING run_id
+                FROM runs r
+                WHERE td.run_id = r.id
+                  AND td.run_id = %s
+                  AND td.state = 'pending'
+                  AND r.status IN ('queued', 'leased', 'running')
+                RETURNING td.run_id
                 """,
                 (now, run_id),
             ).fetchone()
